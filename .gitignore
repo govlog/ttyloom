@@ -1,0 +1,8 @@
+/ttyloom
+*.part
+.superpowers/
+.worktrees/
+/docs/superpowers/
+/docs/audit/
+/docs/notes/
+/dist/

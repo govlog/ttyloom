@@ -1,0 +1,164 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="928" height="644" viewBox="0 0 928 644" font-family="JetBrains Mono, Fira Code, Cascadia Code, DejaVu Sans Mono, Menlo, monospace" font-size="13.2">
+<rect width="928" height="644" rx="12" fill="#11111b"/>
+<rect x="16" y="50" width="896" height="578" fill="#1e1e2e"/>
+<circle cx="26" cy="31.0" r="6" fill="#f38ba8"/><circle cx="46" cy="31.0" r="6" fill="#f9e2af"/><circle cx="66" cy="31.0" r="6" fill="#a6e3a1"/>
+<text x="464" y="36.0" text-anchor="middle" fill="#a6adc8" font-size="12">TTYloom · members</text>
+<text x="16.0" y="62.5" fill="#89b4fa" textLength="208.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="bold">Discussions [récents]     </text>
+<text x="224.0" y="62.5" fill="#585b70" textLength="680.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│───────────────────────────────── 5 septembre 2026 ─────┌Gophers────────────────[x]┐</text>
+<text x="16.0" y="79.5" fill="#585b70" textLength="272.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">──────────────────────────│14:50 &lt;</text>
+<text x="288.0" y="79.5" fill="#a6e3a1" textLength="40.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">alice</text>
+<text x="328.0" y="79.5" fill="#585b70" textLength="16.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">&gt; </text>
+<text x="344.0" y="79.5" fill="#cdd6f4" textLength="240.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Morning! Has anyone tried the </text>
+<text x="584.0" y="79.5" fill="#cdd6f4" textLength="96.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="bold">kitty graphi</text>
+<text x="680.0" y="79.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="688.0" y="79.5" fill="#89b4fa" textLength="208.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">★ chris (you)             </text>
+<text x="896.0" y="79.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="56.0" y="96.5" fill="#585b70" textLength="176.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">── discord ───────[-]│</text>
+<rect x="232.0" y="84.0" width="8.0" height="17.0" fill="#45475a"/>
+<text x="232.0" y="96.5" fill="#89b4fa" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▌</text>
+<rect x="240.0" y="84.0" width="56.0" height="17.0" fill="#45475a"/>
+<text x="240.0" y="96.5" fill="#585b70" textLength="56.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">14:52 &lt;</text>
+<rect x="296.0" y="84.0" width="24.0" height="17.0" fill="#45475a"/>
+<text x="296.0" y="96.5" fill="#f9e2af" textLength="24.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">bob</text>
+<rect x="320.0" y="84.0" width="360.0" height="17.0" fill="#45475a"/>
+<text x="320.0" y="96.5" fill="#585b70" textLength="360.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">&gt; │ alice: Has anyone tried the kitty graphic</text>
+<text x="680.0" y="96.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="688.0" y="96.5" fill="#89b4fa" textLength="208.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">★ alice                   </text>
+<text x="896.0" y="96.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="40.0" y="113.5" fill="#f38ba8" textLength="16.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="bold"> 3</text>
+<text x="56.0" y="113.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">@</text>
+<text x="64.0" y="113.5" fill="#cdd6f4" textLength="160.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> dave               </text>
+<text x="224.0" y="113.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<rect x="232.0" y="101.0" width="8.0" height="17.0" fill="#45475a"/>
+<text x="232.0" y="113.5" fill="#89b4fa" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▌</text>
+<rect x="240.0" y="101.0" width="144.0" height="17.0" fill="#45475a"/>
+<text x="240.0" y="113.5" fill="#cdd6f4" textLength="144.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">            Yes — </text>
+<rect x="384.0" y="101.0" width="72.0" height="17.0" fill="#45475a"/>
+<text x="384.0" y="113.5" fill="#f9e2af" textLength="72.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">rsc.io/qr</text>
+<rect x="456.0" y="101.0" width="224.0" height="17.0" fill="#45475a"/>
+<text x="456.0" y="113.5" fill="#cdd6f4" textLength="224.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> encodes and kitty renders i</text>
+<text x="680.0" y="113.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<rect x="688.0" y="101.0" width="24.0" height="17.0" fill="#cdd6f4"/>
+<text x="688.0" y="113.5" fill="#1e1e2e" textLength="24.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">bob</text>
+<text x="712.0" y="113.5" fill="#585b70" textLength="160.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">┌──────────────────┐</text>
+<rect x="872.0" y="101.0" width="24.0" height="17.0" fill="#cdd6f4"/>
+<text x="896.0" y="113.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="56.0" y="130.5" fill="#585b70" textLength="176.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">── Gophers ───────[-]│</text>
+<rect x="232.0" y="118.0" width="8.0" height="17.0" fill="#45475a"/>
+<text x="232.0" y="130.5" fill="#89b4fa" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▌</text>
+<rect x="240.0" y="118.0" width="96.0" height="17.0" fill="#45475a"/>
+<rect x="336.0" y="118.0" width="8.0" height="17.0" fill="#45475a"/>
+<text x="336.0" y="130.5" fill="#89b4fa" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">👍</text>
+<rect x="344.0" y="118.0" width="24.0" height="17.0" fill="#45475a"/>
+<text x="344.0" y="130.5" fill="#89b4fa" textLength="24.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 3</text>
+<rect x="368.0" y="118.0" width="24.0" height="17.0" fill="#45475a"/>
+<text x="368.0" y="130.5" fill="#585b70" textLength="24.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  🔥</text>
+<rect x="392.0" y="118.0" width="24.0" height="17.0" fill="#45475a"/>
+<text x="392.0" y="130.5" fill="#585b70" textLength="24.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 1</text>
+<text x="680.0" y="130.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="688.0" y="130.5" fill="#89b4fa" textLength="24.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">car</text>
+<text x="712.0" y="130.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<rect x="720.0" y="118.0" width="144.0" height="17.0" fill="#cdd6f4"/>
+<text x="720.0" y="130.5" fill="#1e1e2e" textLength="144.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">message privé     </text>
+<text x="864.0" y="130.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="896.0" y="130.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="56.0" y="147.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">#</text>
+<text x="64.0" y="147.5" fill="#cdd6f4" textLength="160.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> general            </text>
+<text x="224.0" y="147.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<rect x="232.0" y="135.0" width="8.0" height="17.0" fill="#45475a"/>
+<text x="232.0" y="147.5" fill="#89b4fa" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▌</text>
+<rect x="240.0" y="135.0" width="96.0" height="17.0" fill="#45475a"/>
+<rect x="336.0" y="135.0" width="8.0" height="17.0" fill="#45475a"/>
+<text x="336.0" y="147.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">👍</text>
+<rect x="344.0" y="135.0" width="336.0" height="17.0" fill="#45475a"/>
+<text x="344.0" y="147.5" fill="#585b70" textLength="336.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> · g cité · p répondre · r réagir · c cop</text>
+<text x="680.0" y="147.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="688.0" y="147.5" fill="#cdd6f4" textLength="24.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">dav</text>
+<text x="712.0" y="147.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="720.0" y="147.5" fill="#cdd6f4" textLength="144.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">infos             </text>
+<text x="864.0" y="147.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="896.0" y="147.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="40.0" y="164.5" fill="#f38ba8" textLength="16.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="bold">12</text>
+<text x="56.0" y="164.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">#</text>
+<text x="64.0" y="164.5" fill="#cdd6f4" textLength="160.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> help               </text>
+<text x="224.0" y="164.5" fill="#585b70" textLength="64.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│14:55 &lt;</text>
+<text x="288.0" y="164.5" fill="#a6adc8" textLength="40.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="bold">chris</text>
+<text x="328.0" y="164.5" fill="#585b70" textLength="16.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">&gt; </text>
+<text x="344.0" y="164.5" fill="#cdd6f4" textLength="336.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">TTYloom: many networks, one terminal. Code</text>
+<text x="680.0" y="164.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="688.0" y="164.5" fill="#cdd6f4" textLength="24.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">eri</text>
+<text x="712.0" y="164.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="720.0" y="164.5" fill="#cdd6f4" textLength="144.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">signaler / bloquer</text>
+<text x="864.0" y="164.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="896.0" y="164.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="56.0" y="181.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">#</text>
+<text x="64.0" y="181.5" fill="#cdd6f4" textLength="160.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> offtopic           </text>
+<text x="224.0" y="181.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="344.0" y="181.5" fill="#89b4fa" textLength="264.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve" text-decoration="underline">https://github.com/govlog/ttyloom</text>
+<text x="680.0" y="181.5" fill="#585b70" textLength="224.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">└───└──────────────────┘───┘</text>
+<text x="56.0" y="198.5" fill="#585b70" textLength="232.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">── telegram ──────[-]│15:11 &lt;</text>
+<text x="288.0" y="198.5" fill="#a6e3a1" textLength="40.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">alice</text>
+<text x="328.0" y="198.5" fill="#585b70" textLength="240.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">&gt; [photo 1280x720 · 212 KB] ✓✓</text>
+<rect x="16.0" y="203.0" width="24.0" height="17.0" fill="#cdd6f4"/>
+<text x="16.0" y="215.5" fill="#1e1e2e" textLength="24.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">[·]</text>
+<rect x="40.0" y="203.0" width="16.0" height="17.0" fill="#cdd6f4"/>
+<text x="40.0" y="215.5" fill="#1e1e2e" textLength="16.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="bold"> 2</text>
+<rect x="56.0" y="203.0" width="168.0" height="17.0" fill="#cdd6f4"/>
+<text x="56.0" y="215.5" fill="#1e1e2e" textLength="168.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"># Gophers            </text>
+<text x="224.0" y="215.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="40.0" y="232.5" fill="#f38ba8" textLength="16.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="bold"> 1</text>
+<text x="56.0" y="232.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">@</text>
+<text x="64.0" y="232.5" fill="#cdd6f4" textLength="160.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> Alice              </text>
+<text x="224.0" y="232.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="56.0" y="249.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">@</text>
+<text x="64.0" y="249.5" fill="#cdd6f4" textLength="160.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> Bob                </text>
+<text x="224.0" y="249.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="56.0" y="266.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">&amp;</text>
+<text x="64.0" y="266.5" fill="#cdd6f4" textLength="160.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> Go Announcements   </text>
+<text x="224.0" y="266.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="224.0" y="283.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="224.0" y="300.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="224.0" y="317.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="224.0" y="334.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="224.0" y="351.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="224.0" y="368.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="224.0" y="385.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="224.0" y="402.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="232.0" y="402.5" fill="#a6e3a1" textLength="208.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">*** carol joined the group</text>
+<text x="224.0" y="419.5" fill="#585b70" textLength="64.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│15:30 &lt;</text>
+<text x="288.0" y="419.5" fill="#89b4fa" textLength="32.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">dave</text>
+<text x="320.0" y="419.5" fill="#585b70" textLength="184.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">&gt; ↪ de Project notes ✓✓</text>
+<text x="224.0" y="436.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="232.0" y="436.5" fill="#cdd6f4" textLength="680.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">             TTY means terminal. A loom weaves threads together. That is where       </text>
+<text x="224.0" y="453.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="232.0" y="453.5" fill="#cdd6f4" textLength="680.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">             the name comes from.                                                    </text>
+<text x="224.0" y="470.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="232.0" y="470.5" fill="#f38ba8" textLength="672.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">──────────────────────────────────── ↑ non lus ─────────────────────────────────────</text>
+<text x="224.0" y="487.5" fill="#585b70" textLength="64.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│15:40 &lt;</text>
+<text x="288.0" y="487.5" fill="#a6e3a1" textLength="40.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">alice</text>
+<text x="328.0" y="487.5" fill="#585b70" textLength="16.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">&gt; </text>
+<text x="344.0" y="487.5" fill="#cdd6f4" textLength="312.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Also: /gif works on both networks now 🎉</text>
+<text x="664.0" y="487.5" fill="#89b4fa" textLength="16.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> •</text>
+<text x="224.0" y="504.5" fill="#585b70" textLength="64.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│15:41 &lt;</text>
+<text x="288.0" y="504.5" fill="#f9e2af" textLength="24.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">bob</text>
+<text x="312.0" y="504.5" fill="#585b70" textLength="16.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">&gt; </text>
+<text x="328.0" y="504.5" fill="#cdd6f4" textLength="312.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Nice. Ctrl+G, type, Enter — that is it?</text>
+<text x="640.0" y="504.5" fill="#89b4fa" textLength="16.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> •</text>
+<text x="224.0" y="521.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="224.0" y="538.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="224.0" y="555.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="224.0" y="572.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="224.0" y="589.5" fill="#585b70" textLength="688.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">├─────────────────────────────────────────────────────────────────────────────────────</text>
+<text x="224.0" y="606.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<rect x="232.0" y="594.0" width="160.0" height="17.0" fill="#45475a"/>
+<text x="232.0" y="606.5" fill="#cdd6f4" textLength="160.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">[15:42] [@chris] [1:</text>
+<rect x="392.0" y="594.0" width="56.0" height="17.0" fill="#45475a"/>
+<text x="392.0" y="606.5" fill="#89b4fa" textLength="56.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="bold">Gophers</text>
+<rect x="448.0" y="594.0" width="464.0" height="17.0" fill="#45475a"/>
+<text x="448.0" y="606.5" fill="#cdd6f4" textLength="464.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">] [telegram] [img:kitty] [alice tape…]                    </text>
+<text x="16.0" y="623.5" fill="#89b4fa" textLength="208.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="bold"> + nouveau message        </text>
+<text x="224.0" y="623.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="232.0" y="623.5" fill="#89b4fa" textLength="80.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="bold">[Gophers] </text>
+<text x="312.0" y="623.5" fill="#cdd6f4" textLength="600.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Exactly. Enter sends the one under the cursor                              </text>
+<image x="344.0" y="203.0" width="320.0" height="187.0" preserveAspectRatio="none" href="data:image/png;base64,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"/>
+</svg>

@@ -1,0 +1,46 @@
+name: Release
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+permissions:
+  contents: read
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: Test portable build
+        run: CGO_ENABLED=0 go test -tags nospell ./...
+      - name: Build archives
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: bash scripts/release.sh "$RELEASE_TAG"
+      - name: Check binaries
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qemu-user
+          cd "dist/$RELEASE_TAG"
+          sha256sum --check SHA256SUMS
+          tar -xzf "ttyloom_${RELEASE_TAG#v}_linux_amd64.tar.gz"
+          tar -xzf "ttyloom_${RELEASE_TAG#v}_linux_arm64.tar.gz"
+          "./ttyloom_${RELEASE_TAG#v}_linux_amd64/ttyloom" --version
+          qemu-aarch64 "./ttyloom_${RELEASE_TAG#v}_linux_arm64/ttyloom" --version
+      - name: Create draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          gh release create "$RELEASE_TAG" "dist/$RELEASE_TAG/"*.tar.gz "dist/$RELEASE_TAG/SHA256SUMS" \
+            --verify-tag --draft --title "TTYloom $RELEASE_TAG" \
+            --notes 'Portable Linux binaries for x86-64 and ARM64 (without Hunspell), matching source and SHA-256 checksums. See the README for installation and source builds with spell checking.'

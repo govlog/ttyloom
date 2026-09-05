@@ -1,0 +1,2 @@
+# Preserve original third-party notice bytes, including upstream line endings.
+licenses/** -text -whitespace

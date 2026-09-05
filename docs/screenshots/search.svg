@@ -1,0 +1,176 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="928" height="644" viewBox="0 0 928 644" font-family="JetBrains Mono, Fira Code, Cascadia Code, DejaVu Sans Mono, Menlo, monospace" font-size="13.2">
+<rect width="928" height="644" rx="12" fill="#11111b"/>
+<rect x="16" y="50" width="896" height="578" fill="#1e1e2e"/>
+<circle cx="26" cy="31.0" r="6" fill="#f38ba8"/><circle cx="46" cy="31.0" r="6" fill="#f9e2af"/><circle cx="66" cy="31.0" r="6" fill="#a6e3a1"/>
+<text x="464" y="36.0" text-anchor="middle" fill="#a6adc8" font-size="12">TTYloom · search</text>
+<text x="16.0" y="62.5" fill="#89b4fa" textLength="208.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="bold">Chat List [recent]        </text>
+<text x="224.0" y="62.5" fill="#585b70" textLength="680.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│──────────────────────────────── September 5, 2026 ─────────────────────────────────</text>
+<text x="16.0" y="79.5" fill="#585b70" textLength="272.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">──────────────────────────│14:50 &lt;</text>
+<text x="288.0" y="79.5" fill="#a6e3a1" textLength="40.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">alice</text>
+<text x="328.0" y="79.5" fill="#585b70" textLength="16.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">&gt; </text>
+<text x="344.0" y="79.5" fill="#cdd6f4" textLength="240.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Morning! Has anyone tried the </text>
+<rect x="584.0" y="67.0" width="40.0" height="17.0" fill="#cdd6f4"/>
+<text x="584.0" y="79.5" fill="#1e1e2e" textLength="40.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">kitty</text>
+<text x="624.0" y="79.5" fill="#cdd6f4" textLength="144.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="bold"> graphics protocol</text>
+<text x="768.0" y="79.5" fill="#cdd6f4" textLength="104.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> from Go yet?</text>
+<text x="872.0" y="79.5" fill="#585b70" textLength="24.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ✓✓</text>
+<text x="56.0" y="96.5" fill="#585b70" textLength="176.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">── discord ───────[-]│</text>
+<rect x="232.0" y="84.0" width="8.0" height="17.0" fill="#45475a"/>
+<text x="232.0" y="96.5" fill="#89b4fa" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▌</text>
+<rect x="240.0" y="84.0" width="56.0" height="17.0" fill="#45475a"/>
+<text x="240.0" y="96.5" fill="#585b70" textLength="56.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">14:52 &lt;</text>
+<rect x="296.0" y="84.0" width="24.0" height="17.0" fill="#45475a"/>
+<text x="296.0" y="96.5" fill="#f9e2af" textLength="24.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">bob</text>
+<rect x="320.0" y="84.0" width="256.0" height="17.0" fill="#45475a"/>
+<text x="320.0" y="96.5" fill="#585b70" textLength="256.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">&gt; │ alice: Has anyone tried the </text>
+<rect x="576.0" y="84.0" width="40.0" height="17.0" fill="#cdd6f4"/>
+<text x="576.0" y="96.5" fill="#1e1e2e" textLength="40.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">kitty</text>
+<rect x="616.0" y="84.0" width="168.0" height="17.0" fill="#45475a"/>
+<text x="616.0" y="96.5" fill="#585b70" textLength="168.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> graphics protocol ✓✓</text>
+<text x="40.0" y="113.5" fill="#f38ba8" textLength="16.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="bold"> 3</text>
+<text x="56.0" y="113.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">@</text>
+<text x="64.0" y="113.5" fill="#cdd6f4" textLength="160.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> dave               </text>
+<text x="224.0" y="113.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<rect x="232.0" y="101.0" width="8.0" height="17.0" fill="#45475a"/>
+<text x="232.0" y="113.5" fill="#89b4fa" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▌</text>
+<rect x="240.0" y="101.0" width="144.0" height="17.0" fill="#45475a"/>
+<text x="240.0" y="113.5" fill="#cdd6f4" textLength="144.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">            Yes — </text>
+<rect x="384.0" y="101.0" width="72.0" height="17.0" fill="#45475a"/>
+<text x="384.0" y="113.5" fill="#f9e2af" textLength="72.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">rsc.io/qr</text>
+<rect x="456.0" y="101.0" width="104.0" height="17.0" fill="#45475a"/>
+<text x="456.0" y="113.5" fill="#cdd6f4" textLength="104.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> encodes and </text>
+<rect x="560.0" y="101.0" width="40.0" height="17.0" fill="#cdd6f4"/>
+<text x="560.0" y="113.5" fill="#1e1e2e" textLength="40.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">kitty</text>
+<rect x="600.0" y="101.0" width="272.0" height="17.0" fill="#45475a"/>
+<text x="600.0" y="113.5" fill="#cdd6f4" textLength="272.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> renders it, no cgo, no surprises.</text>
+<text x="56.0" y="130.5" fill="#585b70" textLength="176.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">── Gophers ───────[-]│</text>
+<rect x="232.0" y="118.0" width="8.0" height="17.0" fill="#45475a"/>
+<text x="232.0" y="130.5" fill="#89b4fa" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▌</text>
+<rect x="240.0" y="118.0" width="96.0" height="17.0" fill="#45475a"/>
+<rect x="336.0" y="118.0" width="8.0" height="17.0" fill="#45475a"/>
+<text x="336.0" y="130.5" fill="#89b4fa" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">👍</text>
+<rect x="344.0" y="118.0" width="24.0" height="17.0" fill="#45475a"/>
+<text x="344.0" y="130.5" fill="#89b4fa" textLength="24.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 3</text>
+<rect x="368.0" y="118.0" width="24.0" height="17.0" fill="#45475a"/>
+<text x="368.0" y="130.5" fill="#585b70" textLength="24.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  🔥</text>
+<rect x="392.0" y="118.0" width="24.0" height="17.0" fill="#45475a"/>
+<text x="392.0" y="130.5" fill="#585b70" textLength="24.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 1</text>
+<text x="56.0" y="147.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">#</text>
+<rect x="64.0" y="135.0" width="800.0" height="17.0" fill="#45475a"/>
+<text x="64.0" y="147.5" fill="#585b70" textLength="800.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">┌──────────────────────────────────────────────────────────────────────────────────────────────────┐</text>
+<text x="40.0" y="164.5" fill="#f38ba8" textLength="16.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="bold">12</text>
+<text x="56.0" y="164.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">#</text>
+<rect x="64.0" y="152.0" width="8.0" height="17.0" fill="#45475a"/>
+<text x="64.0" y="164.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<rect x="72.0" y="152.0" width="784.0" height="17.0" fill="#45475a"/>
+<text x="72.0" y="164.5" fill="#cdd6f4" textLength="784.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">global search: kitty  (4 results)                                                                 </text>
+<rect x="856.0" y="152.0" width="8.0" height="17.0" fill="#45475a"/>
+<text x="856.0" y="164.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="56.0" y="181.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">#</text>
+<rect x="64.0" y="169.0" width="8.0" height="17.0" fill="#45475a"/>
+<text x="64.0" y="181.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<rect x="72.0" y="169.0" width="504.0" height="17.0" fill="#cdd6f4"/>
+<text x="72.0" y="181.5" fill="#45475a" textLength="504.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">[#Gophers]            05/09 14:50  &lt;alice&gt;         … tried the </text>
+<rect x="576.0" y="169.0" width="40.0" height="17.0" fill="#89b4fa"/>
+<text x="576.0" y="181.5" fill="#45475a" textLength="40.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">kitty</text>
+<rect x="616.0" y="169.0" width="240.0" height="17.0" fill="#cdd6f4"/>
+<text x="616.0" y="181.5" fill="#45475a" textLength="240.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> graphics protocol from Go ye…</text>
+<rect x="856.0" y="169.0" width="8.0" height="17.0" fill="#45475a"/>
+<text x="856.0" y="181.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="56.0" y="198.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">─</text>
+<rect x="64.0" y="186.0" width="288.0" height="17.0" fill="#45475a"/>
+<text x="64.0" y="198.5" fill="#585b70" textLength="288.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│[#Gophers / #gener…]  05/09 12:42  </text>
+<rect x="352.0" y="186.0" width="128.0" height="17.0" fill="#45475a"/>
+<text x="352.0" y="198.5" fill="#cdd6f4" textLength="128.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">&lt;dave&gt;          </text>
+<rect x="480.0" y="186.0" width="40.0" height="17.0" fill="#45475a"/>
+<text x="480.0" y="198.5" fill="#89b4fa" textLength="40.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">kitty</text>
+<rect x="520.0" y="186.0" width="336.0" height="17.0" fill="#45475a"/>
+<text x="520.0" y="198.5" fill="#cdd6f4" textLength="336.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> and Ghostty both do the graphics protoco…</text>
+<rect x="856.0" y="186.0" width="8.0" height="17.0" fill="#45475a"/>
+<text x="856.0" y="198.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<rect x="16.0" y="203.0" width="24.0" height="17.0" fill="#cdd6f4"/>
+<text x="16.0" y="215.5" fill="#1e1e2e" textLength="24.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">[·]</text>
+<rect x="40.0" y="203.0" width="16.0" height="17.0" fill="#cdd6f4"/>
+<text x="40.0" y="215.5" fill="#1e1e2e" textLength="16.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="bold"> 2</text>
+<rect x="56.0" y="203.0" width="8.0" height="17.0" fill="#cdd6f4"/>
+<text x="56.0" y="215.5" fill="#1e1e2e" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">#</text>
+<rect x="64.0" y="203.0" width="288.0" height="17.0" fill="#45475a"/>
+<text x="64.0" y="215.5" fill="#585b70" textLength="288.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│[@Alice]              04/09 13:42  </text>
+<rect x="352.0" y="203.0" width="224.0" height="17.0" fill="#45475a"/>
+<text x="352.0" y="215.5" fill="#cdd6f4" textLength="224.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">&lt;alice&gt;         switched to </text>
+<rect x="576.0" y="203.0" width="40.0" height="17.0" fill="#45475a"/>
+<text x="576.0" y="215.5" fill="#89b4fa" textLength="40.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">kitty</text>
+<rect x="616.0" y="203.0" width="240.0" height="17.0" fill="#45475a"/>
+<text x="616.0" y="215.5" fill="#cdd6f4" textLength="240.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> for the images, worth it     </text>
+<rect x="856.0" y="203.0" width="8.0" height="17.0" fill="#45475a"/>
+<text x="856.0" y="215.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="40.0" y="232.5" fill="#f38ba8" textLength="16.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="bold"> 1</text>
+<text x="56.0" y="232.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">@</text>
+<rect x="64.0" y="220.0" width="288.0" height="17.0" fill="#45475a"/>
+<text x="64.0" y="232.5" fill="#585b70" textLength="288.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│[#Gophers / #help]    03/09 15:42  </text>
+<rect x="352.0" y="220.0" width="184.0" height="17.0" fill="#45475a"/>
+<text x="352.0" y="232.5" fill="#cdd6f4" textLength="184.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">&lt;erin&gt;          is the </text>
+<rect x="536.0" y="220.0" width="40.0" height="17.0" fill="#45475a"/>
+<text x="536.0" y="232.5" fill="#89b4fa" textLength="40.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">kitty</text>
+<rect x="576.0" y="220.0" width="280.0" height="17.0" fill="#45475a"/>
+<text x="576.0" y="232.5" fill="#cdd6f4" textLength="280.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> keyboard protocol on by default?  </text>
+<rect x="856.0" y="220.0" width="8.0" height="17.0" fill="#45475a"/>
+<text x="856.0" y="232.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="56.0" y="249.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">@</text>
+<rect x="64.0" y="237.0" width="800.0" height="17.0" fill="#45475a"/>
+<text x="64.0" y="249.5" fill="#585b70" textLength="800.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│                                                                                                  │</text>
+<text x="56.0" y="266.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">&amp;</text>
+<rect x="64.0" y="254.0" width="800.0" height="17.0" fill="#45475a"/>
+<text x="64.0" y="266.5" fill="#585b70" textLength="800.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│                                                                                                  │</text>
+<rect x="64.0" y="271.0" width="800.0" height="17.0" fill="#45475a"/>
+<text x="64.0" y="283.5" fill="#585b70" textLength="800.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│                                                                                                  │</text>
+<rect x="64.0" y="288.0" width="800.0" height="17.0" fill="#45475a"/>
+<text x="64.0" y="300.5" fill="#585b70" textLength="800.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│                                                                                                  │</text>
+<rect x="64.0" y="305.0" width="800.0" height="17.0" fill="#45475a"/>
+<text x="64.0" y="317.5" fill="#585b70" textLength="800.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│                                                                                                  │</text>
+<rect x="64.0" y="322.0" width="800.0" height="17.0" fill="#45475a"/>
+<text x="64.0" y="334.5" fill="#585b70" textLength="800.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│                                                                                                  │</text>
+<rect x="64.0" y="339.0" width="800.0" height="17.0" fill="#45475a"/>
+<text x="64.0" y="351.5" fill="#585b70" textLength="800.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│                                                                                                  │</text>
+<rect x="64.0" y="356.0" width="800.0" height="17.0" fill="#45475a"/>
+<text x="64.0" y="368.5" fill="#585b70" textLength="800.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│                                                                                                  │</text>
+<rect x="64.0" y="373.0" width="800.0" height="17.0" fill="#45475a"/>
+<text x="64.0" y="385.5" fill="#585b70" textLength="800.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│                                                                                                  │</text>
+<rect x="64.0" y="390.0" width="800.0" height="17.0" fill="#45475a"/>
+<text x="64.0" y="402.5" fill="#585b70" textLength="800.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│                                                                                                  │</text>
+<rect x="64.0" y="407.0" width="800.0" height="17.0" fill="#45475a"/>
+<text x="64.0" y="419.5" fill="#585b70" textLength="800.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│                                                                                                  │</text>
+<rect x="64.0" y="424.0" width="800.0" height="17.0" fill="#45475a"/>
+<text x="64.0" y="436.5" fill="#585b70" textLength="800.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│                                                                                                  │</text>
+<rect x="64.0" y="441.0" width="800.0" height="17.0" fill="#45475a"/>
+<text x="64.0" y="453.5" fill="#585b70" textLength="800.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│                                                                                                  │</text>
+<rect x="64.0" y="458.0" width="800.0" height="17.0" fill="#45475a"/>
+<text x="64.0" y="470.5" fill="#585b70" textLength="800.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│                                                                                                  │</text>
+<text x="864.0" y="470.5" fill="#f38ba8" textLength="40.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">─────</text>
+<rect x="64.0" y="475.0" width="800.0" height="17.0" fill="#45475a"/>
+<text x="64.0" y="487.5" fill="#585b70" textLength="800.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│                                                                                                  │</text>
+<rect x="64.0" y="492.0" width="800.0" height="17.0" fill="#45475a"/>
+<text x="64.0" y="504.5" fill="#585b70" textLength="800.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│                                                                                                  │</text>
+<rect x="64.0" y="509.0" width="800.0" height="17.0" fill="#45475a"/>
+<text x="64.0" y="521.5" fill="#585b70" textLength="800.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│Enter open · Ctrl+F local search · Esc close                                                      │</text>
+<rect x="64.0" y="526.0" width="800.0" height="17.0" fill="#45475a"/>
+<text x="64.0" y="538.5" fill="#585b70" textLength="800.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">└──────────────────────────────────────────────────────────────────────────────────────────────────┘</text>
+<text x="224.0" y="555.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="224.0" y="572.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="224.0" y="589.5" fill="#585b70" textLength="688.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">├─────────────────────────────────────────────────────────────────────────────────────</text>
+<text x="224.0" y="606.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<rect x="232.0" y="594.0" width="160.0" height="17.0" fill="#45475a"/>
+<text x="232.0" y="606.5" fill="#cdd6f4" textLength="160.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">[15:42] [@chris] [1:</text>
+<rect x="392.0" y="594.0" width="56.0" height="17.0" fill="#45475a"/>
+<text x="392.0" y="606.5" fill="#89b4fa" textLength="56.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="bold">Gophers</text>
+<rect x="448.0" y="594.0" width="192.0" height="17.0" fill="#45475a"/>
+<text x="448.0" y="606.5" fill="#cdd6f4" textLength="192.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">] [telegram] [img:kitty]</text>
+<rect x="640.0" y="594.0" width="112.0" height="17.0" fill="#45475a"/>
+<text x="640.0" y="606.5" fill="#89b4fa" textLength="112.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="bold"> [search: 1/0]</text>
+<rect x="752.0" y="594.0" width="160.0" height="17.0" fill="#45475a"/>
+<text x="752.0" y="606.5" fill="#cdd6f4" textLength="160.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> [alice typing…]    </text>
+<text x="16.0" y="623.5" fill="#89b4fa" textLength="208.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="bold"> + new message            </text>
+<text x="224.0" y="623.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="232.0" y="623.5" fill="#89b4fa" textLength="88.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="bold">/ search › </text>
+<text x="320.0" y="623.5" fill="#cdd6f4" textLength="592.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">kitty                                                                     </text>
+</svg>
