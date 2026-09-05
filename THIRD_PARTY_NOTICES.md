@@ -6,6 +6,12 @@ modules; its notice coverage and notice checksums were also verified.
 Third-party copyrights and licenses remain with their owners.
 The project license does not replace them.
 
+TTYloom’s original code, documentation and artwork use the [MIT license](LICENSE.md).
+Copied code, dependencies and data retain their own licenses, including the
+LGPL-3.0-only and MIT Hunspell binding, Unicode License V3 emoji data, and MIT
+Catppuccin palette described below. The project’s MIT grant does not relicense
+those components.
+
 ## Go dependencies
 
 - [Module inventory and original notices](licenses/go/README.md): all **53 modules

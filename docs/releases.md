@@ -1,5 +1,7 @@
 # Publishing a release
 
+[Français](releases.fr.md) · [Contributing](../CONTRIBUTING.md)
+
 TTYloom publishes portable Linux binaries for x86-64 (`amd64`) and ARM64
 (`arm64`). They use `CGO_ENABLED=0` and `nospell`; Hunspell is available in source
 builds. FFmpeg, clipboard tools and dictionaries are installed separately.
@@ -11,7 +13,7 @@ Go toolchain and build flags; `ttyloom --version` prints the version and commit.
 
 ## Prepare and publish
 
-1. Update the changelog and the version in both READMEs. Review dependency
+1. Update the changelog and the version in both READMEs and user manuals. Review dependency
    notices if `go.mod`, copied code, assets or build targets have changed.
 2. Run the checks in `.github/workflows/ci.yml`, then commit the release changes.
 3. Tag that commit and push it, replacing `v1.1.0` below with the new version:
@@ -51,6 +53,6 @@ source, so local files cannot enter the packages. It refuses tracked internal
 working documents. Output is stored under `dist/`, which Git ignores.
 
 Builds use `-trimpath` and record the commit explicitly. Archive timestamps,
-ordering and ownership are fixed. Use the same Go patch version when comparing
-checksums between machines. `SHA256SUMS` detects corrupted or changed downloads;
+ordering, permissions and ownership are fixed. Use the same Go patch version
+when comparing checksums between machines. `SHA256SUMS` detects corrupted or changed downloads;
 it is not a digital signature.

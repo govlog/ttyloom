@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+umask 022
 
 cd "$(git rev-parse --show-toplevel)"
 version=${1:?Usage: scripts/release.sh vMAJOR.MINOR.PATCH}
@@ -44,7 +45,7 @@ for arch in amd64 arm64; do
             -ldflags "-s -w -X main.version=$version -X main.commit=$commit" \
             -o "$package/ttyloom" ./cmd/ttyloom
     )
-    for doc in README.md README.fr.md CHANGELOG.md TODO.md LICENSE.md THIRD_PARTY_NOTICES.md docs licenses; do
+    for doc in README.md README.fr.md CHANGELOG.md TODO.md CONTRIBUTING.md CODE_OF_CONDUCT.md SECURITY.md LICENSE.md THIRD_PARTY_NOTICES.md docs licenses; do
         cp -R "$stage/$doc" "$package/"
     done
     printf 'Version: %s\nCommit: %s\nToolchain: %s\nTarget: linux/%s\nCGO_ENABLED=0; tags=nospell\n' \

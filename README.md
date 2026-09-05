@@ -1,12 +1,13 @@
 <p align="center"><img src="docs/logo.svg" alt="TTYloom — Many networks. One terminal." width="800"></p>
 
-<p align="center"><b>Telegram and Discord, woven into your terminal.</b><br>IRC-style windows. Keyboard commands. Photos, GIFs and conversations in one place.</p>
+<p align="center"><b>Telegram and Discord, woven into your terminal.</b><br>Inline videos. Zoomable images. IRC-style windows and conversations in one place.</p>
 
 <p align="center">
 <a href="https://github.com/govlog/ttyloom/actions/workflows/ci.yml"><img src="https://github.com/govlog/ttyloom/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
 <a href="https://go.dev/dl/"><img src="https://img.shields.io/badge/Go-1.26.7+-00ADD8?logo=go&amp;logoColor=white" alt="Go 1.26.7 or newer"></a>
 <img src="https://img.shields.io/badge/platform-Linux-FCC624?logo=linux&amp;logoColor=black" alt="Linux">
-<a href="README.fr.md">Français</a> · <a href="docs/authentication.md">Account setup</a> · <a href="docs/guide.fr.md">Full French manual</a>
+<a href="LICENSE.md"><img src="https://img.shields.io/badge/license-MIT-89b4fa" alt="MIT license"></a><br>
+<a href="README.fr.md">Français</a> · <a href="docs/guide.md">Full manual</a> · <a href="docs/authentication.md">Account setup</a>
 </p>
 
 ![TTYloom: Telegram messages, Discord channels, replies, reactions and an inline photo](docs/screenshots/main.svg)
@@ -17,11 +18,16 @@
 
 ## Built for conversations
 
-- **Stay on the keyboard.** Numbered windows, per-window drafts, `/query`, `/join`, `/msg`, `/me`, Tab completion and an aggregate view in window 0.
-- **Keep networks together.** Fold the sidebar by network or Discord server, filter with `/net`, and search across Telegram and Discord.
-- **See what people send.** Inline photos, GIFs, stickers and video previews. Native pixels through the kitty graphics protocol; Unicode half blocks as a fallback. Zoom and pan the full-screen viewer.
-- **Write with less friction.** Replies, edits, reactions, mentions, Markdown, an emoji picker, GIF search and clipboard image paste. Optional Hunspell checking.
-- **Pick up where you left off.** Local history cache, unread markers, typing indicators and configurable notifications. French and English interface, switchable while running.
+- **Play videos inside the conversation.** `l` plays or pauses, `s` stops; choose previews, hidden videos or autoplay. Silent playback also works full screen, with FFmpeg.
+- **Open an image and explore it.** Click or press `v` for the built-in viewer. Zoom up to 8× with the wheel or `+`/`-`, **drag with the mouse to pan**, use arrow keys, and press `0` to fit again. [Viewer controls](docs/guide.md#viewer).
+- **Keep photos and GIFs in the flow.** Native pixels through kitty graphics, Unicode half blocks elsewhere. `F5` shows images only on hover; `Ctrl+G` opens a searchable picker with animated GIF previews.
+- **Move between conversations your way.** Numbered windows, a draft in each, `/query`, `/join`, `/msg`, `/me`, and a cycle through unread windows. `F6` combines conversations in window 0.
+- **Make the sidebar work for you.** Fold networks and Discord servers, filter with `/net`, sort by recent activity or unread messages, and drag the border to resize. The wheel switches between open conversations.
+- **Find a message, then jump to it.** `Ctrl+F` searches locally; press it twice to search across networks. Click a reply’s quote to return to its original message, loading the surrounding history when needed.
+- **React without a detour.** Hover actions, quick reactions, double-click 👍, replies, edits and message details. `F3` shows members and presence; click a member to open a conversation.
+- **Give your draft some room.** Expand the multiline editor, paste a code block, complete an `@mention`, pick an emoji or paste an image with `Ctrl+V`. Optional Hunspell underlines misspellings; `Ctrl+R` offers corrections.
+- **Keep the useful little details.** Drag to copy several messages, preview themes live, show seconds in timestamps, spot the unread divider, and keep a local history cache. Typing indicators, focus-aware read state and configurable notifications complete the flow.
+- **Switch languages while chatting.** French and English interface, matching READMEs and full manuals. `/set lang fr` or `/set lang en` applies immediately.
 
 Capabilities depend on the network. Unsupported actions are hidden.
 
@@ -45,18 +51,28 @@ Discord user-token access is unsupported by Discord and can lead to account susp
 
 These frames use **the actual UI renderer with fictional data** and the Catppuccin Mocha palette. PNG previews come from its kitty output; GIF screenshots are still frames. [Regenerate the screenshots](docs/screenshots/README.md).
 
+## Documentation
+
+| Guide | What you will find |
+| --- | --- |
+| [Full user manual](docs/guide.md) | Installation, every setting, commands, mouse controls, media, cache and troubleshooting |
+| [Account setup](docs/authentication.md) | Telegram API credentials, QR/phone/bot login, Discord tokens and session handling |
+| [Contributing](CONTRIBUTING.md) | Testing, feedback, translations, development and checks, in English and French |
+
+Prefer French? [Switch the entire overview](README.fr.md) or open the [French manual](docs/guide.fr.md).
+
 ## Install
 
 ### Download a binary
 
-[Download TTYloom v1.1.0](https://github.com/govlog/ttyloom/releases/tag/v1.1.0) for **Linux x86-64 (`amd64`)** or **ARM64 (`arm64`)**. These portable builds need no Go installation or C library. They omit Hunspell spell checking; the source build below supports it.
+[Download TTYloom v1.1.1](https://github.com/govlog/ttyloom/releases/tag/v1.1.1) for **Linux x86-64 (`amd64`)** or **ARM64 (`arm64`)**. These portable builds need no Go installation or C library. They omit Hunspell spell checking; the source build below supports it.
 
 Download your architecture’s `.tar.gz` archive and `SHA256SUMS` from that release into the same directory, then:
 
 ```bash
 sha256sum --check --ignore-missing SHA256SUMS
-tar -xzf ttyloom_1.1.0_linux_amd64.tar.gz
-cd ttyloom_1.1.0_linux_amd64
+tar -xzf ttyloom_1.1.1_linux_amd64.tar.gz
+cd ttyloom_1.1.1_linux_amd64
 ./ttyloom --version
 ./ttyloom
 ```
@@ -199,21 +215,16 @@ flowchart LR
 
 ## Development
 
-**Testers are welcome!** Try TTYloom with your terminal and chat networks, and share bugs or usability feedback through [GitHub Issues](https://github.com/govlog/ttyloom/issues). Include your TTYloom version, OS, terminal, and steps to reproduce the problem. Remove tokens, session files and private conversations from anything you share.
+**Testers are welcome!** Try TTYloom with your terminal and chat networks, and share bugs or usability feedback through [GitHub Issues](https://github.com/govlog/ttyloom/issues). The [contribution guide](CONTRIBUTING.md) covers useful reports, translations, code changes and checks in English and French.
 
-```bash
-go test ./...
-go test -race ./...
-go test -tags nospell ./...
-go vet ./...
-```
+Please follow the [code of conduct](CODE_OF_CONDUCT.md). Report vulnerabilities privately using the [security policy](SECURITY.md).
 
-See the [changelog](CHANGELOG.md), [French manual](docs/guide.fr.md) and [TODO](TODO.md) for more detail.
+See the [changelog](CHANGELOG.md), [full manual](docs/guide.md) and [TODO](TODO.md) for more detail.
 
 To prepare another release, follow the [release instructions](docs/releases.md). Tagged versions build Linux archives, checksums and matching source in GitHub Actions, then create a draft release for review.
 
 ## Licenses and credits
 
-See [LICENSE.md](LICENSE.md) for the project license and exceptions, and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for dependency versions, license texts, copied code, Unicode data and native-library requirements.
+TTYloom’s original code, documentation and artwork are [MIT licensed](LICENSE.md). Third-party components retain their own licenses; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for dependency versions, license texts, copied code, Unicode data and native-library requirements.
 
 Built on [gotd](https://github.com/gotd/td), [arikawa](https://github.com/diamondburned/arikawa), [ningen](https://github.com/diamondburned/ningen), [rsc.io/qr](https://github.com/rsc/qr), [Hunspell](https://hunspell.github.io/) and the [kitty graphics protocol](https://sw.kovidgoyal.net/kitty/graphics-protocol/). Inspired by ircii and BitchX. Screenshot colours are from [Catppuccin](https://github.com/catppuccin/palette).

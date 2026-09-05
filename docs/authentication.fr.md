@@ -1,6 +1,6 @@
 # Connecter vos comptes
 
-[English](authentication.md) · [Retour au README](../README.fr.md)
+[English](authentication.md) · [Retour au README](../README.fr.md) · [Manuel complet](guide.fr.md)
 
 TTYloom peut connecter Telegram, Discord, ou les deux. Lancez-le une première
 fois pour créer `~/.config/ttyloom/config.toml`, puis modifiez ce fichier.

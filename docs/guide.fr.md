@@ -1,79 +1,122 @@
 # Manuel TTYloom
 
-> 🇬🇧 English README with screenshots: [README.md](../README.md)
+[Français](guide.fr.md) · [English](guide.md) · [Présentation](../README.fr.md) · [Connexion aux comptes](authentication.fr.md)
 
-# Introduction
+Manuel de la version **1.1.1**, vérifié par rapport au code le **5 septembre 2026**.
 
-Le but de cette documentation est de présenter l'installation et la configuration de **ttyloom** sur **Debian 12** ou toute distribution Linux disposant de **Go 1.26.7**.
+<details>
+<summary>Sommaire</summary>
+
+- [Introduction](#introduction) et [prérequis](#prérequis)
+- [Installation](#installation)
+- [Configuration et comptes](#configuration)
+- [Fenêtres, conversations et commandes](#utilisation)
+- [Visionneuse d’images et de vidéos](#viewer)
+- [Cache et synchronisation](#cache-et-synchronisation)
+- [Version et limites](#version-et-limites)
+- [Déconnexion](#déconnexion)
+- [Dépannage](#problèmes-récurrents)
+
+</details>
+
+## Introduction
+
+Ce manuel couvre l’installation, les comptes, toutes les options, les commandes, la souris et les raccourcis de **TTYloom** sur Linux. Les binaires amd64 et arm64 ne nécessitent pas Go ; compiler depuis les sources demande **Go 1.26.7 ou supérieur**.
 
 **ttyloom**[^1] est un client **Telegram et Discord** en mode texte, dans l'esprit d'**ircii** et de **BitchX** : une fenêtre de messages, une barre de statut, une ligne de commande. Il exploite le protocole graphique **kitty**[^2] pour afficher photos, stickers et GIF en ligne dans **Ghostty** ou **kitty**, se replie en demi-blocs Unicode ailleurs, souligne les liens (OSC 8), respecte la mise en forme des messages et charge les thèmes de couleurs de **Ghostty**.
 
 > [!note]
-> Compilé et testé (*go test*) sur **Ubuntu**, **Go 1.26.7**, **Ghostty 1.x**, le 2026-08-29. Validé sur un compte réel le 2026-08-29.
+> Les vérifications automatiques tournent sur Ubuntu. Le binaire ARM64 reçoit un test de lancement sous QEMU. Ces vérifications ne couvrent pas toutes les combinaisons de terminaux ni les connexions à des comptes réels.
 
 > [!note]
-> Un second réseau, **Discord**, peut être connecté en parallèle : voir *Connexion à Discord*. Les deux comptes vivent dans la même interface, le panneau et la vue agrégée les mélangent, et */net* filtre sur l'un ou l'autre.
+> Connectez **Telegram, Discord, ou les deux**. Discord seul ne nécessite aucun identifiant Telegram. Le panneau et la vue agrégée mélangent les réseaux ; */net* les filtre. IRC et WhatsApp sont prévus mais ne sont pas implémentés.
 
 > [!note]
-> Deux modes de connexion existent : **compte utilisateur** (téléphone, code, mot de passe 2FA) et **bot** (token BotFather). Le mode compte utilisateur est le mode principal ; le mode bot ne voit que les messages reçus après sa connexion.
+> Telegram propose deux modes : **compte utilisateur** (QR code ou téléphone, code et éventuel mot de passe 2FA) et **bot** (token BotFather). Un bot ne voit que les messages reçus après sa connexion. Discord utilise un token utilisateur, pas un token de bot ni OAuth.
 
-# Prérequis
+## Prérequis
 
-- Installer **Go** 1.26.7 ou supérieur : [go.dev/dl](https://go.dev/dl/)
+- Pour compiler seulement : installer **Go** 1.26.7 ou supérieur depuis [go.dev/dl](https://go.dev/dl/).
 
 - Installer le paquet *ffmpeg* (optionnel, nécessaire aux vidéos et aux WebP animés ; les GIF sont décodés en Go)
 
 ```bash
-apt update ; apt install ffmpeg
+sudo apt update
+sudo apt install ffmpeg
 ```
 
 - Installer *libhunspell-dev* et les dictionnaires (optionnel, nécessaire à la correction orthographique */set spell* ; compiler avec `-tags nospell` pour s'en passer entièrement)
 
 ```bash
-apt update ; apt install libhunspell-dev hunspell-fr hunspell-en-us
+sudo apt install build-essential libhunspell-dev hunspell-fr hunspell-en-us
 ```
 
-- Créer une application sur [my.telegram.org](https://my.telegram.org/apps) pour obtenir *api_id* et *api_hash*
+- Pour Telegram seulement : créer une application sur [my.telegram.org](https://my.telegram.org/apps) pour obtenir *api_id* et *api_hash*. Le [guide de connexion](authentication.fr.md) détaille les identifiants des deux réseaux.
 
 > [!note]
-> Les identifiants *api_id* et *api_hash* sont obligatoires dans les deux modes de connexion : ils identifient l'application auprès de l'API MTProto, pas l'utilisateur.
+> Les identifiants *api_id* et *api_hash* sont obligatoires pour les deux modes **Telegram** : ils identifient l’application auprès de MTProto. Ils ne sont pas nécessaires pour Discord seul.
 
-# Installation
+## Installation
 
-## Compilation
+### Binaire prêt à lancer
+
+Téléchargez l’archive Linux adaptée à votre processeur (`amd64` pour x86-64, `arm64` pour ARM64) et `SHA256SUMS` depuis la [version 1.1.1](https://github.com/govlog/ttyloom/releases/tag/v1.1.1).
+
+```bash
+sha256sum --check --ignore-missing SHA256SUMS
+tar -xzf ttyloom_1.1.1_linux_amd64.tar.gz
+cd ttyloom_1.1.1_linux_amd64
+./ttyloom --version
+./ttyloom
+```
+
+Remplacez `amd64` par `arm64` pour ARM64. Les binaires portables n’incluent pas Hunspell. Conservez les licences et notices livrées avec le binaire.
+
+### Compilation
 
 - Compiler le binaire **ttyloom**
 
 ```bash
-cd ~/dev/perso/ttyloom
-go build -o ttyloom ./cmd/ttyloom
+git clone https://github.com/govlog/ttyloom.git
+cd ttyloom
+go build -trimpath -o ttyloom ./cmd/ttyloom
 ```
 
 - Installer le binaire dans **/usr/local/bin**
 
 ```bash
-install -m 0755 ttyloom /usr/local/bin/ttyloom
+sudo install -m 0755 ttyloom /usr/local/bin/ttyloom
 ```
 
 - Vérifier que le binaire se lance et crée sa configuration
 
 ```bash
-ttyloom ; ls -la ~/.config/ttyloom/
+ttyloom --version
+ttyloom
 ```
 
 Sans réseau configuré, le résultat attendu est un message qui demande de configurer Telegram ou Discord et un fichier **~/.config/ttyloom/config.toml** créé avec les valeurs par défaut.
 
-# Configuration
+Une compilation locale sans les paramètres de publication affiche `dev` comme version.
 
-## Fichier de configuration
-
-> [!note]
-> Le fichier de configuration principal par défaut est **~/.config/ttyloom/config.toml**. Il est créé au premier lancement. Le répertoire peut être déplacé avec la variable d'environnement *TTYLOOM_DIR*.
-
-- Remplacer le fichier **~/.config/ttyloom/config.toml** (adapter selon usage)
+Pour compiler sans Hunspell ni compilateur C :
 
 ```bash
-cat > ~/.config/ttyloom/config.toml <<\EOF
+CGO_ENABLED=0 go build -trimpath -tags nospell -o ttyloom ./cmd/ttyloom
+```
+
+Les outils facultatifs sont `ffmpeg`/`ffprobe` pour les vidéos et WebP animés, `wl-paste` ou `xclip` pour le collage, et `notify-send` pour les notifications du bureau.
+
+## Configuration
+
+### Fichier de configuration
+
+> [!note]
+> Le fichier principal est **~/.config/ttyloom/config.toml**, ou **$XDG_CONFIG_HOME/ttyloom/config.toml** si cette variable est définie. Il est créé au premier lancement. *TTYLOOM_DIR* remplace le chemin complet du répertoire.
+
+- Modifier les clés existantes de **config.toml**. Voici un exemple de référence ; ne remplacez pas un fichier contenant vos identifiants par cet exemple vide. Gardez les sections `[telegram]` et `[discord]` à la fin.
+
+```toml
 api_id = 0                          # https://my.telegram.org
 api_hash = ""
 bot_token = ""                      # vide = compte utilisateur ; sinon token BotFather (mode bot)
@@ -108,7 +151,6 @@ cache_messages = 2000               # messages gardes par conversation sur disqu
 notify = "terminal"                 # terminal (OSC 777 Ghostty/kitty) | desktop (notify-send) | off
 log = false                         # journaliser toutes les nouvelles fenetres (/log par fenetre)
 log_dir = "~/.local/share/ttyloom/logs"
-EOF
 ```
 
 Détail des options :
@@ -120,14 +162,14 @@ Détail des options :
 | *lang* | langue de l'interface : une langue embarquée (*fr*, *en*) ou une chaîne *fr+en* (ordre de repli, la première langue décide aussi du pluriel) ; vide suit *$LC_ALL*/*$LANG* (*fr_\** → français, sinon anglais) ; */set lang* change à chaud et refuse toute chaîne contenant un segment inconnu |
 | *theme* | nom d'un thème Ghostty ; vide reprend la clé *theme* de **~/.config/ghostty/config**, *terminal* utilise les couleurs ANSI du terminal |
 | *download_dir* | répertoire des médias téléchargés, nommés *AAAAMMJJ-HHMMSS_reseau_chatID_titre_messageID.ext* |
-| *auto_media_max_kb* | taille maximale d'un média téléchargé automatiquement (0 à 524288) |
+| *auto_media_max_kb* | seuil de téléchargement automatique en Kio (0 à 524288) ; **0 désactive tout téléchargement automatique**, y compris les médias de taille inconnue ; */open* et */view* restent des demandes explicites |
 | *images* | *auto* détecte le protocole kitty, *halfblock* force les demi-blocs, *off* désactive les aperçus |
 | *images_hover* | *true* n'insère plus les images dans le fil : elles apparaissent en surimpression au survol du message (*F5* bascule) |
 | *kitty_images* | nombre d'images (photos, GIF, avatars) gardées transmises dans le terminal ; au-delà, la plus ancienne est libérée et retransmise à sa prochaine apparition |
 | *video_inline_frames* | nombre d'images décodées quand une vidéo est lue dans le fil (*l*), 10 par seconde ; plafond de 200 Mo par vidéo |
 | *video* | vidéos dans le fil : *show* garde la première image et la touche *l*, *hidden* n'affiche que l'étiquette (l'aperçu *v* et *o* restent disponibles), *autoplay* lance la lecture en boucle dès qu'une vidéo téléchargée s'affiche à l'écran (*s* arrête, *l* reprend la main) ; *video_inline_frames* borne le décodage dans les trois cas |
 | *link_previews* | sous un message contenant un lien reconnu par Telegram, bloc *│* avec le site, le titre, la description et la vignette ; *o* ou un clic sur l'étiquette ouvre la page |
-| *maps* | *true* télécharge une carte OpenStreetMap (4 tuiles, zoom 15, repère rouge) sous une position ou un lieu partagé et l'affiche comme une photo ; mise en cache dans *download_dir/maps* ; désactivé par défaut car chaque position provoque des requêtes vers *tile.openstreetmap.org* |
+| *maps* | *true* affiche une carte OpenStreetMap pour une position Telegram visible ou ouverte dans la visionneuse ; attribution visible, tuiles mises en cache par coordonnées dans *download_dir/maps* ; option désactivée par défaut car elle contacte *tile.openstreetmap.org* |
 | *avatars* | photos de profil (2 cellules) devant les pseudos et dans le panneau, en protocole kitty seulement |
 | *hover* | survol à la souris : *menu* surligne le message sous le pointeur et montre sa ligne d'aide, *highlight* surligne seulement (la ligne d'aide apparaît au clic), *off* ne fait rien au survol ; *true*/*false* restent acceptés ; règle aussi le suivi du pointeur (zone survolée éclairée, molette du panneau) |
 | *separator* | ligne *─* entre la zone des messages et la barre de statut |
@@ -147,7 +189,17 @@ Détail des options :
 | *cache_messages* | messages gardés par conversation sur disque (les plus récents) ; la mémoire d'une fenêtre suit la même limite |
 | *notify* | notification sur message privé ou mention quand le terminal n'a pas le focus : *terminal* (natif Ghostty/kitty), *desktop* (*notify-send*) ou *off* |
 | *log*, *log_dir* | journalisation en texte brut des fenêtres (*/log* par fenêtre, *log = true* pour toutes les nouvelles) |
-| *[discord] token_cmd* | commande qui imprime le token Discord sur sa sortie standard (voir *Connexion à Discord*) ; section absente ou clé vide = Discord n'est pas connecté |
+| *[discord] token_cmd* | commande qui imprime le token Discord sur sa sortie standard (voir *Connexion à Discord*) ; omettre la section désactive Discord, mais une section présente avec une commande vide produit une erreur |
+
+`[telegram]` accepte `api_id`, `api_hash` et `bot_token` et prend le pas sur leurs équivalents à la racine. Les clés inconnues sont signalées au lancement. `/set` liste les options modifiables à chaud ; les identifiants, `cache` et `video_inline_frames` se règlent dans le fichier puis nécessitent un redémarrage.
+
+Pour utiliser un répertoire existant, y compris après un changement de nom :
+
+```bash
+TTYLOOM_DIR=/chemin/absolu/vers/configuration ttyloom
+```
+
+Ce répertoire doit contenir directement `config.toml` et les fichiers de session. Si le dossier de destination existe déjà, `mv ancien_dossier destination` imbrique le dossier au lieu de fusionner son contenu. Sauvegardez la configuration avant un déplacement et vérifiez aussi `download_dir` et `log_dir`.
 
 > [!note]
 > Les variables d'environnement *TG_API_ID*, *TG_API_HASH* et *TG_BOT_TOKEN* prennent le pas sur le fichier. Les commandes */set* et */theme* réécrivent **config.toml**, mais les valeurs venues de *TG_API_ID*, *TG_API_HASH* et *TG_BOT_TOKEN* n'y sont jamais recopiées.
@@ -158,7 +210,7 @@ Détail des options :
 chmod 0600 ~/.config/ttyloom/config.toml
 ```
 
-## Connexion avec un compte utilisateur
+### Connexion avec un compte utilisateur
 
 > [!note]
 > Mode principal. La session est enregistrée dans **~/.config/ttyloom/session.json** (droits *0600*, non chiffrée) : les connexions suivantes ne redemandent rien.
@@ -185,7 +237,7 @@ Mot de passe 2FA :
 > [!caution]
 > Le fichier **session.json** donne un accès complet au compte. **Ne jamais** le copier sur une machine partagée ni le versionner.
 
-## Connexion en mode bot
+### Connexion en mode bot
 
 > [!warning]
 > A faire uniquement pour piloter un bot créé avec **@BotFather**. Un bot ne peut ni lister ses conversations ni relire l'historique : Telegram refuse *messages.getDialogs* et *messages.getHistory* aux bots. **ttyloom** n'affiche alors que les messages reçus après sa connexion, et les commandes */chats* et */history* sont indisponibles.
@@ -210,7 +262,7 @@ bot_token = "123456789:AAExempleDeTokenBotFather"
 > [!note]
 > La session d'un bot est enregistrée à part, dans **~/.config/ttyloom/session-bot.json** : passer d'un mode à l'autre ne mélange jamais les identités.
 
-## Connexion à Discord
+### Connexion à Discord
 
 > [!caution]
 > Discord interdit les clients utilisant un token utilisateur et peut suspendre le compte. Voir la [politique officielle](https://discord.com/safety/360044104071-Tips-against-spam-and-hacking) et le [guide des identifiants](authentication.fr.md#discord).
@@ -257,19 +309,19 @@ Le panneau se découpe en sections dès qu'il y a de quoi : une ligne d'en-tête
 
 Le filtre ne ferme aucune fenêtre : il ne touche que le panneau — la liste des conversations comme celle des fenêtres, où seules celles liées au réseau choisi restent, la fenêtre 0 toujours — et la vue agrégée. En mode fenêtres, *F2* enchaîne les réseaux avant de masquer le panneau : fenêtres de tous les réseaux, puis de chacun dans l'ordre des noms, puis caché. Avec un seul réseau connecté, */net* se contente de le nommer.
 
-Ce qui fonctionne en v1 :
+Ce qui fonctionne actuellement :
 
 - messages privés, groupes privés et salons texte des guildes (types *texte* et *annonces*), à plat dans le panneau
 - envoi, réponse, édition et suppression de messages, mise en forme Markdown Discord traduite dans les deux sens
 - historique (*PgUp*, */history*) et cache disque comme sur Telegram
 - réactions (*r*, bascule) et survol *qui a réagi*
-- indication de saisie (*est en train d'écrire*), marque de lecture, pièces jointes et images (envoi avec */send*, téléchargement, aperçu)
+- indication de saisie (*est en train d'écrire*), synchronisation de ma position de lecture, pièces jointes et images (envoi avec */send*, téléchargement, aperçu) ; cela ne donne pas d’accusé de lecture du correspondant
 - boîte des participants (*F3*) : les membres d'un salon de guilde, avec un accent de couleur sur ceux qui sont *en ligne* ; en message privé, la boîte et la barre de statut donnent la présence du correspondant (*en ligne*, *inactif*, *ne pas déranger*)
 - *supprimer la conversation* sur un message privé ; sur un groupe privé, elle revient à quitter le groupe, Discord ne fait pas la différence
 - recherche : */search* dans un salon ou un message privé (la recherche de Discord, celle du client officiel), et la recherche globale (*Ctrl+F* deux fois) qui interroge chaque serveur puis les dix messages privés les plus récents, quinze secondes au plus
 - sélecteur de GIF (*Ctrl+G*) : Tenor via Discord, le GIF part comme l'adresse de sa page, et un GIF Tenor reçu s'anime dans le fil
 
-Ce qui manque en v1 :
+Limites actuelles :
 
 - fils de discussion, forums, salons vocaux et catégories : ils ne sont pas listés
 - */whois*, carnet de contacts et */query* d'un pseudo inconnu — Discord ne résout pas un nom en conversation
@@ -283,7 +335,7 @@ Les autres actions indisponibles le disent dans la fenêtre plutôt que de reste
 *** indisponible sur discord
 ```
 
-## Thème
+### Thème
 
 - Lister les thèmes disponibles depuis la ligne de commande de **ttyloom**
 
@@ -301,9 +353,9 @@ Le thème est appliqué immédiatement et enregistré dans **config.toml**. Les 
 
 - Choisir un thème dans un sélecteur : */theme* sans argument ouvre une liste filtrable (flèches, molette, clic), chaque déplacement applique le thème en direct, *Entrée* le conserve, *Échap* restaure l'ancien
 
-# Utilisation
+## Utilisation
 
-## Fenêtres
+### Fenêtres
 
 Par défaut, la fenêtre 0 est la fenêtre de statut : connexion, journaux, résultats de */chats*, */theme list* et */help*. Chaque conversation ouverte occupe une fenêtre numérotée.
 
@@ -337,7 +389,7 @@ Ctrl+X
 
 Un message entrant pour une conversation sans fenêtre crée une fenêtre cachée, signalée dans *[Act: …]* de la barre de statut.
 
-## Conversations
+### Conversations
 
 | Commande | Effet |
 |---|---|
@@ -354,7 +406,9 @@ Un message entrant pour une conversation sans fenêtre crée une fenêtre caché
 | texte sans */* | envoie au chat de la fenêtre courante |
 | *//texte* | envoie un texte commençant par */* |
 
-## Médias
+Les alias `/w`, `/win`, `/q`, `/j`, `/m`, `/hist`, `/t`, `/o`, `/c`, `/h` et `/exit` correspondent à `/window`, `/window`, `/query`, `/join`, `/msg`, `/history`, `/theme`, `/open`, `/clear`, `/help` et `/quit`. Pour `/rename`, mettez les noms contenant des espaces entre guillemets, par exemple `/rename "Amis - Général" Général`.
+
+### Médias
 
 | Commande | Effet |
 |---|---|
@@ -369,29 +423,55 @@ Un message entrant pour une conversation sans fenêtre crée une fenêtre caché
 | *Ctrl+G* ou */gif [recherche]* | sélecteur de GIF animés : les GIF tendance tout de suite, la frappe cherche (le bot *@gif* sur Telegram, Tenor via Discord), les flèches ou la molette déplacent, *Entrée* ou un clic envoie le GIF choisi dans la conversation, *Échap* ferme. Les aperçus visibles sont téléchargés dans le cache et animés (kitty, ou demi-blocs), 40 images chacun au plus |
 | */set auto_media_max_kb 20480* | relève le seuil de téléchargement automatique |
 
+<a id="viewer"></a>
+
+#### Visionneuse intégrée : zoom, déplacement et vidéo
+
+Cliquez une image du fil, sélectionnez son message puis pressez `v`, ou utilisez `/view [N]` pour le N-ième média depuis la fin. Les images doivent être activées (`F4`). La visionneuse fonctionne en pixels kitty ou en demi-blocs Unicode.
+
+| Touche ou geste | Effet |
+|---|---|
+| `+`, `=` ou molette vers le haut | zoom avant |
+| `-` ou molette vers le bas | zoom arrière |
+| Flèches | déplace la zone visible |
+| Bouton gauche maintenu + glisser | déplace l’image avec la souris |
+| `0` | recentre et ajuste à l’écran |
+| `l` sur une vidéo | lance ou met en pause la lecture plein écran, sans son |
+| `s` | arrête la lecture et revient à la première image |
+| `o` | ouvre le fichier, ou la page d’un aperçu de lien, dans l’application externe |
+| `Échap`, `q` ou clic sans glisser | ferme la visionneuse |
+
+Le zoom va de 25 % à 800 % de la vue ajustée, avec un facteur de 1,25 par cran. Une autre touche non affectée à la visionneuse la ferme. Les vidéos demandent FFmpeg : le nombre d’images et leur mémoire sont bornés, ce n’est pas un lecteur vidéo avec son. `video = "show"`, `"hidden"` et `"autoplay"` règlent leur comportement dans le fil.
+
 Les photos, stickers et GIF sous le seuil sont téléchargés dans *download_dir* et affichés en ligne ; les GIF sont animés. Un lien reconnu par Telegram reçoit un aperçu (*link_previews*) : étiquette *[lien · site · titre]* cliquable, description et vignette. Seules les adresses *http*, *https* et *mailto* sont ouvertes avec *xdg-open* ; tout autre schéma est refusé. Un média plus lourd reste une étiquette *[video 00:42 · 38 Mo]* que */open* télécharge à la demande. Un document dont l'extension n'est pas sur la liste blanche (images, vidéos, audio, bureautique, archives, texte, *pdf*) est enregistré en *.bin* et *o* refuse de l'ouvrir ; une image dont les dimensions dépassent 40 mégapixels est refusée au décodage (un GIF animé est plafonné à environ 1,6 mégapixel par image). Les fichiers téléchargés sont créés en *0600* dans des répertoires *0700*.
 
 En protocole kitty, une image n'est transmise au terminal qu'au moment où elle apparaît à l'écran, et au plus *kitty_images* images restent transmises à la fois (la plus anciennement affichée est libérée en premier). Chaque image de GIF est envoyée sur un second identifiant avant que la précédente ne soit effacée, ce qui évite le clignotement noir entre deux images. Les placements portent un identifiant stable : un simple redimensionnement ne retransmet rien, seul un changement de taille de police re-décode les images visibles.
 
+Les aperçus GIF décodent au plus 100 images, et le sélecteur au plus 40 par vignette. Les vidéos décodent au plus `video_inline_frames` images, avec un plafond de 1 000 et un budget de 200 Mio par décodage. Les images décodées hors écran sont libérées quand le budget global cible de 256 Mio est dépassé, puis recréées depuis les fichiers si elles redeviennent visibles ; ce budget n’est pas un plafond de mémoire totale du processus.
+
 Avec *images_hover* (*F5*), le fil ne réserve aucune ligne : l'image apparaît en surimpression quand la souris survole le message, à droite de l'étiquette si la place existe, sinon sous le bloc, jamais par-dessus le message lui-même.
 
-## Cache et synchronisation
+### Cache et synchronisation
 
 > [!note]
 > Par défaut, le répertoire de cache est **~/.cache/ttyloom** (ou **$XDG_CACHE_HOME/ttyloom**) ; avec *TTYLOOM_DIR* défini, il devient **$TTYLOOM_DIR/cache**, de sorte que deux comptes ne partagent jamais un cache. Le cache d'un bot vit dans un sous-répertoire *bot*.
 
-Au lancement, les conversations et l'historique du cache s'affichent avant même la connexion ; les fenêtres des conversations actives (*auto_open_days*) sont créées tout de suite, les autres historiques se chargent à l'ouverture de leur fenêtre. Remonter en haut d'une fenêtre (*PgUp* ou molette) charge la page précédente depuis Telegram, par tranches de 100 messages, jusqu'au début de la conversation ; ces pages rejoignent le cache, qui garde les *cache_messages* messages les plus récents de chaque conversation. Une fois connecté, **ttyloom** synchronise toutes les conversations l'une après l'autre (les 200 derniers messages, puis seulement les nouveautés aux démarrages suivants), à raison d'une requête toutes les 150 ms, sans jamais s'arrêter sur une limitation *FLOOD_WAIT*. La fenêtre 0 affiche la progression, *synchronisation 37/120 chats*, puis *synchronisation terminée*. Les médias sous le seuil sont téléchargés pour les conversations ouvertes.
+Au lancement, les conversations et l'historique du cache s'affichent avant même la connexion ; les fenêtres des conversations actives (*auto_open_days*) sont créées tout de suite, les autres historiques se chargent à l'ouverture de leur fenêtre. Remonter en haut d’une fenêtre (*PgUp* ou molette) charge la page précédente depuis le réseau de la conversation, par tranches de 100 messages, jusqu'au début de la conversation ; ces pages rejoignent le cache, qui garde les *cache_messages* messages les plus récents de chaque conversation. Une fois le compte utilisateur Telegram connecté, **ttyloom** synchronise ses conversations l’une après l’autre (les 200 derniers messages, puis seulement les nouveautés aux démarrages suivants), à raison d'une requête toutes les 150 ms, sans jamais s'arrêter sur une limitation *FLOOD_WAIT*. La fenêtre 0 affiche la progression, *synchronisation 37/120 chats*, puis *synchronisation terminée*. Les médias sous le seuil sont téléchargés pour les conversations ouvertes.
 
-- Vider le cache
+- Les caches sont séparés par réseau : `telegram/` et `discord/`, avec `dialogs.gob` et `history/` dans chacun. Le mode bot Telegram utilise `telegram/bot/`. Discord charge l’historique à l’ouverture des conversations et ne lance pas la passe de synchronisation globale Telegram décrite ci-dessus.
+
+- Pour reconstruire le cache, quitter TTYloom puis déplacer uniquement le répertoire du réseau concerné vers une sauvegarde. Adapter le chemin si `TTYLOOM_DIR` ou `XDG_CACHE_HOME` est défini :
 
 ```bash
-rm -rf ~/.cache/ttyloom/history ~/.cache/ttyloom/dialogs.gob
+mv ~/.cache/ttyloom/telegram ~/.cache/ttyloom/telegram.backup
 ```
+
+Choisissez un nom de sauvegarde qui n’existe pas encore. Les fichiers de session restent dans le répertoire de configuration ; vider le cache ne déconnecte pas le compte.
 
 > [!note]
 > Un cache appartenant à un autre compte est détecté à la connexion et ignoré (*cache d'un autre compte ignoré* en fenêtre 0). En mode bot, aucune synchronisation n'a lieu : le cache ne garde que les messages reçus.
 
-## Panneau latéral et notifications
+### Panneau latéral et notifications
 
 - Afficher le panneau avec *F2* : une première pression liste toutes les conversations (épinglées en tête, non-lus en couleur), une deuxième liste les fenêtres ouvertes, une troisième le masque
 - Avec deux réseaux connectés, la liste des fenêtres enchaîne les réseaux : chaque nouvelle pression de *F2* ne garde que les fenêtres d'un réseau, puis masque le panneau ; *Shift+F2* fait le même cycle sans quitter le mode courant
@@ -406,17 +486,17 @@ Un clic sur une ligne du panneau ouvre ou rejoint la conversation ; un clic sur 
 
 À droite de la zone des messages, une barre de défilement indique la position dans l'historique : un clic saute, un glisser suit la souris ; la piste s'éclaire en couleur d'accent dès que le pointeur est sur les messages ou sur la colonne, et le curseur s'épaissit en bloc plein (*█*) quand le pointeur est sur la colonne elle-même. La barre de statut résume l'activité des fenêtres non affichées sous la forme *[Act: 2(3),5(1)]* (numéro de fenêtre et nombre de messages). Une cloche retentit sur un message privé ou une mention de mon nom ailleurs que dans la fenêtre courante (*/set bell off* la coupe). Au démarrage, les conversations actives depuis *auto_open_days* jours reçoivent une fenêtre cachée, signalée dans *[Act]*.
 
-## Fenêtre 0 agrégée et recherche
+### Fenêtre 0 agrégée et recherche
 
 - Basculer la fenêtre 0 en vue agrégée avec *F6* (ou */set aggregate on*) : tous les messages de toutes les fenêtres y défilent, préfixés du nom de la conversation, *12:01 [alice] <alice> salut*, comme sous **BitchX**
 
-Taper du texte dans la vue agrégée répond à la conversation du dernier message affiché (le prompt indique *[réponse à alice]*). Les messages affichés dans l'agrégé sont considérés lus : l'accusé de lecture part vers Telegram pour chaque conversation concernée.
+Taper du texte dans la vue agrégée répond à la conversation du dernier message affiché (le prompt indique *[réponse à alice]*). Quand le terminal a le focus, les messages affichés sont marqués lus sur leur réseau ; Discord synchronise ma position de lecture sans fournir d’accusé de lecture des autres personnes.
 
 - Chercher dans la fenêtre courante avec *Ctrl+F* : la frappe filtre en direct, sans tenir compte de la casse ni des accents, les occurrences sont surlignées et la barre de statut affiche *[recherche : 3/17]* ; *Entrée* remonte à l'occurrence précédente, *Ctrl+N* descend, *Échap* quitte
 
 - Chercher sur tout le compte : *Ctrl+F* une seconde fois pendant la recherche locale interroge chaque réseau qui sait chercher (Telegram par *messages.searchGlobal*, Discord serveur par serveur puis dans les dix messages privés récents, quinze secondes au plus ; 50 résultats, 300 ms après la dernière frappe), ou seulement le réseau du filtre */net* (*F2* en mode fenêtres le fait tourner), fusionne les réponses du plus récent au plus ancien une fois toutes arrivées, et ouvre une boîte de résultats, une ligne par message (*[#salon|@pseudo]  date  <auteur>  extrait…*, occurrence en couleur) ; *↑*/*↓*, la molette ou un clic choisissent, *Entrée* ouvre la conversation et saute au message, *Ctrl+F* revient à la recherche locale, *Échap* ferme tout
 
-## Brouillons, focus, journalisation
+### Brouillons, focus, journalisation
 
 Chaque fenêtre garde son brouillon : le texte en cours de saisie survit à *Ctrl+X* et revient avec la fenêtre. */me <texte>* envoie une action en italique, comme sous **ircii**.
 
@@ -430,7 +510,7 @@ Chaque fenêtre garde son brouillon : le texte en cours de saisie survit à *Ctr
 
 Les lignes s'ajoutent à **<log_dir>/<titre>-<réseau>-<id>.log** au format *2026-08-30 12:01 <nick> texte* ; *[log]* apparaît dans la barre de statut. Le titre est coupé à 40 caractères, le reste du nom identifie la conversation : deux conversations aux titres longs et proches ne partagent plus un journal. Un renommage ouvre un nouveau fichier, et les journaux d'avant gardent leur ancien nom (aucune reprise automatique).
 
-- Chercher dans tout l'historique Telegram d'une conversation (recherche serveur, 50 résultats)
+- Chercher dans l’historique d’une conversation Telegram ou Discord (recherche serveur, 50 résultats)
 
 ```
 /search facture
@@ -438,7 +518,7 @@ Les lignes s'ajoutent à **<log_dir>/<titre>-<réseau>-<id>.log** au format *202
 
 Les résultats s'ouvrent dans une fenêtre *?facture* liée à la même conversation : sélection, réponse, réactions et édition y fonctionnent ; *Entrée* sur un résultat sélectionné (ou *g*) saute au message dans la vraie fenêtre ; */close* la ferme.
 
-- Afficher la fiche d'un contact (nom, @username, téléphone, bio, dernière connexion, discussions en commun)
+- Afficher la fiche d’un contact Telegram (nom, @username, téléphone, bio, dernière connexion, discussions en commun)
 
 ```
 /whois antonio
@@ -456,7 +536,7 @@ Les avertissements de la bibliothèque Telegram (*WARN*) n'apparaissent que là,
 
 Les blocs de code reçus sont encadrés d'une barre *┃* et, à l'ouverture d'une conversation avec des non-lus, la vue se place sur la ligne rouge *─── ↑ non lus ───* (*redline*). Un indicateur « tape… » est envoyé pendant la saisie (au plus toutes les 5 s).
 
-## Messages
+### Messages
 
 - Sélectionner un message avec *Alt+↑* / *Alt+↓* ou d'un clic (hors lien et hors image) : le bloc passe en surbrillance avec une barre *▌* et une ligne d'aide, *👍 · e éditer · d supprimer · p répondre · r réagir · i info · o ouvrir · v voir · l lire · c copier · Esc*, dont chaque mot est cliquable ; un second clic sur le message le désélectionne
 
@@ -480,14 +560,14 @@ La zone sous le pointeur prend aussi la molette : au-dessus du panneau, elle pas
 
 - Éditer mon dernier message sans le chercher : *↑* sur une saisie vide
 
-Un clic sur une réaction sous n'importe quel message l'ajoute ou la retire, sans passer par la sélection ; la ligne des réactions se met à jour dès la réponse de Telegram. Mes messages portent en fin de première ligne *✓* (envoyé) puis *✓✓* (lu par le destinataire) ; les messages reçus portent *•* tant que je ne les ai pas lus, puis *✓✓*. *i* sur un message avec réactions indique qui a réagi (*réactions : 👍 alice, bob · ❤ moi*).
+Un clic sur une réaction sous n'importe quel message l'ajoute ou la retire, sans passer par la sélection ; la ligne des réactions se met à jour dès la réponse de Telegram. Sur Telegram, mes messages portent en fin de première ligne *✓* (envoyé) puis *✓✓* (lu par le destinataire) ; les messages reçus portent *•* tant que je ne les ai pas lus, puis *✓✓*. *i* sur un message avec réactions indique qui a réagi (*réactions : 👍 alice, bob · ❤ moi*).
 
 - Copier plusieurs messages : glisser à la souris du premier au dernier (la plage se surligne), le texte brut des messages, sans horodatage ni indentation, part dans le presse-papier au relâchement (*copié : 3 messages*)
 
 > [!note]
-> L'édition renvoie du texte brut : un message qui contenait du gras ou un bloc de code perd sa mise en forme. Mes réactions sont affichées en couleur d'accent. En groupe, *lu par* dépend des réglages de confidentialité de Telegram et affiche *indisponible* quand le serveur refuse.
+> L’éditeur démarre avec le texte du message, sans reconstruire sa mise en forme d’origine. Les blocs délimités par trois accents graves sont pris en charge à l’envoi et à l’édition ; ajoutez leurs délimiteurs pour garder un bloc. Le Markdown Discord est interprété par Discord, tandis que le texte Telegram ordinaire n’est pas un éditeur Markdown complet. Une réponse prend le pas sur l’envoi en bloc de code. Les accusés *✓✓* et *lu par* sont propres à Telegram ; ils ne sont pas disponibles sur Discord.
 
-## Ligne de saisie
+### Ligne de saisie
 
 | Touche | Effet |
 |---|---|
@@ -496,7 +576,7 @@ Un clic sur une réaction sous n'importe quel message l'ajoute ou la retire, san
 | *Ctrl+K*, *Ctrl+U*, *Ctrl+W* | supprime jusqu'à la fin, jusqu'au début, le mot précédent |
 | *Ctrl+T* ou */emoji* | sélecteur d'emoji : la frappe filtre, les flèches ou un clic choisissent, *Entrée* insère, *Échap* ferme |
 | *↑*, *↓* | historique de saisie |
-| *Maj+Entrée* ou *Alt+Entrée* | saut de ligne dans la saisie (affiché *⏎*), *Entrée* ou *Ctrl+Entrée* envoie ; demande le protocole clavier kitty (Ghostty, kitty, WezTerm, foot), sinon coller un texte multiligne ; avec *multiline on*, ouvre la zone de saisie étendue (*↑*/*↓* y déplacent le curseur de ligne en ligne, un collage multiligne y propose insertion telle quelle ou en bloc de code) |
+| *Maj+Entrée* ou *Alt+Entrée* | saut de ligne dans la saisie (affiché *⏎*), *Entrée* ou *Ctrl+Entrée* envoie ; Maj+Entrée demande le protocole clavier kitty ; Alt+Entrée est le repli sans ce protocole, et le collage multiligne reste possible ; avec *multiline on*, ouvre la zone de saisie étendue (*↑*/*↓* y déplacent le curseur de ligne en ligne, un collage multiligne y propose insertion telle quelle ou en bloc de code) |
 | *Tab* | complète les commandes, les noms de conversations et les thèmes |
 | *PgUp*, *PgDn* | défilement de la fenêtre |
 | *Ctrl+L* | repeint l'écran |
@@ -512,6 +592,8 @@ Un collage de plus de 64 Ko est refusé ; un collage de plusieurs lignes ne part
 
 La touche *Tab* complète selon la commande : noms de conversations après */query*, */msg* et */join*, fenêtres après */win*, clés puis valeurs après */set*, thèmes après */theme*.
 
+Dans une conversation, taper `@` ouvre aussi les suggestions de membres ayant un pseudo : flèches pour choisir, `Tab` ou `Entrée` pour insérer, `Échap` pour fermer. Le sélecteur d’emoji garde les choix récents. La correction Hunspell (`Ctrl+R`) et les mentions complètent la saisie sans changer de fenêtre.
+
 - Afficher ou modifier une option à chaud
 
 ```
@@ -519,26 +601,40 @@ La touche *Tab* complète selon la commande : noms de conversations après */que
 /set timestamps off
 ```
 
-# Version 1.0
+## Version et limites
 
-La version 1.0 couvre tout ce qui précède. Les limites connues sont listées dans **CHANGELOG.md**.
+Ce manuel décrit la version **1.1.1**. Consultez le [journal des changements](../CHANGELOG.md) et les [travaux prévus](../TODO.md). Les vidéos sont sans son, les binaires portables n’incluent pas Hunspell, Discord ne prend pas en charge fils, forums, vocal ou tokens de bot, et IRC/WhatsApp ne sont pas encore implémentés. Un seul compte par réseau est utilisé dans un même répertoire de configuration ; plusieurs instances doivent utiliser des `TTYLOOM_DIR` distincts.
 
-# Retour arrière
+## Déconnexion
 
 > [!warning]
 > A faire uniquement si le compte doit être déconnecté de cette machine.
 
-- Supprimer la session enregistrée
+- Quitter TTYloom. Pour retirer les identifiants locaux Telegram, supprimer les fichiers de session :
 
 ```bash
 rm -f ~/.config/ttyloom/session.json ~/.config/ttyloom/session-bot.json
 ```
 
-- Vérifier que le prochain lancement redemande le numéro de téléphone ou réutilise le token
+- Un compte utilisateur redemandera une connexion. Un bot peut se reconnecter automatiquement tant que son token reste configuré. Supprimer une session locale ne révoque pas une copie distante : utilisez aussi **Telegram → Réglages → Appareils** pour fermer la session côté serveur si nécessaire.
 
-# Problèmes récurrents
+- Pour Discord, retirer la section `[discord]` désactive ce réseau dans TTYloom. Révoquez un token exposé depuis les réglages du compte Discord. Le [guide de connexion](authentication.fr.md) détaille la gestion des sessions et identifiants.
 
-## La fenêtre 0 se remplit d'avertissements
+## Problèmes récurrents
+
+### Aucun réseau configuré après un déplacement
+
+Vérifiez que le fichier actif contient vos identifiants et qu’il est directement dans le répertoire indiqué par l’erreur, pas dans un sous-dossier créé par `mv`. Vous pouvez démarrer avec `TTYLOOM_DIR=/chemin/absolu/vers/configuration ttyloom`. N’envoyez pas le contenu complet de votre configuration dans une issue.
+
+### Les touches de la visionneuse ou les vidéos ne répondent pas
+
+Activez les images avec `F4`, ouvrez le média avec `v`, attendez son téléchargement, puis utilisez la molette ou `+`/`-`. Maintenez le bouton gauche pour déplacer l’image : un clic seul ferme la visionneuse. Pour une vidéo, installez `ffmpeg` et `ffprobe`, puis pressez `l`. Les binaires ne lisent pas de son.
+
+### La correction orthographique reste désactivée
+
+Les archives portables utilisent `nospell`. Compilez normalement avec Hunspell et installez les dictionnaires, puis essayez `/set spell fr+en_US`. Installer les dictionnaires seuls ne donne pas Hunspell à un binaire `nospell`.
+
+### La fenêtre 0 se remplit d'avertissements
 
 Les avertissements de la bibliothèque Telegram ne sont plus affichés en fenêtre 0 ; ils vont dans le journal interne.
 
@@ -548,11 +644,11 @@ Les avertissements de la bibliothèque Telegram ne sont plus affichés en fenêt
 
 - Consulter le journal avec */debug* ; une limitation *FLOOD_WAIT* suspend les résolutions réseau le temps annoncé, signalé une seule fois par *FLOOD_WAIT 2m43s : résolutions réseau suspendues*
 
-## Alt+A ne répond pas
+### Alt+A ne répond pas
 
 Certains environnements de bureau capturent *Alt+lettre* avant le terminal. Les bascules sont sur les touches de fonction : *F6* pour la vue agrégée, *F4* pour le mode des images.
 
-## réaction non disponible ici
+### réaction non disponible ici
 
 Telegram n'accepte qu'une liste fixe de réactions, que chaque salon peut restreindre ; le sélecteur *r* ne propose que celles-là. Dans **Messages enregistrés**, une réaction sert de tag et demande un compte Premium.
 
@@ -560,9 +656,9 @@ Telegram n'accepte qu'une liste fixe de réactions, que chaque salon peut restre
 *** réaction réservée à Telegram Premium ici
 ```
 
-## Les images s'affichent en demi-blocs dans Ghostty
+### Les images s'affichent en demi-blocs dans Ghostty
 
-**ttyloom** interroge le terminal au démarrage ; sous **tmux** ou **screen** la réponse du protocole kitty n'arrive pas et l'affichage se replie en demi-blocs.
+**TTYloom** interroge le terminal au démarrage. Si un multiplexeur ne relaie pas la réponse du protocole kitty, l’affichage se replie en demi-blocs. Le résultat dépend du terminal et de la configuration du multiplexeur.
 
 ```
 *** terminal 200x60, cellule 0x0 px, kitty graphics false, clavier kitty false → images : halfblock, thème : Bluloco Dark
@@ -572,7 +668,7 @@ Telegram n'accepte qu'une liste fixe de réactions, que chaque salon peut restre
 
 Une cellule *0x0* avec *kitty graphics true* est un autre cas : la taille de cellule n'est pas encore connue au tout premier démarrage dans une fenêtre neuve. Le mode voulu est repris tout seul au premier redimensionnement qui la porte, et les médias sont redécodés ; *F4* fait la même chose à la main.
 
-## Maj+Entrée n'insère pas de saut de ligne
+### Maj+Entrée n'insère pas de saut de ligne
 
 Le saut de ligne dans la saisie demande le protocole clavier kitty. La bannière de démarrage en donne l'état, *clavier kitty true* quand le terminal a répondu à la sonde.
 
@@ -580,10 +676,10 @@ Le saut de ligne dans la saisie demande le protocole clavier kitty. La bannière
 *** terminal 200x60, cellule 9x18 px, kitty graphics true, clavier kitty true → images : kitty, thème : Bluloco Dark
 ```
 
-- Lancer **ttyloom** hors **tmux** et **screen**, qui ne relaient pas la sonde
+- Tester **TTYloom** directement dans le terminal, hors **tmux** ou **screen**, pour vérifier si le multiplexeur bloque la sonde
 - Utiliser *Alt+Entrée*, qui insère le même saut de ligne sans le protocole
 
-## Les GIF restent des étiquettes
+### Les GIF restent des étiquettes
 
 Les GIF Telegram sont des vidéos MP4 : sans *ffmpeg*, l'étiquette indique la cause.
 
@@ -593,13 +689,13 @@ Les GIF Telegram sont des vidéos MP4 : sans *ffmpeg*, l'étiquette indique la c
 
 - Installer le paquet *ffmpeg*
 
-## BOT_METHOD_INVALID dans la fenêtre 0
+### BOT_METHOD_INVALID dans la fenêtre 0
 
 Le mode bot a tenté une opération réservée aux comptes utilisateur, le plus souvent */history* ou */msg* vers un utilisateur qui n'a jamais écrit au bot.
 
 - Utiliser un compte utilisateur pour ces opérations, ou attendre que l'utilisateur écrive au bot
 
-## api_id / api_hash manquants
+### api_id / api_hash manquants
 
 ```
 ttyloom : api_id / api_hash manquants : crée une application sur https://my.telegram.org puis renseigne ~/.config/ttyloom/config.toml (ou TG_API_ID / TG_API_HASH)
@@ -607,8 +703,12 @@ ttyloom : api_id / api_hash manquants : crée une application sur https://my.tel
 
 - Editer le fichier **~/.config/ttyloom/config.toml**
 
-# Sources
+## Sources
 
+- [Guide de connexion](authentication.fr.md)
+- [Guide de contribution](../CONTRIBUTING.md#français)
+- [Politique de sécurité](../SECURITY.md#français)
+- [Licence du projet](../LICENSE.md) et [notices des dépendances](../THIRD_PARTY_NOTICES.md)
 
 [^1]: [core.telegram.org/api](https://core.telegram.org/api)
 [^2]: [sw.kovidgoyal.net/kitty/graphics-protocol](https://sw.kovidgoyal.net/kitty/graphics-protocol/)

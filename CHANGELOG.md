@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.1.1 — 2026-09-05
+
+- **Licence** : licence MIT pour le code original, la documentation et les illustrations ; les composants tiers conservent leurs licences. Les archives de cette version incluent ces textes.
+- **Communauté** : onglets GitHub de contribution, code de conduite et sécurité, avec textes anglais et français et signalement privé des vulnérabilités.
+- **Documentation** : READMEs en miroir, fonctions mises en avant, manuel anglais complet et manuel français mis à jour ; commandes de la visionneuse, chemins des caches, installation et limites propres aux réseaux vérifiés dans le code.
+
 ## v1.1.0 — 2026-09-05
 
 - **Distribution** : binaires Linux amd64 et arm64 sans Hunspell, archives avec licences, sources correspondantes et sommes SHA-256. `ttyloom --version` affiche la version et le commit source. Un tag crée un brouillon de version dans GitHub Actions.
