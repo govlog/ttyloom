@@ -2148,6 +2148,18 @@ func (u *UI) candidates(word string, atStart bool) []string {
 		return helpCandidates()
 	case complNet:
 		return append(u.netNames(), netAll)
+	case complPath:
+		// The editor completes its last word; a path with a space is longer
+		// than that word, so the candidates are cut to the part after the
+		// last space of what was typed.
+		cut := len(tail) - len(word)
+		var out []string
+		for _, c := range pathCandidates(tail) {
+			if len(c) >= cut {
+				out = append(out, c[cut:])
+			}
+		}
+		return out
 	case complFold:
 		return multiWord(word, tail, sectionKeys(u.foldSections()))
 	default:

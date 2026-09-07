@@ -437,7 +437,7 @@ real contact information.
 | `l` on a downloaded video | Play in the conversation without sound; press again to pause. |
 | `s` | Stop playback and return to the first frame. |
 | `/set video hidden` | Keep only video labels in the conversation; `show` previews one frame and `autoplay` loops visible downloaded videos. |
-| `/send path [caption]` | Send a local file: PNG/JPEG as a photo, MP4 as a video with ffprobe metadata, other formats as documents. |
+| `/send path [caption]` | Send a local file: PNG/JPEG as a photo, MP4 as a video with ffprobe metadata, other formats as documents. Tab completes the path: `~`, relative paths and spaces work, a directory gets its `/` and the next Tab goes on inside it. |
 | Ctrl+V | Paste an image through `wl-paste` or `xclip`, then choose send, caption or cancel using the displayed prompt keys. Plain text goes into the editor. |
 | Ctrl+G, `/gif [query]` | Search animated GIF previews: Telegram’s `@gif` bot or Tenor through Discord. Trends appear immediately; typing searches. Arrows or the wheel move; Enter or a click sends; Escape closes. |
 | `/set auto_media_max_kb 20480` | Raise the automatic download threshold to 20 MiB. |

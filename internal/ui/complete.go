@@ -1,7 +1,11 @@
 package ui
 
 import (
+	"os"
+	"path"
 	"strings"
+
+	"github.com/govlog/ttyloom/internal/config"
 
 	"github.com/govlog/ttyloom/internal/i18n"
 	"github.com/govlog/ttyloom/internal/spell"
@@ -21,6 +25,7 @@ const (
 	complHelp                            // /help <topic>
 	complNet                             // /net <network>
 	complFold                            // /fold <section>
+	complPath                            // /send <path>: files of the disk
 	complNone                            // /open /history …
 )
 
@@ -81,6 +86,13 @@ func complContext(line string, cursor int) (src complSource, tail string, setKey
 		return complNet, rest, ""
 	case "fold":
 		return complFold, rest, ""
+	case "send":
+		// The whole tail: a path may hold spaces (splitSendArgs allows it);
+		// once it names a file, the rest is the caption.
+		if p, _ := splitSendArgs(rest, isFile); p != rest {
+			return complNone, "", ""
+		}
+		return complPath, rest, ""
 	default:
 		return complNone, "", ""
 	}
@@ -125,6 +137,40 @@ func multiWord(word, tail string, names []string) []string {
 		if strings.HasPrefix(strings.ToLower(n), tl) {
 			out = append(out, word+n[len(tail):])
 		}
+	}
+	return out
+}
+
+// isFile : the path names a regular file ("~" expanded).
+func isFile(p string) bool {
+	st, err := os.Stat(config.Expand(p))
+	return err == nil && st.Mode().IsRegular()
+}
+
+// pathCandidates : the entries of the directory of p whose name starts with
+// its last element, as p was typed ("~" and relative paths kept); a directory
+// ends with "/" so that the next Tab goes on inside it. Hidden entries only
+// when the typed name starts with ".".
+func pathCandidates(p string) []string {
+	dir, base := path.Split(p)
+	list := dir
+	if list == "" {
+		list = "."
+	}
+	es, err := os.ReadDir(config.Expand(list))
+	if err != nil {
+		return nil
+	}
+	var out []string
+	for _, e := range es {
+		n := e.Name()
+		if !strings.HasPrefix(n, base) || (base == "" && strings.HasPrefix(n, ".")) {
+			continue
+		}
+		if st, err := os.Stat(config.Expand(dir + n)); err == nil && st.IsDir() { // symlinks too
+			n += "/"
+		}
+		out = append(out, dir+n)
 	}
 	return out
 }

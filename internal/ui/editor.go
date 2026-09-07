@@ -188,6 +188,9 @@ func (e *Editor) Complete(cands func(word string, atStart bool) []string) {
 		return
 	}
 	repl := matches[0] + " "
+	if strings.HasSuffix(matches[0], "/") { // a directory: the next Tab goes on inside it
+		repl = matches[0]
+	}
 	if len(matches) > 1 {
 		repl = commonPrefix(matches)
 		if len([]rune(repl)) <= len([]rune(word)) {

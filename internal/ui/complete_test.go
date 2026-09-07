@@ -1,6 +1,10 @@
 package ui
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
 
 func TestComplContext(t *testing.T) {
 	cases := []struct {
@@ -51,4 +55,32 @@ func TestComplFold(t *testing.T) {
 	if src != complFold || tail != "goph" {
 		t.Fatalf("got %v %q", src, tail)
 	}
+}
+
+// TestCompletePath : Tab after /send completes a path of the disk — common
+// prefix of the files, a directory with its "/" and no space so that the next
+// Tab goes on inside it, one file with the space of the caption, "~" kept as
+// typed, and a space inside the path (splitSendArgs allows it) handled.
+func TestCompletePath(t *testing.T) {
+	dir := t.TempDir()
+	for _, n := range []string{"photo1.jpg", "photo2.jpg", "my doc.pdf"} {
+		os.WriteFile(filepath.Join(dir, n), nil, 0o600)
+	}
+	os.Mkdir(filepath.Join(dir, "docs"), 0o700)
+	u := &UI{}
+	try := func(line, want string) {
+		t.Helper()
+		u.ed.Set(line)
+		u.ed.Complete(u.candidates)
+		if got := u.ed.String(); got != want {
+			t.Fatalf("%q → %q, want %q", line, got, want)
+		}
+	}
+	try("/send "+dir+"/ph", "/send "+dir+"/photo")
+	try("/send "+dir+"/d", "/send "+dir+"/docs/")
+	try("/send "+dir+"/photo1", "/send "+dir+"/photo1.jpg ")
+	try("/send "+dir+"/my d", "/send "+dir+"/my doc.pdf ")
+	t.Setenv("HOME", dir)
+	try("/send ~/ph", "/send ~/photo")
+	try("/send "+dir+"/photo1.jpg hello", "/send "+dir+"/photo1.jpg hello") // the caption is free text
 }
