@@ -85,8 +85,8 @@ func serviceOf(t discord.MessageType, who string) string {
 // the state knows it, their display name otherwise. On Discord the nickname is
 // often the only recognisable one.
 func (c *Client) nameOf(guild discord.GuildID, u discord.User) string {
-	if c.st != nil && guild.IsValid() {
-		if m, err := c.st.Cabinet.Member(guild, u.ID); err == nil && m.Nick != "" {
+	if c.state() != nil && guild.IsValid() {
+		if m, err := c.state().Cabinet.Member(guild, u.ID); err == nil && m.Nick != "" {
 			return m.Nick
 		}
 	}
@@ -242,7 +242,7 @@ func recipients(us []discord.User) string {
 // after what I read": 1 then stands for "unread", which is all the sidebar
 // needs to mark the line.
 func (c *Client) readOf(chat *model.Chat, ch *discord.Channel) {
-	rs := c.st.ReadState.ReadState(ch.ID)
+	rs := c.state().ReadState.ReadState(ch.ID)
 	if rs == nil {
 		// ponytail: a channel never opened carries no read state and stays
 		// unmarked, rather than showing everything it holds as unread — much

@@ -194,7 +194,7 @@ log_dir = "~/.local/share/ttyloom/logs"
 | `cache_messages` | Recent messages kept per conversation on disk; window memory follows the same message-count setting. |
 | `notify` | `terminal` for native terminal notifications, `desktop` for `notify-send`, or `off`. Notification delivery also depends on focus. |
 | `log`, `log_dir` | Plain-text conversation logs. `/log` toggles one window; `log = true` enables logging for new windows. |
-| `[discord] token_cmd` | Command printing the Discord user token. Omit the section to disable Discord; an existing section with an empty command is an error. |
+| `[discord] token_cmd` | Command printing the Discord user token. Omit the section to disable Discord; a section without the command logs in by QR code and keeps the token in `discord.token`. |
 
 `[telegram]` accepts `api_id`, `api_hash` and `bot_token` and takes precedence
 over those top-level keys. Unknown settings produce a startup warning. `/set`
@@ -256,8 +256,23 @@ Discord user-token access is unsupported by Discord and can lead to account
 suspension. Read the [official policy](https://discord.com/safety/360044104071-Tips-against-spam-and-hacking)
 and the [token setup guide](authentication.md#discord).
 
-Store your token outside the configuration, for example in a password manager.
-Add this section once, at the end of `config.toml`:
+Add this section once, at the end of `config.toml`, and start TTYloom:
+
+```toml
+[discord]
+```
+
+A QR code appears in window 0, like the Telegram one. Scan it from the Discord
+app (**Settings → Scan QR Code**), confirm on the phone, and TTYloom is logged
+in as its own device: the session shows in **Discord → Settings → Devices**
+and survives a logout of your browser. The code is valid five minutes;
+`/discord login` shows a new one. The token is kept in
+`~/.config/ttyloom/discord.token`, mode `0600`, next to the Telegram session;
+`/discord logout` ends that session on the server and deletes the file, Enter
+gives the QR up.
+
+You may instead keep the token yourself, in a password manager for example,
+and name the command that prints it:
 
 ```toml
 [discord]
@@ -268,12 +283,14 @@ The command must print only the token. It runs without a shell, splits on
 whitespace and times out after 30 seconds: no pipes, redirections, variable
 expansion or shell quoting. Use a wrapper script for a command that needs those
 features. Its output is not copied into the configuration, logs or window 0.
-An empty or failing command leaves Discord disconnected and is reported in
-window 0; the client starts all the same. Fix the manager entry, then
-`/discord login` runs the command again and connects without a restart. That
-later run happens inside the raw terminal: a command that prompts on the tty
-(a curses pinentry) only works at start; use a graphical pinentry or an
-unlocked agent for `/discord login`.
+A failing command leaves Discord disconnected and is reported in window 0
+with what the command said on stderr; the client starts all the same. Fix the
+manager entry, then `/discord login` runs the command again and connects
+without a restart. That later run happens inside the raw terminal: a command
+that prompts on the tty (a curses pinentry) only works at start; use a
+graphical pinentry or an unlocked agent for `/discord login`. With
+`token_cmd`, no QR is shown and `/discord logout` only disconnects: the token
+is yours.
 
 Sections must follow top-level settings: a plain key written after `[discord]`
 belongs to that section. Telegram is optional. With both configured, each
@@ -293,8 +310,8 @@ is saved in `sidebar.toml`. One network without a server needs no section header
 | `/net telegram` | Show Telegram. |
 | `/net all` | Remove the filter. |
 | `/discord`, `/telegram` | Network status: not started, connecting, connected as X. |
-| `/discord login` | Run `token_cmd` again and connect, after a failed or revoked token. |
-| `/discord logout` | Disconnect; the token stays where `token_cmd` reads it. |
+| `/discord login` | Log in again: the QR code, or `token_cmd` run again when it is set. |
+| `/discord logout` | End the session on the server and forget the token file; with `token_cmd`, only disconnect. |
 | `/telegram login` | Start Telegram again after a logout or a fatal error: QR, or phone and code. |
 | `/telegram logout` | End the session on the server (it leaves **Telegram → Settings → Devices**) and disconnect. |
 

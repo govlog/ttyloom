@@ -91,6 +91,26 @@ func TestBackendsDiscordOnly(t *testing.T) {
 	}
 }
 
+// [discord] with no token_cmd: the token file of the configuration directory
+// is the source, and with no file either the launch still gives a backend —
+// the one that logs in by QR and writes the file.
+func TestBackendsDiscordTokenFile(t *testing.T) {
+	cfg := loadCfg(t, "[discord]\n")
+	nets, _, launch, err := backends(context.Background(), cfg, make(chan model.Envelope, 8))
+	if err != nil || !slices.Equal(nets, []string{model.NetDiscord}) {
+		t.Fatalf("networks %v, %v", nets, err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if b, err := launch(ctx, model.NetDiscord); err != nil || b == nil {
+		t.Fatalf("launch with no token: %v %v", b, err)
+	}
+	os.WriteFile(cfg.DiscordTokenPath(), []byte("tok\n"), 0o600)
+	if b, err := launch(ctx, model.NetDiscord); err != nil || b == nil {
+		t.Fatalf("launch with the token file: %v %v", b, err)
+	}
+}
+
 // token_cmd that fails: the network is configured all the same (the client
 // starts, /discord login retries), its launch is the one that fails.
 func TestBackendsTokenError(t *testing.T) {

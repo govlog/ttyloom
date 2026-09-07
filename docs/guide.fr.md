@@ -189,7 +189,7 @@ Détail des options :
 | *cache_messages* | messages gardés par conversation sur disque (les plus récents) ; la mémoire d'une fenêtre suit la même limite |
 | *notify* | notification sur message privé ou mention quand le terminal n'a pas le focus : *terminal* (natif Ghostty/kitty), *desktop* (*notify-send*) ou *off* |
 | *log*, *log_dir* | journalisation en texte brut des fenêtres (*/log* par fenêtre, *log = true* pour toutes les nouvelles) |
-| *[discord] token_cmd* | commande qui imprime le token Discord sur sa sortie standard (voir *Connexion à Discord*) ; omettre la section désactive Discord, mais une section présente avec une commande vide produit une erreur |
+| *[discord] token_cmd* | commande qui imprime le token Discord sur sa sortie standard (voir *Connexion à Discord*) ; omettre la section désactive Discord, une section sans commande se connecte par QR code et garde le token dans *discord.token* |
 
 `[telegram]` accepte `api_id`, `api_hash` et `bot_token` et prend le pas sur leurs équivalents à la racine. Les clés inconnues sont signalées au lancement. `/set` liste les options modifiables à chaud ; les identifiants, `cache` et `video_inline_frames` se règlent dans le fichier puis nécessitent un redémarrage.
 
@@ -267,10 +267,12 @@ bot_token = "123456789:AAExempleDeTokenBotFather"
 > [!caution]
 > Discord interdit les clients utilisant un token utilisateur et peut suspendre le compte. Voir la [politique officielle](https://discord.com/safety/360044104071-Tips-against-spam-and-hacking) et le [guide des identifiants](authentication.fr.md#discord).
 
-> [!note]
-> Le token n'est jamais écrit dans **config.toml** : la clé *token_cmd* nomme une commande qui l'imprime sur sa sortie standard (*pass*, *gopass*, *secret-tool*…). Elle est exécutée sans shell — ni tube, ni redirection, ni variable, et découpée sur les blancs (un chemin avec une espace passe par un script) — avec un délai maximal de 30 secondes, et sa sortie n'apparaît ni dans les journaux ni dans la fenêtre 0.
+- Ajouter une section **[discord]** vide à la fin de **~/.config/ttyloom/config.toml** et lancer **ttyloom** : un QR code s'affiche en fenêtre 0, comme celui de Telegram. Le scanner depuis l'appli Discord (**Paramètres → Scanner un QR code**), confirmer sur le téléphone : TTYloom est connecté comme un appareil à part entière, visible dans **Discord → Paramètres → Appareils**, et une déconnexion du navigateur ne le touche pas. Le code vaut cinq minutes, */discord login* en affiche un nouveau. Le token est gardé dans **~/.config/ttyloom/discord.token** en mode 0600, à côté de la session Telegram ; */discord logout* ferme cette session côté serveur et supprime le fichier, *Entrée* abandonne le QR.
 
-- Obtenir et stocker votre token : [procédure détaillée](authentication.fr.md#discord). Telegram est facultatif ; une configuration Discord seule est prise en charge.
+> [!note]
+> Pour garder le token soi-même (*pass*, *gopass*, *secret-tool*…), la clé *token_cmd* nomme une commande qui l'imprime sur sa sortie standard ; le token n'est alors jamais écrit dans **config.toml** ni dans **discord.token**. Elle est exécutée sans shell — ni tube, ni redirection, ni variable, et découpée sur les blancs (un chemin avec une espace passe par un script) — avec un délai maximal de 30 secondes, et sa sortie n'apparaît ni dans les journaux ni dans la fenêtre 0 ; en cas d'échec, sa première ligne d'erreur est reprise dans le message. Avec *token_cmd*, pas de QR, et */discord logout* se contente de se déconnecter : le token est le vôtre.
+
+- Obtenir et stocker votre token à la main : [procédure détaillée](authentication.fr.md#discord). Telegram est facultatif ; une configuration Discord seule est prise en charge.
 
 - Ajouter la section **[discord]** à la fin de **~/.config/ttyloom/config.toml** (adapter selon usage)
 
@@ -307,8 +309,8 @@ Le panneau se découpe en sections dès qu'il y a de quoi : une ligne d'en-tête
 | */net telegram* | ne garde que Telegram |
 | */net all* | lève le filtre |
 | */discord*, */telegram* | état du réseau : non démarré, connexion, connecté en tant que X |
-| */discord login* | relance *token_cmd* et se connecte, après un token en échec ou révoqué |
-| */discord logout* | se déconnecte ; le token reste là où *token_cmd* le lit |
+| */discord login* | se reconnecte : QR code, ou *token_cmd* relancée quand elle est définie |
+| */discord logout* | ferme la session côté serveur et supprime le fichier de token ; avec *token_cmd*, se déconnecte seulement |
 | */telegram login* | redémarre Telegram après une déconnexion ou une erreur fatale : QR, ou téléphone et code |
 | */telegram logout* | ferme la session côté serveur (elle disparaît de **Telegram → Réglages → Appareils**) et se déconnecte |
 

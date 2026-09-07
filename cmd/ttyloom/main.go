@@ -100,12 +100,17 @@ func backends(ctx context.Context, cfg *config.Config, events chan<- model.Envel
 	// token command that prompts on the tty (pinentry-curses) works at start
 	// as it always did. The launches that follow (/discord login) read it
 	// again from inside the raw terminal — such a command needs a graphical
-	// pinentry or an unlocked agent by then.
+	// pinentry or an unlocked agent by then. With no command the token file
+	// is the source, and the backend logs in by QR and writes it when it is
+	// missing.
 	var firstTok string
 	var firstErr error
-	first := cfg.Discord != nil
+	first, tokenFile := cfg.Discord != nil, ""
 	if first {
-		firstTok, firstErr = cfg.Discord.Token()
+		if cfg.Discord.TokenCmd == "" {
+			tokenFile = cfg.DiscordTokenPath()
+		}
+		firstTok, firstErr = cfg.Discord.Token(cfg.DiscordTokenPath())
 	}
 	// build makes the backend of net on its own chan. A token command that
 	// fails is the error of the launch: the UI shows it and starts nothing.
@@ -117,13 +122,13 @@ func backends(ctx context.Context, cfg *config.Config, events chan<- model.Envel
 		case model.NetDiscord:
 			tok, err := firstTok, firstErr
 			if !first { // the first read is spent: the command or the file again
-				tok, err = cfg.Discord.Token()
+				tok, err = cfg.Discord.Token(cfg.DiscordTokenPath())
 			}
 			first = false
 			if err != nil {
 				return nil, err
 			}
-			return dsc.New(dsc.Config{Token: tok}, raw), nil
+			return dsc.New(dsc.Config{Token: tok, TokenFile: tokenFile}, raw), nil
 		}
 		return nil, fmt.Errorf("%s: unknown network", net)
 	}

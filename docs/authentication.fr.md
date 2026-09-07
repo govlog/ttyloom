@@ -84,6 +84,17 @@ application peut entraîner une suspension ou une suppression du compte.
 L’intégration est non officielle. Consultez les [conseils de sécurité Discord](https://discord.com/safety/360044104071-Tips-against-spam-and-hacking)
 et la [politique sur les self-bots](https://support.discord.com/hc/en-us/articles/115002192352-Automated-User-Accounts-Self-Bots).
 
+### Se connecter par QR code (recommandé)
+
+Écrivez une section `[discord]` vide à la fin de `config.toml` et lancez
+TTYloom. Un QR code s’affiche en fenêtre 0 ; scannez-le depuis l’appli Discord
+(**Paramètres → Scanner un QR code**) et confirmez sur le téléphone. C’est
+l’authentification à distance du client officiel : TTYloom devient un appareil
+à part entière, listé dans **Paramètres → Appareils**, et le token reçu est
+enregistré dans `~/.config/ttyloom/discord.token` en mode `0600`. Rien n’est lu
+dans un navigateur ni dans le client de bureau. `/discord logout` ferme cette
+session côté serveur et supprime le fichier ; `/discord login` réaffiche le QR.
+
 ### Obtenir manuellement votre propre token
 
 Cette procédure concerne uniquement **votre propre session de navigateur déjà

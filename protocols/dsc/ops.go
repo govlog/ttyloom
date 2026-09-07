@@ -41,7 +41,7 @@ func ids(chat *model.Chat) (discord.ChannelID, discord.GuildID) {
 
 // rest gives the REST client bound to ctx: arikawa carries the context on the
 // client, not on each call.
-func (c *Client) rest(ctx context.Context) *api.Client { return c.st.Client.WithContext(ctx) }
+func (c *Client) rest(ctx context.Context) *api.Client { return c.state().Client.WithContext(ctx) }
 
 // --- what Discord does not do ---
 
@@ -252,7 +252,7 @@ func (c *Client) Delete(ctx context.Context, chat *model.Chat, id int) {
 // delete the channel for everybody. Unknown channel = refused.
 func (c *Client) DeleteChat(ctx context.Context, chat *model.Chat) {
 	chID, _ := ids(chat)
-	ch, err := c.st.Cabinet.Channel(chID)
+	ch, err := c.state().Cabinet.Channel(chID)
 	if err != nil || (ch.Type != discord.DirectMessage && ch.Type != discord.GroupDM) {
 		c.warn("DeleteChat")
 		return
@@ -281,7 +281,7 @@ func (c *Client) React(ctx context.Context, chat *model.Chat, id int, e string) 
 		mid := discord.MessageID(id)
 		// Cache only: a REST read per click would be neither sober nor useful,
 		// the message under the cursor is one the window has just shown.
-		m, _ := c.st.Cabinet.Message(chID, mid)
+		m, _ := c.state().Cabinet.Message(chID, mid)
 		e, add := toggleReaction(m, e)
 		if e == "" {
 			return // nothing of mine to drop
@@ -349,7 +349,7 @@ func (c *Client) apiEmoji(e string, m *discord.Message, guild discord.GuildID) (
 		}
 	}
 	if guild.IsValid() {
-		es, err := c.st.Cabinet.Emojis(guild)
+		es, err := c.state().Cabinet.Emojis(guild)
 		if err == nil {
 			for _, em := range es {
 				if em.Name == name {
@@ -403,7 +403,7 @@ func (c *Client) WhoReacted(ctx context.Context, chat *model.Chat, id int, rs []
 		defer c.Guard("WhoReacted", nil)
 		chID, guild := ids(chat)
 		mid := discord.MessageID(id)
-		m, err := c.st.Cabinet.Message(chID, mid) // for the ids of the custom emojis
+		m, err := c.state().Cabinet.Message(chID, mid) // for the ids of the custom emojis
 		if err != nil {
 			m = &discord.Message{ID: mid, ChannelID: chID}
 		}
@@ -444,7 +444,7 @@ func (c *Client) history(ctx context.Context, name string, chat *model.Chat, ev 
 		// later.
 		for i := range ms {
 			ms[i].GuildID = guild
-			c.st.Cabinet.MessageSet(&ms[i], false)
+			c.state().Cabinet.MessageSet(&ms[i], false)
 		}
 		ms = newerThan(ms, minID)
 		ev.Msgs = c.msgsOf(ms)
@@ -530,7 +530,7 @@ func (c *Client) Info(ctx context.Context, chat *model.Chat, id, _, _ int) {
 		defer c.Guard("Info", fail)
 		chID, guild := ids(chat)
 		mid := discord.MessageID(id)
-		m, err := c.st.Message(chID, mid) // the cache first, the network after
+		m, err := c.state().Message(chID, mid) // the cache first, the network after
 		if err != nil {
 			fail(err.Error())
 			return
@@ -566,7 +566,7 @@ func (c *Client) Participants(_ context.Context, chat *model.Chat) {
 		})
 		chID, guild := ids(chat)
 		if !guild.IsValid() { // DM or group DM
-			ch, err := c.st.Cabinet.Channel(chID)
+			ch, err := c.state().Cabinet.Channel(chID)
 			if err != nil {
 				ev.Err = err.Error()
 				c.Post(ev)
@@ -582,8 +582,8 @@ func (c *Client) Participants(_ context.Context, chat *model.Chat) {
 		// out (asynchronous, it subscribes the guild on the way) and what the
 		// cache already holds is shown at once: a first opening can be short,
 		// the next one is complete.
-		c.st.MemberState.RequestMemberList(guild, chID, 0)
-		ms, err := c.st.Cabinet.Members(guild)
+		c.state().MemberState.RequestMemberList(guild, chID, 0)
+		ms, err := c.state().Cabinet.Members(guild)
 		if err != nil {
 			ev.Err = err.Error()
 			c.Post(ev)
@@ -618,7 +618,7 @@ func (c *Client) member(guild discord.GuildID, u discord.User, nick string) mode
 	if int64(u.ID) == c.self.Load() {
 		p.Text += i18n.T("member_me_suffix")
 	}
-	if pr, err := c.st.Cabinet.Presence(guild, u.ID); err == nil {
+	if pr, err := c.state().Cabinet.Presence(guild, u.ID); err == nil {
 		p.Online = pr.Status == discord.OnlineStatus
 	}
 	return p
@@ -645,7 +645,7 @@ func (c *Client) MarkRead(_ context.Context, chat *model.Chat, maxID int) {
 	go func() {
 		defer c.Guard("MarkRead", nil)
 		chID, _ := ids(chat)
-		c.st.ReadState.MarkRead(chID, discord.MessageID(maxID))
+		c.state().ReadState.MarkRead(chID, discord.MessageID(maxID))
 	}()
 }
 

@@ -128,7 +128,9 @@ Start `./ttyloom`. Scan the QR code from **Telegram → Settings → Devices →
 
 ### Discord
 
-Store your own user token in a password manager. Add this section **at the end** of `config.toml`:
+Add an empty `[discord]` section **at the end** of `config.toml`, start `./ttyloom` and scan the QR code from the Discord app (**Settings → Scan QR Code**). TTYloom logs in as a device of its own and keeps the token in `~/.config/ttyloom/discord.token` (mode `0600`).
+
+Prefer to hold the token yourself? Store it in a password manager and name the command that prints it:
 
 ```toml
 [discord]

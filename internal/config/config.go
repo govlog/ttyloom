@@ -54,24 +54,43 @@ type TelegramConfig struct {
 }
 
 type DiscordConfig struct {
-	TokenCmd string `toml:"token_cmd"` // command printing the token; never the token itself
+	// TokenCmd : command printing the token; never the token itself. Empty:
+	// the token file of the configuration directory, written by the QR login.
+	TokenCmd string `toml:"token_cmd"`
 }
 
-// Token runs token_cmd without a shell and returns its trimmed stdout.
-// The token never lands in config.toml, the log or an event.
+// Token gives the Discord token: the trimmed stdout of token_cmd when there
+// is one, the token file otherwise — "" with no error when that file does not
+// exist yet, and the backend then logs in by QR and writes it. The token
+// never lands in config.toml, the log or an event.
 //
-// The timeout is the one of a password prompt that nobody answers: a pinentry
-// waiting on a locked keyring would otherwise hold the start of the whole
-// client with an empty screen.
-func (d *DiscordConfig) Token() (string, error) {
+// The timeout of the command is the one of a password prompt that nobody
+// answers: a pinentry waiting on a locked keyring would otherwise hold the
+// start of the whole client with an empty screen.
+func (d *DiscordConfig) Token(file string) (string, error) {
 	f := strings.Fields(d.TokenCmd)
 	if len(f) == 0 {
-		return "", errors.New("discord: token_cmd is empty")
+		b, err := os.ReadFile(file)
+		if errors.Is(err, os.ErrNotExist) {
+			return "", nil
+		}
+		if err != nil {
+			return "", fmt.Errorf("discord: %w", err)
+		}
+		return strings.TrimSpace(string(b)), nil
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	out, err := exec.CommandContext(ctx, f[0], f[1:]...).Output()
 	if err != nil {
+		// The first line the command wrote on stderr names the cause ("cat:
+		// …: No such file"); "exit status 1" alone says nothing.
+		var ee *exec.ExitError
+		if errors.As(err, &ee) {
+			if line, _, _ := strings.Cut(strings.TrimSpace(string(ee.Stderr)), "\n"); line != "" {
+				return "", fmt.Errorf("discord: token_cmd: %w: %s", err, line)
+			}
+		}
 		return "", fmt.Errorf("discord: token_cmd: %w", err)
 	}
 	tok := strings.TrimSpace(string(out))
@@ -150,7 +169,7 @@ const defaultFile = `# ttyloom
 # Third-party clients on a user account are against the Discord terms of
 # service: a secondary account is the safe way to try it.
 #   [discord]
-#   token_cmd = "pass show discord/token"
+#   token_cmd = "pass show discord/token"   # or nothing: /discord login shows a QR code
 # Sections go at the END of the file: a plain key written after [discord]
 # would be read as one of its keys.
 api_id = 0            # https://my.telegram.org
@@ -321,6 +340,10 @@ func (c *Config) Path() string { return filepath.Join(c.dir, "config.toml") }
 
 // SessionPath : one session per identity; a bot and a user account never
 // share the same file.
+// DiscordTokenPath : the token file of the QR login (mode 0600, next to the
+// Telegram session), read when [discord] has no token_cmd.
+func (c *Config) DiscordTokenPath() string { return filepath.Join(c.dir, "discord.token") }
+
 func (c *Config) SessionPath() string {
 	if c.BotToken != "" {
 		return filepath.Join(c.dir, "session-bot.json")

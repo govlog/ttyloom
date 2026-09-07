@@ -160,7 +160,7 @@ func TestDeleteChatRefusesGuildChannel(t *testing.T) {
 	ev := make(chan model.Event, 4)
 	c.Poster = model.Poster{Events: ev}
 	ch := &discord.Channel{ID: 8, GuildID: 9, Type: discord.GuildText, Name: "general"}
-	if err := c.st.Cabinet.ChannelSet(ch, false); err != nil {
+	if err := c.state().Cabinet.ChannelSet(ch, false); err != nil {
 		t.Fatalf("channel of the test: %s", err)
 	}
 	for _, chat := range []*model.Chat{
@@ -187,7 +187,7 @@ func TestHistorySeedsCabinet(t *testing.T) {
 	// A REST message carries no guild_id: without the guild of the chat put
 	// back on it, the nickname of the member is lost — on the page shown and
 	// on the store copy an edit or a reaction re-converts later.
-	if err := c.st.Cabinet.MemberSet(9,
+	if err := c.state().Cabinet.MemberSet(9,
 		&discord.Member{User: discord.User{ID: 42, Username: "bob"}, Nick: "Bobby"}, false); err != nil {
 		t.Fatalf("member of the test: %s", err)
 	}
@@ -206,7 +206,7 @@ func TestHistorySeedsCabinet(t *testing.T) {
 		t.Fatalf("author of the page = %q, want the guild nickname", got.Msgs[0].From)
 	}
 	for _, id := range []discord.MessageID{msgID(2000), msgID(3000)} {
-		m, err := c.st.Cabinet.Message(8, id)
+		m, err := c.state().Cabinet.Message(8, id)
 		if err != nil {
 			t.Fatalf("message %d absent from the store: %s", id, err)
 		}
@@ -239,7 +239,7 @@ func TestLoadDialogsPresence(t *testing.T) {
 	c := dmState(t) // one DM, id 5, with bob (42) in it
 	ev := make(chan model.Event, 8)
 	c.Poster = model.Poster{Events: ev}
-	cab := c.st.Cabinet
+	cab := c.state().Cabinet
 	// A second DM, nothing known of its recipient: no line for that one.
 	if err := cab.ChannelSet(&discord.Channel{ID: 6, Type: discord.DirectMessage,
 		DMRecipients: []discord.User{{ID: 43, Username: "carol"}}}, false); err != nil {
@@ -308,10 +308,10 @@ func TestUploadReportsTmpID(t *testing.T) {
 
 // The state is built by New, not by Run: a chat replayed from the disk cache
 // exists before the network is up, and DeleteChat on it read c.st on the UI
-// goroutine — nil until Run had run, a crash of the whole client.
+// goroutine — nil until Run had run (c.state() now), a crash of the whole client.
 func TestStateBuiltInNew(t *testing.T) {
 	c := New(Config{}, make(chan model.Event, 4))
-	if c.st == nil {
+	if c.state() == nil {
 		t.Fatal("state built in Run: a call before Run dereferences nil")
 	}
 	c.DeleteChat(context.Background(), &model.Chat{ID: 1, Peer: peer{Channel: 1}}) // must not panic

@@ -117,13 +117,13 @@ func (c *Client) SearchGlobal(ctx context.Context, q string, limit int) {
 		})
 		ctx, cancel := context.WithTimeout(ctx, globalBudget)
 		defer cancel()
-		guilds, err := c.st.Guilds()
+		guilds, err := c.state().Guilds()
 		if err != nil {
 			ev.Err = err.Error()
 			c.Post(ev)
 			return
 		}
-		dms, _ := c.st.PrivateChannels()
+		dms, _ := c.state().PrivateChannels()
 		slices.SortFunc(dms, func(a, b discord.Channel) int { return cmp.Compare(b.LastMessageID, a.LastMessageID) })
 		if len(dms) > globalDMs {
 			dms = dms[:globalDMs]

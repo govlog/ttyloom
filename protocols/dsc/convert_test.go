@@ -25,7 +25,7 @@ func TestMsgOf(t *testing.T) {
 	c.self.Store(7)
 	// The quoted message carries no guild of its own: without the guild of the
 	// message that quotes it, the nickname of the member is lost.
-	if err := c.st.Cabinet.MemberSet(9,
+	if err := c.state().Cabinet.MemberSet(9,
 		&discord.Member{User: discord.User{ID: 42, Username: "bob"}, Nick: "Bobby"}, false); err != nil {
 		t.Fatalf("member of the test: %s", err)
 	}
@@ -173,10 +173,10 @@ func TestChatOfPhoto(t *testing.T) {
 // last read id, never a number of unread messages — 1 then just means "there
 // is something after what I read".
 func TestReadOf(t *testing.T) {
-	c := &Client{st: ningen.New("")}
+	c := testClient(nil)
 	ch := &discord.Channel{ID: 5, Type: discord.DirectMessage, LastMessageID: msgID(1000),
 		DMRecipients: []discord.User{{ID: 42, Username: "bob"}}}
-	if err := c.st.Cabinet.ChannelSet(ch, false); err != nil {
+	if err := c.state().Cabinet.ChannelSet(ch, false); err != nil {
 		t.Fatalf("channel of the test: %s", err)
 	}
 
@@ -188,7 +188,7 @@ func TestReadOf(t *testing.T) {
 	}
 
 	// Read up to an older message: unread, with no count to give.
-	c.st.ReadState.MarkRead(ch.ID, msgID(900))
+	c.state().ReadState.MarkRead(ch.ID, msgID(900))
 	chat = &model.Chat{}
 	c.readOf(chat, ch)
 	if chat.ReadInboxMaxID != int(msgID(900)) || chat.Unread != 1 {
@@ -197,7 +197,7 @@ func TestReadOf(t *testing.T) {
 
 	// Two mentions since: the count of the mentions wins, it is the one worth
 	// showing.
-	c.st.ReadState.MarkUnread(ch.ID, msgID(1000), 2)
+	c.state().ReadState.MarkUnread(ch.ID, msgID(1000), 2)
 	chat = &model.Chat{}
 	c.readOf(chat, ch)
 	if chat.Unread != 2 {
@@ -208,10 +208,10 @@ func TestReadOf(t *testing.T) {
 // dmState : a client whose state holds one DM with bob in it.
 func dmState(t *testing.T) *Client {
 	t.Helper()
-	c := &Client{st: ningen.New("")}
+	c := testClient(nil)
 	ch := &discord.Channel{ID: 5, Type: discord.DirectMessage,
 		DMRecipients: []discord.User{{ID: 42, Username: "bob", DisplayName: "Bob"}}}
-	if err := c.st.Cabinet.ChannelSet(ch, false); err != nil {
+	if err := c.state().Cabinet.ChannelSet(ch, false); err != nil {
 		t.Fatalf("channel of the test: %s", err)
 	}
 	return c
@@ -244,7 +244,7 @@ func TestReactions(t *testing.T) {
 	c.Poster = model.Poster{Events: ev}
 	m := discord.Message{ID: msgID(1000), ChannelID: 5, Author: discord.User{ID: 42},
 		Reactions: []discord.Reaction{{Count: 2, Me: true, Emoji: discord.Emoji{Name: "🔥"}}}}
-	if err := c.st.Cabinet.MessageSet(&m, false); err != nil {
+	if err := c.state().Cabinet.MessageSet(&m, false); err != nil {
 		t.Fatalf("message of the test: %s", err)
 	}
 
@@ -273,24 +273,24 @@ func TestReactions(t *testing.T) {
 // comes back, and nothing is dropped.
 func TestGuildDeleteGone(t *testing.T) {
 	ev := make(chan model.Event, 8)
-	c := &Client{st: ningen.New(""), Poster: model.Poster{Events: ev}}
+	c := testClient(ev)
 	for _, ch := range []discord.Channel{
 		{ID: 10, GuildID: 9, Type: discord.GuildText, Name: "general"},
 		{ID: 11, GuildID: 9, Type: discord.GuildAnnouncement, Name: "annonces"},
 		{ID: 12, GuildID: 9, Type: discord.GuildVoice, Name: "vocal"},
 	} {
-		if err := c.st.Cabinet.ChannelSet(&ch, false); err != nil {
+		if err := c.state().Cabinet.ChannelSet(&ch, false); err != nil {
 			t.Fatalf("channel of the test: %s", err)
 		}
 	}
 
 	c.wire() // the handler has to be registered, that was the bug
-	c.st.Handler.Call(&gateway.GuildDeleteEvent{ID: 9, Unavailable: true})
+	c.state().Handler.Call(&gateway.GuildDeleteEvent{ID: 9, Unavailable: true})
 	if len(ev) != 0 {
 		t.Fatalf("unavailable guild: %d event(s), want none", len(ev))
 	}
 
-	c.st.Handler.Call(&gateway.GuildDeleteEvent{ID: 9})
+	c.state().Handler.Call(&gateway.GuildDeleteEvent{ID: 9})
 	var got []int64
 	for len(ev) > 0 {
 		e, ok := (<-ev).(model.EvChatGone)
@@ -321,10 +321,10 @@ func TestReadyIncomplete(t *testing.T) {
 // channel itself, its id is the one of the chat.
 func TestChannelDeleteGone(t *testing.T) {
 	ev := make(chan model.Event, 4)
-	c := &Client{st: ningen.New(""), Poster: model.Poster{Events: ev}}
+	c := testClient(ev)
 	c.wire()
 
-	c.st.Handler.Call(&gateway.ChannelDeleteEvent{Channel: discord.Channel{ID: 5, Type: discord.DirectMessage}})
+	c.state().Handler.Call(&gateway.ChannelDeleteEvent{Channel: discord.Channel{ID: 5, Type: discord.DirectMessage}})
 
 	select {
 	case got := <-ev:
@@ -389,4 +389,11 @@ func TestMsgOfEmbedGIFV(t *testing.T) {
 		md.Mime != "video/mp4" || md.Ext != ".mp4" || md.URL != "https://tenor.com/view/cat-1" || !md.Previewable() {
 		t.Fatalf("gifv embed: %+v", md)
 	}
+}
+
+// testClient : a client on an empty state, with events on ev when given.
+func testClient(ev chan<- model.Event) *Client {
+	c := &Client{Poster: model.Poster{Events: ev}}
+	c.st.Store(ningen.New(""))
+	return c
 }

@@ -27,7 +27,7 @@ import (
 // gateway down with it, and the UI would wait for a terminal event that never
 // comes.
 func (c *Client) wire() {
-	st := c.st
+	st := c.state()
 	st.AddSyncHandler(func(e *gateway.ReadyEvent) {
 		defer c.Guard("Ready", nil)
 		// Held before any message of this connection: msgOf tells our own
@@ -130,7 +130,7 @@ func (c *Client) guildGone(e *gateway.GuildDeleteEvent) {
 	if e.Unavailable {
 		return
 	}
-	chs, err := c.st.Cabinet.Channels(e.ID)
+	chs, err := c.state().Cabinet.Channels(e.ID)
 	if err != nil {
 		return // guild never cached: nothing was listed from it either
 	}
@@ -145,7 +145,7 @@ func (c *Client) guildGone(e *gateway.GuildDeleteEvent) {
 // as the entry to create for a chat it has never seen. A channel missing from
 // the cache leaves an entry with its id for a title rather than nothing.
 func (c *Client) chatFor(id discord.ChannelID) *model.Chat {
-	ch, err := c.st.Cabinet.Channel(id)
+	ch, err := c.state().Cabinet.Channel(id)
 	if err != nil {
 		return &model.Chat{ID: int64(id), Kind: model.ChatGroup,
 			Peer: peer{Channel: uint64(id)}, Title: "#" + id.String()}
@@ -159,7 +159,7 @@ func (c *Client) guildName(id discord.GuildID) string {
 	if !id.IsValid() {
 		return ""
 	}
-	if g, err := c.st.Cabinet.Guild(id); err == nil {
+	if g, err := c.state().Cabinet.Guild(id); err == nil {
 		return g.Name
 	}
 	return ""
@@ -176,14 +176,14 @@ func (c *Client) typist(e *gateway.TypingStartEvent) string {
 		}
 		return e.Member.User.DisplayOrUsername()
 	}
-	if ch, err := c.st.Cabinet.Channel(e.ChannelID); err == nil {
+	if ch, err := c.state().Cabinet.Channel(e.ChannelID); err == nil {
 		for _, u := range ch.DMRecipients {
 			if u.ID == e.UserID {
 				return u.DisplayOrUsername()
 			}
 		}
 	}
-	if p, err := c.st.Cabinet.Presence(0, e.UserID); err == nil {
+	if p, err := c.state().Cabinet.Presence(0, e.UserID); err == nil {
 		return p.User.DisplayOrUsername()
 	}
 	return e.UserID.String()
@@ -196,7 +196,7 @@ func (c *Client) typist(e *gateway.TypingStartEvent) string {
 // remove cannot land in the wrong order. A message the cache does not hold is
 // left alone — a REST read per reaction would be neither sober nor ordered.
 func (c *Client) reactions(chID discord.ChannelID, id discord.MessageID) {
-	m, err := c.st.Cabinet.Message(chID, id)
+	m, err := c.state().Cabinet.Message(chID, id)
 	if err != nil {
 		return
 	}

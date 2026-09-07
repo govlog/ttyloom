@@ -7,6 +7,7 @@ require (
 	github.com/clipperhouse/uax29/v2 v2.7.0
 	github.com/diamondburned/arikawa/v3 v3.6.0
 	github.com/diamondburned/ningen/v3 v3.0.1-0.20250703054403-e5dc4cf15e84
+	github.com/gorilla/websocket v1.5.3
 	github.com/gotd/contrib v0.25.0
 	github.com/gotd/log v0.1.0
 	github.com/gotd/td v0.161.0
@@ -32,7 +33,6 @@ require (
 	github.com/go-faster/yaml v0.4.6 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/schema v1.4.1 // indirect
-	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/gotd/ige v0.3.0 // indirect
 	github.com/gotd/neo v0.1.5 // indirect
 	github.com/klauspost/compress v1.19.0 // indirect

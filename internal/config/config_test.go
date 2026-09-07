@@ -242,18 +242,34 @@ func TestAutoMediaMaxKBBounded(t *testing.T) {
 // TestDiscordToken : the token comes from the command, never from the file.
 // No shell — the words of token_cmd are the argv.
 func TestDiscordToken(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "discord.token")
 	d := &DiscordConfig{TokenCmd: "echo  abc "}
-	got, err := d.Token()
+	got, err := d.Token(file)
 	if err != nil || got != "abc" {
 		t.Fatalf("token of %q: %q, %v", d.TokenCmd, got, err)
 	}
-	// Empty command, command that fails, command that prints nothing: an empty
-	// token would go to the network as it is and come back as an obscure error.
-	for _, cmd := range []string{"", "   ", "ttyloom-no-such-command-here", "true", "echo   "} {
+	// Command that fails, command that prints nothing: an empty token would go
+	// to the network as it is and come back as an obscure error.
+	for _, cmd := range []string{"ttyloom-no-such-command-here", "true", "echo   "} {
 		d := &DiscordConfig{TokenCmd: cmd}
-		if tok, err := d.Token(); err == nil {
+		if tok, err := d.Token(file); err == nil {
 			t.Errorf("token_cmd %q: no error, token %q", cmd, tok)
 		}
+	}
+	// What the command said on stderr is in the error: "exit status 1" alone
+	// hid a wrong path for days.
+	d = &DiscordConfig{TokenCmd: "cat /ttyloom-no-such-file"}
+	if _, err := d.Token(file); err == nil || !strings.Contains(err.Error(), "No such file") {
+		t.Fatalf("stderr of token_cmd missing: %v", err)
+	}
+	// No command: the token file, or nothing at all (the QR login then).
+	d = &DiscordConfig{}
+	if tok, err := d.Token(file); err != nil || tok != "" {
+		t.Fatalf("no file: %q, %v", tok, err)
+	}
+	os.WriteFile(file, []byte(" tok-1\n"), 0o600)
+	if tok, err := d.Token(file); err != nil || tok != "tok-1" {
+		t.Fatalf("file: %q, %v", tok, err)
 	}
 }
 
