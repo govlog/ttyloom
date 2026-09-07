@@ -163,6 +163,14 @@ func (c *Client) Run(ctx context.Context) error {
 
 // --- authentication ---
 
+// Logout ends the account session on the server (auth.logOut): the next Run
+// goes through the QR flow again. The session file stays — its auth key is
+// still good for a new login.
+func (c *Client) Logout(ctx context.Context) error {
+	_, err := c.api.AuthLogOut(ctx)
+	return err
+}
+
 // qrLogin offers the QR login before the phone flow: the QR goes to the UI
 // while the prompt waits for Enter, and the first of the two ways that works
 // closes the other. It gives back the text already typed (a phone number,

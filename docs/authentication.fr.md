@@ -137,8 +137,9 @@ son code ne journalise pas volontairement sa valeur.
 
 En cas d’échec, vérifiez en privé l’entrée du gestionnaire et la commande.
 Reconnectez-vous au client officiel et remplacez le token sauvegardé si
-nécessaire. Si le token a été exposé, sécurisez le compte dans les paramètres
-Discord et remplacez cet accès.
+nécessaire ; `/discord login` relance ensuite la commande sans quitter TTYloom.
+Si le token a été exposé, sécurisez le compte dans les paramètres Discord et
+remplacez cet accès.
 
 ### Si vous cherchez un token de bot Discord
 

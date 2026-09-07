@@ -52,6 +52,19 @@ type Backend interface {
 	SendGif(ctx context.Context, chat *Chat, g Gif, tmpID int64)
 }
 
+// Launcher builds the backend of one configured network and runs it: the
+// backend comes back at once, Run goes on under ctx, and an EvStopped reaches
+// the UI when it ends. An error (a token command that fails) means nothing
+// was started. Called at start for each network, then by /<net> login.
+type Launcher func(ctx context.Context, net string) (Backend, error)
+
+// Logouter : a backend that can end the account session on the server
+// (Telegram: auth.logOut). Optional — /<net> logout only disconnects a
+// network without it.
+type Logouter interface {
+	Logout(ctx context.Context) error
+}
+
 // Caps : what the network can do; the UI hides what is false. The zero value
 // allows nothing — a backend that is gone gates everything off rather than
 // offering an action that would go nowhere.

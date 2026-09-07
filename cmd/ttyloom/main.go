@@ -48,59 +48,25 @@ func main() {
 	}
 }
 
-// backends builds one backend per configured network: its event chan forwarded
-// into the UI chan under its name, its cache directory and the function that
-// runs it. Each network starts only when its credentials are configured.
-func backends(cfg *config.Config, events chan<- model.Envelope) (map[string]model.Backend, map[string]*cache.Cache, []func(context.Context), error) {
+// backends : the configured networks, their caches, and the launcher that
+// builds and runs one of them — at start for each, and again on /<net> login.
+// A network is configured only when its credentials are; the Discord token
+// is read here once, then at every launch, and goes nowhere else: not in the
+// log, not in an event, not in config.toml. ctx is the one of the whole client: the last
+// event of a network is delivered as long as the UI runs.
+func backends(ctx context.Context, cfg *config.Config, events chan<- model.Envelope) ([]string, map[string]*cache.Cache, model.Launcher, error) {
 	// [telegram], or the historic flat keys synthesized into it by config.
 	tg := cfg.Telegram
 	useTelegram := tg != nil && (tg.APIID != 0 || tg.APIHash != "" || tg.BotToken != "")
 	if useTelegram && (tg.APIID <= 0 || tg.APIHash == "") {
 		return nil, nil, nil, fmt.Errorf(i18n.T("main_no_api_id"), cfg.Path())
 	}
-	nets := map[string]model.Backend{}
+	var nets []string
 	caches := map[string]*cache.Cache{}
-	var starters []func(context.Context)
 	root := config.CacheDir()
 
-	// add wires a backend: its own chan, the forwarder that stamps the network
-	// on every event, and the body of its goroutine — an error or a panic comes
-	// back as an event rather than killing the terminal.
-	add := func(net string, mk func(chan<- model.Event) model.Backend) {
-		raw := make(chan model.Event, 256)
-		b := mk(raw)
-		nets[net] = b
-		starters = append(starters, func(ctx context.Context) {
-			go func() {
-				for {
-					select {
-					case <-ctx.Done():
-						return
-					case ev := <-raw:
-						select {
-						case events <- model.Envelope{Net: net, Ev: ev}:
-						case <-ctx.Done():
-							return
-						}
-					}
-				}
-			}()
-			defer func() {
-				if r := recover(); r != nil {
-					raw <- model.EvFatal{Err: i18n.T("panic", r)}
-				}
-			}()
-			if err := b.Run(ctx); err != nil && ctx.Err() == nil {
-				raw <- model.EvFatal{Err: err.Error()}
-			}
-		})
-	}
-
 	if useTelegram {
-		add(model.NetTelegram, func(raw chan<- model.Event) model.Backend {
-			return tgc.New(tgc.Config{AppID: tg.APIID, AppHash: tg.APIHash, BotToken: tg.BotToken,
-				SessionPath: cfg.SessionPath()}, raw)
-		})
+		nets = append(nets, model.NetTelegram)
 		if cfg.Cache {
 			dir := filepath.Join(root, model.NetTelegram) // one directory per network
 			tgRoot := root
@@ -120,30 +86,90 @@ func backends(cfg *config.Config, events chan<- model.Envelope) (map[string]mode
 			caches[model.NetTelegram] = cache.New(dir, cfg.CacheMessages)
 		}
 	}
-
 	if cfg.Discord != nil {
-		// The token is read here and goes nowhere else: not in the log, not in
-		// an event, not in config.toml. A command that fails leaves Discord out
-		// and Telegram starts all the same.
-		tok, err := cfg.Discord.Token()
-		if err != nil {
-			if len(nets) == 0 {
-				return nil, nil, nil, err
-			}
-			events <- model.Envelope{Net: model.NetDiscord, Ev: model.EvLog{Level: "ERROR", Msg: err.Error()}}
-		} else {
-			add(model.NetDiscord, func(raw chan<- model.Event) model.Backend {
-				return dsc.New(dsc.Config{Token: tok}, raw)
-			})
-			if cfg.Cache {
-				caches[model.NetDiscord] = cache.New(filepath.Join(root, model.NetDiscord), cfg.CacheMessages)
-			}
+		nets = append(nets, model.NetDiscord)
+		if cfg.Cache {
+			caches[model.NetDiscord] = cache.New(filepath.Join(root, model.NetDiscord), cfg.CacheMessages)
 		}
 	}
 	if len(nets) == 0 {
 		return nil, nil, nil, fmt.Errorf(i18n.T("main_no_networks"), cfg.Path())
 	}
-	return nets, caches, starters, nil
+
+	// The first Discord token is read now, before the terminal goes raw: a
+	// token command that prompts on the tty (pinentry-curses) works at start
+	// as it always did. The launches that follow (/discord login) read it
+	// again from inside the raw terminal — such a command needs a graphical
+	// pinentry or an unlocked agent by then.
+	var firstTok string
+	var firstErr error
+	first := cfg.Discord != nil
+	if first {
+		firstTok, firstErr = cfg.Discord.Token()
+	}
+	// build makes the backend of net on its own chan. A token command that
+	// fails is the error of the launch: the UI shows it and starts nothing.
+	build := func(net string, raw chan<- model.Event) (model.Backend, error) {
+		switch net {
+		case model.NetTelegram:
+			return tgc.New(tgc.Config{AppID: tg.APIID, AppHash: tg.APIHash, BotToken: tg.BotToken,
+				SessionPath: cfg.SessionPath()}, raw), nil
+		case model.NetDiscord:
+			tok, err := firstTok, firstErr
+			if !first { // the first read is spent: the command or the file again
+				tok, err = cfg.Discord.Token()
+			}
+			first = false
+			if err != nil {
+				return nil, err
+			}
+			return dsc.New(dsc.Config{Token: tok}, raw), nil
+		}
+		return nil, fmt.Errorf("%s: unknown network", net)
+	}
+	// launch wires a backend: its own chan, the forwarder that stamps the
+	// network on every event, and the goroutine of its Run — an error or a
+	// panic comes back as an event rather than killing the terminal.
+	launch := func(nctx context.Context, net string) (model.Backend, error) {
+		raw := make(chan model.Event, 256)
+		b, err := build(net, raw)
+		if err != nil {
+			return nil, err
+		}
+		go func() {
+			for {
+				select {
+				case <-nctx.Done():
+					return
+				case ev := <-raw:
+					select {
+					case events <- model.Envelope{Net: net, Ev: ev}:
+					case <-nctx.Done():
+						return
+					}
+				}
+			}
+		}()
+		go func() {
+			var stopped model.EvStopped
+			// Straight into the UI chan, not through raw: when the context that
+			// ended Run is the one of a logout, the forwarder is already gone.
+			defer func() {
+				if r := recover(); r != nil {
+					stopped.Err = i18n.T("panic", r)
+				}
+				select {
+				case events <- model.Envelope{Net: net, Ev: stopped}:
+				case <-ctx.Done():
+				}
+			}()
+			if err := b.Run(nctx); err != nil && nctx.Err() == nil {
+				stopped.Err = err.Error()
+			}
+		}()
+		return b, nil
+	}
+	return nets, caches, launch, nil
 }
 
 func run() error {
@@ -160,7 +186,9 @@ func run() error {
 	// One goroutine per backend chan, fan-in into the UI chan: a backend posts
 	// bare events, the UI wants to know which network they come from.
 	events := make(chan model.Envelope, 256)
-	nets, caches, starters, err := backends(cfg, events)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	nets, caches, launch, err := backends(ctx, cfg, events)
 	if err != nil {
 		return err
 	}
@@ -191,10 +219,5 @@ func run() error {
 	}()
 	defer t.Close()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	for _, start := range starters {
-		go start(ctx)
-	}
-	return ui.Run(ctx, cancel, t, cfg, th, nets, events, caches)
+	return ui.Run(ctx, cancel, t, cfg, th, nets, launch, events, caches)
 }

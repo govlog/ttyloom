@@ -306,6 +306,13 @@ Le panneau se découpe en sections dès qu'il y a de quoi : une ligne d'en-tête
 | */net discord* | ne garde que Discord dans le panneau et la vue agrégée |
 | */net telegram* | ne garde que Telegram |
 | */net all* | lève le filtre |
+| */discord*, */telegram* | état du réseau : non démarré, connexion, connecté en tant que X |
+| */discord login* | relance *token_cmd* et se connecte, après un token en échec ou révoqué |
+| */discord logout* | se déconnecte ; le token reste là où *token_cmd* le lit |
+| */telegram login* | redémarre Telegram après une déconnexion ou une erreur fatale : QR, ou téléphone et code |
+| */telegram logout* | ferme la session côté serveur (elle disparaît de **Telegram → Réglages → Appareils**) et se déconnecte |
+
+Un réseau dont la connexion se termine sur une erreur (token révoqué, session fermée) le dit en fenêtre 0 et s'arrête seul, pas le client : */discord login* ou */telegram login* le relance. Une commande *token_cmd* qui échoue au lancement laisse de même Discord arrêté, avec son erreur en fenêtre 0. Relancée par */discord login*, la commande tourne dans le terminal en mode brut : une commande qui interroge le tty (pinentry curses) ne fonctionne qu'au lancement ; prévoir un pinentry graphique ou un agent déverrouillé.
 
 Le filtre ne ferme aucune fenêtre : il ne touche que le panneau — la liste des conversations comme celle des fenêtres, où seules celles liées au réseau choisi restent, la fenêtre 0 toujours — et la vue agrégée. En mode fenêtres, *F2* enchaîne les réseaux avant de masquer le panneau : fenêtres de tous les réseaux, puis de chacun dans l'ordre des noms, puis caché. Avec un seul réseau connecté, */net* se contente de le nommer.
 
@@ -398,6 +405,7 @@ Un message entrant pour une conversation sans fenêtre crée une fenêtre caché
 | */msg nom texte* | envoie sans changer de fenêtre |
 | */chats* | liste les conversations, non lues en surbrillance |
 | */net [réseau]* | filtre le panneau et la vue agrégée sur un réseau (*telegram*, *discord*, *all*) ; sans argument, cycle, comme *Shift+F2* |
+| */telegram [status\|login\|logout]*, */discord [status\|login\|logout]* | un réseau : son état, une nouvelle connexion (Discord relance *token_cmd*) ou une déconnexion (Telegram ferme la session côté serveur) |
 | */fold [section]* | plie ou déplie une section du panneau, comme un clic sur sa ligne d'en-tête ; la section se nomme par sa clé (*telegram*, *discord:Gophers*) ou par un préfixe du nom affiché ; sans argument, liste les sections et leur état (*[+]* pliée, *[-]* dépliée) |
 | */history N* | charge N messages plus anciens (*PgUp* en haut de l'écran fait de même) |
 | */clear* (*/c*) | vide la fenêtre |
@@ -616,7 +624,7 @@ Ce manuel décrit la version **1.1.1**. Consultez le [journal des changements](.
 rm -f ~/.config/ttyloom/session.json ~/.config/ttyloom/session-bot.json
 ```
 
-- Un compte utilisateur redemandera une connexion. Un bot peut se reconnecter automatiquement tant que son token reste configuré. Supprimer une session locale ne révoque pas une copie distante : utilisez aussi **Telegram → Réglages → Appareils** pour fermer la session côté serveur si nécessaire.
+- Un compte utilisateur redemandera une connexion. Un bot peut se reconnecter automatiquement tant que son token reste configuré. Supprimer une session locale ne révoque pas une copie distante : */telegram logout* depuis le client, ou **Telegram → Réglages → Appareils**, ferme la session côté serveur.
 
 - Pour Discord, retirer la section `[discord]` désactive ce réseau dans TTYloom. Révoquez un token exposé depuis les réglages du compte Discord. Le [guide de connexion](authentication.fr.md) détaille la gestion des sessions et identifiants.
 

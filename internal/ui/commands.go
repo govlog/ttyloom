@@ -20,7 +20,8 @@ var aliases = map[string]string{
 }
 
 var commandNames = []string{"/window", "/close", "/query", "/join", "/new", "/msg", "/me", "/chats", "/net", "/fold", "/history",
-	"/search", "/whois", "/rename", "/unrename", "/open", "/view", "/send", "/theme", "/set", "/clear", "/log", "/debug", "/emoji", "/gif", "/help", "/quit"}
+	"/search", "/whois", "/rename", "/unrename", "/open", "/view", "/send", "/theme", "/set", "/clear", "/log", "/debug", "/emoji", "/gif", "/help", "/quit",
+	"/telegram", "/discord"}
 
 // ParseCommand : "/win new hide" → ("window", [new hide], "new hide", true).
 // "//x" → text "/x"; with no slash → text as it is, ok=false.
@@ -123,6 +124,8 @@ func (u *UI) command(name string, args []string, text string) {
 		u.listChats()
 	case "net":
 		u.netCmd(w, arg(0))
+	case model.NetTelegram, model.NetDiscord:
+		u.netAction(w, name, strings.ToLower(arg(0)))
 	case "fold":
 		u.foldCmd(w, text)
 	case "history":

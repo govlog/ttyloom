@@ -44,7 +44,10 @@ type UI struct {
 	t         *term.Term
 	cfg       *config.Config
 	th        theme.Theme
-	nets      map[string]model.Backend // network name → backend, given by Run
+	nets      map[string]model.Backend      // network name → live backend (started, not stopped)
+	netList   []string                      // configured networks, sorted: the ones /<net> login can start
+	launch    model.Launcher                // builds and runs one of them, given by Run
+	netCancel map[string]context.CancelFunc // ends the Run of a live network (/<net> logout)
 	events    chan model.Event
 	ws        *Windows
 	agg       *Window // aggregated view of window 0: never in ws.List
@@ -60,6 +63,7 @@ type UI struct {
 	aliases   map[model.ChatKey]string // local names (/rename), saved in aliases.toml
 	pending   map[string]*Window       // /query waiting for a lookup
 	prompt    *model.EvAuthPrompt
+	promptNet string // network that asked u.prompt: its stop takes the prompt away
 	qr        *qrBox // QR code login running: passive overlay
 	// self : identity of the account per network (EvReady). Zero value while
 	// the network has not answered yet — id 0 owns nothing, name empty, not a
@@ -178,11 +182,13 @@ type UI struct {
 	dispatchNet string
 }
 
-// Run drives the UI. nets and caches are keyed by network name; events
-// carries the envelopes of every backend, fanned in by main.
+// Run drives the UI. netList names the configured networks, launch starts one
+// of them (at start here, then on /<net> login); caches are keyed by network
+// name and events carries the envelopes of every backend, fanned in by main.
 func Run(ctx context.Context, cancel context.CancelFunc, t *term.Term, cfg *config.Config, th theme.Theme,
-	nets map[string]model.Backend, events <-chan model.Envelope, caches map[string]*cache.Cache) error {
-	u := &UI{ctx: ctx, cancel: cancel, t: t, cfg: cfg, th: th, nets: nets, events: make(chan model.Event, 256), ws: NewWindows(),
+	netList []string, launch model.Launcher, events <-chan model.Envelope, caches map[string]*cache.Cache) error {
+	u := &UI{ctx: ctx, cancel: cancel, t: t, cfg: cfg, th: th, nets: map[string]model.Backend{}, netList: netList, launch: launch,
+		netCancel: map[string]context.CancelFunc{}, events: make(chan model.Event, 256), ws: NewWindows(),
 		agg: &Window{}, aggregate: cfg.Aggregate, debug: &Window{}, focused: true,
 		chats: map[model.ChatKey]*model.Chat{}, pending: map[string]*Window{}, typing: map[model.ChatKey]typing{}, lastTyping: map[model.ChatKey]time.Time{},
 		avatars: map[model.ChatKey]*model.Media{}, openNext: map[*model.Media]bool{}, pendingMsg: map[int64]string{}, presence: map[model.ChatKey]string{},
@@ -214,6 +220,9 @@ func Run(ctx context.Context, cancel context.CancelFunc, t *term.Term, cfg *conf
 		u.status0(i18n.T("sidebar_error", err)) // unreadable file: we start with everything unfolded
 	} else {
 		u.folded = f
+	}
+	for _, n := range netList {
+		u.startNet(n)
 	}
 	u.loadCache() // no cache at all: the loop over u.caches has nothing to read
 	u.applySpell(cfg.Spell)
@@ -439,6 +448,83 @@ func (u *UI) connStatus() string {
 		return i18n.T("status_disconnected_net", strings.Join(down, ", "))
 	}
 	return i18n.T("status_disconnected")
+}
+
+// startNet : /<net> login, and the start of every configured network. The
+// launcher runs the token command of Discord again: a token renewed in the
+// password manager is taken without a restart. A failure shows like the
+// start-up error did (window 0 and the log) and nothing is started.
+func (u *UI) startNet(net string) {
+	if u.nets[net] != nil {
+		u.sys(i18n.T("net_already_up", net))
+		return
+	}
+	ctx, cancel := context.WithCancel(u.ctx)
+	b, err := u.launch(ctx, net)
+	if err != nil {
+		cancel()
+		u.event(model.EvLog{Level: "ERROR", Msg: err.Error()})
+		u.status0(i18n.T("net_status_off", net, net)) // says how to retry
+		return
+	}
+	u.nets[net], u.netCancel[net] = b, cancel
+}
+
+// stopNet : /<net> logout. The account session ends on the server when the
+// backend knows how (Telegram), then its context is cancelled; the backend
+// leaves u.nets at the EvStopped its Run posts on the way out.
+func (u *UI) stopNet(net string) {
+	b := u.nets[net]
+	if b == nil {
+		u.sys(i18n.T("net_not_up", net))
+		return
+	}
+	cancel := u.netCancel[net]
+	l, ok := b.(model.Logouter)
+	if !ok {
+		cancel()
+		return
+	}
+	go func() {
+		if err := l.Logout(u.ctx); err != nil {
+			u.events <- model.EvLog{Level: "ERROR", Msg: i18n.T("net_logout_error", net, err)}
+		}
+		cancel()
+	}()
+}
+
+// netStatus : /<net> [status] — one line: not started, disconnected,
+// connecting (no account yet: the login is in progress), or connected as X.
+func (u *UI) netStatus(w *Window, net string) {
+	s := u.self[net]
+	switch {
+	case u.nets[net] == nil:
+		w.AddSys(i18n.T("net_status_off", net, net))
+	case !u.conn[net]:
+		w.AddSys(i18n.T("disconnected_net", net))
+	case s.Name == "":
+		w.AddSys(i18n.T("net_status_connecting", net))
+	default:
+		w.AddSys(i18n.T("net_status_up", net, s.Name))
+	}
+}
+
+// netAction : /telegram and /discord — status (the default), login, logout.
+func (u *UI) netAction(w *Window, net, sub string) {
+	if !slices.Contains(u.netList, net) {
+		w.AddSys(i18n.T("net_unconfigured", net))
+		return
+	}
+	switch sub {
+	case "", "status":
+		u.netStatus(w, net)
+	case "login":
+		u.startNet(net)
+	case "logout":
+		u.stopNet(net)
+	default:
+		w.AddSys(i18n.T("usage_net_cmd", net))
+	}
 }
 
 // multiNet : more than one backend. Sole gate of everything the networks show
@@ -789,7 +875,7 @@ func (u *UI) event(ev model.Event) {
 	}
 	switch e := ev.(type) {
 	case model.EvAuthPrompt:
-		u.prompt = &e
+		u.prompt, u.promptNet = &e, u.dispatchNet
 		u.status0(e.Question)
 		u.goTo(0)
 	case model.EvQR:
@@ -826,9 +912,30 @@ func (u *UI) event(ev model.Event) {
 			return
 		}
 		u.status0(i18n.T("disconnected"))
-	case model.EvFatal:
-		u.status0(i18n.T("fatal_error", e.Err))
-		u.goTo(0)
+	case model.EvStopped:
+		// Run is over, on its own or after /<net> logout: the network leaves
+		// the live map (every call site treats a missing one as gone) and
+		// /<net> login may start it again.
+		net := u.dispatchNet
+		if c := u.netCancel[net]; c != nil {
+			c() // Run ended on its own: frees the forwarder of its events
+		}
+		delete(u.nets, net)
+		delete(u.netCancel, net)
+		delete(u.self, net)
+		delete(u.dialogsSeen, net) // the next login auto-opens and syncs again
+		u.conn[net] = false
+		if u.prompt != nil && u.promptNet == net { // a login question nobody waits for any more
+			u.closeQR()
+			u.prompt = nil
+			u.ed.Set("")
+		}
+		if e.Err != "" {
+			u.status0(i18n.T("net_stopped_error", net, e.Err, net))
+			u.goTo(0)
+			return
+		}
+		u.status0(i18n.T("net_stopped", net))
 	case model.EvDialogs:
 		if e.Err != "" {
 			u.status0(i18n.T("dialogs_error", e.Err))

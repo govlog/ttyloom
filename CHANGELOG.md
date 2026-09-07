@@ -1,5 +1,9 @@
 # Changelog
 
+## Non publié
+
+- **Réseaux** : `/telegram` et `/discord` (`status`, `login`, `logout`). `/discord login` relance `token_cmd` et se connecte sans redémarrer : un token renouvelé dans le gestionnaire de mots de passe est pris sur place, là où « *token_cmd: exit status 1* » laissait Discord absent jusqu'au prochain lancement. `/telegram logout` ferme la session côté serveur (elle quitte *Réglages → Appareils*), et `/telegram login` repasse par le QR. Un réseau dont la connexion meurt (token révoqué, erreur fatale) s'arrête seul et se relance par `login` ; le client démarre même si le seul réseau configuré échoue son token.
+
 ## v1.1.1 — 2026-09-05
 
 - **Licence** : licence MIT pour le code original, la documentation et les illustrations ; les composants tiers conservent leurs licences. Les archives de cette version incluent ces textes.

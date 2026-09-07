@@ -111,7 +111,7 @@ func (u *UI) openMenu(x, y int) {
 
 // openMemberMenu : right click on the line line of the member box, q being the
 // token of the member (@name or id). The chat of the box is kept with it: an
-// event can move the shown window (EvAuthPrompt, EvFatal both goTo(0)) without
+// event can move the shown window (EvAuthPrompt, EvStopped both goTo(0)) without
 // closing the menu, and the token would then be sent to the wrong network.
 func (u *UI) openMemberMenu(q string, line, x, y int) {
 	c := u.view().Chat

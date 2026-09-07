@@ -133,8 +133,9 @@ token to `config.toml` or intentionally log its value.
 
 An authentication failure normally means a revoked token, an incorrect manager
 entry or a command that failed. Check the manager privately, sign in again in
-the official client, and replace the saved token if needed. If exposed, secure
-the account using Discord’s account settings and replace the credential.
+the official client, and replace the saved token if needed; `/discord login`
+then runs the command again without leaving TTYloom. If exposed, secure the
+account using Discord’s account settings and replace the credential.
 
 ### If you meant a Discord bot token
 

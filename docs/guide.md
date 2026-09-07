@@ -268,8 +268,12 @@ The command must print only the token. It runs without a shell, splits on
 whitespace and times out after 30 seconds: no pipes, redirections, variable
 expansion or shell quoting. Use a wrapper script for a command that needs those
 features. Its output is not copied into the configuration, logs or window 0.
-An empty or failing command leaves Discord disconnected and is reported; if no
-other network is usable, startup stops with that error.
+An empty or failing command leaves Discord disconnected and is reported in
+window 0; the client starts all the same. Fix the manager entry, then
+`/discord login` runs the command again and connects without a restart. That
+later run happens inside the raw terminal: a command that prompts on the tty
+(a curses pinentry) only works at start; use a graphical pinentry or an
+unlocked agent for `/discord login`.
 
 Sections must follow top-level settings: a plain key written after `[discord]`
 belongs to that section. Telegram is optional. With both configured, each
@@ -288,6 +292,15 @@ is saved in `sidebar.toml`. One network without a server needs no section header
 | `/net discord` | Show Discord in the sidebar and aggregate view. |
 | `/net telegram` | Show Telegram. |
 | `/net all` | Remove the filter. |
+| `/discord`, `/telegram` | Network status: not started, connecting, connected as X. |
+| `/discord login` | Run `token_cmd` again and connect, after a failed or revoked token. |
+| `/discord logout` | Disconnect; the token stays where `token_cmd` reads it. |
+| `/telegram login` | Start Telegram again after a logout or a fatal error: QR, or phone and code. |
+| `/telegram logout` | End the session on the server (it leaves **Telegram → Settings → Devices**) and disconnect. |
+
+A network whose connection ends with an error (a revoked token, a closed
+session) says so in window 0 and is stopped, not the client: `/discord login`
+or `/telegram login` starts it again.
 
 Filtering does not close windows. In the sidebar’s window mode, window 0 stays
 visible and F2 cycles network filters before hiding the panel. With one network,
@@ -383,6 +396,7 @@ window and adds its activity to `[Act: …]` in the status bar.
 | `/new`, Ctrl+N | Open the new-conversation picker. |
 | `/chats` | List conversations, highlighting unread ones. |
 | `/net [network]` | Filter the sidebar and aggregate view; `telegram`, `discord`, `all`, or no argument to cycle. |
+| `/telegram [status\|login\|logout]`, `/discord [status\|login\|logout]` | One network: its status, a new login (Discord runs `token_cmd` again) or a logout (Telegram ends the session on the server). |
 | `/fold [section]` | Toggle a sidebar section by key, such as `telegram` or `discord:Gophers`, or a displayed-name prefix. No argument lists sections and their collapsed/expanded state. |
 | `/history N`, `/hist N` | Load N older messages; PgUp at the top also loads older history. |
 | `/clear`, `/c` | Clear the current window. |

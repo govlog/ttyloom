@@ -1,9 +1,13 @@
 package main
 
 import (
+	"context"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/govlog/ttyloom/internal/config"
 	"github.com/govlog/ttyloom/internal/model"
@@ -30,83 +34,90 @@ func loadCfg(t *testing.T, body string) *config.Config {
 
 const tgOnly = "api_id = 42\napi_hash = \"hash\"\n"
 
-// No [discord] section: one network, one cache, one thing to run.
+// No [discord] section: one network, one cache.
 func TestBackendsTelegramOnly(t *testing.T) {
 	cfg := loadCfg(t, tgOnly)
-	events := make(chan model.Envelope, 8)
-	nets, caches, run, err := backends(cfg, events)
+	nets, caches, launch, err := backends(context.Background(), cfg, make(chan model.Envelope, 8))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(nets) != 1 || nets[model.NetTelegram] == nil {
+	if !slices.Equal(nets, []string{model.NetTelegram}) || launch == nil {
 		t.Fatalf("networks: %v", nets)
 	}
-	if len(caches) != 1 || caches[model.NetTelegram] == nil || len(run) != 1 {
-		t.Fatalf("caches %v, run %d", caches, len(run))
+	if len(caches) != 1 || caches[model.NetTelegram] == nil {
+		t.Fatalf("caches %v", caches)
 	}
 }
 
-// [discord] with a token_cmd that works: two networks, two caches.
+// [discord] with a token_cmd that works: two networks, two caches, and the
+// launch of Discord gives a backend whose stop reaches the UI chan.
 func TestBackendsWithDiscord(t *testing.T) {
 	cfg := loadCfg(t, tgOnly+"[discord]\ntoken_cmd = \"echo tok\"\n")
 	events := make(chan model.Envelope, 8)
-	nets, caches, run, err := backends(cfg, events)
+	nets, caches, launch, err := backends(context.Background(), cfg, events)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(nets) != 2 || nets[model.NetDiscord] == nil {
+	if !slices.Equal(nets, []string{model.NetTelegram, model.NetDiscord}) {
 		t.Fatalf("networks: %v", nets)
 	}
-	if len(caches) != 2 || caches[model.NetDiscord] == nil || len(run) != 2 {
-		t.Fatalf("caches %v, run %d", caches, len(run))
+	if len(caches) != 2 || caches[model.NetDiscord] == nil {
+		t.Fatalf("caches %v", caches)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // Run ends at once: no network is reached
+	b, err := launch(ctx, model.NetDiscord)
+	if err != nil || b == nil {
+		t.Fatalf("launch: %v %v", b, err)
+	}
+	select {
+	case env := <-events:
+		if _, ok := env.Ev.(model.EvStopped); !ok || env.Net != model.NetDiscord {
+			t.Fatalf("event after the stop: %+v", env)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("no EvStopped after the stop")
 	}
 }
 
 func TestBackendsDiscordOnly(t *testing.T) {
 	cfg := loadCfg(t, "[discord]\ntoken_cmd = \"echo tok\"\n")
-	nets, caches, run, err := backends(cfg, make(chan model.Envelope, 8))
+	nets, caches, _, err := backends(context.Background(), cfg, make(chan model.Envelope, 8))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(nets) != 1 || nets[model.NetDiscord] == nil || len(caches) != 1 || len(run) != 1 {
-		t.Fatalf("networks %v, caches %v, starters %d", nets, caches, len(run))
+	if !slices.Equal(nets, []string{model.NetDiscord}) || len(caches) != 1 {
+		t.Fatalf("networks %v, caches %v", nets, caches)
 	}
 }
 
-func TestBackendsDiscordOnlyTokenError(t *testing.T) {
-	cfg := loadCfg(t, "[discord]\ntoken_cmd = \"false\"\n")
-	if _, _, _, err := backends(cfg, make(chan model.Envelope, 8)); err == nil {
-		t.Fatal("started with no usable network")
-	}
-}
-
-// token_cmd that fails: the error is said, Discord is left out and Telegram
-// starts all the same.
+// token_cmd that fails: the network is configured all the same (the client
+// starts, /discord login retries), its launch is the one that fails.
 func TestBackendsTokenError(t *testing.T) {
-	cfg := loadCfg(t, tgOnly+"[discord]\ntoken_cmd = \"ttyloom-no-such-command-here\"\n")
+	cfg := loadCfg(t, "[discord]\ntoken_cmd = \"false\"\n")
 	events := make(chan model.Envelope, 8)
-	nets, _, _, err := backends(cfg, events)
+	nets, _, launch, err := backends(context.Background(), cfg, events)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(nets) != 1 || nets[model.NetTelegram] == nil {
+	if !slices.Equal(nets, []string{model.NetDiscord}) {
 		t.Fatalf("networks: %v", nets)
+	}
+	b, err := launch(context.Background(), model.NetDiscord)
+	if b != nil || err == nil || !strings.Contains(err.Error(), "token_cmd") {
+		t.Fatalf("launch with a failing token_cmd: %v %v", b, err)
 	}
 	select {
 	case env := <-events:
-		log, ok := env.Ev.(model.EvLog)
-		if !ok || log.Level != "ERROR" || env.Net != model.NetDiscord {
-			t.Fatalf("event of the token error: %+v", env)
-		}
+		t.Fatalf("event after a failed launch: %+v", env)
 	default:
-		t.Fatal("token error: nothing said")
 	}
 }
 
 // Without api_id nothing starts: the message names the file to fill in.
 func TestBackendsNoAPIID(t *testing.T) {
 	cfg := loadCfg(t, "api_hash = \"hash\"\n")
-	if _, _, _, err := backends(cfg, make(chan model.Envelope, 8)); err == nil {
+	if _, _, _, err := backends(context.Background(), cfg, make(chan model.Envelope, 8)); err == nil {
 		t.Fatal("no api_id: no error")
 	}
 }

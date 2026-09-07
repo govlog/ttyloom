@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"context"
+	"errors"
 	"slices"
 	"strings"
 	"testing"
@@ -451,5 +453,89 @@ func TestSetCycleMode(t *testing.T) {
 	u.setCmd([]string{"cycle_mode", "last_unread"})
 	if u.cfg.CycleMode != "last_unread" {
 		t.Fatalf("value refused: %q", u.cfg.CycleMode)
+	}
+}
+
+// launchUI : interface with no live network, discord and telegram configured,
+// and a launcher that counts its calls and gives a fake backend (or err).
+func launchUI(err error) (*UI, *int) {
+	u := netUI()
+	u.ctx = context.Background()
+	u.netList = []string{model.NetDiscord, model.NetTelegram}
+	u.netCancel = map[string]context.CancelFunc{}
+	u.self = map[string]selfInfo{}
+	n := new(int)
+	u.launch = func(context.Context, string) (model.Backend, error) {
+		*n++
+		if err != nil {
+			return nil, err
+		}
+		return &fakeBackend{}, nil
+	}
+	return u, n
+}
+
+// TestNetLogin : /discord login starts the network through the launcher once;
+// a second login does not start it again, and status says who we are.
+func TestNetLogin(t *testing.T) {
+	u, n := launchUI(nil)
+	w := u.ws.List[0]
+	u.command("discord", []string{"status"}, "status")
+	if len(w.Items) != 1 || !strings.Contains(w.Items[0].Sys, "/discord login") {
+		t.Fatalf("status before login: %+v", w.Items)
+	}
+	u.command("discord", []string{"login"}, "login")
+	if *n != 1 || u.nets[model.NetDiscord] == nil || u.netCancel[model.NetDiscord] == nil {
+		t.Fatalf("login: launched %d, net %v", *n, u.nets[model.NetDiscord])
+	}
+	u.command("discord", []string{"login"}, "login")
+	if *n != 1 {
+		t.Fatalf("second login launched again: %d", *n)
+	}
+	u.self[model.NetDiscord] = selfInfo{ID: 1, Name: "alice"}
+	u.conn[model.NetDiscord] = true
+	u.command("discord", nil, "")
+	if last := w.Items[len(w.Items)-1].Sys; !strings.Contains(last, "alice") {
+		t.Fatalf("status after login: %q", last)
+	}
+}
+
+// TestNetLoginError : a launcher that fails (token_cmd: exit status 1) puts
+// the error in window 0 and starts nothing.
+func TestNetLoginError(t *testing.T) {
+	u, _ := launchUI(errors.New("discord: token_cmd: exit status 1"))
+	u.command("discord", []string{"login"}, "login")
+	if u.nets[model.NetDiscord] != nil {
+		t.Fatal("backend kept after a failed launch")
+	}
+	it := u.ws.List[0].Items
+	if n := len(it); n < 2 || !strings.Contains(it[n-2].Sys, "token_cmd: exit status 1") || !strings.Contains(it[n-1].Sys, "/discord login") {
+		t.Fatalf("window 0: %+v", it)
+	}
+}
+
+// TestNetLogoutStopped : /discord logout cancels the network's context, and
+// the EvStopped that follows drops the backend so that login can start it
+// again. EvStopped with an error says so in window 0.
+func TestNetLogoutStopped(t *testing.T) {
+	u, _ := launchUI(nil)
+	u.command("discord", []string{"login"}, "login")
+	var ctx context.Context
+	u.launch = func(c context.Context, _ string) (model.Backend, error) { ctx = c; return &fakeBackend{}, nil }
+	u.command("discord", []string{"logout"}, "logout")
+	u.command("discord", []string{"login"}, "login") // still up until EvStopped: nothing starts
+	if ctx != nil {
+		t.Fatal("login while stopping launched a second backend")
+	}
+	if u.nets[model.NetDiscord] == nil {
+		t.Fatal("backend dropped before EvStopped")
+	}
+	u.dispatch(model.Envelope{Net: model.NetDiscord, Ev: model.EvStopped{}})
+	if u.nets[model.NetDiscord] != nil || u.netCancel[model.NetDiscord] != nil {
+		t.Fatal("backend kept after EvStopped")
+	}
+	u.dispatch(model.Envelope{Net: model.NetDiscord, Ev: model.EvStopped{Err: "discord: 4004"}})
+	if last := u.ws.List[0].Items[len(u.ws.List[0].Items)-1].Sys; !strings.Contains(last, "4004") || !strings.Contains(last, "/discord login") {
+		t.Fatalf("window 0: %q", last)
 	}
 }

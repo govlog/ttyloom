@@ -244,7 +244,11 @@ type EvReady struct {
 }
 type EvConnected struct{}
 type EvDisconnected struct{}
-type EvFatal struct{ Err string }
+
+// EvStopped : the Run of the backend is over. Err is empty when it was asked
+// to end (logout, quit), the error otherwise — the network is gone either
+// way, until the next /<net> login.
+type EvStopped struct{ Err string }
 type EvLog struct{ Level, Msg string }
 type EvDialogs struct {
 	Chats []*Chat
