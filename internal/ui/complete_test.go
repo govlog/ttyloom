@@ -4,6 +4,9 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/govlog/ttyloom/internal/config"
+	"github.com/govlog/ttyloom/internal/model"
 )
 
 func TestComplContext(t *testing.T) {
@@ -25,6 +28,9 @@ func TestComplContext(t *testing.T) {
 		{"/net tel", complNet, "tel", ""},
 		{"/open 2", complNone, "", ""},
 		{"salut al", complChats, "al", ""},
+		{"/discord l", complNetCmd, "l", ""},
+		{"/telegram ", complNetCmd, "", ""},
+		{"/log o", complLog, "o", ""},
 	}
 	for _, c := range cases {
 		src, tail, key := complContext(c.line, len([]rune(c.line)))
@@ -83,4 +89,41 @@ func TestCompletePath(t *testing.T) {
 	t.Setenv("HOME", dir)
 	try("/send ~/ph", "/send ~/photo")
 	try("/send "+dir+"/photo1.jpg hello", "/send "+dir+"/photo1.jpg hello") // the caption is free text
+}
+
+// TestChatCandidates : Tab on a chat name matches the start of any word of the
+// title, not only its first, and "@" before a username is understood — the
+// two ways /query and /join are typed.
+func TestChatCandidates(t *testing.T) {
+	u := &UI{cfg: &config.Config{}, chatList: []*model.Chat{
+		{Net: "telegram", ID: 1, Title: "Les copains du foot"},
+		{Net: "telegram", ID: 2, Title: "Go", Username: "golang"},
+	}}
+	try := func(line, want string) {
+		t.Helper()
+		u.ed.Set(line)
+		u.ed.Complete(u.candidates)
+		if got := u.ed.String(); got != want {
+			t.Fatalf("%q → %q, want %q", line, got, want)
+		}
+	}
+	try("/query cop", "/query copains du foot ")
+	try("/q les", "/q les copains du foot ")
+	try("/join @gol", "/join @golang ")
+	try("/msg gola", "/msg golang ")
+}
+
+// TestCompleteListsWhenStuck : with several candidates and nothing more to
+// add, Complete gives them back so that the UI can list them — a second Tab
+// on "/q Jean Du" says Dupont and Durand instead of staying mute.
+func TestCompleteListsWhenStuck(t *testing.T) {
+	u := &UI{cfg: &config.Config{}, chatList: []*model.Chat{
+		{Net: "telegram", ID: 1, Title: "Jean Dupont"}, {Net: "telegram", ID: 2, Title: "Jean Durand"}}}
+	u.ed.Set("/q Je")
+	if got := u.ed.Complete(u.candidates); u.ed.String() != "/q Jean Du" || got != nil {
+		t.Fatalf("first Tab: %q, list %v", u.ed.String(), got)
+	}
+	if got := u.ed.Complete(u.candidates); len(got) != 2 || got[0] != "Dupont" || got[1] != "Durand" {
+		t.Fatalf("second Tab: %q, list %v", u.ed.String(), got)
+	}
 }

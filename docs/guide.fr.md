@@ -587,7 +587,7 @@ Un clic sur une réaction sous n'importe quel message l'ajoute ou la retire, san
 | *Ctrl+T* ou */emoji* | sélecteur d'emoji : la frappe filtre, les flèches ou un clic choisissent, *Entrée* insère, *Échap* ferme |
 | *↑*, *↓* | historique de saisie |
 | *Maj+Entrée* ou *Alt+Entrée* | saut de ligne dans la saisie (affiché *⏎*), *Entrée* ou *Ctrl+Entrée* envoie ; Maj+Entrée demande le protocole clavier kitty ; Alt+Entrée est le repli sans ce protocole, et le collage multiligne reste possible ; avec *multiline on*, ouvre la zone de saisie étendue (*↑*/*↓* y déplacent le curseur de ligne en ligne, un collage multiligne y propose insertion telle quelle ou en bloc de code) |
-| *Tab* | complète les commandes, les noms de conversations et les thèmes |
+| *Tab* | complète les commandes, les noms de conversations (depuis le début de n'importe quel mot du titre, *@pseudo* aussi), les fenêtres, les clés et valeurs de */set*, les thèmes, les sujets de */help*, les chemins de */send*, les arguments de */log*, */telegram* et */discord* ; plusieurs noms restants et rien à ajouter : un second *Tab* les liste |
 | *PgUp*, *PgDn* | défilement de la fenêtre |
 | *Ctrl+L* | repeint l'écran |
 | *Ctrl+C*, */quit* | quitte |
@@ -600,7 +600,7 @@ Les sorties longues (*/chats*, */theme list*, */help*, */window list*) s'affiche
 
 Un collage de plus de 64 Ko est refusé ; un collage de plusieurs lignes ne part pas tout seul : la ligne de saisie propose *(e)* envoyer tel quel, *(c)* envoyer en bloc de code, *(a)* annuler.
 
-La touche *Tab* complète selon la commande : noms de conversations après */query*, */msg* et */join*, fenêtres après */win*, clés puis valeurs après */set*, thèmes après */theme*.
+La touche *Tab* complète selon la commande : noms de conversations après */query*, */msg* et */join* (depuis le début de n'importe quel mot du titre, ou *@pseudo*), fenêtres après */win*, clés puis valeurs après */set*, thèmes après */theme*, chemins après */send*, *on*/*off* après */log*, *status*/*login*/*logout* après */telegram* et */discord*. Quand plusieurs noms restent et que rien ne peut être ajouté, un second *Tab* les liste dans la fenêtre. */query* accepte aussi un morceau pris à l'intérieur d'un titre quand il est seul à le contenir.
 
 Dans une conversation, taper `@` ouvre aussi les suggestions de membres ayant un pseudo : flèches pour choisir, `Tab` ou `Entrée` pour insérer, `Échap` pour fermer. Le sélecteur d’emoji garde les choix récents. La correction Hunspell (`Ctrl+R`) et les mentions complètent la saisie sans changer de fenêtre.
 

@@ -171,8 +171,9 @@ func (e *Editor) Submit() string {
 }
 
 // Complete completes the word under the cursor with cands(word, startOfLine):
-// only one → candidate + space; several → longest common prefix.
-func (e *Editor) Complete(cands func(word string, atStart bool) []string) {
+// only one → candidate + space; several → longest common prefix. When that
+// prefix adds nothing, the matches come back so that the caller lists them.
+func (e *Editor) Complete(cands func(word string, atStart bool) []string) []string {
 	start := e.cur
 	for start > 0 && e.buf[start-1] != ' ' {
 		start--
@@ -185,7 +186,7 @@ func (e *Editor) Complete(cands func(word string, atStart bool) []string) {
 		}
 	}
 	if len(matches) == 0 {
-		return
+		return nil
 	}
 	repl := matches[0] + " "
 	if strings.HasSuffix(matches[0], "/") { // a directory: the next Tab goes on inside it
@@ -194,11 +195,12 @@ func (e *Editor) Complete(cands func(word string, atStart bool) []string) {
 	if len(matches) > 1 {
 		repl = commonPrefix(matches)
 		if len([]rune(repl)) <= len([]rune(word)) {
-			return
+			return matches
 		}
 	}
 	e.buf = slices.Concat(e.buf[:start], []rune(repl), e.buf[e.cur:])
 	e.cur = start + len([]rune(repl))
+	return nil
 }
 
 func commonPrefix(ss []string) string {

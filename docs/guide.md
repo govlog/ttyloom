@@ -680,7 +680,7 @@ precedence over sending a fenced/code-block paste.
 | Up/Down | Input history, or vertical movement in the expanded editor. Up on empty input can edit the last sent message. |
 | Shift+Enter, Alt+Enter | Insert a line break. Shift+Enter needs kitty keyboard support; Alt+Enter is the fallback. With `multiline` enabled, open the expanded editor. |
 | Enter, Ctrl+Enter | Send the draft. |
-| Tab | Complete commands, chats, windows, settings, themes and help topics. |
+| Tab | Complete commands, chats (`/query`, `/join`, `/msg`: from the start of any word of a title, `@username` too), windows, settings, themes, help topics, `/send` paths, `/log` and `/telegram`/`/discord` arguments. Several names left and nothing more to add: a second Tab lists them. |
 | PgUp/PgDn | Scroll history. |
 | Ctrl+L | Repaint the screen. |
 | Ctrl+C, `/quit`, `/exit` | Quit. |

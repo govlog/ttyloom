@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/govlog/ttyloom/internal/config"
+	"github.com/govlog/ttyloom/internal/model"
 
 	"github.com/govlog/ttyloom/internal/i18n"
 	"github.com/govlog/ttyloom/internal/spell"
@@ -26,6 +27,8 @@ const (
 	complNet                             // /net <network>
 	complFold                            // /fold <section>
 	complPath                            // /send <path>: files of the disk
+	complNetCmd                          // /telegram /discord <status|login|logout>
+	complLog                             // /log <on|off>
 	complNone                            // /open /history …
 )
 
@@ -86,6 +89,10 @@ func complContext(line string, cursor int) (src complSource, tail string, setKey
 		return complNet, rest, ""
 	case "fold":
 		return complFold, rest, ""
+	case model.NetTelegram, model.NetDiscord:
+		return complNetCmd, rest, ""
+	case "log":
+		return complLog, rest, ""
 	case "send":
 		// The whole tail: a path may hold spaces (splitSendArgs allows it);
 		// once it names a file, the rest is the caption.
@@ -171,6 +178,36 @@ func pathCandidates(p string) []string {
 			n += "/"
 		}
 		out = append(out, dir+n)
+	}
+	return out
+}
+
+// chatCandidates : the names Tab may complete after /query, /join, /msg —
+// each chat by its @username, its bare username and its shown title. A name
+// matches from its start or from the start of any of its words ("cop" gives
+// "copains du foot"), and the candidate is the name from there on: the editor
+// completes its last word, and findChat takes the piece it gives.
+func (u *UI) chatCandidates(word, tail string) []string {
+	tr := []rune(tail)
+	var out []string
+	add := func(n string) {
+		r := []rune(n)
+		for i := range r {
+			if i > 0 && r[i-1] != ' ' || len(r)-i < len(tr) {
+				continue
+			}
+			if strings.EqualFold(string(r[i:i+len(tr)]), tail) {
+				out = append(out, word+string(r[i+len(tr):]))
+				return
+			}
+		}
+	}
+	for _, c := range u.chatList {
+		if c.Username != "" {
+			add("@" + c.Username)
+			add(c.Username)
+		}
+		add(u.title(c)) // the local name can be completed, findChat resolves it
 	}
 	return out
 }

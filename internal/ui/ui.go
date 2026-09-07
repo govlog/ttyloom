@@ -1656,7 +1656,7 @@ func (u *UI) whois(e model.EvWhois) {
 // case insensitive.
 func (u *UI) findChat(q string) (chat *model.Chat, ambiguous bool) {
 	q = strings.ToLower(strings.TrimPrefix(q, "@"))
-	var exact, pref []*model.Chat
+	var exact, pref, inside []*model.Chat
 	for _, c := range u.chatList {
 		un, ti := strings.ToLower(c.Username), strings.ToLower(c.Title)
 		al := strings.ToLower(u.aliases[c.Key()])
@@ -1665,12 +1665,18 @@ func (u *UI) findChat(q string) (chat *model.Chat, ambiguous bool) {
 			exact = append(exact, c)
 		case (un != "" && strings.HasPrefix(un, q)) || strings.HasPrefix(ti, q) || (al != "" && strings.HasPrefix(al, q)):
 			pref = append(pref, c)
+		case q != "" && (strings.Contains(un, q) || strings.Contains(ti, q) || strings.Contains(al, q)):
+			inside = append(inside, c) // "copains du foot", as the completion hands it over
 		}
 	}
-	// An exact name wins over the prefixes; two chats with the same exact name
-	// (a local name that copies the title of another) stay ambiguous.
-	if len(exact) > 0 {
+	// An exact name wins over the prefixes, a prefix over a piece inside; two
+	// chats with the same exact name (a local name that copies the title of
+	// another) stay ambiguous.
+	switch {
+	case len(exact) > 0:
 		pref = exact
+	case len(pref) == 0:
+		pref = inside
 	}
 	if len(pref) == 1 {
 		return pref[0], false
@@ -1921,7 +1927,13 @@ func (u *UI) key(k term.Key) {
 	case k.Code == term.PgDn:
 		u.scroll(w, -u.viewRows()/2)
 	case k.Code == term.Tab:
-		u.ed.Complete(u.candidates)
+		// Nothing more to add and several names: they are listed, like a shell.
+		if list := u.ed.Complete(u.candidates); len(list) > 0 {
+			if len(list) > 20 {
+				list = append(list[:20], "…")
+			}
+			u.sys(i18n.T("complete_choices", strings.Join(list, "  ")))
+		}
 	case k.Code == term.Paste:
 		u.pasteText(w, normalizePaste(k.Text))
 	case k.Code == term.None && k.Rune != 0 && !k.Alt:
@@ -2119,14 +2131,7 @@ func (u *UI) candidates(word string, atStart bool) []string {
 	case complCommands:
 		return commandNames
 	case complChats:
-		var names []string
-		for _, c := range u.chatList {
-			if c.Username != "" {
-				names = append(names, c.Username)
-			}
-			names = append(names, u.title(c)) // the local name can be completed, findChat resolves it
-		}
-		return multiWord(word, tail, names)
+		return u.chatCandidates(word, tail)
 	case complWindows:
 		out := []string{"new", "close", "list"}
 		for i, w := range u.ws.List {
@@ -2148,6 +2153,10 @@ func (u *UI) candidates(word string, atStart bool) []string {
 		return helpCandidates()
 	case complNet:
 		return append(u.netNames(), netAll)
+	case complNetCmd:
+		return []string{"status", "login", "logout"}
+	case complLog:
+		return []string{"on", "off"}
 	case complPath:
 		// The editor completes its last word; a path with a space is longer
 		// than that word, so the candidates are cut to the part after the
