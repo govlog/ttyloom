@@ -722,6 +722,14 @@ func (c *Client) LoadDialogs(ctx context.Context) {
 			c.Post(model.EvDialogs{Err: err.Error()})
 			return
 		}
+		// The archive (folder 1) is a list of its own: a chat put away there
+		// is still one of the account, and nothing else would ever show it.
+		archived, err := query.GetDialogs(c.api).BatchSize(100).FolderID(1).Collect(ctx)
+		if err != nil {
+			c.Post(model.EvDialogs{Err: err.Error()})
+			return
+		}
+		elems = append(elems, archived...)
 		var chats []*model.Chat
 		for _, e := range elems {
 			d, ok := e.Dialog.(*tg.Dialog)

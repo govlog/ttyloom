@@ -494,12 +494,21 @@ func TestUploadReportsTmpID(t *testing.T) {
 // TestLoadDialogs : one page of dialogs becomes the chat list — unread
 // counter, read marks and date of the last message included. messages.dialogs
 // (not dialogsSlice) is the complete form: the gotd iterator stops after one
-// batch (query/dialogs/iter.go:121).
+// batch (query/dialogs/iter.go:121). The archive (folder 1) is asked too: a
+// chat put away there is still a chat of the account.
 func TestLoadDialogs(t *testing.T) {
 	ev := make(chan model.Event, 4)
 	inv := &fakeInvoker{answer: func(req bin.Encoder) (any, error) {
-		if _, ok := req.(*tg.MessagesGetDialogsRequest); !ok {
+		r, ok := req.(*tg.MessagesGetDialogsRequest)
+		if !ok {
 			return nil, fmt.Errorf("per-dialog lookup: %T", req)
+		}
+		if r.FolderID == 1 {
+			return &tg.MessagesDialogs{
+				Dialogs:  []tg.DialogClass{&tg.Dialog{Peer: &tg.PeerUser{UserID: 8}, TopMessage: 5}},
+				Messages: []tg.MessageClass{&tg.Message{ID: 5, PeerID: &tg.PeerUser{UserID: 8}, Date: 1600000000}},
+				Users:    []tg.UserClass{withName(8, "bob")},
+			}, nil
 		}
 		return &tg.MessagesDialogs{
 			Dialogs: []tg.DialogClass{&tg.Dialog{Peer: &tg.PeerUser{UserID: 7}, TopMessage: 12,
@@ -510,8 +519,8 @@ func TestLoadDialogs(t *testing.T) {
 	}}
 	fakeClient(inv, ev).LoadDialogs(context.Background())
 	e := next(t, ev).(model.EvDialogs)
-	if e.Err != "" || len(e.Chats) != 1 {
-		t.Fatalf("dialogs: %+v", e)
+	if e.Err != "" || len(e.Chats) != 2 || e.Chats[1].Username != "bob" {
+		t.Fatalf("dialogs (main list, then the archive): %+v", e)
 	}
 	c := e.Chats[0]
 	if c.ID != 7 || c.Username != "alice" || c.Unread != 3 || c.ReadInboxMaxID != 9 || c.ReadOutboxMaxID != 11 {
