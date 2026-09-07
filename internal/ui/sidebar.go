@@ -731,18 +731,25 @@ func sidebarLines(mode sideMode, chats []*model.Chat, ws []*Window, wins []int, 
 				pfx = kindPrefix(w.Chat.Kind)
 			}
 			s := fmt.Sprintf("%d: %s", i, render.CleanLine(winName(w, title)))
+			act := "" // activity counter: the unread badge of this mode, red too
 			if w.Act > 0 {
-				s += fmt.Sprintf(" (%d)", w.Act)
+				act = fmt.Sprintf(" (%d)", w.Act)
 			}
 			textW := width - render.Width(pfx)
-			st, p, text := theme.Style{}, dim, fit(s, textW)
+			st, p, a := theme.Style{}, dim, red
 			switch {
-			case i == cur:
-				st, p, text = on, on, marquee(s, textW, step)
+			case i == cur: // one style on the whole line: the counter scrolls with the name
+				return []render.Span{{Text: pfx, Style: on}, {Text: marquee(s+act, textW, step), Style: on}}, 0
 			case w.Chat != nil && w.Chat == sideMenuChat: // line of the open menu
-				st, p = on, on
+				st, p, a = on, on, on
 			}
-			return []render.Span{{Text: pfx, Style: p}, {Text: text, Style: st}}, 0
+			name := render.Truncate(s, textW-render.Width(act), "")
+			sp := []render.Span{{Text: pfx, Style: p}, {Text: name, Style: st}}
+			if act != "" {
+				sp = append(sp, render.Span{Text: act, Style: a})
+			}
+			pad := strings.Repeat(" ", max(0, textW-render.Width(name)-render.Width(act)))
+			return append(sp, render.Span{Text: pad, Style: st}), 0
 		}
 	}
 

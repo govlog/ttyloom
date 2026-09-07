@@ -4,6 +4,7 @@
 
 - **Réseaux** : `/telegram` et `/discord` (`status`, `login`, `logout`). `/discord login` relance `token_cmd` et se connecte sans redémarrer : un token renouvelé dans le gestionnaire de mots de passe est pris sur place, là où « *token_cmd: exit status 1* » laissait Discord absent jusqu'au prochain lancement. `/telegram logout` ferme la session côté serveur (elle quitte *Réglages → Appareils*), et `/telegram login` repasse par le QR. Un réseau dont la connexion meurt (token révoqué, erreur fatale) s'arrête seul et se relance par `login` ; le client démarre même si le seul réseau configuré échoue son token.
 - **Fenêtre 0** : avec `timestamps`, les lignes système des fenêtres d'état (fenêtre 0, vue agrégée, journal) portent l'heure de leur arrivée.
+- **Panneau** : en mode fenêtres (*F2*), le compteur d'activité *(N)* est en rouge, comme le badge de non-lus du mode conversations.
 
 ## v1.1.1 — 2026-09-05
 

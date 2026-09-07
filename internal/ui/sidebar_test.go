@@ -1165,3 +1165,28 @@ func TestSideWheelHoverOffScrollsList(t *testing.T) {
 		t.Fatalf("hover off: scroll %d, window %d", u.sideScroll, u.ws.Cur)
 	}
 }
+
+// TestSideWindowsActRed : in window mode the activity counter " (N)" is drawn
+// like the unread badge of the chat mode — red, bold — and not in the plain
+// style of the name. The current line keeps its single reversed style.
+func TestSideWindowsActRed(t *testing.T) {
+	th := theme.Terminal()
+	ws := []*Window{{}, {Chat: &model.Chat{ID: 1, Kind: model.ChatUser, Title: "ancien"}, Act: 2}}
+	lines := sidebarLines(sideWindows, nil, ws, nil, 0, th, testSideW, 2, 0, false, false, 0, -1, false, nil)
+	red := theme.Style{FG: th.Color(theme.Error), Bold: true}
+	var act *render.Span
+	for i := range content(lines[1]) {
+		if strings.TrimSpace(content(lines[1])[i].Text) == "(2)" {
+			act = &content(lines[1])[i]
+		}
+	}
+	if act == nil || act.Style != red {
+		t.Fatalf("activity span: %+v", content(lines[1]))
+	}
+	if got := body(lines[1]); got != "@1: ancien (2)" {
+		t.Fatalf("window 1: %q", got)
+	}
+	if !oneBar(lines[0]) {
+		t.Fatalf("current line patchy: %+v", content(lines[0]))
+	}
+}
