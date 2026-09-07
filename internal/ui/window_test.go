@@ -297,3 +297,26 @@ func TestUpdateReplacedMedia(t *testing.T) {
 		t.Fatal("media replaced by the edit: the old one is still shown")
 	}
 }
+
+// TestSysTimestamp : with timestamps on, a system line of a status window
+// (window 0, aggregate, log) carries the time of its arrival like a message;
+// a chat window keeps its bare "*** " lines.
+func TestSysTimestamp(t *testing.T) {
+	o := render.Opts{Width: 60, Theme: theme.Terminal(), Timestamps: true}
+	w := &Window{}
+	w.AddSys("connected")
+	w.Items[0].At = time.Date(2026, 9, 7, 14, 3, 0, 0, time.UTC)
+	if got := render.LineText(w.Lines(o)[0]); got != "14:03 *** connected" {
+		t.Fatalf("status window: %q", got)
+	}
+	c := &Window{Chat: &model.Chat{ID: 1}}
+	c.AddSys("connected")
+	if got := render.LineText(c.Lines(o)[0]); got != "*** connected" {
+		t.Fatalf("chat window: %q", got)
+	}
+	o.Timestamps = false
+	w.Invalidate()
+	if got := render.LineText(w.Lines(o)[0]); got != "*** connected" {
+		t.Fatalf("timestamps off: %q", got)
+	}
+}

@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/govlog/ttyloom/internal/i18n"
 	"github.com/govlog/ttyloom/internal/model"
@@ -20,6 +21,10 @@ const defaultMaxItems = 2000
 type Item struct {
 	Msg *model.Msg
 	Sys string
+	// At : arrival of a system line, shown before it in the status windows
+	// (window 0, aggregate, log) when timestamps are on. Zero on the lines
+	// that are not events (cache mark, history gap): no time on those.
+	At time.Time
 	// Info : information line of a message (key "i"), dropped when the
 	// message is deselected. ponytail: a mark on the item, no list to keep.
 	Info bool
@@ -330,7 +335,7 @@ func (w *Window) Msgs() []model.Msg {
 	return out
 }
 
-func (w *Window) AddSys(s string)           { w.Items = append(w.Items, &Item{Sys: s}); w.trim() }
+func (w *Window) AddSys(s string)           { w.Items = append(w.Items, &Item{Sys: s, At: time.Now()}); w.trim() }
 func (w *Window) AddLines(ls []render.Line) { w.Items = append(w.Items, &Item{Text: ls}); w.trim() }
 
 // Invalidate of an item: its drawing will be made again at the next draw.
@@ -469,7 +474,11 @@ func (w *Window) LineItems(o render.Opts) ([]render.Line, []*Item, int) {
 			case it.Text != nil:
 				it.lines = it.Text
 			default:
-				it.lines = render.Plain("*** "+it.Sys, o.Theme.Style(theme.System), o.Width)
+				s := "*** " + it.Sys
+				if o.Timestamps && !it.At.IsZero() && w.Chat == nil && w.Search == "" {
+					s = o.Stamp(it.At) + s
+				}
+				it.lines = render.Plain(s, o.Theme.Style(theme.System), o.Width)
 			}
 			it.w = o.Width
 		}

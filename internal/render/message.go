@@ -74,6 +74,15 @@ type Opts struct {
 	Caps func(m *model.Msg) model.Caps
 }
 
+// Stamp : the time prefix of a line ("15:04 ", with seconds on o.Seconds).
+func (o Opts) Stamp(t time.Time) string {
+	f := "15:04"
+	if o.Seconds {
+		f = "15:04:05"
+	}
+	return t.Format(f) + " "
+}
+
 // caps : capabilities of the network of m, nothing allowed with no Caps posed.
 func (o Opts) caps(m *model.Msg) model.Caps {
 	if o.Caps == nil {
@@ -241,11 +250,7 @@ func msgPrefix(m *model.Msg, o Opts, fromID int64, own bool) (prefix []Span, ind
 		}
 	}
 	if o.Timestamps {
-		f := "15:04"
-		if o.Seconds {
-			f = "15:04:05"
-		}
-		prefix = append(prefix, Span{m.Date.Format(f) + " ", dim})
+		prefix = append(prefix, Span{o.Stamp(m.Date), dim})
 	}
 	if o.ShowChat && label != "" {
 		prefix = append(prefix, Span{"[" + Clean(label) + "] ", theme.Style{FG: th.Nick(m.ChatID)}})
