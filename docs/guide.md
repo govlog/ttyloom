@@ -445,8 +445,9 @@ echo never enters the history, cache or log of the window. `/msg alice text`
 echoes the same way without opening the mode.
 
 Tab after `/m `, `/q ` or `/j `, with no letters yet, lists up to 20 targets;
-a second Tab expands to up to 100. Online contacts come first, with one name per
-chat in the unfiltered list. Command completion cycles alphabetically:
+a second Tab expands to up to 100. `/join` completes channels and groups only,
+`/query` private conversations only, `/msg` all of them. Online contacts come
+first, with one name per chat in the unfiltered list. Command completion cycles alphabetically:
 `/ne` → Tab → `/net` → Tab → `/new`. Unique command prefixes work on Enter
 without Tab, for example `/quer alice`; `/qu` is an explicit alias for `/query`
 because `/quit` shares that prefix. Exact aliases take precedence when executing.

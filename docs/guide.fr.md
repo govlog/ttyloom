@@ -434,7 +434,8 @@ d'Alice ; l'écho n'entre jamais dans l'historique, le cache ni le journal de la
 fenêtre. `/msg alice texte` fait de même sans ouvrir le mode.
 
 Tab après `/m `, `/q ` ou `/j ` sans lettre liste jusqu'à 20 cibles ; un second
-Tab agrandit la liste jusqu'à 100. Les contacts en ligne viennent d'abord, avec
+Tab agrandit la liste jusqu'à 100. `/join` ne complète que les canaux et groupes,
+`/query` que les privés, `/msg` tout. Les contacts en ligne viennent d'abord, avec
 un seul nom par conversation dans la liste non filtrée. Les commandes se
 complètent en boucle par ordre alphabétique : `/ne` → Tab → `/net` → Tab → `/new`.
 Un préfixe de commande unique fonctionne directement avec Entrée (`/quer alice`).

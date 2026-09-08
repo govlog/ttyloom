@@ -185,6 +185,7 @@ func pathCandidates(p string) []string {
 // "copains du foot"), and the candidate is the name from there on: the editor
 // completes its last word, and findChat takes the piece it gives.
 func (u *UI) chatCandidates(word, tail string) []string {
+	keep := chatKinds(u.ed.String())
 	tr := []rune(tail)
 	var out []string
 	seen := map[string]bool{}
@@ -219,6 +220,9 @@ func (u *UI) chatCandidates(word, tail string) []string {
 		return 0
 	})
 	for _, c := range chats {
+		if keep != nil && !keep(c) {
+			continue
+		}
 		if tail == "" { // one useful name per chat in the unfiltered list
 			if c.Username != "" {
 				add("@" + c.Username)
@@ -234,6 +238,22 @@ func (u *UI) chatCandidates(word, tail string) []string {
 		add(u.title(c)) // the local name can be completed, findChat resolves it
 	}
 	return out
+}
+
+// chatKinds : the chats a command completes — /join a channel or a group,
+// /query a private conversation, /msg and free text any of them (nil).
+func chatKinds(line string) func(*model.Chat) bool {
+	if !strings.HasPrefix(line, "/") {
+		return nil
+	}
+	name, _, _ := strings.Cut(line[1:], " ")
+	switch resolveCommand(strings.ToLower(name)) {
+	case "join":
+		return func(c *model.Chat) bool { return c.Kind != model.ChatUser }
+	case "query":
+		return func(c *model.Chat) bool { return c.Kind == model.ChatUser }
+	}
+	return nil
 }
 
 const completionShortLimit = 20

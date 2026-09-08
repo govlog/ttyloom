@@ -107,7 +107,7 @@ func TestCompletePath(t *testing.T) {
 func TestChatCandidates(t *testing.T) {
 	u := &UI{cfg: &config.Config{}, chatList: []*model.Chat{
 		{Net: "telegram", ID: 1, Title: "Les copains du foot"},
-		{Net: "telegram", ID: 2, Title: "Go", Username: "golang"},
+		{Net: "telegram", ID: 2, Title: "Go", Username: "golang", Kind: model.ChatChannel},
 	}}
 	try := func(line, want string) {
 		t.Helper()
@@ -178,8 +178,12 @@ func TestEmptyChatCompletionExpandsOnlineFirst(t *testing.T) {
 		t.Run(command, func(t *testing.T) {
 			u := listUI()
 			u.presence = map[model.ChatKey]string{}
+			kind := model.ChatUser
+			if command == "/j " { // /join lists channels only
+				kind = model.ChatChannel
+			}
 			for i := 0; i < 35; i++ {
-				u.chatList = append(u.chatList, &model.Chat{Net: model.NetTelegram, ID: int64(i + 1),
+				u.chatList = append(u.chatList, &model.Chat{Net: model.NetTelegram, ID: int64(i + 1), Kind: kind,
 					Title: fmt.Sprintf("contact%02d", i), Username: fmt.Sprintf("contact%02d", i)})
 			}
 			u.presence[u.chatList[34].Key()] = i18n.T("presence_online")
@@ -234,6 +238,26 @@ func TestCommandPrefixesOnSubmit(t *testing.T) {
 	for _, name := range commandNames {
 		if got, _, _, _ := ParseCommand(name); got != name[1:] {
 			t.Errorf("exact command %s resolved to %s", name, got)
+		}
+	}
+}
+
+// TestChatCandidatesByCommand : Tab after /join offers channels and groups,
+// after /query private conversations, after /msg all of them.
+func TestChatCandidatesByCommand(t *testing.T) {
+	u := &UI{cfg: &config.Config{}, chatList: []*model.Chat{
+		{Net: "telegram", ID: 1, Title: "Les copains du foot", Kind: model.ChatGroup},
+		{Net: "telegram", ID: 2, Title: "Go", Username: "golang"},
+		{Net: "telegram", ID: 3, Title: "Go news", Kind: model.ChatChannel},
+	}}
+	for line, want := range map[string]string{
+		"/join ": "Les copains du foot Go news", "/j ": "Les copains du foot Go news",
+		"/query ": "@golang", "/q ": "@golang", "/qu ": "@golang",
+		"/msg ": "Les copains du foot @golang Go news", "": "Les copains du foot @golang Go news",
+	} {
+		u.ed.Set(line)
+		if got := strings.Join(u.chatCandidates("", ""), " "); got != want {
+			t.Fatalf("%q: %q, want %q", line, got, want)
 		}
 	}
 }
