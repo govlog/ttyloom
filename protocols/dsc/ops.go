@@ -667,6 +667,11 @@ func mediaRequestAllowed(req *http.Request) bool {
 		return false
 	}
 	host := strings.ToLower(u.Hostname())
+	// Discord now serves GIF search results from KLIPY. Keep this scoped to
+	// its media CDN; the page URL is only used when sending the selected GIF.
+	if host == "static.klipy.com" {
+		return true
+	}
 	for _, domain := range []string{"discordapp.com", "discordapp.net", "tenor.com", "giphy.com"} {
 		if host == domain || strings.HasSuffix(host, "."+domain) {
 			return true

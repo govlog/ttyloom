@@ -2,6 +2,10 @@ package dsc
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/govlog/ttyloom/internal/model"
@@ -48,10 +52,55 @@ func TestSendGifForeign(t *testing.T) {
 // The search routes are the ones of the official client; an empty query asks
 // for the trending ones and the query is escaped.
 func TestGifURL(t *testing.T) {
-	if u := gifURL(""); u != "https://discord.com/api/v9/gifs/trending-gifs?provider=tenor&media_format=gif" {
+	if u := gifURL(""); u != "https://discord.com/api/v9/gifs/trending-gifs?media_format=mp4" {
 		t.Fatalf("trending: %s", u)
 	}
-	if u := gifURL("a b&c"); u != "https://discord.com/api/v9/gifs/search?provider=tenor&media_format=gif&q=a+b%26c" {
+	if u := gifURL("a b&c"); u != "https://discord.com/api/v9/gifs/search?media_format=mp4&q=a+b%26c" {
 		t.Fatalf("search: %s", u)
+	}
+}
+
+// Regression: Discord returns KLIPY URLs even for provider=tenor. The old
+// CDN allowlist left every preview on "discord: media URL refused".
+func TestKlipyPreviewDownload(t *testing.T) {
+	gs, err := gifsOf([]byte(`[{"url":"https://klipy.com/gifs/good-night-peanuts",
+	 "src":"https://static.klipy.com/ii/sample/preview.mp4","gif_src":"https://static.klipy.com/ii/sample/preview.webp",
+	 "width":640,"height":442}]`))
+	if err != nil || len(gs) != 1 {
+		t.Fatalf("GIF response: %v %v", gs, err)
+	}
+	if gs[0].Preview.Mime != "video/mp4" || gs[0].Send != "https://klipy.com/gifs/good-night-peanuts" {
+		t.Fatalf("GIF metadata: %+v", gs[0])
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "" {
+			t.Error("token sent to GIF CDN")
+		}
+		if r.URL.Path == "/ii/sample/preview.mp4" {
+			http.Redirect(w, r, "https://static.klipy.com/ii/sample/final.mp4", http.StatusFound)
+			return
+		}
+		w.Write([]byte("preview bytes"))
+	}))
+	defer srv.Close()
+	useTestCDN(t, srv.URL)
+	path := filepath.Join(t.TempDir(), "preview.mp4")
+	if err := fetch(context.Background(), string(gs[0].Preview.Loc.(fileURL)), path, 100); err != nil {
+		t.Fatalf("KLIPY preview (with redirect) refused: %v", err)
+	}
+	if b, err := os.ReadFile(path); err != nil || string(b) != "preview bytes" {
+		t.Fatalf("preview download: %q %v", b, err)
+	}
+	for _, raw := range []string{
+		"http://static.klipy.com/x", "https://static.klipy.com.evil.test/x", "https://evil-static.klipy.com/x",
+		"https://static.klipy.com:8443/x", "https://user@static.klipy.com/x", "https://127.0.0.1/x",
+	} {
+		r, err := http.NewRequest("GET", raw, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if mediaRequestAllowed(r) {
+			t.Errorf("unexpected media destination allowed: %s", raw)
+		}
 	}
 }

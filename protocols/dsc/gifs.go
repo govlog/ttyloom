@@ -13,7 +13,7 @@ import (
 	rend "github.com/govlog/ttyloom/internal/render"
 )
 
-// GIF search through the routes of the official client (provider Tenor),
+// GIF search through the routes of the official client (currently KLIPY),
 // with the token of the account already in place. A GIF is sent the way the
 // client sends it: a message whose content is the page URL, which Discord
 // unfurls into the animation at the other end.
@@ -21,13 +21,13 @@ import (
 // gifURL : search route, or the trending one on an empty query.
 func gifURL(q string) string {
 	if q == "" {
-		return api.Endpoint + "gifs/trending-gifs?provider=tenor&media_format=gif"
+		return api.Endpoint + "gifs/trending-gifs?media_format=mp4"
 	}
-	return api.Endpoint + "gifs/search?provider=tenor&media_format=gif&q=" + url.QueryEscape(q)
+	return api.Endpoint + "gifs/search?media_format=mp4&q=" + url.QueryEscape(q)
 }
 
-// tenorGif : one entry of the answer — the fields read, the rest ignored.
-type tenorGif struct {
+// discordGif : one entry of the answer, independent of Discord's provider.
+type discordGif struct {
 	URL    string `json:"url"`     // the page: what is sent
 	Src    string `json:"src"`     // mp4 clip
 	GifSrc string `json:"gif_src"` // "gif": an animated WebP in practice
@@ -40,14 +40,14 @@ type tenorGif struct {
 // http(s) URL is dropped: both go out as they are, to the network and to the
 // terminal.
 func gifsOf(body []byte) ([]model.Gif, error) {
-	var list []tenorGif
+	var list []discordGif
 	if bytes.HasPrefix(bytes.TrimSpace(body), []byte("[")) {
 		if err := json.Unmarshal(body, &list); err != nil {
 			return nil, err
 		}
 	} else {
 		var obj struct {
-			Gifs []tenorGif `json:"gifs"`
+			Gifs []discordGif `json:"gifs"`
 		}
 		if err := json.Unmarshal(body, &obj); err != nil {
 			return nil, err
@@ -60,7 +60,7 @@ func gifsOf(body []byte) ([]model.Gif, error) {
 			continue
 		}
 		// The mp4 clip first: smaller, and ffmpeg reads it everywhere — the
-		// "gif" of Tenor is an animated WebP the Go decoder cannot open.
+		// provider's "gif" can be an animated WebP the Go decoder cannot open.
 		src, mime, ext := g.Src, "video/mp4", ".mp4"
 		if src == "" {
 			src, mime, ext = g.GifSrc, "image/gif", ".gif"
@@ -75,7 +75,7 @@ func gifsOf(body []byte) ([]model.Gif, error) {
 	return out, nil
 }
 
-// SearchGifs asks Tenor for q through Discord (q empty: the trending ones).
+// SearchGifs asks Discord's GIF provider for q (empty: the trending ones).
 func (c *Client) SearchGifs(ctx context.Context, _ *model.Chat, q string) {
 	go func() {
 		ev := model.EvGifs{Query: q}

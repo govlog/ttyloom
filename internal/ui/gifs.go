@@ -18,7 +18,7 @@ import (
 
 // GIF box (Ctrl+G, /gif): a search line, a grid of animated previews, Enter
 // or a click sends the one chosen to the conversation of the window. The
-// network answers (@gif on Telegram, Tenor through Discord); the box only
+// network answers (@gif on Telegram, Discord's GIF provider); the box only
 // shows and picks. Same mechanics as the new chat overlay for the typing: the
 // query goes out once it has settled, one request in flight, a stale answer
 // dropped. An empty query shows the trending ones.

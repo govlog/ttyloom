@@ -328,7 +328,7 @@ Ce qui fonctionne actuellement :
 - boîte des participants (*F3*) : les membres d'un salon de guilde, avec un accent de couleur sur ceux qui sont *en ligne* ; en message privé, la boîte et la barre de statut donnent la présence du correspondant (*en ligne*, *inactif*, *ne pas déranger*)
 - *supprimer la conversation* sur un message privé ; sur un groupe privé, elle revient à quitter le groupe, Discord ne fait pas la différence
 - recherche : */search* dans un salon ou un message privé (la recherche de Discord, celle du client officiel), et la recherche globale (*Ctrl+F* deux fois) qui interroge chaque serveur puis les dix messages privés les plus récents, quinze secondes au plus
-- sélecteur de GIF (*Ctrl+G*) : Tenor via Discord, le GIF part comme l'adresse de sa page, et un GIF Tenor reçu s'anime dans le fil
+- sélecteur de GIF (*Ctrl+G*) : fournisseur de Discord (actuellement KLIPY), le GIF part comme l'adresse de sa page, et les GIF reçus pris en charge s'animent dans le fil
 
 Limites actuelles :
 

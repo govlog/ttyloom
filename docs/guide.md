@@ -335,8 +335,8 @@ Available on Discord:
 - Deleting a DM; deleting a group DM leaves that group.
 - Conversation search and global search across servers plus the ten most recent
   DMs, with a 15-second global-search deadline.
-- Ctrl+G GIF search through Tenor. Sending a GIF posts its page URL; received
-  supported Tenor GIFs animate in the conversation.
+- Ctrl+G GIF search through Discord's provider (currently KLIPY). Sending a GIF
+  posts its page URL; supported received GIFs animate in the conversation.
 
 Current limits:
 
