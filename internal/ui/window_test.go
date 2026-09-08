@@ -320,3 +320,30 @@ func TestSysTimestamp(t *testing.T) {
 		t.Fatalf("timestamps off: %q", got)
 	}
 }
+
+// TestHideBacklog : Ctrl+L leaves the window blank at its bottom, the lines
+// that come after show, and the whole backlog is back as soon as the window
+// scrolls (PgUp); /clear (Items dropped) forgets the mark.
+func TestHideBacklog(t *testing.T) {
+	o := render.Opts{Width: 40, Theme: theme.Terminal()}
+	w := &Window{}
+	w.AddSys("old one")
+	w.AddSys("old two")
+	w.HideBacklog()
+	if lines, _ := w.Visible(o); len(lines) != 0 {
+		t.Fatalf("after Ctrl+L: %d lines", len(lines))
+	}
+	w.AddSys("new")
+	if lines, items := w.Visible(o); len(lines) != 1 || items[0].Sys != "new" {
+		t.Fatalf("after a new line: %d lines", len(lines))
+	}
+	w.Scroll = 1
+	if lines, _ := w.Visible(o); len(lines) != 3 {
+		t.Fatalf("scrolled: %d lines, want the whole backlog", len(lines))
+	}
+	w.Scroll, w.Items = 0, nil
+	w.AddSys("fresh")
+	if lines, _ := w.Visible(o); len(lines) != 1 || w.hidden != nil {
+		t.Fatalf("after /clear: %d lines, hidden=%v", len(lines), w.hidden)
+	}
+}

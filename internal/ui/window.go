@@ -47,6 +47,10 @@ type Window struct {
 	// Target overrides outgoing messages while keeping this window's feed.
 	// /query and /join set it; either command without a name clears it.
 	Target *model.Chat
+	// hidden : last item cleared by Ctrl+L. At the bottom of the window
+	// (Scroll 0) the lines up to it are not drawn; PgUp shows them again.
+	// Dropped with the item (trim, /clear, reload).
+	hidden *Item
 	Items  []*Item
 	Sel    *Item // selected message (never a sys item)
 	Scroll int   // physical lines from the bottom
@@ -458,6 +462,31 @@ func (w *Window) LastID() int {
 		}
 	}
 	return 0
+}
+
+// HideBacklog : Ctrl+L, like the clear of a terminal. The lines stay in the
+// window and in the history.
+func (w *Window) HideBacklog() {
+	if n := len(w.Items); n > 0 {
+		w.hidden = w.Items[n-1]
+	}
+}
+
+// Visible : the lines to draw and their items. After Ctrl+L, at the bottom
+// of the window, only what came after the clear; Scroll > 0 (PgUp, wheel)
+// shows the whole backlog again.
+func (w *Window) Visible(o render.Opts) ([]render.Line, []*Item) {
+	lines, items, _ := w.LineItems(o)
+	if w.hidden == nil || w.Scroll > 0 {
+		return lines, items
+	}
+	for i := len(items) - 1; i >= 0; i-- {
+		if items[i] == w.hidden {
+			return lines[i+1:], items[i+1:]
+		}
+	}
+	w.hidden = nil // the item went away
+	return lines, items
 }
 
 // Lines draws the whole window (cache per item and width), with day

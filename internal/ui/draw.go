@@ -26,7 +26,7 @@ func (u *UI) draw() {
 	rows := u.t.Rows
 	x0, cols := u.layout() // x0 > 0: the sidebar takes the columns 0..x0-1
 	view := u.viewRows()
-	lines, items, _ := w.LineItems(u.opts())
+	lines, items := w.Visible(u.opts())
 	maxScroll := max(0, len(lines)-view)
 	w.Scroll = max(0, min(w.Scroll, maxScroll))
 	if u.selShow { // on a selection change only: the scroll stays free

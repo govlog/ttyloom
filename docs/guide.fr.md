@@ -611,7 +611,7 @@ Un clic sur une réaction sous n'importe quel message l'ajoute ou la retire, san
 | *Maj+Entrée* ou *Alt+Entrée* | saut de ligne dans la saisie (affiché *⏎*), *Entrée* ou *Ctrl+Entrée* envoie ; Maj+Entrée demande le protocole clavier kitty ; Alt+Entrée est le repli sans ce protocole, et le collage multiligne reste possible ; avec *multiline on*, ouvre la zone de saisie étendue (*↑*/*↓* y déplacent le curseur de ligne en ligne, un collage multiligne y propose insertion telle quelle ou en bloc de code) |
 | *Tab* | complète les commandes, les noms de conversations (depuis le début de n'importe quel mot du titre, *@pseudo* aussi), les fenêtres, les clés et valeurs de */set*, les thèmes, les sujets de */help*, les chemins de */send*, les arguments de */log*, */telegram* et */discord* ; plusieurs noms restants et rien à ajouter : un second *Tab* les liste |
 | *PgUp*, *PgDn* | défilement de la fenêtre |
-| *Ctrl+L* | repeint l'écran |
+| *Ctrl+L* | vide la fenêtre comme le `clear` d'un terminal : les lignes restent dans l'historique, *Page haut* ou la molette les ramène |
 | *Ctrl+C*, */quit* | quitte |
 | *molette* | fait défiler la fenêtre de 3 lignes (charge l'historique en haut) ; au-dessus du panneau, passe à la fenêtre précédente/suivante dans l'ordre du panneau |
 | *clic* sur un lien | ouvre le lien avec *xdg-open* |

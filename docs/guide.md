@@ -706,7 +706,7 @@ precedence over sending a fenced/code-block paste.
 | Enter, Ctrl+Enter | Send the draft. |
 | Tab | Complete commands, chats (`/query`, `/join`, `/msg`: from the start of any word of a title, `@username` too), windows, settings, themes, help topics, `/send` paths, `/log` and `/telegram`/`/discord` arguments. Several names left and nothing more to add: a second Tab lists them. |
 | PgUp/PgDn | Scroll history. |
-| Ctrl+L | Repaint the screen. |
+| Ctrl+L | Clear the window like a terminal `clear`: the lines stay in the history, Page Up or the wheel brings them back. |
 | Ctrl+C, `/quit`, `/exit` | Quit. |
 | Wheel | Scroll three message lines; at the top, load history. Over the sidebar with hover tracking, switch existing windows. |
 | Click a link | Open it with `xdg-open`. |

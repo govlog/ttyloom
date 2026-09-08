@@ -1846,7 +1846,8 @@ func (u *UI) key(k term.Key) {
 			u.ed.KillWord()
 		case 'r': // spell check walk (Enter fixes, i ignores, a adds)
 			u.spellFixStart()
-		case 'l':
+		case 'l': // clear of the window, the lines come back with PgUp
+			w.HideBacklog()
 			u.clear()
 		case 'c':
 			u.cancel()
