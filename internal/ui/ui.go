@@ -131,6 +131,7 @@ type UI struct {
 	parts       *partsBox             // member box shown (F3), nil = nothing to show
 	mention     *mentionBox           // @… box above the input, nil = closed
 	mentionMute int                   // 1+start of the @word muted by Esc; 0 = none
+	completion  *completionState      // repeated Tab on the current input
 	spell       spellChecker          // nil = off (config, error, or nospell build)
 	spellText   string                // input of the last spell scan
 	spellCache  []spell.Range         // its wrong words
@@ -1499,6 +1500,7 @@ func (u *UI) cycleTarget() int {
 }
 
 func (u *UI) goTo(n int) {
+	u.completion = nil
 	u.selCancel()   // before the change: the range is about the window we leave
 	u.closeViewer() // every window change frees the preview
 	old := u.ws.Current()
@@ -1704,6 +1706,9 @@ func (u *UI) scroll(w *Window, delta int) {
 // --- keyboard ---
 
 func (u *UI) key(k term.Key) {
+	if k.Code != term.Tab && k.Code != term.Mouse && k.Code != term.FocusIn && k.Code != term.FocusOut {
+		u.completion = nil
+	}
 	// Neither the release of a click nor a move is an action: otherwise they
 	// would close the overlay (emoji picker, pager, preview) that the press
 	// has just opened, which treats every mouse event as a click. They go
@@ -1927,13 +1932,7 @@ func (u *UI) key(k term.Key) {
 	case k.Code == term.PgDn:
 		u.scroll(w, -u.viewRows()/2)
 	case k.Code == term.Tab:
-		// Nothing more to add and several names: they are listed, like a shell.
-		if list := u.ed.Complete(u.candidates); len(list) > 0 {
-			if len(list) > 20 {
-				list = append(list[:20], "…")
-			}
-			u.sys(i18n.T("complete_choices", strings.Join(list, "  ")))
-		}
+		u.completeTab()
 	case k.Code == term.Paste:
 		u.pasteText(w, normalizePaste(k.Text))
 	case k.Code == term.None && k.Rune != 0 && !k.Alt:

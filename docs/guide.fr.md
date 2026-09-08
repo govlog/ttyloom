@@ -418,6 +418,13 @@ Un message entrant pour une conversation sans fenêtre crée une fenêtre caché
 
 Les alias `/w`, `/win`, `/q`, `/j`, `/m`, `/hist`, `/t`, `/o`, `/c`, `/h` et `/exit` correspondent à `/window`, `/window`, `/query`, `/join`, `/msg`, `/history`, `/theme`, `/open`, `/clear`, `/help` et `/quit`. Pour `/rename`, mettez les noms contenant des espaces entre guillemets, par exemple `/rename "Amis - Général" Général`.
 
+Tab après `/m `, `/q ` ou `/j ` sans lettre liste jusqu'à 20 cibles ; un second
+Tab agrandit la liste jusqu'à 100. Les contacts en ligne viennent d'abord, avec
+un seul nom par conversation dans la liste non filtrée. Les commandes se
+complètent en boucle par ordre alphabétique : `/ne` → Tab → `/net` → Tab → `/new`.
+Un préfixe de commande unique fonctionne directement avec Entrée (`/quer alice`).
+`/qu` est un alias explicite de `/query`, car `/quit` partage ce préfixe.
+
 ### Médias
 
 | Commande | Effet |

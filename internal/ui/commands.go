@@ -15,7 +15,7 @@ import (
 )
 
 var aliases = map[string]string{
-	"w": "window", "win": "window", "q": "query", "j": "join", "m": "msg",
+	"w": "window", "win": "window", "q": "query", "qu": "query", "j": "join", "m": "msg",
 	"hist": "history", "t": "theme", "o": "open", "c": "clear", "h": "help", "exit": "quit",
 }
 
@@ -34,11 +34,38 @@ func ParseCommand(line string) (name string, args []string, text string, ok bool
 	}
 	name, text, _ = strings.Cut(line[1:], " ")
 	name = strings.ToLower(name)
-	if a, ok := aliases[name]; ok {
-		name = a
-	}
+	name = resolveCommand(name)
 	text = strings.TrimSpace(text)
 	return name, strings.Fields(text), text, true
+}
+
+// resolveCommand keeps aliases exact, then accepts a command prefix when it
+// names one command only. /qu is an explicit alias: query and quit would
+// otherwise both match it. Ambiguous prefixes stay available for Tab cycling.
+func resolveCommand(name string) string {
+	if a, ok := aliases[name]; ok {
+		return a
+	}
+	if slices.Contains(commandNames, "/"+name) {
+		return name
+	}
+	var match string
+	for _, command := range commandNames {
+		candidate := strings.TrimPrefix(command, "/")
+		if candidate == name {
+			return candidate
+		}
+		if strings.HasPrefix(candidate, name) {
+			if match != "" {
+				return name // ambiguous: keep the original for the error message
+			}
+			match = candidate
+		}
+	}
+	if match != "" {
+		return match
+	}
+	return name
 }
 
 // onOff reads a boolean of /set. Anything else is false; the echo that

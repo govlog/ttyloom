@@ -3,6 +3,7 @@ package ui
 import (
 	"os"
 	"path"
+	"slices"
 	"strings"
 
 	"github.com/govlog/ttyloom/internal/config"
@@ -53,13 +54,9 @@ func complContext(line string, cursor int) (src complSource, tail string, setKey
 		return complChats, s, "" // last (and only) word
 	}
 	if !strings.HasPrefix(before, "/") {
-		words := strings.Fields(s)
-		return complChats, words[len(words)-1], ""
+		return complChats, s[strings.LastIndexAny(s, " \n")+1:], ""
 	}
-	name := strings.ToLower(before[1:])
-	if a, ok := aliases[name]; ok {
-		name = a
-	}
+	name := resolveCommand(strings.ToLower(before[1:]))
 	switch name {
 	case "query", "msg", "join", "whois", "rename", "unrename":
 		// After the target, the rest is free text (message, new name).
@@ -190,6 +187,7 @@ func pathCandidates(p string) []string {
 func (u *UI) chatCandidates(word, tail string) []string {
 	tr := []rune(tail)
 	var out []string
+	seen := map[string]bool{}
 	add := func(n string) {
 		r := []rune(n)
 		for i := range r {
@@ -197,12 +195,38 @@ func (u *UI) chatCandidates(word, tail string) []string {
 				continue
 			}
 			if strings.EqualFold(string(r[i:i+len(tr)]), tail) {
-				out = append(out, word+string(r[i+len(tr):]))
+				candidate := word + string(r[i+len(tr):])
+				key := strings.ToLower(candidate)
+				if !seen[key] {
+					out = append(out, candidate)
+					seen[key] = true
+				}
 				return
 			}
 		}
 	}
-	for _, c := range u.chatList {
+	// Keep the existing dialog order for the stable part of the list, but put
+	// online contacts first. This matters most for an empty target ("/m <Tab>"):
+	// the first, short list should still offer the useful peers.
+	chats := slices.Clone(u.chatList)
+	slices.SortStableFunc(chats, func(a, b *model.Chat) int {
+		if u.online(a) != u.online(b) {
+			if u.online(a) {
+				return -1
+			}
+			return 1
+		}
+		return 0
+	})
+	for _, c := range chats {
+		if tail == "" { // one useful name per chat in the unfiltered list
+			if c.Username != "" {
+				add("@" + c.Username)
+			} else {
+				add(u.title(c))
+			}
+			continue
+		}
 		if c.Username != "" {
 			add("@" + c.Username)
 			add(c.Username)
@@ -210,4 +234,78 @@ func (u *UI) chatCandidates(word, tail string) []string {
 		add(u.title(c)) // the local name can be completed, findChat resolves it
 	}
 	return out
+}
+
+const completionShortLimit = 20
+const completionLongLimit = 100
+
+type completionState struct {
+	line    string
+	cursor  int
+	matches []string
+	index   int
+	cycle   bool
+}
+
+func (u *UI) showCompletionChoices(list []string, expanded bool) {
+	limit := completionShortLimit
+	if expanded {
+		limit = completionLongLimit
+	}
+	shown := list
+	if len(shown) > limit {
+		shown = append(slices.Clone(shown[:limit]), "…")
+	}
+	u.sys(i18n.T("complete_choices", strings.Join(shown, "  ")))
+}
+
+// completeTab cycles command names from the original prefix. Chat targets
+// without any letters always list first; repeated Tab expands the list.
+// Paths and other arguments retain the editor's common-prefix completion.
+func (u *UI) completeTab() {
+	line, cursor := u.ed.String(), u.ed.Cursor()
+	if s := u.completion; s != nil && s.line == line && s.cursor == cursor {
+		if s.cycle {
+			s.index = (s.index + 1) % len(s.matches)
+			u.ed.Replace(0, cursor, s.matches[s.index])
+			s.line, s.cursor = u.ed.String(), u.ed.Cursor()
+		} else {
+			// Presence may have changed between the two presses.
+			src, tail, _ := complContext(line, cursor)
+			if src == complChats {
+				start := cursor
+				for start > 0 && !sep(u.ed.buf[start-1]) {
+					start--
+				}
+				s.matches = u.chatCandidates(string(u.ed.buf[start:cursor]), tail)
+			}
+			u.showCompletionChoices(s.matches, true)
+		}
+		return
+	}
+	u.completion = nil
+	src, tail, _ := complContext(line, cursor)
+	var list []string
+	if src == complCommands {
+		for _, name := range commandNames {
+			if strings.HasPrefix(name, strings.ToLower(tail)) {
+				list = append(list, name)
+			}
+		}
+		slices.Sort(list) // /ne: /net, /new
+		if len(list) > 1 {
+			u.ed.Replace(0, cursor, list[0])
+			u.completion = &completionState{line: u.ed.String(), cursor: u.ed.Cursor(), matches: list, cycle: true}
+			return
+		}
+	}
+	if src == complChats && tail == "" {
+		list = u.chatCandidates("", "")
+	} else {
+		list = u.ed.Complete(u.candidates)
+	}
+	if len(list) > 0 {
+		u.completion = &completionState{line: u.ed.String(), cursor: u.ed.Cursor(), matches: list}
+		u.showCompletionChoices(list, false)
+	}
 }

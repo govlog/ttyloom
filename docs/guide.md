@@ -427,6 +427,13 @@ The window command also accepts `/w`; `/theme` accepts `/t`, `/open` accepts
 for example `/rename "Friends - General" General`. `/whois` retains Telegram’s
 real contact information.
 
+Tab after `/m `, `/q ` or `/j `, with no letters yet, lists up to 20 targets;
+a second Tab expands to up to 100. Online contacts come first, with one name per
+chat in the unfiltered list. Command completion cycles alphabetically:
+`/ne` → Tab → `/net` → Tab → `/new`. Unique command prefixes work on Enter
+without Tab, for example `/quer alice`; `/qu` is an explicit alias for `/query`
+because `/quit` shares that prefix. Exact aliases take precedence when executing.
+
 ### Media
 
 | Command or key | Effect |

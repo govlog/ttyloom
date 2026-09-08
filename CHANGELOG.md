@@ -2,6 +2,7 @@
 
 ## Non publié
 
+- **Complétion** : `/m `, `/q ` et `/j ` suivis de Tab sans lettre affichent une liste courte (20), puis une liste agrandie (100) au second Tab, contacts en ligne en tête. Les commandes cyclent par ordre alphabétique (`/ne` → `/net` → `/new`) ; un préfixe unique se résout sans Tab. `/qu` est un alias explicite de `/query`.
 - **GIF Discord** : le CDN `static.klipy.com` des résultats actuels est accepté ; les aperçus restaient tous sur « discord: media URL refused ». Les recherches demandent désormais explicitement des clips MP4 au fournisseur de Discord.
 
 - **Discord par QR code** : une section `[discord]` sans `token_cmd` suffit ; TTYloom affiche le QR de l'authentification à distance du client officiel (`remote-auth-gateway`, clé RSA locale, token déchiffré sur place), le téléphone le scanne et confirme, et le token va dans `~/.config/ttyloom/discord.token` (0600). La session est un appareil à part entière : une déconnexion du navigateur ne la tue plus. `/discord logout` ferme la session côté serveur et supprime le fichier ; `token_cmd` reste possible et prioritaire, sans QR.
