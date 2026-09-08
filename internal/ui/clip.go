@@ -111,6 +111,9 @@ func pasteImageName(t time.Time, mime string) string {
 // the UI loop) and opens the send prompt when the image comes.
 func (u *UI) pasteClip() {
 	w := u.sendWin()
+	if w == nil {
+		return
+	}
 	if w.Chat == nil {
 		w.AddSys(i18n.T("window_not_bound"))
 		return
@@ -242,6 +245,10 @@ func (u *UI) clipImage(e evClipImage) {
 		return
 	}
 	w := u.sendWin()
+	if w == nil {
+		os.Remove(e.Path)
+		return
+	}
 	if w.Chat == nil {
 		os.Remove(e.Path)
 		w.AddSys(i18n.T("window_not_bound"))
@@ -364,6 +371,9 @@ func splitSendArgs(args string, exists func(string) bool) (path, caption string)
 
 // sendCmd : /send <path> [caption].
 func (u *UI) sendCmd(w *Window, args string) {
+	if w == nil {
+		return
+	}
 	if w.Chat == nil {
 		w.AddSys(i18n.T("window_not_bound"))
 		return

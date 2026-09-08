@@ -664,6 +664,15 @@ func (u *UI) drawInput(b *strings.Builder, row, x0, cols int) (curRow, curCol in
 		prompt = fmt.Sprintf("✎ #%d › ", u.edit.Msg.ID)
 	case u.reply != nil:
 		prompt = fmt.Sprintf("↩ #%d › ", u.reply.Msg.ID)
+	case u.queryPending(u.view()) != "":
+		prompt = "[→ " + render.CleanLine(u.queryPending(u.view())) + "…] "
+	case u.view().Target != nil:
+		c := u.view().Target
+		label := kindPrefix(c.Kind) + render.CleanLine(u.title(c))
+		if u.multiNet() {
+			label = c.Net + ":" + label
+		}
+		prompt = "[→ " + label + "] "
 	case u.view() == u.agg:
 		if c := u.aggTarget(); c != nil { // the input goes to the chat of the last message
 			prompt = i18n.T("reply_to_prompt", render.CleanLine(u.title(c)))

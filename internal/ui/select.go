@@ -349,8 +349,11 @@ func (u *UI) startEdit(it *Item) {
 // editLast : ↑ on an empty input, outside any mode and outside a selection,
 // edits my last message. false: the key stays the input history.
 func (u *UI) editLast(w *Window) bool {
-	if u.ed.String() != "" || w.Sel != nil || u.edit != nil || u.reply != nil {
+	if u.ed.String() != "" || w.Sel != nil || u.edit != nil || u.reply != nil || u.queryPending(w) != "" {
 		return false
+	}
+	if w.Target != nil {
+		w = u.winFor(w.Target)
 	}
 	it := lastOwn(w, u.own)
 	if it == nil || !u.capsOf(it.Msg).Edit {

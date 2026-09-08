@@ -156,7 +156,8 @@ Vérifiez `download_dir` et `log_dir` dans cette configuration. Les caches écri
 | Action | Touche ou commande |
 | --- | --- |
 | Fenêtre suivante / par numéro | Ctrl+X / Alt+1…9 ou `/5` |
-| Nouvelle conversation | Ctrl+N ou `/query @name` |
+| Ouvrir une conversation | Ctrl+N ou le panneau |
+| Parler en privé depuis cette fenêtre | `/q nom` ; `/q` seul revient à la cible habituelle |
 | Panneau / filtre réseau | F2 / Shift+F2 ou `/net discord` |
 | Conversations agrégées dans la fenêtre 0 | F6 |
 | Recherche locale / sur les réseaux | Ctrl+F / Ctrl+F encore |

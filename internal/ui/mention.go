@@ -89,10 +89,7 @@ func (u *UI) mentionScan() {
 		u.mention = nil
 		return
 	}
-	c := u.view().Chat
-	if u.view() == u.agg {
-		c = u.aggTarget()
-	}
+	c := u.inputChat(u.view())
 	if c == nil {
 		u.mention = nil
 		return

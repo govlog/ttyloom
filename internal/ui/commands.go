@@ -107,11 +107,7 @@ func (u *UI) command(name string, args []string, text string) {
 	case "close":
 		u.closeWindow()
 	case "query", "join":
-		if arg(0) == "" {
-			w.AddSys(i18n.T("usage_cmd_name", name))
-			return
-		}
-		u.bind(w, arg(0), name == "join")
+		u.query(w, text, name == "join")
 	case "new":
 		u.openNewChat()
 	case "msg":
@@ -125,18 +121,7 @@ func (u *UI) command(name string, args []string, text string) {
 			return
 		}
 		body := strings.TrimSpace(strings.TrimPrefix(text, arg(0)))
-		if i := u.ws.ForChat(c.Key()); i >= 0 {
-			u.send(u.ws.List[i], body)
-		} else {
-			b := u.net(c)
-			if b == nil {
-				return
-			}
-			u.tmpID++
-			u.pendingMsg[u.tmpID] = u.title(c) // the result is reported by sent()
-			b.Send(u.ctx, c, body, u.tmpID)
-			w.AddSys(i18n.T("msg_queued", u.title(c), body))
-		}
+		u.send(u.winFor(c), body) // always keep the message in its own conversation too
 	case "me":
 		if text == "" {
 			w.AddSys(i18n.T("usage_me"))
@@ -330,7 +315,7 @@ func (u *UI) switchTo(s string) {
 	u.sys(i18n.T("no_window_named", s))
 }
 
-// bind : /query and /join on the current window.
+// bind opens a resolved conversation in its own window (member picker).
 func (u *UI) bind(w *Window, name string, join bool) {
 	if w == u.ws.List[0] || w == u.agg || w == u.debug {
 		w.AddSys(i18n.T("window0_no_bind"))

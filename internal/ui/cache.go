@@ -116,6 +116,7 @@ func (u *UI) dropCache(net string) {
 	u.cancelMode()  // edit, reply, confirmation, search: nothing valid left
 	u.setSel(u.view(), nil)
 	stale := func(k model.ChatKey) bool { return k.Net == net && u.cached[k] }
+	u.dropTargets(func(c *model.Chat) bool { return stale(c.Key()) })
 	for i := len(u.ws.List) - 1; i > 0; i-- {
 		if w := u.ws.List[i]; w.Chat == nil || !stale(w.Chat.Key()) {
 			continue

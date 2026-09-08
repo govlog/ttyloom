@@ -16,6 +16,7 @@ import (
 )
 
 type Opts struct {
+	sendEcho     bool // local outgoing prefix: [msg(target)] instead of <nick>
 	Width        int
 	Theme        theme.Theme
 	Timestamps   bool
@@ -101,6 +102,14 @@ func (o Opts) self(m *model.Msg) int64 {
 
 // selMark : column of the selection marker.
 const selMark = "▌"
+
+// SendEcho uses the same body, wrapping and error display with an IRC-style
+// outgoing label. The caller decides whether this is a history item or only
+// a local transcript (which must not allocate media placements).
+func SendEcho(m *model.Msg, o Opts) []Line {
+	o.sendEcho, o.Avatars, o.ShowChat = true, false, false
+	return Message(m, o)
+}
 
 // Message draws a whole message (prefix, body, media, reactions).
 func Message(m *model.Msg, o Opts) []Line {
@@ -251,6 +260,13 @@ func msgPrefix(m *model.Msg, o Opts, fromID int64, own bool) (prefix []Span, ind
 	}
 	if o.Timestamps {
 		prefix = append(prefix, Span{o.Stamp(m.Date), dim})
+	}
+	if o.sendEcho {
+		prefix = append(prefix, Span{"[msg(", dim}, Span{CleanLine(label), th.Style(theme.Own)}, Span{")] ", dim})
+		for _, s := range prefix {
+			indent += Width(s.Text)
+		}
+		return prefix, indent, 0
 	}
 	if o.ShowChat && label != "" {
 		prefix = append(prefix, Span{"[" + Clean(label) + "] ", theme.Style{FG: th.Nick(m.ChatID)}})

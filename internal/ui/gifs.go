@@ -118,6 +118,9 @@ func (u *UI) gifRect() rect {
 // openGifs : Ctrl+G, /gif. The conversation is the one the input goes to.
 func (u *UI) openGifs(q string) {
 	w := u.sendWin()
+	if w == nil {
+		return
+	}
 	c := w.Chat
 	if c == nil {
 		w.AddSys(i18n.T("window_not_bound"))

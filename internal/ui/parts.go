@@ -54,7 +54,7 @@ func (u *UI) partsRect() (rect, bool) {
 
 // toggleParts : F3. u.partsOn carries the intent, u.parts the box that can be
 // shown: a window with no chat has nothing to show without cancelling the
-// request, until a /query binds it.
+// request, until a conversation is opened in it.
 func (u *UI) toggleParts() {
 	u.partsOn = !u.partsOn
 	if u.partsOn && u.view().Chat == nil {
@@ -224,7 +224,7 @@ func (u *UI) partsMouse(m term.MouseEvent, r rect) {
 
 // openMember opens the private chat of a member without ever unbinding the
 // current window — their window when they already have one, a new one
-// otherwise, /query doing the binding (and the network lookup when needed).
+// otherwise, bind doing the network lookup when needed.
 func (u *UI) openMember(net, q string) {
 	c, amb := u.memberChat(net, q)
 	if amb {

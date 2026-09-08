@@ -275,6 +275,7 @@ func (u *UI) dropChat(k model.ChatKey) bool {
 	if u.chats[k] == nil {
 		return false
 	}
+	u.dropTargets(func(c *model.Chat) bool { return c.Key() == k })
 	for i := len(u.ws.List) - 1; i > 0; i-- {
 		w := u.ws.List[i]
 		if w.Chat == nil || w.Chat.Key() != k {

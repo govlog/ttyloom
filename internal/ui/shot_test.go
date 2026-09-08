@@ -137,7 +137,7 @@ func shotUI(th theme.Theme, out *bytes.Buffer) *UI {
 		nets:  map[string]model.Backend{model.NetTelegram: tg, model.NetDiscord: dc},
 		chats: map[model.ChatKey]*model.Chat{}, pending: map[string]*Window{}, typing: map[model.ChatKey]typing{},
 		lastTyping: map[model.ChatKey]time.Time{}, avatars: map[model.ChatKey]*model.Media{}, openNext: map[*model.Media]bool{},
-		pendingMsg: map[int64]string{}, presence: map[model.ChatKey]string{}, dirty: map[model.ChatKey]bool{},
+		presence: map[model.ChatKey]string{}, dirty: map[model.ChatKey]bool{},
 		partsCache: map[model.ChatKey]partsEntry{}, whoCache: map[whoKey]whoEntry{}, aliases: map[model.ChatKey]string{},
 		folded: map[string]bool{}, self: map[string]selfInfo{model.NetTelegram: {ID: 1, Name: "chris"}, model.NetDiscord: {ID: 2, Name: "chris"}},
 		conn: map[string]bool{model.NetTelegram: true, model.NetDiscord: true}, dialogsSeen: map[string]bool{},

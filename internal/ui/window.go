@@ -21,6 +21,12 @@ const defaultMaxItems = 2000
 type Item struct {
 	Msg *model.Msg
 	Sys string
+	// Echo : local transcript of a send made from here to another chat (/q,
+	// /msg), drawn as [msg(target)] text. Not part of this chat's history:
+	// no id, no read marker, no cache, no message action.
+	Echo *model.Msg
+	// Timed : a conversation-mode notice, timestamped in a chat window too.
+	Timed bool
 	// At : arrival of a system line, shown before it in the status windows
 	// (window 0, aggregate, log) when timestamps are on. Zero on the lines
 	// that are not events (cache mark, history gap): no time on those.
@@ -37,7 +43,10 @@ type Item struct {
 }
 
 type Window struct {
-	Chat   *model.Chat
+	Chat *model.Chat
+	// Target overrides outgoing messages while keeping this window's feed.
+	// /query and /join set it; either command without a name clears it.
+	Target *model.Chat
 	Items  []*Item
 	Sel    *Item // selected message (never a sys item)
 	Scroll int   // physical lines from the bottom
@@ -338,6 +347,25 @@ func (w *Window) Msgs() []model.Msg {
 func (w *Window) AddSys(s string)           { w.Items = append(w.Items, &Item{Sys: s, At: time.Now()}); w.trim() }
 func (w *Window) AddLines(ls []render.Line) { w.Items = append(w.Items, &Item{Text: ls}); w.trim() }
 
+func (w *Window) AddEvent(s string) {
+	w.Items = append(w.Items, &Item{Sys: s, At: time.Now(), Timed: true})
+	w.trim()
+}
+
+func (w *Window) AddEcho(m *model.Msg) {
+	echo := *m // this transcript keeps the text as sent, independently of history
+	w.Items = append(w.Items, &Item{Echo: &echo})
+	w.trim()
+}
+
+func (w *Window) echoSent(tmpID int64, id int, errText string) {
+	for _, it := range w.Items {
+		if m := it.Echo; m != nil && m.TmpID == tmpID {
+			m.ID, m.Pending, m.Err, it.lines = id, false, errText, nil
+		}
+	}
+}
+
 // Invalidate of an item: its drawing will be made again at the next draw.
 func (it *Item) Invalidate() {
 	if it != nil {
@@ -469,13 +497,17 @@ func (w *Window) LineItems(o render.Opts) ([]render.Line, []*Item, int) {
 		}
 		if it.lines == nil || it.w != o.Width {
 			switch {
+			case it.Echo != nil:
+				echoOpts := o
+				echoOpts.Images, echoOpts.ImagesHover, echoOpts.LinkPreviews = "off", false, false
+				it.lines = render.SendEcho(it.Echo, echoOpts)
 			case it.Msg != nil:
 				it.lines = render.Message(it.Msg, o)
 			case it.Text != nil:
 				it.lines = it.Text
 			default:
 				s := "*** " + it.Sys
-				if o.Timestamps && !it.At.IsZero() && w.Chat == nil && w.Search == "" {
+				if o.Timestamps && !it.At.IsZero() && (it.Timed || w.Chat == nil && w.Search == "") {
 					s = o.Stamp(it.At) + s
 				}
 				it.lines = render.Plain(s, o.Theme.Style(theme.System), o.Width)

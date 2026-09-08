@@ -62,6 +62,7 @@ type UI struct {
 	chatList  []*model.Chat
 	aliases   map[model.ChatKey]string // local names (/rename), saved in aliases.toml
 	pending   map[string]*Window       // /query waiting for a lookup
+	queryWait map[string][]*Window     // send targets waiting for a lookup
 	prompt    *model.EvAuthPrompt
 	promptNet string // network that asked u.prompt: its stop takes the prompt away
 	qr        *qrBox // QR code login running: passive overlay
@@ -109,11 +110,7 @@ type UI struct {
 	openNext map[*model.Media]bool
 	// decodes : decoding running per media, to be ended when nobody waits for
 	// it any more ("s", window closed, media freed, preview closed).
-	decodes map[*model.Media]context.CancelFunc
-	// pendingMsg : /msg with no window — tmpID → title of the chat. Keyed by a
-	// bare id and not by ChatKey: a tmpID comes from u.tmpID, minted here, so it
-	// is unique whatever the network.
-	pendingMsg  map[int64]string
+	decodes     map[*model.Media]context.CancelFunc
 	clock       string
 	flashMsg    string                // temporary message of the status bar (copy)
 	flashUntil  time.Time             // end of the display of flashMsg
@@ -192,7 +189,7 @@ func Run(ctx context.Context, cancel context.CancelFunc, t *term.Term, cfg *conf
 		netCancel: map[string]context.CancelFunc{}, events: make(chan model.Event, 256), ws: NewWindows(),
 		agg: &Window{}, aggregate: cfg.Aggregate, debug: &Window{}, focused: true,
 		chats: map[model.ChatKey]*model.Chat{}, pending: map[string]*Window{}, typing: map[model.ChatKey]typing{}, lastTyping: map[model.ChatKey]time.Time{},
-		avatars: map[model.ChatKey]*model.Media{}, openNext: map[*model.Media]bool{}, pendingMsg: map[int64]string{}, presence: map[model.ChatKey]string{},
+		avatars: map[model.ChatKey]*model.Media{}, openNext: map[*model.Media]bool{}, presence: map[model.ChatKey]string{},
 		caches: caches, dirty: map[model.ChatKey]bool{}, partsCache: map[model.ChatKey]partsEntry{}, whoCache: map[whoKey]whoEntry{},
 		sideW:       clampSideW(cfg.SidebarWidth, t.Cols),
 		aliases:     map[model.ChatKey]string{},
@@ -678,10 +675,12 @@ func (u *UI) setDebug(on bool) {
 	u.setSel(u.view(), nil)
 }
 
-// aggTarget gives the chat of the last message of the aggregate, nil when there
-// is none. A message hidden by the /net filter is not a target: the input of the
-// aggregate must go to the chat the user sees.
+// aggTarget gives the explicit query/join target when one is active. Without
+// one, it falls back to the last message visible under the /net filter.
 func (u *UI) aggTarget() *model.Chat {
+	if u.agg.Target != nil {
+		return u.agg.Target
+	}
 	for i := len(u.agg.Items) - 1; i >= 0; i-- {
 		if m := u.agg.Items[i].Msg; m != nil && u.netShown(m) {
 			return u.chats[m.Key()]
@@ -692,21 +691,19 @@ func (u *UI) aggTarget() *model.Chat {
 
 // sendWin gives the window the input goes to. From the aggregate, the one of
 // the chat of the last message; failing that the aggregate itself ("window not
-// bound" error). From a search result, the one of the chat: it alone gets the
-// send receipt, which ForChat cannot route to a search window.
+// bound" error). An explicit query target wins over those defaults; replies
+// keep the chat of the selected message. A pending lookup reports why it
+// cannot send yet and returns nil.
 func (u *UI) sendWin() *Window {
 	w := u.view()
-	if w != u.agg && w.Search == "" {
-		return w
+	if c := u.inputChat(w); c != nil {
+		return u.winFor(c)
 	}
-	c := w.Chat
-	if w == u.agg {
-		c = u.aggTarget()
+	if name := u.queryPending(w); name != "" {
+		w.AddSys(i18n.T("query_waiting", name))
+		return nil
 	}
-	if c == nil {
-		return w
-	}
-	return u.winFor(c)
+	return w
 }
 
 // winFor gives the window of the chat, opening a hidden one when there is
@@ -1378,6 +1375,12 @@ func (u *UI) sent(e model.EvSent) {
 	if e.TmpID == 0 {
 		return
 	}
+	for _, w := range u.ws.List {
+		w.echoSent(e.TmpID, e.ID, e.Err)
+	}
+	if u.debug != nil {
+		u.debug.echoSent(e.TmpID, e.ID, e.Err)
+	}
 	u.agg.Sent(e.TmpID, e.ID, e.Err)
 	if i := u.ws.ForChat(u.evKey(e.ChatID)); i >= 0 {
 		w := u.ws.List[i]
@@ -1399,20 +1402,12 @@ func (u *UI) sent(e model.EvSent) {
 			return
 		}
 	}
-	// Send through /msg, with no window to stamp the result: it goes to window 0.
-	title, ok := u.pendingMsg[e.TmpID]
-	if !ok {
-		return
-	}
-	delete(u.pendingMsg, e.TmpID)
-	if e.Err != "" {
-		u.status0(i18n.T("msg_send_failed", title, e.Err))
-		return
-	}
-	u.status0(i18n.T("msg_sent", title))
 }
 
 func (u *UI) chatResolved(e model.EvChat) {
+	if u.queryResolved(e) {
+		return
+	}
 	w := u.pending[e.Query]
 	delete(u.pending, e.Query)
 	if e.Err != "" {
@@ -1614,8 +1609,7 @@ func (u *UI) attach(w *Window, c *model.Chat) {
 	u.freeImages(w)
 	u.cancelMode()
 	w.Items, w.Sel, w.Scroll, w.Full, w.ReadSent = nil, nil, 0, false, 0
-	// Search set back to empty: /query on a search result makes it a plain chat
-	// window again.
+	// Binding a real conversation clears a previous search view.
 	w.MarkID, w.Loaded, w.Search, w.scrolledToMark = 0, false, "", false
 	u.bindChat(w, c)  // cached history while waiting for the network answer
 	u.autoMediaWin(w) // its media: the network page may cover none of them (bot, error)
@@ -1969,16 +1963,23 @@ func (u *UI) edEnd() {
 // (w.Search) or the authentication prompt (u.prompt): no real message being
 // typed.
 func (u *UI) sendTyping(w *Window) {
-	if w.Chat == nil || w.Search != "" || u.prompt != nil {
+	if u.prompt != nil {
 		return
 	}
-	b := u.net(w.Chat)
+	c := u.inputChat(w)
+	if c == nil {
+		return
+	}
+	b := u.net(c)
 	if b == nil {
 		return
 	}
-	if now := time.Now(); now.Sub(u.lastTyping[w.Chat.Key()]) >= 5*time.Second {
-		u.lastTyping[w.Chat.Key()] = now
-		b.Typing(u.ctx, w.Chat, false)
+	if u.lastTyping == nil {
+		u.lastTyping = map[model.ChatKey]time.Time{}
+	}
+	if now := time.Now(); now.Sub(u.lastTyping[c.Key()]) >= 5*time.Second {
+		u.lastTyping[c.Key()] = now
+		b.Typing(u.ctx, c, false)
 	}
 }
 
@@ -2025,7 +2026,11 @@ func (u *UI) submit() {
 		u.command(name, args, text)
 		return
 	}
-	u.send(u.sendWin(), text)
+	if w := u.sendWin(); w != nil {
+		u.send(w, text)
+	} else {
+		u.ed.Set(line) // still resolving: keep the unsent draft
+	}
 }
 
 func (u *UI) send(w *Window, text string) {
@@ -2034,6 +2039,9 @@ func (u *UI) send(w *Window, text string) {
 
 // sendWith : pre=true sends text as a code block (multiline paste).
 func (u *UI) sendWith(w *Window, text string, pre bool) {
+	if w == nil {
+		return
+	}
 	if w.Chat == nil {
 		w.AddSys(i18n.T("window_not_bound"))
 		return
@@ -2085,15 +2093,24 @@ func (u *UI) sendWith(w *Window, text string, pre bool) {
 }
 
 // insertPending puts the message sent locally into w and into the aggregate
-// (my sends show there too), and settles the selection and the scroll.
+// (my sends show there too), and settles the selection and the scroll. Sent
+// from a view of another chat (/q, /msg), it leaves an IRC-style local echo
+// there as well, outside the history of the viewed chat; a search view of
+// the same chat gets nothing, the message is its own.
 func (u *UI) insertPending(w *Window, m *model.Msg) {
 	w.Upsert(m)
 	u.setSel(w, nil)
 	w.Scroll = 0
 	u.agg.Upsert(m)
-	if u.view() == u.agg {
+	source := u.view()
+	switch {
+	case source == u.agg:
 		u.setSel(u.agg, nil)
 		u.agg.Scroll = 0
+	case source != w && (source.Chat == nil || source.Chat.Key() != w.Chat.Key()):
+		source.AddEcho(m)
+		u.setSel(source, nil)
+		source.Scroll = 0
 	}
 }
 
@@ -2106,6 +2123,9 @@ func meMsg(meName, arg string) (string, []model.Span) {
 
 // sendMe : /me <text>.
 func (u *UI) sendMe(w *Window, arg string) {
+	if w == nil {
+		return
+	}
 	if w.Chat == nil {
 		w.AddSys(i18n.T("window_not_bound"))
 		return

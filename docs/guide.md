@@ -393,11 +393,12 @@ Every open conversation has a numbered window.
 | F7 | Sidebar order: recent, alphabetical, unread. |
 | Ctrl+R | Spell correction: Enter applies, `i` ignores, `a` adds, Escape closes. |
 
-For example, create a window, then bind it to a contact:
+For example, talk to a contact while keeping the current feed visible:
 
 ```text
-/window new
 /query alice
+hello alice
+/q
 ```
 
 An incoming message for a conversation without a window creates a hidden
@@ -407,9 +408,10 @@ window and adds its activity to `[Act: …]` in the status bar.
 
 | Command | Effect |
 | --- | --- |
-| `/query name`, `/q name` | Bind the current window to a DM, using an exact name or prefix. |
-| `/join @channel`, `/j @channel` | Join a public Telegram channel or group and bind the window. |
-| `/msg name text`, `/m name text` | Send without switching windows. |
+| `/query name`, `/q name`, `/qu name` | Pin this window's send target to a contact or channel, using an exact name or prefix. |
+| `/join channel`, `/j channel` | Join or resolve a channel/group and pin it as the send target. |
+| `/q`, `/j` without a name | Clear the target and return input to this window's usual conversation. |
+| `/msg name text`, `/m name text` | Send without switching windows; the line is echoed here as `[msg(name)] text`. |
 | `/new`, Ctrl+N | Open the new-conversation picker. |
 | `/chats` | List conversations, highlighting unread ones. |
 | `/net [network]` | Filter the sidebar and aggregate view; `telegram`, `discord`, `all`, or no argument to cycle. |
@@ -419,13 +421,28 @@ window and adds its activity to `[Act: …]` in the status bar.
 | `/clear`, `/c` | Clear the current window. |
 | `/rename [target] name`, `/unrename [target]` | Set or remove a local chat/contact alias, saved in `aliases.toml`. It applies to the sidebar, status bar, aggregate view, completion and the DM contact’s displayed name. It is not sent to the network. |
 | `/help`, `/h` | List commands, keys and options. `/help topic` explains one, including `/help F3` or `/help hover`; Tab completes topics. |
-| Text without `/` | Send to the current conversation. |
+| Text without `/` | Send to the pinned target, or this window's usual conversation. |
 | `//text` | Send text beginning with `/`. |
 
 The window command also accepts `/w`; `/theme` accepts `/t`, `/open` accepts
 `/o`, and `/quit` accepts `/exit`. Quote names with spaces when using `/rename`,
 for example `/rename "Friends - General" General`. `/whois` retains Telegram’s
 real contact information.
+
+`/q alice` keeps the current feed visible and routes successive messages to
+Alice until `/q` closes the mode. This works in every window, including aggregate
+window 0. Incoming activity never changes a pinned target. Each window remembers
+its own target across window switches; `[→ @Alice]` in the input prompt names it.
+`/j channel` works the same way for channels. Use `/new`, the sidebar, or `/win`
+to view the conversation itself. In aggregate mode, clearing the target restores
+the default of replying to the last visible conversation. While a name is being
+resolved, sends wait and ordinary unsent text stays in the editor.
+
+A message sent to the target from another window is echoed there as
+`[msg(alice)] text`, between the *Opening conversation with alice* and *Closing
+conversation with alice* notices, and stays in Alice's own conversation; the
+echo never enters the history, cache or log of the window. `/msg alice text`
+echoes the same way without opening the mode.
 
 Tab after `/m `, `/q ` or `/j `, with no letters yet, lists up to 20 targets;
 a second Tab expands to up to 100. Online contacts come first, with one name per

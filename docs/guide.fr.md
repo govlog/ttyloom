@@ -256,7 +256,7 @@ bot_token = "123456789:AAExempleDeTokenBotFather"
 
 ```
 *** connecté : @mon_bot
-*** mode bot : pas de liste de conversations ni d'historique, les messages arrivent au fil de l'eau ; /query @utilisateur ou /join @canal pour ouvrir une fenêtre
+*** mode bot : pas de liste de conversations ni d'historique, les messages arrivent au fil de l'eau ; /query @utilisateur ou /join @canal pour choisir la cible d'envoi
 ```
 
 > [!note]
@@ -388,12 +388,12 @@ Par défaut, la fenêtre 0 est la fenêtre de statut : connexion, journaux, rés
 | *F7* | ordre du panneau, dans les deux modes : récents, a→z, non-lus |
 | *Ctrl+R* | parcourt les fautes de la saisie (*/set spell*) : *Entrée* corrige, *i* ignore, *a* ajoute au dico, *Échap* quitte |
 
-- Ouvrir un privé dans une nouvelle fenêtre, comme sous **ircii**
+- Parler en privé en gardant le flux courant visible
 
 ```
-/window new hide
-Ctrl+X
 /query antonio
+salut antonio
+/q
 ```
 
 Un message entrant pour une conversation sans fenêtre crée une fenêtre cachée, signalée dans *[Act: …]* de la barre de statut.
@@ -402,9 +402,10 @@ Un message entrant pour une conversation sans fenêtre crée une fenêtre caché
 
 | Commande | Effet |
 |---|---|
-| */query nom* (*/q*) | lie la fenêtre courante à un privé, nom exact ou préfixe |
-| */join @canal* (*/j*) | rejoint un canal ou un groupe public et le lie |
-| */msg nom texte* | envoie sans changer de fenêtre |
+| */query nom* (*/q*, */qu*) | fixe la cible d'envoi de cette fenêtre vers un contact ou canal, nom exact ou préfixe |
+| */join canal* (*/j*) | rejoint ou résout un canal/groupe et le choisit comme cible d'envoi |
+| */q*, */j* sans nom | efface la cible et revient à la conversation habituelle de cette fenêtre |
+| */msg nom texte* | envoie sans changer de fenêtre ; la ligne est reprise ici sous la forme `[msg(nom)] texte` |
 | */chats* | liste les conversations, non lues en surbrillance |
 | */net [réseau]* | filtre le panneau et la vue agrégée sur un réseau (*telegram*, *discord*, *all*) ; sans argument, cycle, comme *Shift+F2* |
 | */telegram [status\|login\|logout]*, */discord [status\|login\|logout]* | un réseau : son état, une nouvelle connexion (Discord relance *token_cmd*) ou une déconnexion (Telegram ferme la session côté serveur) |
@@ -413,10 +414,24 @@ Un message entrant pour une conversation sans fenêtre crée une fenêtre caché
 | */clear* (*/c*) | vide la fenêtre |
 | */rename [cible] nom*, */unrename [cible]* | renomme localement une conversation ou un contact (alias enregistré dans **aliases.toml**, appliqué au panneau, à la barre de statut, à l'agrégé, à la complétion et au pseudo du contact en privé ; */whois* garde le titre Telegram) |
 | */help* (*/h*) | une ligne par commande, touche et option, groupées par section ; */help <sujet>* détaille une commande, une touche (*/help F3*) ou une clé (*/help hover*), *Tab* complète les sujets |
-| texte sans */* | envoie au chat de la fenêtre courante |
+| texte sans */* | envoie à la cible fixée, sinon à la conversation habituelle de cette fenêtre |
 | *//texte* | envoie un texte commençant par */* |
 
 Les alias `/w`, `/win`, `/q`, `/j`, `/m`, `/hist`, `/t`, `/o`, `/c`, `/h` et `/exit` correspondent à `/window`, `/window`, `/query`, `/join`, `/msg`, `/history`, `/theme`, `/open`, `/clear`, `/help` et `/quit`. Pour `/rename`, mettez les noms contenant des espaces entre guillemets, par exemple `/rename "Amis - Général" Général`.
+
+`/q alice` garde le flux courant visible et envoie les messages suivants à Alice
+jusqu'à `/q` seul. Ce mode fonctionne partout, y compris en fenêtre 0 agrégée.
+Chaque fenêtre garde sa propre cible lors des changements de fenêtre ; les
+messages entrants ne la modifient pas. Le prompt `[→ @Alice]` indique la cible.
+`/j canal` fonctionne de la même façon. `/new`, le panneau ou `/win` permet
+d'afficher la conversation elle-même. Pendant la résolution d'un nom, les envois
+attendent et le texte ordinaire non envoyé reste dans l'éditeur.
+
+Un message envoyé à la cible depuis une autre fenêtre y est repris sous la forme
+`[msg(alice)] texte`, entre les lignes *Ouverture de la conversation avec alice*
+et *Fermeture de la conversation avec alice*, et reste dans la conversation
+d'Alice ; l'écho n'entre jamais dans l'historique, le cache ni le journal de la
+fenêtre. `/msg alice texte` fait de même sans ouvrir le mode.
 
 Tab après `/m `, `/q ` ou `/j ` sans lettre liste jusqu'à 20 cibles ; un second
 Tab agrandit la liste jusqu'à 100. Les contacts en ligne viennent d'abord, avec
@@ -507,7 +522,7 @@ Un clic sur une ligne du panneau ouvre ou rejoint la conversation ; un clic sur 
 
 - Basculer la fenêtre 0 en vue agrégée avec *F6* (ou */set aggregate on*) : tous les messages de toutes les fenêtres y défilent, préfixés du nom de la conversation, *12:01 [alice] <alice> salut*, comme sous **BitchX**
 
-Taper du texte dans la vue agrégée répond à la conversation du dernier message affiché (le prompt indique *[réponse à alice]*). Quand le terminal a le focus, les messages affichés sont marqués lus sur leur réseau ; Discord synchronise ma position de lecture sans fournir d’accusé de lecture des autres personnes.
+Sans cible fixée par `/q nom` ou `/j canal`, taper du texte dans la vue agrégée répond à la conversation du dernier message affiché (le prompt indique *[réponse à alice]*). `/q` ou `/j` seul restaure ce comportement. Quand le terminal a le focus, les messages affichés sont marqués lus sur leur réseau ; Discord synchronise ma position de lecture sans fournir d’accusé de lecture des autres personnes.
 
 - Chercher dans la fenêtre courante avec *Ctrl+F* : la frappe filtre en direct, sans tenir compte de la casse ni des accents, les occurrences sont surlignées et la barre de statut affiche *[recherche : 3/17]* ; *Entrée* remonte à l'occurrence précédente, *Ctrl+N* descend, *Échap* quitte
 
