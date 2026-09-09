@@ -179,6 +179,21 @@ func (u *UI) draw() {
 	if u.t.Kitty {
 		u.endFrameKitty(&b, cur) // after every placement: never a hole
 	}
+	// The pill "↓ last message" gives way to an image placed over its cells:
+	// an image goes above the text, and dropping the block for a pill would
+	// leave its label alone with blank lines.
+	u.jumpShown = false
+	if r, ok := u.jumpRect(); ok {
+		u.jumpShown = true
+		for _, p := range u.placed {
+			if r.hits(p.row, x0+p.img.Col, p.img.Rows, p.img.Cols) {
+				u.jumpShown = false
+			}
+		}
+		if u.jumpShown {
+			ov = append(ov, overlayBox{rect: r, lines: u.jumpLines()})
+		}
+	}
 	for _, box := range ov {
 		for i, l := range box.lines {
 			fmt.Fprintf(&b, "\x1b[%d;%dH", box.row+i+1, box.col+1)

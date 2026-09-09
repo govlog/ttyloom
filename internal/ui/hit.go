@@ -120,6 +120,10 @@ func (u *UI) mouse(m term.MouseEvent) {
 		u.partsMouse(m, r)
 		return
 	}
+	if r, ok := u.jumpRect(); ok && u.jumpShown && m.Press && m.Button == 0 && r.hits(m.Y, m.X, 1, 1) {
+		u.view().Scroll = 0 // pill "↓ last message"
+		return
+	}
 	switch {
 	case m.Button == 64: // wheel up
 		u.scroll(u.view(), 3)

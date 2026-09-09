@@ -40,6 +40,7 @@ type placed struct {
 
 type UI struct {
 	ctx       context.Context
+	jumpShown bool // pill "↓ last message" drawn by the last repaint (jump.go)
 	cancel    context.CancelFunc
 	t         *term.Term
 	cfg       *config.Config
