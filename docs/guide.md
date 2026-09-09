@@ -707,7 +707,7 @@ precedence over sending a fenced/code-block paste.
 | Shift+Enter, Alt+Enter | Insert a line break. Shift+Enter needs kitty keyboard support; Alt+Enter is the fallback. With `multiline` enabled, open the expanded editor. |
 | Enter, Ctrl+Enter | Send the draft. |
 | Tab | Complete commands, chats (`/query`, `/join`, `/msg`: from the start of any word of a title, `@username` too), windows, settings, themes, help topics, `/send` paths, `/log` and `/telegram`/`/discord` arguments. Several names left and nothing more to add: a second Tab lists them. |
-| PgUp/PgDn | Scroll history. |
+| PgUp/PgDn | Scroll history. An image cut by the edge of the window shows its visible part, so the scroll moves line by line over it. Scrolled up, a pill `↓ last message` at the bottom right of the messages brings back to the end on a click. |
 | Ctrl+L | Clear the window like a terminal `clear`: the lines stay in the history, Page Up or the wheel brings them back. |
 | Ctrl+C, `/quit`, `/exit` | Quit. |
 | Wheel | Scroll three message lines; at the top, load history. Over the sidebar with hover tracking, switch existing windows. |

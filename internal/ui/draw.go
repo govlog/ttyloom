@@ -71,9 +71,17 @@ func (u *UI) draw() {
 			line = highlight(line, string(u.search.q), theme.Style{Reverse: true})
 		}
 		u.writeLine(&b, line, cols, &u.hits[r])
-		if img := lines[i].Img; img != nil && img.Row == 0 && r+img.Rows <= view &&
-			!ov.hits(r, x0+img.Col, img.Rows, img.Cols) {
-			u.placed = append(u.placed, placed{row: r, pid: uint32(r + 1), img: img})
+		if img := lines[i].Img; img != nil {
+			// A block cut by the view is placed cropped; the crop needs the
+			// pixel size, known once the frames are decoded (then a repaint comes).
+			row, rows, top, ok := imgPlace(img, r, view)
+			md := img.Media
+			if ok && (rows == img.Rows || md.FrameH > 0) && !ov.hits(row, x0+img.Col, rows, img.Cols) {
+				part := *img
+				part.Rows = rows
+				u.placed = append(u.placed, placed{row: row, pid: uint32(row + 1), img: &part,
+					crop: cropOf(top, rows, img.Rows, md.FrameW, md.FrameH)})
+			}
 		}
 		if h := lines[i].Hover; h != nil && u.hover != nil && items[i] == u.hover {
 			hov, hovRow = h, r
@@ -154,7 +162,7 @@ func (u *UI) draw() {
 			}
 			u.redecode(md) // zoom: decode again only the images on the screen
 			fmt.Fprintf(&b, "\x1b[%d;%dH", p.row+1, x0+p.img.Col+1)
-			u.placeKitty(&b, cur, p.pid, md, md.Frames[md.Frame%len(md.Frames)], p.img.Cols, p.img.Rows)
+			u.placeKitty(&b, cur, p.pid, md, md.Frames[md.Frame%len(md.Frames)], p.img.Cols, p.img.Rows, p.crop)
 		}
 		for _, a := range avs {
 			u.redecode(a.md)
@@ -291,21 +299,36 @@ func (u *UI) endFrameKitty(b *strings.Builder, cur map[kplace]bool) {
 // viewSlice gives the lines drawn — [start, end) trimmed to view rows from
 // start — for a drawing of len(lines) lines with scroll of them held back at
 // the bottom. The bottom is the anchor: the last line drawn stays lines[end-1].
-//
-// An image block that the top of the view cuts is taken back whole (a cut
-// block is never placed, so its lines would stay blank), but never at scroll
-// 0: there the scroll is already at its floor, and the lines that the move
-// pushes past the bottom cannot be reached at all. A tall block met by the
-// top of the view would then take the end of the thread off the screen — the
-// last image block with it, cut in turn, hence not placed: label alone and
-// blank lines, while the images higher up keep showing.
+// An image block that the top or the bottom of the view cuts is placed
+// cropped (imgPlace): the scroll moves line by line over it.
 func viewSlice(lines []render.Line, scroll, view int) (start, end int) {
 	end = len(lines) - scroll
-	start = max(0, end-view)
-	if scroll > 0 && start < end && lines[start].Img != nil && lines[start].Img.Row > 0 {
-		start = max(0, start-lines[start].Img.Row)
+	return max(0, end-view), end
+}
+
+// imgPlace gives the placement of a block from the line r of the view that
+// carries it: the first line of the block, or the first line of the view
+// when the top cuts the block. row and rows are the screen row and height of
+// the part shown, top the rows of the block hidden above it. ok false: this
+// line places nothing.
+func imgPlace(img *render.Img, r, view int) (row, rows, top int, ok bool) {
+	if img.Row != 0 && r != 0 {
+		return 0, 0, 0, false
 	}
-	return start, end
+	r0 := r - img.Row // screen row of the start of the block, negative when cut
+	top = max(0, -r0)
+	row = r0 + top
+	rows = min(view, r0+img.Rows) - row
+	return row, rows, top, rows > 0
+}
+
+// cropOf gives the source pixels of the rows [top, top+rows) of a block of
+// total rows, for an image of w×h pixels; empty for the whole block (no crop).
+func cropOf(top, rows, total, w, h int) image.Rectangle {
+	if top == 0 && rows == total {
+		return image.Rectangle{}
+	}
+	return image.Rect(0, top*h/total, w, (top+rows)*h/total)
 }
 
 // showRows gives the Scroll that shows the lines first..last of the drawing

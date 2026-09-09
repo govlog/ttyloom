@@ -612,7 +612,7 @@ Un clic sur une réaction sous n'importe quel message l'ajoute ou la retire, san
 | *↑*, *↓* | historique de saisie |
 | *Maj+Entrée* ou *Alt+Entrée* | saut de ligne dans la saisie (affiché *⏎*), *Entrée* ou *Ctrl+Entrée* envoie ; Maj+Entrée demande le protocole clavier kitty ; Alt+Entrée est le repli sans ce protocole, et le collage multiligne reste possible ; avec *multiline on*, ouvre la zone de saisie étendue (*↑*/*↓* y déplacent le curseur de ligne en ligne, un collage multiligne y propose insertion telle quelle ou en bloc de code) |
 | *Tab* | complète les commandes, les noms de conversations (depuis le début de n'importe quel mot du titre, *@pseudo* aussi), les fenêtres, les clés et valeurs de */set*, les thèmes, les sujets de */help*, les chemins de */send*, les arguments de */log*, */telegram* et */discord* ; plusieurs noms restants et rien à ajouter : un second *Tab* les liste |
-| *PgUp*, *PgDn* | défilement de la fenêtre |
+| *PgUp*, *PgDn* | défilement de la fenêtre ; une image coupée par le bord de la fenêtre montre sa partie visible, le défilement avance ligne par ligne dessus ; remonté dans l'historique, une pastille *↓ dernier message* en bas à droite des messages ramène à la fin d'un clic |
 | *Ctrl+L* | vide la fenêtre comme le `clear` d'un terminal : les lignes restent dans l'historique, *Page haut* ou la molette les ramène |
 | *Ctrl+C*, */quit* | quitte |
 | *molette* | fait défiler la fenêtre de 3 lignes (charge l'historique en haut) ; au-dessus du panneau, passe à la fenêtre précédente/suivante dans l'ordre du panneau |

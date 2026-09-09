@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"image"
 	"os"
 	"path/filepath"
 	"strings"
@@ -251,9 +252,10 @@ func TestGifSurvivesResize(t *testing.T) {
 		placed := false
 		for r := 0; r < view && start+r < end; r++ {
 			img := lines[start+r].Img
-			// Same rule as draw(): a block is placed whole or not at all.
-			if img != nil && img.Media == gif && img.Row == 0 && r+img.Rows <= view {
-				placed = true
+			if img != nil && img.Media == gif {
+				if _, rows, _, ok := imgPlace(img, r, view); ok && rows == img.Rows {
+					placed = true // same rule as draw(), and the gif shows whole
+				}
 			}
 		}
 		if !placed {
@@ -280,5 +282,54 @@ func TestStatusNetSegment(t *testing.T) {
 		if got := strings.Contains(b.String(), " ["+model.NetTelegram+"]"); got != c.want {
 			t.Fatalf("%d network(s): segment %v, want %v — %q", len(c.nets), got, c.want, b.String())
 		}
+	}
+}
+
+// A block cut by the top of the view is no longer taken back whole: the
+// scroll moves line by line and the image shows its lower part.
+func TestViewSliceCutsBlock(t *testing.T) {
+	var lines []render.Line
+	for i := 0; i < 10; i++ {
+		lines = append(lines, render.Line{})
+	}
+	md := &model.Media{}
+	for k := 0; k < 5; k++ {
+		lines = append(lines, render.Line{Img: &render.Img{Media: md, Cols: 20, Rows: 5, Row: k}})
+	}
+	for i := 0; i < 10; i++ {
+		lines = append(lines, render.Line{})
+	}
+	start, end := viewSlice(lines, 3, 10) // end 22, start 12: line 12 is row 2 of the block
+	if start != 12 || end != 22 {
+		t.Fatalf("slice: %d..%d", start, end)
+	}
+}
+
+// imgPlace : the placement of a block from the line of the view that
+// carries it — its first line, or the first line of the view when the top
+// cuts it — with the rows hidden above and below taken off; cropOf gives
+// the source pixels that stay.
+func TestImgPlace(t *testing.T) {
+	img := func(row int) *render.Img { return &render.Img{Cols: 20, Rows: 5, Row: row} }
+	for _, c := range []struct {
+		row, r, view      int
+		wRow, wRows, wTop int
+		ok                bool
+	}{
+		{0, 3, 10, 3, 5, 0, true},  // whole
+		{2, 0, 10, 0, 3, 2, true},  // cut by the top: 2 rows hidden
+		{0, 8, 10, 8, 2, 0, true},  // cut by the bottom
+		{2, 4, 10, 0, 0, 0, false}, // middle line of a block placed by its first line
+	} {
+		row, rows, top, ok := imgPlace(img(c.row), c.r, c.view)
+		if row != c.wRow || rows != c.wRows || top != c.wTop || ok != c.ok {
+			t.Fatalf("Row %d at r %d: got %d %d %d %v", c.row, c.r, row, rows, top, ok)
+		}
+	}
+	if r := cropOf(0, 5, 5, 100, 50); !r.Empty() {
+		t.Fatalf("whole block: crop %v", r)
+	}
+	if r := cropOf(2, 3, 5, 100, 50); r != image.Rect(0, 20, 100, 50) {
+		t.Fatalf("lower 3 of 5 rows: crop %v", r)
 	}
 }
