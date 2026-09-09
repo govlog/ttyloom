@@ -1840,8 +1840,8 @@ func (u *UI) key(k term.Key) {
 			u.openGifs("")
 		case 'k':
 			u.ed.KillToEnd()
-		case 'u':
-			u.ed.KillLine()
+		case 'b', 'i', 'u': // style toggles of the draft (Ctrl+I needs the kitty keyboard protocol: Tab elsewhere)
+			u.ed.Insert(string(map[rune]rune{'b': markBold, 'i': markItalic, 'u': markUnderline}[k.Rune]))
 		case 'w':
 			u.ed.KillWord()
 		case 'r': // spell check walk (Enter fixes, i ignores, a adds)
@@ -2071,9 +2071,17 @@ func (u *UI) sendWith(w *Window, text string, pre bool) {
 	if pre && replyTo == 0 {
 		m.Entities = []model.Span{{End: len([]rune(text)), Kind: model.SpanPre}}
 	}
+	if styled := parseStyle(text); styled != nil && (pre || replyTo != 0) {
+		text = fenceText(styled) // ponytail: a reply or a paste goes out plain, the markers dropped
+		m.Text = text
+	}
 	var segs []model.Seg
 	if !pre && replyTo == 0 {
-		if segs = parseFences(text); segs != nil {
+		// ponytail: markers win over fences; a styled draft never carries a code block.
+		if segs = parseStyle(text); segs == nil {
+			segs = parseFences(text)
+		}
+		if segs != nil {
 			m.Text, m.Entities = fenceText(segs), fenceEntities(segs)
 		}
 	}
@@ -2141,7 +2149,7 @@ func (u *UI) sendMe(w *Window, arg string) {
 	m := &model.Msg{Net: w.Chat.Net, ChatID: w.Chat.ID, ChatLabel: w.Chat.Title, Date: time.Now(), From: me.Name, FromID: me.ID,
 		Out: true, Text: text, Entities: ents, Pending: true, TmpID: u.tmpID}
 	u.insertPending(w, m)
-	b.SendStyled(u.ctx, w.Chat, []model.Seg{{Text: text, Kind: model.SegItalic}}, u.tmpID)
+	b.SendStyled(u.ctx, w.Chat, []model.Seg{{Text: text, Italic: true}}, u.tmpID)
 }
 
 // candidates for Tab: dispatch by command context (complContext).

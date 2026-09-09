@@ -5,6 +5,7 @@ import (
 	"strings"
 	"unicode/utf16"
 
+	"github.com/gotd/td/telegram/message/entity"
 	"github.com/gotd/td/telegram/message/styling"
 	"github.com/gotd/td/tg"
 
@@ -68,21 +69,33 @@ func spansOf(text string, ents []tg.MessageEntityClass) []model.Span {
 }
 
 // stylingOf turns neutral segments into gotd styling options. One "\n"
-// between the blocks, like the local echo of the sender counts it.
+// around a fence, like the local echo of the sender counts it; the styles
+// of a run stack as several entities over its range.
 func stylingOf(segs []model.Seg) []styling.StyledTextOption {
 	out := make([]styling.StyledTextOption, 0, 2*len(segs))
 	for i, s := range segs {
-		if i > 0 {
+		if model.SegBreak(segs, i) {
 			out = append(out, styling.Plain("\n"))
 		}
-		switch s.Kind {
-		case model.SegPre:
+		if s.Kind == model.SegPre {
 			out = append(out, styling.Pre(s.Text, s.Lang))
-		case model.SegItalic:
-			out = append(out, styling.Italic(s.Text))
-		default:
-			out = append(out, styling.Plain(s.Text))
+			continue
 		}
+		var fs []entity.Formatter
+		for _, f := range []struct {
+			on bool
+			f  entity.Formatter
+		}{{s.Bold, entity.Bold()}, {s.Italic, entity.Italic()}, {s.Underline, entity.Underline()}} {
+			if f.on {
+				fs = append(fs, f.f)
+			}
+		}
+		if len(fs) == 0 {
+			out = append(out, styling.Plain(s.Text))
+			continue
+		}
+		text := s.Text
+		out = append(out, styling.Custom(func(eb *entity.Builder) error { eb.Format(text, fs...); return nil }))
 	}
 	return out
 }

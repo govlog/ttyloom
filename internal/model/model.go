@@ -171,14 +171,21 @@ type SegKind int
 const (
 	SegPlain SegKind = iota
 	SegPre           // Lang
-	SegItalic
 )
 
-// Seg : one block of a styled send (fences, /me), in document order.
+// Seg : one block of a styled send (fences, /me, Ctrl+B/I/U runs), in
+// document order. Bold/Italic/Underline stack on a plain segment.
 type Seg struct {
-	Text string
-	Kind SegKind
-	Lang string
+	Text                    string
+	Kind                    SegKind
+	Lang                    string
+	Bold, Italic, Underline bool
+}
+
+// SegBreak : a line break sits between two segments only around a fence;
+// the styled runs of one line (Ctrl+B/I/U) follow one another.
+func SegBreak(segs []Seg, i int) bool {
+	return i > 0 && (segs[i-1].Kind == SegPre || segs[i].Kind == SegPre)
 }
 
 type Msg struct {

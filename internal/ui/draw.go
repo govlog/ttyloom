@@ -13,6 +13,7 @@ import (
 	"github.com/govlog/ttyloom/internal/media"
 	"github.com/govlog/ttyloom/internal/model"
 	"github.com/govlog/ttyloom/internal/render"
+	"github.com/govlog/ttyloom/internal/spell"
 	"github.com/govlog/ttyloom/internal/theme"
 )
 
@@ -586,6 +587,9 @@ func (u *UI) drawStatus(b *strings.Builder, row, x0, cols int) {
 		mode += i18n.T("status_hover_suffix")
 	}
 	add(" [img:"+mode+"]", st)
+	if l := styleLabel([]rune(u.ed.String())[:u.ed.Cursor()]); l != "" { // Ctrl+B/I/U open at the cursor
+		add(" ["+l+"]", acc)
+	}
 	if l := u.actList(); l != "" {
 		add(" [Act: ", st)
 		add(l, act)
@@ -700,10 +704,11 @@ func (u *UI) drawInput(b *strings.Builder, row, x0, cols int) (curRow, curCol in
 	shown, curW, first := hwindow(runes, cursor, avail)
 	acc := theme.Style{FG: u.th.Color(theme.Accent), Bold: true}
 	fmt.Fprintf(b, "\x1b[%d;%dH%s\x1b[K", row, x0+1, theme.Style{FG: u.th.FG, BG: u.th.BG}.SGR())
-	spans := []render.Span{{Text: shown}}
+	var bad []spell.Range
 	if u.spellActive() {
-		spans = styleRanges([]rune(shown), first, u.spellBadRanges(), theme.Style{}, u.spellStyle())
+		bad = u.spellBadRanges()
 	}
+	spans := u.inputSpans(runes[:first], []rune(shown), first, bad)
 	u.inMap = inputMap{top: row, pw: pw, avail: avail, lo: first}
 	u.writeLine(b, render.Line{Spans: append([]render.Span{{Text: prompt, Style: acc}}, spans...)}, cols, nil)
 	return row, pw + curW
@@ -738,7 +743,11 @@ func (u *UI) drawInputMulti(b *strings.Builder, row, x0, cols int, prompt string
 	avail := max(cols-pw-1, 1)
 	acc := theme.Style{FG: u.th.Color(theme.Accent), Bold: true}
 	bg := theme.Style{FG: u.th.FG, BG: u.th.BG}.SGR()
-	bad := u.spellBadRanges()
+	var bad []spell.Range
+	if u.spellActive() {
+		bad = u.spellBadRanges()
+	}
+	all := []rune(u.ed.String())
 	// Rune offset of each draft line in the whole buffer, for the ranges.
 	offs := make([]int, len(lines))
 	for i := 1; i < len(lines); i++ {
@@ -759,10 +768,7 @@ func (u *UI) drawInputMulti(b *strings.Builder, row, x0, cols int, prompt string
 		} else {
 			shown = render.Truncate(lines[li], avail, "")
 		}
-		spans := []render.Span{{Text: shown}}
-		if u.spellActive() {
-			spans = styleRanges([]rune(shown), offs[li]+lo, bad, theme.Style{}, u.spellStyle())
-		}
+		spans := u.inputSpans(all[:offs[li]+lo], []rune(shown), offs[li]+lo, bad)
 		lead := render.Span{Text: strings.Repeat(" ", pw)}
 		if r == 0 {
 			lead = render.Span{Text: prompt, Style: acc}

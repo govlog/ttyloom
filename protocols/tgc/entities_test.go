@@ -57,7 +57,7 @@ func TestSpansOfKinds(t *testing.T) {
 // actually sent come back as Span.
 func TestStylingOf(t *testing.T) {
 	var b entity.Builder
-	segs := []model.Seg{{Text: "a"}, {Text: "code", Kind: model.SegPre, Lang: "go"}, {Text: "c", Kind: model.SegItalic}}
+	segs := []model.Seg{{Text: "a"}, {Text: "code", Kind: model.SegPre, Lang: "go"}, {Text: "c", Italic: true}}
 	if err := styling.Perform(&b, stylingOf(segs)...); err != nil {
 		t.Fatalf("perform: %v", err)
 	}
@@ -70,6 +70,25 @@ func TestStylingOf(t *testing.T) {
 		{Start: 2, End: 6, Kind: model.SpanPre, Lang: "go"},
 		{Start: 7, End: 8, Kind: model.SpanItalic},
 	}
+	if !slices.Equal(got, want) {
+		t.Fatalf("spans:\n got %+v\nwant %+v", got, want)
+	}
+}
+
+// Styled runs of one line: no break, and the styles of one run stack as
+// several entities over the same range.
+func TestStylingOfRuns(t *testing.T) {
+	var b entity.Builder
+	segs := []model.Seg{{Text: "a"}, {Text: "b", Bold: true, Underline: true}, {Text: "c"}}
+	if err := styling.Perform(&b, stylingOf(segs)...); err != nil {
+		t.Fatalf("perform: %v", err)
+	}
+	text, ents := b.Complete()
+	if text != "abc" {
+		t.Fatalf("text: %q", text)
+	}
+	got := spansOf(text, ents)
+	want := []model.Span{{Start: 1, End: 2, Kind: model.SpanBold}, {Start: 1, End: 2, Kind: model.SpanUnderline}}
 	if !slices.Equal(got, want) {
 		t.Fatalf("spans:\n got %+v\nwant %+v", got, want)
 	}

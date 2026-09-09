@@ -85,6 +85,7 @@ var helpTopics = []topic{
 	{"/emoji", "help_emoji", "input"},
 	{"Ctrl+T", "help_ctrl_t", "input"},
 	{"Ctrl+A/E", "help_ctrl_ae", "input"},
+	{"Ctrl+B/I/U", "help_ctrl_biu", "input"},
 	{"Shift+Enter", "help_shift_enter", "input"},
 	{"Ctrl+R", "help_ctrl_r", "input"},
 	{"PgUp/PgDn", "help_pgupdn", "input"},

@@ -85,7 +85,7 @@ func TestParseNilNames(t *testing.T) {
 // render: one "\n" between the blocks like fenceText, then the round trip
 // gives the text and the spans of the local echo back.
 func TestRenderRoundTrip(t *testing.T) {
-	segs := []model.Seg{{Text: "a"}, {Text: "code\nmore", Kind: model.SegPre, Lang: "go"}, {Text: "c", Kind: model.SegItalic}}
+	segs := []model.Seg{{Text: "a"}, {Text: "code\nmore", Kind: model.SegPre, Lang: "go"}, {Text: "c", Italic: true}}
 	md := render(segs)
 	if md != "a\n```go\ncode\nmore\n```\n*c*" {
 		t.Fatalf("render: %q", md)
@@ -106,7 +106,19 @@ func TestRenderRoundTrip(t *testing.T) {
 // A marker inside an italic segment (/me with a "*") must not close the run
 // on the Discord side: it goes out escaped.
 func TestRenderEscapesItalicBody(t *testing.T) {
-	if got := render([]model.Seg{{Text: "a*b_c", Kind: model.SegItalic}}); got != `*a\*b\_c*` {
+	if got := render([]model.Seg{{Text: "a*b_c", Italic: true}}); got != `*a\*b\_c*` {
 		t.Fatalf("italic body: %q", got)
 	}
+}
+
+// Styled runs of one line: no break between them, the markers nest and a
+// style kept from one run to the next is not closed then opened again
+// (**b****__c__** would break Discord's parser).
+func TestRenderStyledRuns(t *testing.T) {
+	segs := []model.Seg{{Text: "a"}, {Text: "b", Bold: true}, {Text: "c", Bold: true, Underline: true}, {Text: "d", Underline: true}, {Text: "e"}}
+	if got := render(segs); got != "a**b__c__**__d__e" {
+		t.Fatalf("render: %q", got)
+	}
+	// ponytail: no round trip here — the incoming parser reads no nested
+	// run (the local echo takes its spans from the segments, not from it).
 }

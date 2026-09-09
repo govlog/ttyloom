@@ -606,7 +606,8 @@ Un clic sur une réaction sous n'importe quel message l'ajoute ou la retire, san
 |---|---|
 | *←*, *→*, *Home*, *End*, *Ctrl+A*, *Ctrl+E* | déplacement (en zone étendue, *Home*/*End* et *Ctrl+A*/*Ctrl+E* jouent sur la ligne courante) |
 | *Ctrl+←*, *Ctrl+→* | saute de mot en mot |
-| *Ctrl+K*, *Ctrl+U*, *Ctrl+W* | supprime jusqu'à la fin, jusqu'au début, le mot précédent |
+| *Ctrl+K*, *Ctrl+W* | supprime jusqu'à la fin de la ligne, le mot précédent |
+| *Ctrl+B*, *Ctrl+I*, *Ctrl+U* | bascule gras, italique, souligné au curseur : ce qui suit prend le style jusqu'à la même touche, et les styles se cumulent (*Ctrl+U* puis *Ctrl+I* : souligné+italique) ; la barre d'état montre les styles ouverts au curseur, `[bold+underline]` ; *Retour arrière* sur une bascule l'annule ; *Ctrl+I* demande le protocole clavier kitty (Ghostty, kitty, WezTerm, foot), ailleurs c'est *Tab* |
 | *Ctrl+T* ou */emoji* | sélecteur d'emoji : la frappe filtre, les flèches ou un clic choisissent, *Entrée* insère, *Échap* ferme |
 | *↑*, *↓* | historique de saisie |
 | *Maj+Entrée* ou *Alt+Entrée* | saut de ligne dans la saisie (affiché *⏎*), *Entrée* ou *Ctrl+Entrée* envoie ; Maj+Entrée demande le protocole clavier kitty ; Alt+Entrée est le repli sans ce protocole, et le collage multiligne reste possible ; avec *multiline on*, ouvre la zone de saisie étendue (*↑*/*↓* y déplacent le curseur de ligne en ligne, un collage multiligne y propose insertion telle quelle ou en bloc de code) |

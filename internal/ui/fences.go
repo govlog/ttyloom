@@ -56,7 +56,7 @@ func parseFences(s string) []model.Seg {
 func fenceText(segs []model.Seg) string {
 	var b strings.Builder
 	for i, s := range segs {
-		if i > 0 {
+		if model.SegBreak(segs, i) {
 			b.WriteString("\n")
 		}
 		b.WriteString(s.Text)
@@ -64,18 +64,29 @@ func fenceText(segs []model.Seg) string {
 	return b.String()
 }
 
-// fenceEntities : pre spans of the local echo, offsets in runes like the rest
-// of the model.
+// fenceEntities : pre and style spans of the local echo, offsets in runes
+// like the rest of the model.
 func fenceEntities(segs []model.Seg) []model.Span {
 	var ents []model.Span
 	off := 0
 	for i, s := range segs {
-		if i > 0 {
+		if model.SegBreak(segs, i) {
 			off++ // the "\n" of fenceText
 		}
 		n := len([]rune(s.Text))
+		add := func(k model.SpanKind) {
+			ents = append(ents, model.Span{Start: off, End: off + n, Kind: k, Lang: s.Lang})
+		}
 		if s.Kind == model.SegPre {
-			ents = append(ents, model.Span{Start: off, End: off + n, Kind: model.SpanPre, Lang: s.Lang})
+			add(model.SpanPre)
+		}
+		for _, k := range []struct {
+			on bool
+			k  model.SpanKind
+		}{{s.Bold, model.SpanBold}, {s.Italic, model.SpanItalic}, {s.Underline, model.SpanUnderline}} {
+			if k.on {
+				add(k.k)
+			}
 		}
 		off += n
 	}

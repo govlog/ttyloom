@@ -700,7 +700,8 @@ precedence over sending a fenced/code-block paste.
 | --- | --- |
 | Left/Right, Home/End, Ctrl+A/E | Move the cursor; Home/End and Ctrl+A/E apply to the current line in the expanded editor. |
 | Ctrl+Left/Right | Move by word. |
-| Ctrl+K, Ctrl+U, Ctrl+W | Delete to the end, to the start, or the previous word. |
+| Ctrl+K, Ctrl+W | Delete to the end of the line, or the previous word. |
+| Ctrl+B, Ctrl+I, Ctrl+U | Toggle bold, italic, underline at the cursor: what follows takes the style until the same key comes again, and the styles stack (Ctrl+U then Ctrl+I: underline+italic). The status bar shows the styles open at the cursor, `[bold+underline]`; Backspace on a toggle takes it back. Ctrl+I needs kitty keyboard support (Ghostty, kitty, WezTerm, foot): elsewhere it is Tab. |
 | Ctrl+T, `/emoji` | Search the emoji picker; arrows or a click choose, Enter inserts, Escape closes. Recent choices are saved. |
 | Up/Down | Input history, or vertical movement in the expanded editor. Up on empty input can edit the last sent message. |
 | Shift+Enter, Alt+Enter | Insert a line break. Shift+Enter needs kitty keyboard support; Alt+Enter is the fallback. With `multiline` enabled, open the expanded editor. |

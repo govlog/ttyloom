@@ -30,3 +30,15 @@ func TestParseFences(t *testing.T) {
 		t.Fatalf("solo block: %+v", segs)
 	}
 }
+
+// The line break between blocks is kept around a fence only.
+func TestFenceTextSeparator(t *testing.T) {
+	segs := []model.Seg{{Text: "a"}, {Text: "b", Kind: model.SegPre}, {Text: "c"}, {Text: "d", Bold: true}}
+	if got := fenceText(segs); got != "a\nb\nc"+"d" {
+		t.Fatalf("text: %q", got)
+	}
+	ents := fenceEntities(segs)
+	if len(ents) != 2 || ents[1].Start != 5 || ents[1].End != 6 || ents[1].Kind != model.SpanBold {
+		t.Fatalf("entities: %+v", ents)
+	}
+}

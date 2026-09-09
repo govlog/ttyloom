@@ -2,6 +2,7 @@ package dsc
 
 import (
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"unicode"
@@ -210,21 +211,63 @@ var mdEscape = strings.NewReplacer(`\`, `\\`, "*", `\*`, "_", `\_`, "~", `\~`, "
 
 // render turns neutral segments back into Discord markdown for a send. Plain
 // goes out as it is: Discord reads the markdown the user types, that is the
-// convention. One "\n" between the blocks, like fenceText and stylingOf.
+// convention. One "\n" around a fence, like fenceText. The style markers of
+// the runs nest (closed in the reverse order of their opening) and a style
+// kept from one run to the next stays open: "**b****__c__**" would break
+// Discord's parser.
 func render(segs []model.Seg) string {
 	var b strings.Builder
+	var open []string // markers open, in opening order
+	want := func(s model.Seg) []string {
+		var out []string
+		for _, m := range []struct {
+			on bool
+			m  string
+		}{{s.Bold, "**"}, {s.Italic, "*"}, {s.Underline, "__"}} {
+			if m.on {
+				out = append(out, m.m)
+			}
+		}
+		return out
+	}
+	closeAll := func() {
+		for i := len(open) - 1; i >= 0; i-- {
+			b.WriteString(open[i])
+		}
+		open = nil
+	}
 	for i, s := range segs {
-		if i > 0 {
+		if model.SegBreak(segs, i) {
+			closeAll()
 			b.WriteString("\n")
 		}
-		switch s.Kind {
-		case model.SegPre:
+		if s.Kind == model.SegPre {
+			closeAll()
 			b.WriteString("```" + s.Lang + "\n" + s.Text + "\n```")
-		case model.SegItalic:
-			b.WriteString("*" + mdEscape.Replace(s.Text) + "*")
-		default:
+			continue
+		}
+		w := want(s)
+		// Close down to the first open marker that is not wanted any more.
+		keep := 0
+		for keep < len(open) && slices.Contains(w, open[keep]) {
+			keep++
+		}
+		for i := len(open) - 1; i >= keep; i-- {
+			b.WriteString(open[i])
+		}
+		open = open[:keep]
+		for _, m := range w {
+			if !slices.Contains(open, m) {
+				b.WriteString(m)
+				open = append(open, m)
+			}
+		}
+		if len(open) > 0 {
+			b.WriteString(mdEscape.Replace(s.Text))
+		} else {
 			b.WriteString(s.Text)
 		}
 	}
+	closeAll()
 	return b.String()
 }
