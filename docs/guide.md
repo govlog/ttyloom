@@ -485,6 +485,7 @@ half blocks.
 | `l` on a video | Start or pause full-screen playback, without sound. |
 | `s` | Stop and return to the first frame. |
 | `o` | Open the file externally, or the web page for a link preview. |
+| `c` | Copy the image to the system clipboard (`wl-copy` on Wayland, `xclip` on X11), to paste it in another application. |
 | Escape, `q`, or a click without dragging | Close the viewer. |
 
 Zoom ranges from 25% to 800% of the fitted view, by a factor of 1.25 per step.

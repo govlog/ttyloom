@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -160,5 +161,29 @@ func TestSendPathRoutedWindow(t *testing.T) {
 	}
 	if want := i18n.T("sent_to_window", 1, "alice"); u.flashMsg != want {
 		t.Fatalf("status bar: %q, want %q", u.flashMsg, want)
+	}
+}
+
+// "c" in the viewer: the file goes to the clipboard under its image type,
+// read from its bytes; a video or a text file is refused.
+func TestCopyImage(t *testing.T) {
+	dir := t.TempDir()
+	png := filepath.Join(dir, "a.png")
+	os.WriteFile(png, append([]byte("\x89PNG\r\n\x1a\n"), make([]byte, 64)...), 0o600)
+	txt := filepath.Join(dir, "a.txt")
+	os.WriteFile(txt, []byte("hello"), 0o600)
+	if m := copyMime(png); m != "image/png" {
+		t.Fatalf("png: %q", m)
+	}
+	if m := copyMime(txt); m != "" {
+		t.Fatalf("text: %q", m)
+	}
+	want := []string{"--type", "image/png"}
+	if got := copyArgs(true, "image/png", png); !slices.Equal(got, want) {
+		t.Fatalf("wl-copy: %v", got)
+	}
+	want = []string{"-selection", "clipboard", "-t", "image/png", "-i", png}
+	if got := copyArgs(false, "image/png", png); !slices.Equal(got, want) {
+		t.Fatalf("xclip: %v", got)
 	}
 }

@@ -472,6 +472,7 @@ Cliquez une image du fil, sélectionnez son message puis pressez `v`, ou utilise
 | `l` sur une vidéo | lance ou met en pause la lecture plein écran, sans son |
 | `s` | arrête la lecture et revient à la première image |
 | `o` | ouvre le fichier, ou la page d’un aperçu de lien, dans l’application externe |
+| `c` | copie l’image dans le presse-papier système (`wl-copy` sous Wayland, `xclip` sous X11), pour la coller dans une autre application |
 | `Échap`, `q` ou clic sans glisser | ferme la visionneuse |
 
 Le zoom va de 25 % à 800 % de la vue ajustée, avec un facteur de 1,25 par cran. Une autre touche non affectée à la visionneuse la ferme. Les vidéos demandent FFmpeg : le nombre d’images et leur mémoire sont bornés, ce n’est pas un lecteur vidéo avec son. `video = "show"`, `"hidden"` et `"autoplay"` règlent leur comportement dans le fil.

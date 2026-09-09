@@ -398,3 +398,82 @@ func (u *UI) sendCmd(w *Window, args string) {
 	}
 	u.sendFile(w.Chat, path, caption)
 }
+
+// --- copy of the image shown by the viewer ("c") ---
+
+// copyBin : clipboard writer resolved once at start, Wayland first ("":
+// neither wl-copy nor xclip is installed).
+var copyBin, copyWayland = func() (string, bool) {
+	if p, err := exec.LookPath("wl-copy"); err == nil {
+		return p, true
+	}
+	if p, err := exec.LookPath("xclip"); err == nil {
+		return p, false
+	}
+	return "", false
+}()
+
+// copyArgs gives the write arguments for the type mime of the file path;
+// wl-copy reads its stdin (the file is given to it by copyImage). Fixed
+// arguments, never a shell.
+func copyArgs(wayland bool, mime, path string) []string {
+	if wayland {
+		return []string{"--type", mime}
+	}
+	return []string{"-selection", "clipboard", "-t", mime, "-i", path}
+}
+
+// copyMime : the image type read from the bytes of the file, "" when it is
+// no image (video, document) or cannot be read.
+func copyMime(path string) string {
+	f, err := os.Open(path)
+	if err != nil {
+		return ""
+	}
+	defer f.Close()
+	head := make([]byte, 512)
+	n, _ := io.ReadFull(f, head)
+	mime := http.DetectContentType(head[:n])
+	if !strings.HasPrefix(mime, "image/") {
+		return ""
+	}
+	return mime
+}
+
+// evFlash : a word for the status bar, posted by a goroutine.
+type evFlash struct{ Text string }
+
+// copyImage puts the file of md into the clipboard as an image; the result
+// shows in the status bar.
+func (u *UI) copyImage(md *model.Media) {
+	if copyBin == "" {
+		u.flash(i18n.T("clip_no_copy_tool"))
+		return
+	}
+	mime := copyMime(md.Path)
+	if mime == "" {
+		u.flash(i18n.T("clip_not_image"))
+		return
+	}
+	bin, wl, path, ctx := copyBin, copyWayland, md.Path, u.ctx
+	go func() {
+		ctx, cancel := context.WithTimeout(ctx, clipReadWait)
+		defer cancel()
+		cmd := exec.CommandContext(ctx, bin, copyArgs(wl, mime, path)...)
+		if wl {
+			f, err := os.Open(path)
+			if err != nil {
+				u.events <- evFlash{Text: i18n.T("clip_error", err)}
+				return
+			}
+			defer f.Close()
+			cmd.Stdin = f
+		}
+		// wl-copy and xclip fork to serve the clipboard, the parent returns at once.
+		if err := cmd.Run(); err != nil {
+			u.events <- evFlash{Text: i18n.T("clip_error", err)}
+			return
+		}
+		u.events <- evFlash{Text: i18n.T("clip_copied")}
+	}()
+}

@@ -249,6 +249,9 @@ func (u *UI) viewerKey(k term.Key) {
 		case ch && k.Rune == 's' && render.Stoppable(v.md):
 			u.stopVideo(v.md)
 			return
+		case ch && k.Rune == 'c': // the image to the clipboard, to paste elsewhere
+			u.copyImage(v.md)
+			return
 		case ch && (k.Rune == '+' || k.Rune == '='),
 			k.Code == term.Mouse && k.Mouse.Button == 64: // wheel up
 			u.viewZoom(zoomStep(v.zoom, true))

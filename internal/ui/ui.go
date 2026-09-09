@@ -1061,6 +1061,8 @@ func (u *UI) event(ev model.Event) {
 		u.clipImage(e)
 	case evClipText:
 		u.pasteText(u.view(), normalizePaste(e.Text))
+	case evFlash:
+		u.flash(e.Text)
 	}
 }
 
