@@ -25,7 +25,7 @@
 - **Make the sidebar work for you.** Fold networks and Discord servers, filter with `/net`, sort by recent activity or unread messages, and drag the border to resize. The wheel switches between open conversations.
 - **Find a message, then jump to it.** `Ctrl+F` searches locally; press it twice to search across networks. Click a reply’s quote to return to its original message, loading the surrounding history when needed.
 - **React without a detour.** Hover actions, quick reactions, double-click 👍, replies, edits and message details. `F3` shows members and presence; click a member to open a conversation.
-- **Give your draft some room.** Expand the multiline editor, paste a code block, complete an `@mention`, pick an emoji or paste an image with `Ctrl+V`. Optional Hunspell underlines misspellings; `Ctrl+R` offers corrections.
+- **Give your draft some room.** Expand the multiline editor, paste a code block, complete an `@mention`, pick an emoji or paste an image with `Ctrl+V`. `Ctrl+B`, `Ctrl+I` and `Ctrl+U` style the draft in bold, italic and underline, sent as Discord Markdown or Telegram entities. Optional Hunspell underlines misspellings; `Ctrl+R` offers corrections.
 - **Keep the useful little details.** Drag to copy several messages, preview themes live, show seconds in timestamps, spot the unread divider, and keep a local history cache. Typing indicators, focus-aware read state and configurable notifications complete the flow.
 - **Switch languages while chatting.** French and English interface, matching READMEs and full manuals. `/set lang fr` or `/set lang en` applies immediately.
 
@@ -65,14 +65,14 @@ Prefer French? [Switch the entire overview](README.fr.md) or open the [French ma
 
 ### Download a binary
 
-[Download TTYloom v1.1.1](https://github.com/govlog/ttyloom/releases/tag/v1.1.1) for **Linux x86-64 (`amd64`)** or **ARM64 (`arm64`)**. These portable builds need no Go installation or C library. They omit Hunspell spell checking; the source build below supports it.
+[Download TTYloom v1.2.0](https://github.com/govlog/ttyloom/releases/tag/v1.2.0) for **Linux x86-64 (`amd64`)** or **ARM64 (`arm64`)**. These portable builds need no Go installation or C library. They omit Hunspell spell checking; the source build below supports it.
 
 Download your architecture’s `.tar.gz` archive and `SHA256SUMS` from that release into the same directory, then:
 
 ```bash
 sha256sum --check --ignore-missing SHA256SUMS
-tar -xzf ttyloom_1.1.1_linux_amd64.tar.gz
-cd ttyloom_1.1.1_linux_amd64
+tar -xzf ttyloom_1.2.0_linux_amd64.tar.gz
+cd ttyloom_1.2.0_linux_amd64
 ./ttyloom --version
 ./ttyloom
 ```
@@ -103,7 +103,7 @@ go build -trimpath -o ttyloom ./cmd/ttyloom
 | Optional tool | Enables |
 | --- | --- |
 | `ffmpeg` and `ffprobe` | Video previews/playback, animated WebP, video metadata |
-| `wl-paste` or `xclip` | Clipboard text and image paste |
+| `wl-clipboard` (`wl-paste`, `wl-copy`) or `xclip` | Clipboard text and image paste, image copy from the viewer (`c`) |
 | `notify-send` | Desktop notifications |
 | Ghostty or kitty | Native inline images; other terminals can use half blocks |
 
@@ -165,6 +165,8 @@ Review `download_dir` and `log_dir` in that configuration. Caches written with e
 | Select a message | Alt+↑ / Alt+↓ or click |
 | Reply / edit / react / copy selection | `p` / `e` / `r` / `c` |
 | Paste / send a file | Ctrl+V / `/send path [caption]` |
+| Bold / italic / underline in the draft | Ctrl+B / Ctrl+I / Ctrl+U |
+| Clear the screen, keep the history | Ctrl+L |
 | Member list / image mode | F3 / F4 |
 | Help | `/help` or `/help topic` |
 

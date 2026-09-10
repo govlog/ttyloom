@@ -1,9 +1,10 @@
 # Changelog
 
-## Non publié
+## v1.2.0 — 2026-09-10
 
+- **Documentation** : READMEs, manuels et aide intégrée (`/help`) vérifiés contre le code ; outils `wl-copy`/`xclip` de la copie d'image, fournisseur de GIF Discord (KLIPY, plus Tenor), *Alt+Retour arrière*, portée des styles de saisie.
 - **Visionneuse** : *c* copie l'image affichée dans le presse-papier système (`wl-copy` sous Wayland, `xclip` sous X11), collable dans une autre application ; une vidéo est refusée.
-- **Styles de saisie** : *Ctrl+B*, *Ctrl+I*, *Ctrl+U* basculent gras, italique et souligné au curseur, cumulables (souligné+italique) ; la ligne de saisie montre le style, la barre d'état les styles ouverts (`[bold+underline]`), *Retour arrière* sur une bascule l'annule. Envoyé en markdown sur Discord et en entités sur Telegram, écho local stylé. *Ctrl+U* ne supprime plus jusqu'au début de la ligne (*Ctrl+K* et *Ctrl+W* restent) ; *Ctrl+I* demande le protocole clavier kitty, ailleurs c'est *Tab*.
+- **Styles de saisie** : *Ctrl+B*, *Ctrl+I*, *Ctrl+U* basculent gras, italique et souligné au curseur, cumulables (souligné+italique) ; la ligne de saisie montre le style, la barre d'état les styles ouverts (`[bold+underline]`), *Retour arrière* sur une bascule l'annule. Envoyé en markdown sur Discord et en entités sur Telegram, écho local stylé ; valable aussi pour l'édition d'un message (*e*) et `/me`, où les marqueurs partaient en octets bruts. *Ctrl+U* ne supprime plus jusqu'au début de la ligne (*Ctrl+K* et *Ctrl+W* restent) ; *Ctrl+I* demande le protocole clavier kitty, ailleurs c'est *Tab*.
 - **Défilement sur les images** : une image coupée par le haut ou le bas de la fenêtre montre sa partie visible (recadrage kitty) au lieu d'être remontée entière ou laissée en blanc ; le défilement avance ligne par ligne.
 - **Retour au dernier message** : remonté dans l'historique, une pastille *↓ dernier message* en bas à droite des messages ramène à la fin d'un clic ; elle s'efface sous une image placée à cet endroit.
 - **Ctrl+L** : vide la fenêtre courante comme le `clear` d'un terminal ; les lignes restent dans l'historique et reviennent avec *Page haut* ou la molette (`/clear` les supprime toujours).

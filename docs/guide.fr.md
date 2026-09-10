@@ -2,7 +2,7 @@
 
 [Français](guide.fr.md) · [English](guide.md) · [Présentation](../README.fr.md) · [Connexion aux comptes](authentication.fr.md)
 
-Manuel de la version **1.1.1**, vérifié par rapport au code le **5 septembre 2026**.
+Manuel de la version **1.2.0**, vérifié par rapport au code le **10 septembre 2026**.
 
 <details>
 <summary>Sommaire</summary>
@@ -60,12 +60,12 @@ sudo apt install build-essential libhunspell-dev hunspell-fr hunspell-en-us
 
 ### Binaire prêt à lancer
 
-Téléchargez l’archive Linux adaptée à votre processeur (`amd64` pour x86-64, `arm64` pour ARM64) et `SHA256SUMS` depuis la [version 1.1.1](https://github.com/govlog/ttyloom/releases/tag/v1.1.1).
+Téléchargez l’archive Linux adaptée à votre processeur (`amd64` pour x86-64, `arm64` pour ARM64) et `SHA256SUMS` depuis la [version 1.2.0](https://github.com/govlog/ttyloom/releases/tag/v1.2.0).
 
 ```bash
 sha256sum --check --ignore-missing SHA256SUMS
-tar -xzf ttyloom_1.1.1_linux_amd64.tar.gz
-cd ttyloom_1.1.1_linux_amd64
+tar -xzf ttyloom_1.2.0_linux_amd64.tar.gz
+cd ttyloom_1.2.0_linux_amd64
 ./ttyloom --version
 ./ttyloom
 ```
@@ -105,7 +105,7 @@ Pour compiler sans Hunspell ni compilateur C :
 CGO_ENABLED=0 go build -trimpath -tags nospell -o ttyloom ./cmd/ttyloom
 ```
 
-Les outils facultatifs sont `ffmpeg`/`ffprobe` pour les vidéos et WebP animés, `wl-paste` ou `xclip` pour le collage, et `notify-send` pour les notifications du bureau.
+Les outils facultatifs sont `ffmpeg`/`ffprobe` pour les vidéos et WebP animés, `wl-paste`/`wl-copy` (paquet `wl-clipboard`) ou `xclip` pour le collage et la copie d'image de la visionneuse, et `notify-send` pour les notifications du bureau.
 
 ## Configuration
 
@@ -411,7 +411,7 @@ Un message entrant pour une conversation sans fenêtre crée une fenêtre caché
 | */telegram [status\|login\|logout]*, */discord [status\|login\|logout]* | un réseau : son état, une nouvelle connexion (Discord relance *token_cmd*) ou une déconnexion (Telegram ferme la session côté serveur) |
 | */fold [section]* | plie ou déplie une section du panneau, comme un clic sur sa ligne d'en-tête ; la section se nomme par sa clé (*telegram*, *discord:Gophers*) ou par un préfixe du nom affiché ; sans argument, liste les sections et leur état (*[+]* pliée, *[-]* dépliée) |
 | */history N* | charge N messages plus anciens (*PgUp* en haut de l'écran fait de même) |
-| */clear* (*/c*) | vide la fenêtre |
+| */clear* (*/c*) | vide la fenêtre ; *Ctrl+L* n'efface que l'écran, les lignes restent dans l'historique |
 | */rename [cible] nom*, */unrename [cible]* | renomme localement une conversation ou un contact (alias enregistré dans **aliases.toml**, appliqué au panneau, à la barre de statut, à l'agrégé, à la complétion et au pseudo du contact en privé ; */whois* garde le titre Telegram) |
 | */help* (*/h*) | une ligne par commande, touche et option, groupées par section ; */help <sujet>* détaille une commande, une touche (*/help F3*) ou une clé (*/help hover*), *Tab* complète les sujets |
 | texte sans */* | envoie à la cible fixée, sinon à la conversation habituelle de cette fenêtre |
@@ -448,12 +448,12 @@ Un préfixe de commande unique fonctionne directement avec Entrée (`/quer alice
 | */open* | ouvre le dernier média de la fenêtre avec *xdg-open* |
 | */open N* | ouvre le N-ième média depuis la fin |
 | */set images halfblock* | bascule l'affichage en demi-blocs (*auto*, *kitty*, *off*) ; *F4* cycle |
-| */view* ou *v* sur une sélection | aperçu plein écran du média, *Échap* ferme, *o* ouvre le fichier ; *+*/*-* ou la molette zooment (centré, jusqu'à 8×), les flèches déplacent la vue, *0* réajuste |
+| */view* ou *v* sur une sélection | aperçu plein écran du média, *Échap* ferme, *o* ouvre le fichier, *c* copie l'image dans le presse-papier ; *+*/*-* ou la molette zooment (centré, jusqu'à 8×), les flèches déplacent la vue, *0* réajuste |
 | *l* sur une vidéo téléchargée | lit la vidéo dans le fil (sans son), *l* de nouveau met en pause, *s* revient au début ; l'étiquette indique *décodage 42 %* le temps d'extraire les images |
 | */set video hidden* | retire les vidéos du fil, étiquette seule ; *autoplay* les lance au contraire toutes seules, en boucle |
 | */send chemin [légende]* | envoie un fichier local : photo pour png/jpeg, vidéo pour un mp4 (durée et dimensions relevées par *ffprobe*, un mp4 part comme vidéo lisible et non comme fichier), document sinon ; *Tab* complète le chemin (*~*, chemins relatifs et espaces acceptés, un dossier reçoit son */* et le *Tab* suivant continue dedans) |
 | *Ctrl+V* | colle une image du presse-papier (*wl-paste* ou *xclip*) et propose *(e)* envoyer, *(l)* légende, *(a)* annuler ; un texte est inséré dans la saisie |
-| *Ctrl+G* ou */gif [recherche]* | sélecteur de GIF animés : les GIF tendance tout de suite, la frappe cherche (le bot *@gif* sur Telegram, Tenor via Discord), les flèches ou la molette déplacent, *Entrée* ou un clic envoie le GIF choisi dans la conversation, *Échap* ferme. Les aperçus visibles sont téléchargés dans le cache et animés (kitty, ou demi-blocs), 40 images chacun au plus |
+| *Ctrl+G* ou */gif [recherche]* | sélecteur de GIF animés : les GIF tendance tout de suite, la frappe cherche (le bot *@gif* sur Telegram, le fournisseur de GIF de Discord, actuellement KLIPY), les flèches ou la molette déplacent, *Entrée* ou un clic envoie le GIF choisi dans la conversation, *Échap* ferme. Les aperçus visibles sont téléchargés dans le cache et animés (kitty, ou demi-blocs), 40 images chacun au plus |
 | */set auto_media_max_kb 20480* | relève le seuil de téléchargement automatique |
 
 <a id="viewer"></a>
@@ -599,7 +599,7 @@ Un clic sur une réaction sous n'importe quel message l'ajoute ou la retire, san
 - Copier plusieurs messages : glisser à la souris du premier au dernier (la plage se surligne), le texte brut des messages, sans horodatage ni indentation, part dans le presse-papier au relâchement (*copié : 3 messages*)
 
 > [!note]
-> L’éditeur démarre avec le texte du message, sans reconstruire sa mise en forme d’origine. Les blocs délimités par trois accents graves sont pris en charge à l’envoi et à l’édition ; ajoutez leurs délimiteurs pour garder un bloc. Le Markdown Discord est interprété par Discord, tandis que le texte Telegram ordinaire n’est pas un éditeur Markdown complet. Une réponse prend le pas sur l’envoi en bloc de code. Les accusés *✓✓* et *lu par* sont propres à Telegram ; ils ne sont pas disponibles sur Discord.
+> L’éditeur démarre avec le texte du message, sans reconstruire sa mise en forme d’origine. Les blocs délimités par trois accents graves sont pris en charge à l’envoi et à l’édition ; ajoutez leurs délimiteurs pour garder un bloc. Le Markdown Discord est interprété par Discord, tandis que le texte Telegram ordinaire n’est pas un éditeur Markdown complet. Une réponse prend le pas sur l’envoi en bloc de code. Les styles *Ctrl+B/I/U* partent en Markdown Discord ou en entités Telegram, sur un nouveau message, une édition ou */me* (qui reste en italique dessous) ; une réponse ou un collage en bloc de code abandonne les bascules et part en texte brut. Les accusés *✓✓* et *lu par* sont propres à Telegram ; ils ne sont pas disponibles sur Discord.
 
 ### Ligne de saisie
 
@@ -607,7 +607,7 @@ Un clic sur une réaction sous n'importe quel message l'ajoute ou la retire, san
 |---|---|
 | *←*, *→*, *Home*, *End*, *Ctrl+A*, *Ctrl+E* | déplacement (en zone étendue, *Home*/*End* et *Ctrl+A*/*Ctrl+E* jouent sur la ligne courante) |
 | *Ctrl+←*, *Ctrl+→* | saute de mot en mot |
-| *Ctrl+K*, *Ctrl+W* | supprime jusqu'à la fin de la ligne, le mot précédent |
+| *Ctrl+K*, *Ctrl+W*, *Alt+Retour arrière* | supprime jusqu'à la fin de la ligne, le mot précédent |
 | *Ctrl+B*, *Ctrl+I*, *Ctrl+U* | bascule gras, italique, souligné au curseur : ce qui suit prend le style jusqu'à la même touche, et les styles se cumulent (*Ctrl+U* puis *Ctrl+I* : souligné+italique) ; la barre d'état montre les styles ouverts au curseur, `[bold+underline]` ; *Retour arrière* sur une bascule l'annule ; *Ctrl+I* demande le protocole clavier kitty (Ghostty, kitty, WezTerm, foot), ailleurs c'est *Tab* |
 | *Ctrl+T* ou */emoji* | sélecteur d'emoji : la frappe filtre, les flèches ou un clic choisissent, *Entrée* insère, *Échap* ferme |
 | *↑*, *↓* | historique de saisie |
@@ -638,7 +638,7 @@ Dans une conversation, taper `@` ouvre aussi les suggestions de membres ayant un
 
 ## Version et limites
 
-Ce manuel décrit la version **1.1.1**. Consultez le [journal des changements](../CHANGELOG.md) et les [travaux prévus](../TODO.md). Les vidéos sont sans son, les binaires portables n’incluent pas Hunspell, Discord ne prend pas en charge fils, forums, vocal ou tokens de bot, et IRC/WhatsApp ne sont pas encore implémentés. Un seul compte par réseau est utilisé dans un même répertoire de configuration ; plusieurs instances doivent utiliser des `TTYLOOM_DIR` distincts.
+Ce manuel décrit la version **1.2.0**. Consultez le [journal des changements](../CHANGELOG.md) et les [travaux prévus](../TODO.md). Les vidéos sont sans son, les binaires portables n’incluent pas Hunspell, Discord ne prend pas en charge fils, forums, vocal ou tokens de bot, et IRC/WhatsApp ne sont pas encore implémentés. Un seul compte par réseau est utilisé dans un même répertoire de configuration ; plusieurs instances doivent utiliser des `TTYLOOM_DIR` distincts.
 
 ## Déconnexion
 

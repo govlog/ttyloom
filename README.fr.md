@@ -25,7 +25,7 @@
 - **Adaptez le panneau latéral.** Pliez réseaux et serveurs Discord, filtrez avec `/net`, triez par activité récente ou messages non lus, et glissez la bordure pour redimensionner. La molette passe entre les conversations ouvertes.
 - **Trouvez un message, puis rejoignez-le.** `Ctrl+F` cherche localement ; pressez-le deux fois pour chercher sur les réseaux. Cliquez la citation d’une réponse pour revenir au message original, avec chargement de l’historique autour si nécessaire.
 - **Réagissez directement.** Actions au survol, réactions rapides, double-clic 👍, réponses, modifications et détails des messages. `F3` montre les membres et leur présence ; un clic sur un membre ouvre une conversation.
-- **Donnez de la place au brouillon.** Dépliez l’éditeur multiligne, collez un bloc de code, complétez une `@mention`, choisissez un emoji ou collez une image avec `Ctrl+V`. Hunspell, facultatif, souligne les fautes ; `Ctrl+R` propose des corrections.
+- **Donnez de la place au brouillon.** Dépliez l’éditeur multiligne, collez un bloc de code, complétez une `@mention`, choisissez un emoji ou collez une image avec `Ctrl+V`. `Ctrl+B`, `Ctrl+I` et `Ctrl+U` mettent le brouillon en gras, italique et souligné, envoyés en Markdown Discord ou en entités Telegram. Hunspell, facultatif, souligne les fautes ; `Ctrl+R` propose des corrections.
 - **Profitez des petits détails utiles.** Glissez pour copier plusieurs messages, prévisualisez les thèmes en direct, affichez les secondes, repérez la ligne des non-lus et gardez un cache local d’historique. Indications de saisie, état de lecture lié au focus et notifications configurables complètent l’interface.
 - **Changez de langue en discutant.** Interface française et anglaise, READMEs équivalents et manuels complets. `/set lang fr` ou `/set lang en` s’applique immédiatement.
 
@@ -65,14 +65,14 @@ Vous préférez l’anglais ? [Changez la langue de toute la présentation](READ
 
 ### Télécharger un binaire
 
-[Téléchargez TTYloom v1.1.1](https://github.com/govlog/ttyloom/releases/tag/v1.1.1) pour **Linux x86-64 (`amd64`)** ou **ARM64 (`arm64`)**. Ces binaires ne nécessitent ni Go ni bibliothèque C. Ils n’incluent pas la correction Hunspell ; la compilation depuis les sources ci-dessous la permet.
+[Téléchargez TTYloom v1.2.0](https://github.com/govlog/ttyloom/releases/tag/v1.2.0) pour **Linux x86-64 (`amd64`)** ou **ARM64 (`arm64`)**. Ces binaires ne nécessitent ni Go ni bibliothèque C. Ils n’incluent pas la correction Hunspell ; la compilation depuis les sources ci-dessous la permet.
 
 Téléchargez l’archive `.tar.gz` de votre architecture et `SHA256SUMS` depuis cette version, dans le même dossier, puis :
 
 ```bash
 sha256sum --check --ignore-missing SHA256SUMS
-tar -xzf ttyloom_1.1.1_linux_amd64.tar.gz
-cd ttyloom_1.1.1_linux_amd64
+tar -xzf ttyloom_1.2.0_linux_amd64.tar.gz
+cd ttyloom_1.2.0_linux_amd64
 ./ttyloom --version
 ./ttyloom
 ```
@@ -103,7 +103,7 @@ go build -trimpath -o ttyloom ./cmd/ttyloom
 | Outil facultatif | Fonction |
 | --- | --- |
 | `ffmpeg` et `ffprobe` | Aperçus et lecture vidéo, WebP animés, métadonnées vidéo |
-| `wl-paste` ou `xclip` | Collage de texte et d’images |
+| `wl-clipboard` (`wl-paste`, `wl-copy`) ou `xclip` | Collage de texte et d’images, copie d’image depuis la visionneuse (`c`) |
 | `notify-send` | Notifications du bureau |
 | Ghostty ou kitty | Images natives ; les autres terminaux peuvent utiliser les demi-blocs |
 
@@ -165,6 +165,8 @@ Vérifiez `download_dir` et `log_dir` dans cette configuration. Les caches écri
 | Sélectionner un message | Alt+↑ / Alt+↓ ou clic |
 | Répondre / modifier / réagir / copier | `p` / `e` / `r` / `c` |
 | Coller / envoyer un fichier | Ctrl+V / `/send path [caption]` |
+| Gras / italique / souligné dans le brouillon | Ctrl+B / Ctrl+I / Ctrl+U |
+| Effacer l’écran, garder l’historique | Ctrl+L |
 | Liste des membres / mode des images | F3 / F4 |
 | Aide | `/help` ou `/help topic` |
 

@@ -2,7 +2,7 @@
 
 [English](guide.md) · [Français](guide.fr.md) · [Overview](../README.md) · [Account setup](authentication.md)
 
-Manual for **1.1.1**, checked against the code on **September 5, 2026**.
+Manual for **1.2.0**, checked against the code on **September 10, 2026**.
 
 <details>
 <summary>Contents</summary>
@@ -69,12 +69,12 @@ Install only the optional components you intend to use.
 ### Ready-to-run binary
 
 Download the Linux archive for your CPU (`amd64` for x86-64, `arm64` for ARM64)
-and `SHA256SUMS` from [v1.1.1](https://github.com/govlog/ttyloom/releases/tag/v1.1.1).
+and `SHA256SUMS` from [v1.2.0](https://github.com/govlog/ttyloom/releases/tag/v1.2.0).
 
 ```bash
 sha256sum --check --ignore-missing SHA256SUMS
-tar -xzf ttyloom_1.1.1_linux_amd64.tar.gz
-cd ttyloom_1.1.1_linux_amd64
+tar -xzf ttyloom_1.2.0_linux_amd64.tar.gz
+cd ttyloom_1.2.0_linux_amd64
 ./ttyloom --version
 ./ttyloom
 ```
@@ -108,7 +108,8 @@ To build without Hunspell or a C compiler:
 CGO_ENABLED=0 go build -trimpath -tags nospell -o ttyloom ./cmd/ttyloom
 ```
 
-Other optional tools are `wl-paste` or `xclip` for clipboard paste and
+Other optional tools are `wl-paste`/`wl-copy` (package `wl-clipboard`) or
+`xclip` for clipboard paste and the image copy of the viewer, and
 `notify-send` for desktop notifications.
 
 ## Configuration
@@ -418,7 +419,7 @@ window and adds its activity to `[Act: …]` in the status bar.
 | `/telegram [status\|login\|logout]`, `/discord [status\|login\|logout]` | One network: its status, a new login (Discord runs `token_cmd` again) or a logout (Telegram ends the session on the server). |
 | `/fold [section]` | Toggle a sidebar section by key, such as `telegram` or `discord:Gophers`, or a displayed-name prefix. No argument lists sections and their collapsed/expanded state. |
 | `/history N`, `/hist N` | Load N older messages; PgUp at the top also loads older history. |
-| `/clear`, `/c` | Clear the current window. |
+| `/clear`, `/c` | Clear the current window. Ctrl+L only clears the screen: the lines stay in the history. |
 | `/rename [target] name`, `/unrename [target]` | Set or remove a local chat/contact alias, saved in `aliases.toml`. It applies to the sidebar, status bar, aggregate view, completion and the DM contact’s displayed name. It is not sent to the network. |
 | `/help`, `/h` | List commands, keys and options. `/help topic` explains one, including `/help F3` or `/help hover`; Tab completes topics. |
 | Text without `/` | Send to the pinned target, or this window's usual conversation. |
@@ -464,7 +465,7 @@ because `/quit` shares that prefix. Exact aliases take precedence when executing
 | `/set video hidden` | Keep only video labels in the conversation; `show` previews one frame and `autoplay` loops visible downloaded videos. |
 | `/send path [caption]` | Send a local file: PNG/JPEG as a photo, MP4 as a video with ffprobe metadata, other formats as documents. Tab completes the path: `~`, relative paths and spaces work, a directory gets its `/` and the next Tab goes on inside it. |
 | Ctrl+V | Paste an image through `wl-paste` or `xclip`, then choose send, caption or cancel using the displayed prompt keys. Plain text goes into the editor. |
-| Ctrl+G, `/gif [query]` | Search animated GIF previews: Telegram’s `@gif` bot or Tenor through Discord. Trends appear immediately; typing searches. Arrows or the wheel move; Enter or a click sends; Escape closes. |
+| Ctrl+G, `/gif [query]` | Search animated GIF previews: Telegram’s `@gif` bot or Discord’s GIF provider (currently KLIPY). Trends appear immediately; typing searches. Arrows or the wheel move; Enter or a click sends; Escape closes. |
 | `/set auto_media_max_kb 20480` | Raise the automatic download threshold to 20 MiB. |
 
 <a id="viewer"></a>
@@ -693,7 +694,10 @@ Editing starts with the message’s text, without reconstructing its original
 formatting. Complete triple-backtick fences work when sending and editing;
 restore their delimiters to retain a code block. Discord interprets its Markdown,
 while ordinary Telegram input is not a full Markdown editor. A reply takes
-precedence over sending a fenced/code-block paste.
+precedence over sending a fenced/code-block paste. The Ctrl+B/I/U styles go out as
+Discord Markdown or Telegram entities, on a new message, an edit or `/me`
+(which stays italic under them); a reply or a code-block paste drops the
+toggles and goes out plain.
 
 ### Input line
 
@@ -701,7 +705,7 @@ precedence over sending a fenced/code-block paste.
 | --- | --- |
 | Left/Right, Home/End, Ctrl+A/E | Move the cursor; Home/End and Ctrl+A/E apply to the current line in the expanded editor. |
 | Ctrl+Left/Right | Move by word. |
-| Ctrl+K, Ctrl+W | Delete to the end of the line, or the previous word. |
+| Ctrl+K, Ctrl+W, Alt+Backspace | Delete to the end of the line, or the previous word. |
 | Ctrl+B, Ctrl+I, Ctrl+U | Toggle bold, italic, underline at the cursor: what follows takes the style until the same key comes again, and the styles stack (Ctrl+U then Ctrl+I: underline+italic). The status bar shows the styles open at the cursor, `[bold+underline]`; Backspace on a toggle takes it back. Ctrl+I needs kitty keyboard support (Ghostty, kitty, WezTerm, foot): elsewhere it is Tab. |
 | Ctrl+T, `/emoji` | Search the emoji picker; arrows or a click choose, Enter inserts, Escape closes. Recent choices are saved. |
 | Up/Down | Input history, or vertical movement in the expanded editor. Up on empty input can edit the last sent message. |
@@ -738,7 +742,7 @@ work without leaving the conversation.
 
 ## Version and limits
 
-This manual describes **1.1.1**. See the [changelog](../CHANGELOG.md) and
+This manual describes **1.2.0**. See the [changelog](../CHANGELOG.md) and
 [planned work](../TODO.md). Videos play without sound. Portable binaries omit
 Hunspell. Discord threads, forums, voice and bot tokens are not supported;
 IRC and WhatsApp are not implemented. One configuration directory holds one
@@ -838,7 +842,7 @@ history and dialog listing. A bot must wait for a user to contact it first.
 For Telegram, create an application at [my.telegram.org/apps](https://my.telegram.org/apps)
 and edit the active configuration, or supply `TG_API_ID` and `TG_API_HASH`.
 Check whether a `[telegram]` section overrides top-level values. If you only
-want Discord, omit Telegram credentials and configure `[discord] token_cmd`.
+want Discord, omit Telegram credentials and add a `[discord]` section.
 
 ## Sources
 
