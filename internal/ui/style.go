@@ -36,6 +36,16 @@ func toggle(s *model.Seg, r rune) bool {
 	return true
 }
 
+// parseDraft splits a draft into its segments for a styled send, an edit or
+// /me: the Ctrl+B/I/U runs, else the fences; nil when the text goes out raw.
+// ponytail: markers win over fences; a styled draft never carries a code block.
+func parseDraft(s string) []model.Seg {
+	if segs := parseStyle(s); segs != nil {
+		return segs
+	}
+	return parseFences(s)
+}
+
 // parseStyle splits a draft with markers into styled runs; nil with no
 // marker (the text goes out raw). Empty runs are dropped.
 func parseStyle(s string) []model.Seg {

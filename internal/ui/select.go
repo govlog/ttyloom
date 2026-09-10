@@ -421,7 +421,7 @@ func (u *UI) applyEdit(w *Window, it *Item, text string) {
 	// ponytail: an edit with fences that fails gives the stripped text back to
 	// the input, the fences lost; rare enough to leave as is.
 	u.editText = text
-	if segs := parseFences(text); segs != nil {
+	if segs := parseDraft(text); segs != nil { // Ctrl+B/I/U runs, or fences
 		u.editText = fenceText(segs)
 		b.EditStyled(u.ctx, c, m.ID, segs)
 		return

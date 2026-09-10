@@ -64,6 +64,32 @@ func (b *styledBackend) SendStyled(_ context.Context, _ *model.Chat, segs []mode
 	b.segs = segs
 }
 
+func (b *styledBackend) EditStyled(_ context.Context, _ *model.Chat, _ int, segs []model.Seg) {
+	b.segs = segs
+}
+
+// An edit with markers reaches the network as runs, never as raw bytes; /me
+// keeps its italic under the markers of its text.
+func TestStyleEditAndMe(t *testing.T) {
+	u, _, room, _ := queryUI()
+	b := &styledBackend{}
+	b.caps = model.AllCaps()
+	u.nets[model.NetTelegram] = b
+	u.self = map[string]selfInfo{model.NetTelegram: {Name: "me"}}
+	u.ws.Cur = 1
+	w := u.view()
+	it := &Item{Msg: &model.Msg{Net: room.Net, ChatID: room.ID, ID: 7, Out: true, Text: "old"}}
+	w.Items = append(w.Items, it)
+	u.applyEdit(w, it, "a\x02b")
+	if want := []model.Seg{{Text: "a"}, {Text: "b", Bold: true}}; !slices.Equal(b.segs, want) {
+		t.Fatalf("edit segments: %+v", b.segs)
+	}
+	u.sendMe(w, "waves \x02hard")
+	if want := []model.Seg{{Text: "* me ", Italic: true}, {Text: "waves ", Italic: true}, {Text: "hard", Italic: true, Bold: true}}; !slices.Equal(b.segs, want) {
+		t.Fatalf("/me segments: %+v", b.segs)
+	}
+}
+
 // Ctrl+B, typed text, Ctrl+B again, more text, Enter: the network gets the
 // runs, the local echo has the plain text and the bold span.
 func TestStyleKeysSend(t *testing.T) {

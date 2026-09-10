@@ -2080,11 +2080,7 @@ func (u *UI) sendWith(w *Window, text string, pre bool) {
 	}
 	var segs []model.Seg
 	if !pre && replyTo == 0 {
-		// ponytail: markers win over fences; a styled draft never carries a code block.
-		if segs = parseStyle(text); segs == nil {
-			segs = parseFences(text)
-		}
-		if segs != nil {
+		if segs = parseDraft(text); segs != nil {
 			m.Text, m.Entities = fenceText(segs), fenceEntities(segs)
 		}
 	}
@@ -2129,8 +2125,22 @@ func (u *UI) insertPending(w *Window, m *model.Msg) {
 // meMsg builds the text and the italic entity of /me <text>: "* <meName>
 // <text>", in italics over its whole length (IRC convention).
 func meMsg(meName, arg string) (string, []model.Span) {
-	text := "* " + meName + " " + arg
-	return text, []model.Span{{End: len([]rune(text)), Kind: model.SpanItalic}}
+	segs := meSegs(meName, arg)
+	return fenceText(segs), fenceEntities(segs)
+}
+
+// meSegs : the runs of /me, all italic; the Ctrl+B/U markers of arg add
+// their style on top (Ctrl+I changes nothing: the action is italic already).
+func meSegs(meName, arg string) []model.Seg {
+	segs := parseStyle(arg)
+	if segs == nil {
+		return []model.Seg{{Text: "* " + meName + " " + arg, Italic: true}}
+	}
+	segs = append([]model.Seg{{Text: "* " + meName + " "}}, segs...)
+	for i := range segs {
+		segs[i].Italic = true
+	}
+	return segs
 }
 
 // sendMe : /me <text>.
@@ -2148,11 +2158,11 @@ func (u *UI) sendMe(w *Window, arg string) {
 	}
 	u.tmpID++
 	me := u.selfOf(w.Chat.Net)
-	text, ents := meMsg(me.Name, arg)
+	segs := meSegs(me.Name, arg)
 	m := &model.Msg{Net: w.Chat.Net, ChatID: w.Chat.ID, ChatLabel: w.Chat.Title, Date: time.Now(), From: me.Name, FromID: me.ID,
-		Out: true, Text: text, Entities: ents, Pending: true, TmpID: u.tmpID}
+		Out: true, Text: fenceText(segs), Entities: fenceEntities(segs), Pending: true, TmpID: u.tmpID}
 	u.insertPending(w, m)
-	b.SendStyled(u.ctx, w.Chat, []model.Seg{{Text: text, Italic: true}}, u.tmpID)
+	b.SendStyled(u.ctx, w.Chat, segs, u.tmpID)
 }
 
 // candidates for Tab: dispatch by command context (complContext).
