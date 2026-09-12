@@ -34,6 +34,8 @@ type Item struct {
 	// Info : information line of a message (key "i"), dropped when the
 	// message is deselected. ponytail: a mark on the item, no list to keep.
 	Info bool
+	// Reveal : deleted message whose content is shown (click on it).
+	Reveal bool
 	// gap : hole marker of the history — the two ids the hole lies between
 	// (see markGap). Zero on every other item.
 	gap   [2]int
@@ -531,7 +533,9 @@ func (w *Window) LineItems(o render.Opts) ([]render.Line, []*Item, int) {
 				echoOpts.Images, echoOpts.ImagesHover, echoOpts.LinkPreviews = "off", false, false
 				it.lines = render.SendEcho(it.Echo, echoOpts)
 			case it.Msg != nil:
-				it.lines = render.Message(it.Msg, o)
+				mo := o
+				mo.Reveal = it.Reveal
+				it.lines = render.Message(it.Msg, mo)
 			case it.Text != nil:
 				it.lines = it.Text
 			default:

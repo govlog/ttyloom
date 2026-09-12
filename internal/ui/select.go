@@ -168,6 +168,9 @@ func (u *UI) selRelease() {
 	u.selAnchor, u.selEnd = nil, nil
 	if end == nil {
 		w := u.view()
+		if anchor != nil && anchor.Msg != nil && anchor.Msg.Deleted { // deleted: the click shows its content, the next one hides it
+			anchor.Reveal, anchor.lines = !anchor.Reveal, nil
+		}
 		if w.Sel == anchor {
 			anchor = nil // second click on the selected message: toggle
 		}

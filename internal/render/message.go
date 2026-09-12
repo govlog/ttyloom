@@ -35,7 +35,10 @@ type Opts struct {
 	Avatars  bool       // gutter of 3 cells before the nick (kitty)
 	ShowChat bool       // aggregated view: put the chat title in front
 	Selected *model.Msg // selected message: marker and background
-	Hover    *model.Msg // message under the mouse: background, no marker
+	// Reveal : a deleted message shows its content (text, media, reactions)
+	// with the "(deleted)" marker after it, instead of the marker alone.
+	Reveal bool
+	Hover  *model.Msg // message under the mouse: background, no marker
 	// TextSel : messages covered by a selection drag. Background only.
 	TextSel map[*model.Msg]bool
 	// ReadOutbox : last of my messages read by the chat of the message. nil: no
@@ -279,6 +282,7 @@ type msgMarks struct {
 func msgBody(m *model.Msg, o Opts, bw int) (lines []Line, mk msgMarks, ra []Act, quote string) {
 	th := o.Theme
 	dim := th.Style(theme.Dim)
+	shown := !m.Deleted || o.Reveal // content of a deleted message: on reveal only
 	var sections [][]Span
 	labelSec := -1 // section of the media label (hover mode)
 	replySec := -1
@@ -298,7 +302,7 @@ func msgBody(m *model.Msg, o Opts, bw int) (lines []Line, mk msgMarks, ra []Act,
 		sections = append(sections, []Span{{i18n.T("fwd_from", Clean(m.FwdFrom)), dim}})
 	}
 	switch {
-	case m.Deleted:
+	case !shown:
 		sections = append(sections, []Span{{i18n.T("msg_deleted"), dim}})
 	case m.Text != "":
 		body := Runs(m.Text, m.Entities, theme.Style{}, th)
@@ -308,9 +312,14 @@ func msgBody(m *model.Msg, o Opts, bw int) (lines []Line, mk msgMarks, ra []Act,
 		if m.Edited {
 			body = append(body, Span{i18n.T("msg_edited"), dim})
 		}
+		if m.Deleted {
+			body = append(body, Span{" " + i18n.T("msg_deleted"), dim})
+		}
 		sections = append(sections, body)
+	case m.Deleted: // revealed, no text: the marker stands alone above the media
+		sections = append(sections, []Span{{i18n.T("msg_deleted"), dim}})
 	}
-	if md := m.Media; md != nil && !m.Deleted {
+	if md := m.Media; md != nil && shown {
 		label := Clean(md.Label)
 		switch md.State {
 		case model.MediaLoading:
@@ -339,7 +348,7 @@ func msgBody(m *model.Msg, o Opts, bw int) (lines []Line, mk msgMarks, ra []Act,
 	}
 	// ra : clickable reactions, placed after the columns are made.
 	reactSec := -1
-	if len(m.Reactions) > 0 && !m.Deleted {
+	if len(m.Reactions) > 0 && shown {
 		ra = reactActs(m.Reactions)
 		accent := th.Style(theme.Accent)
 		var spans []Span
@@ -385,7 +394,7 @@ func msgBody(m *model.Msg, o Opts, bw int) (lines []Line, mk msgMarks, ra []Act,
 // empty when nothing is to be shown (no media, images off, hidden video, cut
 // link preview).
 func msgImage(m *model.Msg, o Opts, indent int) (lines []Line, hover *model.Media) {
-	if md := m.Media; md != nil && !m.Deleted && md.State == model.MediaReady && len(md.Frames) > 0 && o.Images != "off" &&
+	if md := m.Media; md != nil && (!m.Deleted || o.Reveal) && md.State == model.MediaReady && len(md.Frames) > 0 && o.Images != "off" &&
 		(md.Kind != model.MediaWebPage || o.LinkPreviews) && // cut previews: the thumbnail goes with the block
 		(md.Kind != model.MediaVideo || o.Video != "hidden") { // video = hidden: the label alone, "v" and "o" still work
 		if o.ImagesHover {

@@ -389,3 +389,19 @@ func TestAskKeys(t *testing.T) {
 func selectionText(items []*Item, a, b *Item) string {
 	return strings.Join(selBlocks(items, a, b), "\n")
 }
+
+// TestClickRevealsDeleted : a click on a deleted message shows its content,
+// the next click hides it again.
+func TestClickRevealsDeleted(t *testing.T) {
+	u := &UI{ws: NewWindows(), agg: &Window{}, t: &term.Term{Cols: 80, Rows: 24}}
+	w := u.ws.Current()
+	w.Upsert(&model.Msg{ID: 1, From: "alice", FromID: 7, Text: "oups", Deleted: true})
+	it := w.Items[0]
+	for _, want := range []bool{true, false} {
+		u.drag, u.selAnchor, u.selEnd = dragText, it, nil
+		u.selRelease()
+		if it.Reveal != want {
+			t.Fatalf("after a click: reveal %v, want %v", it.Reveal, want)
+		}
+	}
+}

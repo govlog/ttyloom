@@ -11,6 +11,7 @@ import (
 
 	"github.com/gotd/td/tg"
 
+	"github.com/govlog/ttyloom/internal/i18n"
 	"github.com/govlog/ttyloom/internal/media"
 	"github.com/govlog/ttyloom/internal/model"
 	"github.com/govlog/ttyloom/internal/theme"
@@ -841,5 +842,19 @@ func TestMapAttribution(t *testing.T) {
 	}
 	if !strings.Contains(credit, "OpenStreetMap contributors") {
 		t.Fatalf("map credit missing: %q", credit)
+	}
+}
+
+// TestDeletedReveal : a deleted message shows the marker alone; revealed, its
+// text comes back with the marker after it.
+func TestDeletedReveal(t *testing.T) {
+	o := Opts{Width: 40, Theme: theme.Terminal(), Images: "off"}
+	m := &model.Msg{ID: 1, From: "alice", FromID: 7, Text: "oups", Deleted: true}
+	if got := texts(Message(m, o)); len(got) != 1 || got[0] != "<alice> "+i18n.T("msg_deleted") {
+		t.Fatalf("hidden: %q", got)
+	}
+	o.Reveal = true
+	if got := texts(Message(m, o)); len(got) != 1 || got[0] != "<alice> oups "+i18n.T("msg_deleted") {
+		t.Fatalf("revealed: %q", got)
 	}
 }
