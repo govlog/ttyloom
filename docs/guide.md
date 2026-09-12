@@ -37,7 +37,7 @@ QEMU. These checks do not cover every terminal combination or live account login
 
 Connect **Telegram, Discord, or both**. Discord alone needs no Telegram
 credentials. The sidebar and aggregate view combine networks; `/net` filters
-them. IRC and WhatsApp are planned but not implemented.
+them. IRC is supported too, as many networks as wanted; WhatsApp is planned but not implemented.
 
 Telegram supports a user account, through QR or phone/code/2FA login, and bot
 login through BotFather. Bots only see messages received after login. Discord
@@ -316,6 +316,7 @@ is saved in `sidebar.toml`. One network without a server needs no section header
 | `/telegram login` | Start Telegram again after a logout or a fatal error: QR, or phone and code. |
 | `/telegram logout` | End the session on the server (it leaves **Telegram → Settings → Devices**) and disconnect. |
 | `/discord disconnect`, `/telegram disconnect` | Disconnect and keep the session: `login` connects again without a QR. |
+| `/irc`, `/irc add`, `/irc connect <name>`, `/irc disconnect <name>` | The IRC networks, see [IRC networks](#irc-networks). |
 
 A network whose connection ends with an error (a revoked token, a closed
 session) says so in window 0 and is stopped, not the client: `/discord login`
@@ -352,6 +353,54 @@ Current limits:
   history; the disk cache retains what has already been fetched.
 
 Other unsupported actions report their limit in the window.
+
+### IRC networks
+
+IRC needs no bouncer and no helper program: TTYloom connects straight to the
+server, as many networks as you like. Each one is an `[[irc]]` table at the
+end of `config.toml`, and `/irc add` writes one for you from a form:
+
+```toml
+[[irc]]
+name = "libera"              # network key: irc:libera
+host = "irc.libera.chat"
+port = 6697
+tls = true
+nick = "me"
+user = "me"                  # empty = nick
+realname = "me"              # empty = nick
+nickserv_password = ""       # SASL PLAIN when the server offers it, NickServ IDENTIFY otherwise
+channels = ["#go-nuts"]      # kept by the client: /join adds, /leave removes, joined again at start
+dcc_ip = ""                  # address announced by DCC SEND (behind a NAT); empty = the IRC socket's
+dcc_ports = ""               # "5000-5010" to pin the DCC ports; empty = any free port
+```
+
+The name is the key of the network (`irc:libera`): `/net irc:libera`, a
+section of its own in the sidebar headed by the name, superscript `ⁱ` in
+front of its chats. A private chat is a nick, a room a channel; `/join #room`
+and `/query nick` open them (from a window of the network when several are
+configured, `#room` goes to the IRC networks only). The channel list of the
+table is the memory of the client across sessions; the disk cache is the
+scrollback, the server keeps no history. Incoming bold, italic and underline
+codes are kept, colours dropped; the draft styles (Ctrl+B/I/U) go out as
+mIRC codes. `/whois`, F3 (NAMES) and `/me` work; edits, reactions, read
+receipts and search do not exist on IRC and are hidden. A notice from a
+person or a service (NickServ) lands in window 0.
+
+| Command | Effect |
+| --- | --- |
+| `/irc` | State of each IRC network. |
+| `/irc add` | The form: name, host, port, TLS, nick, user, real name, NickServ password. On the hostname field, ← → (or Space) cycle through the well-known networks — Libera.Chat, OFTC, EFnet, DALnet, Undernet, IRCnet, QuakeNet, Rizon, hackint, GameSurge, EsperNet, Snoonet, tilde.chat — and fill host, port, TLS and name; typing gives a host of your own. Saved and connected at once. |
+| `/irc connect <name>`, `/irc disconnect <name>` | Start or stop one network. |
+| `/dcc` | DCC offers waiting and transfers running. |
+| `/dcc send <nick> <path>` | Send a file straight to that person (DCC SEND); `/send` in a private IRC chat does the same. |
+| `/dcc get [nick]` | Fetch the last offer of the window, or of that nick's chat; the download key on the file line too. |
+
+DCC goes from client to client over TCP: the sender listens and announces its
+address and port, the receiver connects. Behind a NAT, set `dcc_ip` to the
+public address and `dcc_ports` to a forwarded range. A received offer shows
+as a file line in the private chat; the file lands in `download_dir`. Reverse
+offers (a sender behind a NAT) are accepted. No resume, no DCC CHAT.
 
 ### Themes
 
@@ -746,7 +795,7 @@ work without leaving the conversation.
 This manual describes **1.2.0**. See the [changelog](../CHANGELOG.md) and
 [planned work](../TODO.md). Videos play without sound. Portable binaries omit
 Hunspell. Discord threads, forums, voice and bot tokens are not supported;
-IRC and WhatsApp are not implemented. One configuration directory holds one
+WhatsApp is not implemented. One configuration directory holds one
 account per network. Use separate `TTYLOOM_DIR` paths for separate instances.
 
 ## Signing out
@@ -762,7 +811,9 @@ ask for login again; a bot can reconnect while its token remains configured.
 Deleting a local file does not revoke another copy. Use **Telegram → Settings →
 Devices** to terminate the server-side session when necessary.
 
-Removing `[discord]` disables Discord in TTYloom. Revoke an exposed token through
+Removing an `[[irc]]` table forgets that network; its NickServ password
+lives in `config.toml` (mode `0600`) and nowhere else. Removing `[discord]`
+disables Discord in TTYloom. Revoke an exposed token through
 Discord account settings. The [authentication guide](authentication.md) covers
 session and credential handling in more detail.
 

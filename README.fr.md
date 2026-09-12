@@ -1,6 +1,6 @@
 <p align="center"><img src="docs/logo.svg" alt="TTYloom — Plusieurs réseaux. Un seul terminal." width="800"></p>
 
-<p align="center"><b>Telegram et Discord, tissés dans votre terminal.</b><br>Vidéos intégrées. Images avec zoom. Fenêtres façon IRC et conversations au même endroit.</p>
+<p align="center"><b>Telegram, Discord et IRC, tissés dans votre terminal.</b><br>Vidéos intégrées. Images avec zoom. Fenêtres façon IRC et conversations au même endroit.</p>
 
 <p align="center">
 <a href="https://github.com/govlog/ttyloom/actions/workflows/ci.yml"><img src="https://github.com/govlog/ttyloom/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
@@ -36,7 +36,7 @@ Les capacités dépendent du réseau. Les actions indisponibles sont masquées.
 | Telegram | Connexion utilisateur ou bot, privés, groupes, canaux, médias, recherche, réactions, état de lecture | Un bot reçoit les nouveaux messages ; pas d’historique du compte ni de liste des conversations |
 | Discord | Comptes utilisateur, privés, groupes privés, salons texte des serveurs, médias, recherche, réactions, GIF | Pas de fils, forums, vocal, accusés de lecture ni mode compte bot |
 | WhatsApp | Prévu | Aucune implémentation pour le moment |
-| IRC | Prévu | Aucune implémentation pour le moment |
+| IRC | Autant de réseaux que voulu, sans bouncer : salons, privés, `/whois`, membres, styles mIRC, DCC SEND/GET | Pas d’historique côté serveur (le cache disque fait le défilement), pas de reprise DCC ni de DCC CHAT |
 
 L’accès par token utilisateur n’est pas pris en charge par Discord et peut entraîner une suspension du compte. Lisez le [guide de connexion](docs/authentication.fr.md#discord) avant de l’activer.
 
@@ -56,7 +56,7 @@ Ces captures utilisent **le vrai moteur de rendu de l’interface avec des donn�
 | Guide | Contenu |
 | --- | --- |
 | [Manuel utilisateur complet](docs/guide.fr.md) | Installation, toutes les options, commandes, souris, médias, cache et dépannage |
-| [Connexion aux comptes](docs/authentication.fr.md) | Identifiants API Telegram, connexion QR/téléphone/bot, tokens Discord et gestion des sessions |
+| [Connexion aux comptes](docs/authentication.fr.md) | Identifiants API Telegram, connexion QR/téléphone/bot, tokens Discord, mots de passe IRC et gestion des sessions |
 | [Contribuer](CONTRIBUTING.md#français) | Tests, retours, traductions, développement et vérifications, en français et en anglais |
 
 Vous préférez l’anglais ? [Changez la langue de toute la présentation](README.md) ou ouvrez le [manuel anglais](docs/guide.md).
@@ -111,7 +111,7 @@ Les GIF sont décodés en Go sans FFmpeg. macOS, Windows et les autres combinais
 
 ## Connecter un compte
 
-Utilisez Telegram, Discord, ou les deux. **Discord seul ne nécessite aucun identifiant Telegram.**
+Utilisez Telegram, Discord, IRC, ou n’importe quel mélange. **Les autres réseaux ne nécessitent aucun identifiant Telegram.**
 
 ### Telegram
 
@@ -141,6 +141,23 @@ token_cmd = "pass show discord/token"
 
 [Obtenir et stocker un token Discord, et comprendre pourquoi un token de bot ne fonctionne pas →](docs/authentication.fr.md#discord)
 
+### IRC
+
+Tapez `/irc add` dans TTYloom : un formulaire demande le nom, l’hôte (← → choisissent Libera.Chat, OFTC, EFnet, DALnet, Undernet, IRCnet, QuakeNet, Rizon, hackint et d’autres, ports remplis), le port, TLS, le pseudo, l’utilisateur, le nom réel et le mot de passe NickServ, puis écrit une table `[[irc]]` à la fin de `config.toml` et se connecte. Ni bouncer ni programme auxiliaire ; autant de réseaux que voulu, chacun une section du panneau. Les salons rejoints par `/join` sont mémorisés et rejoints au prochain démarrage. `/dcc send <pseudo> <chemin>` et `/dcc get` transfèrent des fichiers directement entre clients.
+
+```toml
+[[irc]]
+name = "libera"
+host = "irc.libera.chat"
+port = 6697
+tls = true
+nick = "moi"
+nickserv_password = ""
+channels = ["#go-nuts"]
+```
+
+[Réseaux IRC, DCC et réglages NAT →](docs/guide.fr.md#réseaux-irc)
+
 ### Installation existante
 
 Les nouveaux chemins par défaut utilisent `ttyloom` pour la configuration, le cache, les téléchargements et les journaux. Pour garder une configuration et une session existantes, indiquez leur répertoire :
@@ -158,7 +175,7 @@ Vérifiez `download_dir` et `log_dir` dans cette configuration. Les caches écri
 | Fenêtre suivante / par numéro | Ctrl+X / Alt+1…9 ou `/5` |
 | Ouvrir une conversation | Ctrl+N ou le panneau |
 | Parler en privé depuis cette fenêtre | `/q nom` ; `/q` seul revient à la cible habituelle |
-| Panneau / filtre réseau | F2 / Shift+F2 ou `/net discord` |
+| Panneau / filtre réseau | F2 / Shift+F2 ou `/net discord`, `/net irc:libera` |
 | Conversations agrégées dans la fenêtre 0 | F6 |
 | Recherche locale / sur les réseaux | Ctrl+F / Ctrl+F encore |
 | GIF / emoji | Ctrl+G / Ctrl+T |
@@ -194,6 +211,7 @@ cmd/ttyloom/       point d’entrée et configuration des réseaux
 protocols/
   tgc/            adaptateur Telegram : MTProto via gotd
   dsc/            adaptateur Discord : arikawa et ningen
+  irc/            adaptateur IRC : ergochat/irc-go, DCC
 internal/
   model/          messages, événements, Backend et capacités partagés
   ui/             fenêtres, saisie, panneau, boîtes et boucle d’événements

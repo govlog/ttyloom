@@ -17,6 +17,21 @@ const NetTelegram = "telegram"
 // NetDiscord : name of the Discord network, same key of the backend maps.
 const NetDiscord = "discord"
 
+// NetIRC : prefix of the IRC networks — there can be several, each one keyed
+// "irc:<name>" (IRCNet). The prefix alone is never a network.
+const NetIRC = "irc"
+
+// IRCNet gives the network key of the IRC network name.
+func IRCNet(name string) string { return NetIRC + ":" + name }
+
+// IRCName gives the name of an IRC network key, "" for any other network.
+func IRCName(net string) string {
+	if len(net) > len(NetIRC)+1 && net[:len(NetIRC)+1] == NetIRC+":" {
+		return net[len(NetIRC)+1:]
+	}
+	return ""
+}
+
 // ChatKey identifies a chat across networks: Discord snowflakes and TDLib
 // ids can collide, the net disambiguates.
 type ChatKey struct {

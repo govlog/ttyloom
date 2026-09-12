@@ -49,3 +49,5 @@ golang.org/x/term,https://cs.opensource.google/go/x/term/+/v0.45.0:LICENSE,BSD-3
 golang.org/x/text,https://cs.opensource.google/go/x/text/+/v0.41.0:LICENSE,BSD-3-Clause
 golang.org/x/time/rate,https://cs.opensource.google/go/x/time/+/v0.15.0:LICENSE,BSD-3-Clause
 rsc.io/qr,https://github.com/rsc/qr/blob/v0.2.0/LICENSE,BSD-3-Clause
+github.com/ergochat/irc-go,https://github.com/ergochat/irc-go/blob/v0.7.0/LICENSE,ISC
+github.com/ergochat/irc-go/ircevent,https://github.com/ergochat/irc-go/blob/v0.7.0/ircevent/LICENSE,BSD-3-Clause

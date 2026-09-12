@@ -17,6 +17,7 @@ Original texts and checksums are recorded in [manifest.json](manifest.json). Kee
 | `github.com/diamondburned/arikawa/v3` | `v3.6.0` | application or tests | [LICENSE](github.com/diamondburned/arikawa/v3@v3.6.0/LICENSE), [LICENSE](github.com/diamondburned/arikawa/v3@v3.6.0/utils/bot/extras/shellwords/LICENSE) |
 | `github.com/diamondburned/ningen/v3` | `v3.0.1-0.20250703054403-e5dc4cf15e84` | application or tests | [LICENSE](github.com/diamondburned/ningen/v3@v3.0.1-0.20250703054403-e5dc4cf15e84/LICENSE) |
 | `github.com/dlclark/regexp2` | `v1.12.0` | declared; not imported on this platform | [LICENSE](github.com/dlclark/regexp2@v1.12.0/LICENSE) |
+| `github.com/ergochat/irc-go` | `v0.7.0` | application or tests | [LICENSE](github.com/ergochat/irc-go@v0.7.0/LICENSE), [LICENSE](github.com/ergochat/irc-go@v0.7.0/ircevent/LICENSE) |
 | `github.com/fatih/color` | `v1.19.0` | declared; not imported on this platform | [LICENSE.md](github.com/fatih/color@v1.19.0/LICENSE.md) |
 | `github.com/ghodss/yaml` | `v1.0.0` | declared; not imported on this platform | [LICENSE](github.com/ghodss/yaml@v1.0.0/LICENSE) |
 | `github.com/go-faster/errors` | `v0.7.1` | application or tests | [LICENSE](github.com/go-faster/errors@v0.7.1/LICENSE) |

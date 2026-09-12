@@ -30,6 +30,7 @@ const (
 	complFold                            // /fold <section>
 	complPath                            // /send <path>: files of the disk
 	complNetCmd                          // /telegram /discord <status|login|logout|disconnect>
+	complIrc                             // /irc <add|connect|disconnect> [name]
 	complLog                             // /log <on|off>
 	complNone                            // /open /history …
 )
@@ -89,6 +90,8 @@ func complContext(line string, cursor int) (src complSource, tail string, setKey
 		return complFold, rest, ""
 	case model.NetTelegram, model.NetDiscord:
 		return complNetCmd, rest, ""
+	case "irc":
+		return complIrc, rest, ""
 	case "log":
 		return complLog, rest, ""
 	case "send":

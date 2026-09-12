@@ -134,6 +134,48 @@ func TestBackendsTokenError(t *testing.T) {
 	}
 }
 
+// Two [[irc]] tables: two networks keyed by name, a cache each, and the
+// launch of one gives a backend whose Run ends on the cancelled context. The
+// room list written by the backend lands in the file.
+func TestBackendsIRC(t *testing.T) {
+	cfg := loadCfg(t, tgOnly+"[[irc]]\nname = \"libera\"\nhost = \"127.0.0.1\"\nport = 1\nnick = \"me\"\n[[irc]]\nname = \"oftc\"\nhost = \"127.0.0.1\"\nport = 1\nnick = \"me\"\n")
+	events := make(chan model.Envelope, 8)
+	nets, caches, launch, err := backends(context.Background(), cfg, events)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(nets, []string{model.NetTelegram, "irc:libera", "irc:oftc"}) || len(caches) != 3 || caches["irc:oftc"] == nil {
+		t.Fatalf("networks %v, caches %v", nets, caches)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	b, err := launch(ctx, "irc:libera")
+	if err != nil || b == nil {
+		t.Fatalf("launch: %v %v", b, err)
+	}
+	select {
+	case env := <-events:
+		if _, ok := env.Ev.(model.EvStopped); !ok || env.Net != "irc:libera" {
+			t.Fatalf("event after the stop: %+v", env)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("no EvStopped after the stop")
+	}
+	if _, err := launch(ctx, "irc:nope"); err == nil {
+		t.Fatal("an unknown IRC network must not launch")
+	}
+	if err := ircConfig(cfg, cfg.IRCByName("oftc")).SaveChannels([]string{"#debian"}); err != nil {
+		t.Fatal(err)
+	}
+	again, err := config.LoadFrom(filepath.Dir(cfg.Path()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := again.IRCByName("oftc"); n == nil || len(n.Channels) != 1 || n.Channels[0] != "#debian" {
+		t.Fatalf("saved rooms: %+v", n)
+	}
+}
+
 // Without api_id nothing starts: the message names the file to fill in.
 func TestBackendsNoAPIID(t *testing.T) {
 	cfg := loadCfg(t, "api_hash = \"hash\"\n")

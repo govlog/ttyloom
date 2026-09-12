@@ -21,7 +21,7 @@ var aliases = map[string]string{
 
 var commandNames = []string{"/window", "/close", "/query", "/join", "/new", "/msg", "/me", "/chats", "/net", "/fold", "/history",
 	"/search", "/whois", "/rename", "/unrename", "/open", "/view", "/send", "/theme", "/set", "/clear", "/log", "/debug", "/emoji", "/gif", "/help", "/quit",
-	"/telegram", "/discord"}
+	"/telegram", "/discord", "/irc", "/dcc"}
 
 // ParseCommand : "/win new hide" → ("window", [new hide], "new hide", true).
 // "//x" → text "/x"; with no slash → text as it is, ok=false.
@@ -138,6 +138,10 @@ func (u *UI) command(name string, args []string, text string) {
 		u.netCmd(w, arg(0))
 	case model.NetTelegram, model.NetDiscord:
 		u.netAction(w, name, strings.ToLower(arg(0)))
+	case "irc":
+		u.ircCmd(w, args)
+	case "dcc":
+		u.dccCmd(w, args, text)
 	case "fold":
 		u.foldCmd(w, text)
 	case "history":
@@ -332,12 +336,7 @@ func (u *UI) bind(w *Window, name string, join bool) {
 	// the lookup that is still running. The list is made before anything is
 	// said, so a network that cannot resolve never shows a "resolving…" it
 	// would take back on the next line.
-	var resolvers []model.Backend
-	for _, b := range u.nets {
-		if b.Caps().Resolve {
-			resolvers = append(resolvers, b)
-		}
-	}
+	resolvers := u.resolversFor(w, name)
 	if len(resolvers) == 0 {
 		w.AddSys(i18n.T("net_unsupported", strings.Join(u.netNames(), ", ")))
 		return

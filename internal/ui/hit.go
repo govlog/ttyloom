@@ -199,7 +199,7 @@ func (u *UI) hoverAt(x, y int) bool {
 // overlayLead tells whether an overlay has the lead on the mouse: key() routes
 // every event to it, so nothing under it is hovered nor zoned.
 func (u *UI) overlayLead() bool {
-	return u.viewer != nil || u.picker != nil || u.themePick != nil || u.gsearch != nil || u.newChat != nil ||
+	return u.viewer != nil || u.picker != nil || u.themePick != nil || u.gsearch != nil || u.newChat != nil || u.form != nil ||
 		u.gifs != nil || u.menu != nil || u.pager != nil || u.pasteAsk != "" || u.ask != nil || u.sendAsk != nil
 }
 

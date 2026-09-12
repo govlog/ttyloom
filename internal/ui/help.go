@@ -41,6 +41,8 @@ var helpTopics = []topic{
 	{"/net", "help_net", "chats"},
 	{"/telegram", "help_telegram", "chats"},
 	{"/discord", "help_discord", "chats"},
+	{"/irc", "help_irc", "chats"},
+	{"/dcc", "help_dcc", "chats"},
 	{"/history", "help_history", "chats"},
 	{"/search", "help_search", "chats"},
 	{"/whois", "help_whois", "chats"},

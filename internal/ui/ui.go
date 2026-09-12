@@ -144,6 +144,8 @@ type UI struct {
 	search      *searchState            // Ctrl+F search running in the shown window
 	gsearch     *globalSearch           // 2nd Ctrl+F: overlay of the server results, it takes everything
 	newChat     *newChatBox             // "new chat" overlay: it takes everything
+	form        *formBox                // form overlay (/irc add): it takes everything
+	dccAfter    map[string]string       // /dcc send waiting for the private chat: nick -> path
 	gifs        *gifBox                 // GIF box (Ctrl+G): it takes everything
 	customs     map[string]*model.Media // images of the custom emojis, by URL, kept for the session (customs.go)
 	gifOrphan   map[*model.Media]bool   // previews of a closed GIF box whose download still comes
@@ -1430,7 +1432,7 @@ func (u *UI) sent(e model.EvSent) {
 }
 
 func (u *UI) chatResolved(e model.EvChat) {
-	if u.queryResolved(e) {
+	if u.queryResolved(e) || u.dccResolved(e) {
 		return
 	}
 	w := u.pending[e.Query]
@@ -1793,6 +1795,7 @@ func (u *UI) key(k term.Key) {
 	for _, o := range []leadOverlay{
 		{u.themePick != nil, u.themeKey, u.themeMouse}, // like the emoji picker: lead until Enter or Esc
 		{u.newChat != nil, u.ncKey, u.ncMouse},         // new chat
+		{u.form != nil, u.formKey, u.formMouse},        // form (/irc add)
 		{u.gifs != nil, u.gifKey, u.gifMouse},          // GIF box
 		{u.gsearch != nil, u.gsKey, u.gsMouse},         // global search
 		{u.menu != nil, u.menuKey, u.menuMouse},        // context menu, until the choice
@@ -2246,6 +2249,15 @@ func (u *UI) candidates(word string, atStart bool) []string {
 		return append(u.netNames(), netAll)
 	case complNetCmd:
 		return []string{"status", "login", "logout", "disconnect"}
+	case complIrc:
+		if strings.Contains(tail, " ") { // after the sub-command: the network names
+			var names []string
+			for _, n := range u.ircNets() {
+				names = append(names, model.IRCName(n))
+			}
+			return names
+		}
+		return []string{"add", "connect", "disconnect"}
 	case complLog:
 		return []string{"on", "off"}
 	case complPath:

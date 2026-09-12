@@ -305,3 +305,46 @@ func TestLoadFromUnknownKeys(t *testing.T) {
 		t.Fatalf("unknown keys: %v", c.Unknown)
 	}
 }
+
+// Two [[irc]] tables read back, one with a bad name dropped and reported;
+// Save keeps the valid ones and their channel list.
+func TestLoadIRCTables(t *testing.T) {
+	dir := t.TempDir()
+	body := "api_id = 1\n[[irc]]\nname = \"libera\"\nhost = \"irc.libera.chat\"\nport = 6697\ntls = true\nnick = \"me\"\nchannels = [\"#go-nuts\"]\n" +
+		"[[irc]]\nname = \"Bad Name\"\nhost = \"x\"\n[[irc]]\nname = \"oftc\"\nhost = \"irc.oftc.net\"\nport = 6667\n"
+	if err := os.WriteFile(filepath.Join(dir, "config.toml"), []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	c, err := LoadFrom(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(c.IRC) != 2 || c.IRC[0].Name != "libera" || c.IRC[1].Name != "oftc" {
+		t.Fatalf("irc tables: %+v", c.IRC)
+	}
+	if n := c.IRCByName("libera"); n == nil || n.Port != 6697 || !n.TLS || len(n.Channels) != 1 || n.Channels[0] != "#go-nuts" {
+		t.Fatalf("libera: %+v", n)
+	}
+	if c.IRCByName("nope") != nil || !strings.Contains(strings.Join(c.Unknown, ","), "irc.Bad Name") {
+		t.Fatalf("unknown: %v", c.Unknown)
+	}
+	c.IRC[1].Channels = []string{"#debian"}
+	if err := c.Save(); err != nil {
+		t.Fatal(err)
+	}
+	again, err := LoadFrom(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := again.IRCByName("oftc"); n == nil || len(n.Channels) != 1 || n.Channels[0] != "#debian" || len(again.IRC) != 2 {
+		t.Fatalf("saved irc tables: %+v", again.IRC)
+	}
+}
+
+func TestValidIRCName(t *testing.T) {
+	for name, ok := range map[string]bool{"libera": true, "my-net_2": true, "": false, "Libera": false, "a b": false, strings.Repeat("a", 33): false} {
+		if ValidIRCName(name) != ok {
+			t.Errorf("ValidIRCName(%q) = %v, want %v", name, !ok, ok)
+		}
+	}
+}

@@ -156,3 +156,22 @@ For a separate bot project, create an application in the
 [official bot setup guide](https://docs.discord.com/developers/quick-start/getting-started).
 **TTYloom’s current Discord adapter cannot use that token.** Bot integration
 would require an implementation using the supported bot APIs.
+
+## IRC
+
+IRC needs no token: a nick, and a password when the nick is registered with
+the network's services (NickServ). `/irc add` asks for both in a form and
+writes an `[[irc]]` table at the end of `config.toml` (mode `0600`); the
+password stays in that file and goes nowhere else. TTYloom connects straight
+to the server over TLS (port 6697 on most networks), no bouncer involved.
+
+With a password, TTYloom identifies by **SASL PLAIN** when the server offers
+it, which is the case of Libera.Chat, OFTC and every modern ircd; a server
+without SASL gets a `NickServ IDENTIFY` right after registration. A nick in
+use is suffixed by the server. Leave the password empty on a network where
+the nick is not registered.
+
+To stop using a network, `/irc disconnect <name>` keeps its table; removing
+the table from `config.toml` forgets it, password and channel list included.
+Change the password with the network's services (`/msg NickServ SET PASSWORD`
+on most networks) if it was exposed.

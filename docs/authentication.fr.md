@@ -160,3 +160,23 @@ Pour un projet de bot distinct, créez une application dans le
 [guide officiel des bots](https://docs.discord.com/developers/quick-start/getting-started).
 **L’adaptateur Discord actuel de TTYloom ne peut pas utiliser ce token.**
 Il faudrait une implémentation fondée sur les API bot officielles.
+
+## IRC
+
+IRC ne demande aucun token : un pseudo, et un mot de passe quand ce pseudo est
+enregistré auprès des services du réseau (NickServ). `/irc add` demande les
+deux dans un formulaire et écrit une table `[[irc]]` à la fin de
+`config.toml` (mode `0600`) ; le mot de passe reste dans ce fichier et ne va
+nulle part ailleurs. TTYloom se connecte directement au serveur en TLS (port
+6697 sur la plupart des réseaux), sans bouncer.
+
+Avec un mot de passe, TTYloom s'identifie par **SASL PLAIN** quand le serveur
+l'offre, ce qui est le cas de Libera.Chat, OFTC et de tout ircd moderne ; un
+serveur sans SASL reçoit un `NickServ IDENTIFY` juste après l'enregistrement.
+Un pseudo déjà pris est suffixé par le serveur. Laissez le mot de passe vide
+sur un réseau où le pseudo n'est pas enregistré.
+
+Pour ne plus utiliser un réseau, `/irc disconnect <nom>` garde sa table ;
+retirer la table de `config.toml` l'oublie, mot de passe et liste de salons
+compris. Changez le mot de passe auprès des services du réseau (`/msg
+NickServ SET PASSWORD` sur la plupart d'entre eux) s'il a été exposé.

@@ -54,12 +54,7 @@ func (u *UI) query(w *Window, name string, join bool) {
 	} else if ambiguous {
 		return
 	}
-	var resolvers []model.Backend
-	for _, b := range u.nets {
-		if b.Caps().Resolve {
-			resolvers = append(resolvers, b)
-		}
-	}
+	resolvers := u.resolversFor(w, name)
 	if len(resolvers) == 0 {
 		w.AddSys(i18n.T("net_unsupported", strings.Join(u.netNames(), ", ")))
 		return

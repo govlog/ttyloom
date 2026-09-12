@@ -1,6 +1,6 @@
 <p align="center"><img src="docs/logo.svg" alt="TTYloom — Many networks. One terminal." width="800"></p>
 
-<p align="center"><b>Telegram and Discord, woven into your terminal.</b><br>Inline videos. Zoomable images. IRC-style windows and conversations in one place.</p>
+<p align="center"><b>Telegram, Discord and IRC, woven into your terminal.</b><br>Inline videos. Zoomable images. IRC-style windows and conversations in one place.</p>
 
 <p align="center">
 <a href="https://github.com/govlog/ttyloom/actions/workflows/ci.yml"><img src="https://github.com/govlog/ttyloom/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
@@ -36,7 +36,7 @@ Capabilities depend on the network. Unsupported actions are hidden.
 | Telegram | User and bot login, DMs, groups, channels, media, search, reactions, read state | Bot mode receives new messages; no account history or dialog list |
 | Discord | User accounts, DMs, group DMs, server text channels, media, search, reactions, GIFs | No threads, forums, voice, read receipts or bot-account mode |
 | WhatsApp | Planned | No implementation yet |
-| IRC | Planned | No implementation yet |
+| IRC | As many networks as wanted, no bouncer: channels, private chats, `/whois`, members, mIRC styles, DCC SEND/GET | No history on the server (the disk cache is the scrollback), no DCC resume or DCC CHAT |
 
 Discord user-token access is unsupported by Discord and can lead to account suspension. Read the [authentication guide](docs/authentication.md#discord) before enabling it.
 
@@ -56,7 +56,7 @@ These frames use **the actual UI renderer with fictional data** and the Catppucc
 | Guide | What you will find |
 | --- | --- |
 | [Full user manual](docs/guide.md) | Installation, every setting, commands, mouse controls, media, cache and troubleshooting |
-| [Account setup](docs/authentication.md) | Telegram API credentials, QR/phone/bot login, Discord tokens and session handling |
+| [Account setup](docs/authentication.md) | Telegram API credentials, QR/phone/bot login, Discord tokens, IRC passwords and session handling |
 | [Contributing](CONTRIBUTING.md) | Testing, feedback, translations, development and checks, in English and French |
 
 Prefer French? [Switch the entire overview](README.fr.md) or open the [French manual](docs/guide.fr.md).
@@ -111,7 +111,7 @@ GIF decoding works in Go without FFmpeg. macOS, Windows and other terminal combi
 
 ## Connect an account
 
-Use Telegram, Discord, or both. **Telegram credentials are not required for Discord alone.**
+Use Telegram, Discord, IRC, or any mix. **Telegram credentials are not required for the other networks.**
 
 ### Telegram
 
@@ -141,6 +141,23 @@ token_cmd = "pass show discord/token"
 
 [How to obtain and store a Discord token, and why a bot token will not work →](docs/authentication.md#discord)
 
+### IRC
+
+Type `/irc add` in TTYloom: a form asks for the name, host (← → pick Libera.Chat, OFTC, EFnet, DALnet, Undernet, IRCnet, QuakeNet, Rizon, hackint and more, ports filled in), port, TLS, nick, user, real name and NickServ password, then writes an `[[irc]]` table at the end of `config.toml` and connects. No bouncer, no helper program; as many networks as you like, each one a section of the sidebar. Rooms joined with `/join` are remembered and joined again at the next start. `/dcc send <nick> <path>` and `/dcc get` transfer files straight between clients.
+
+```toml
+[[irc]]
+name = "libera"
+host = "irc.libera.chat"
+port = 6697
+tls = true
+nick = "me"
+nickserv_password = ""
+channels = ["#go-nuts"]
+```
+
+[IRC networks, DCC and the NAT settings →](docs/guide.md#irc-networks)
+
 ### Existing installation
 
 The new defaults use `ttyloom` for configuration, cache, downloads and logs. To keep an existing configuration and session, point to its directory explicitly:
@@ -158,7 +175,7 @@ Review `download_dir` and `log_dir` in that configuration. Caches written with e
 | Next window / window number | Ctrl+X / Alt+1…9 or `/5` |
 | Open a conversation | Ctrl+N or the sidebar |
 | Keep chatting privately from this window | `/q name`; `/q` alone returns to the usual target |
-| Sidebar / network filter | F2 / Shift+F2 or `/net discord` |
+| Sidebar / network filter | F2 / Shift+F2 or `/net discord`, `/net irc:libera` |
 | Aggregate conversations in window 0 | F6 |
 | Search here / search across networks | Ctrl+F / Ctrl+F again |
 | GIFs / emoji | Ctrl+G / Ctrl+T |
@@ -194,6 +211,7 @@ cmd/ttyloom/       application entry point and network setup
 protocols/
   tgc/            Telegram adapter: MTProto through gotd
   dsc/            Discord adapter: arikawa and ningen
+  irc/            IRC adapter: ergochat/irc-go, DCC
 internal/
   model/          shared messages, events, Backend and capability contract
   ui/             windows, editor, sidebar, overlays and event loop

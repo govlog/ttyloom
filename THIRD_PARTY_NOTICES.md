@@ -14,8 +14,8 @@ those components.
 
 ## Go dependencies
 
-- [Module inventory and original notices](licenses/go/README.md): all **53 modules
-  declared in go.mod**, including **37 modules used by application packages or
+- [Module inventory and original notices](licenses/go/README.md): all **54 modules
+  declared in go.mod**, including **38 modules used by application packages or
   tests** on the reviewed platform. Nested license, copyright, patent, author and
   NOTICE files are retained, not just each module’s top-level license.
 - [Machine-readable manifest](licenses/go/manifest.json): exact versions, module

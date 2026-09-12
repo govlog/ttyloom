@@ -29,7 +29,7 @@ Ce manuel couvre l’installation, les comptes, toutes les options, les commande
 > Les vérifications automatiques tournent sur Ubuntu. Le binaire ARM64 reçoit un test de lancement sous QEMU. Ces vérifications ne couvrent pas toutes les combinaisons de terminaux ni les connexions à des comptes réels.
 
 > [!note]
-> Connectez **Telegram, Discord, ou les deux**. Discord seul ne nécessite aucun identifiant Telegram. Le panneau et la vue agrégée mélangent les réseaux ; */net* les filtre. IRC et WhatsApp sont prévus mais ne sont pas implémentés.
+> Connectez **Telegram, Discord, ou les deux**. Discord seul ne nécessite aucun identifiant Telegram. Le panneau et la vue agrégée mélangent les réseaux ; */net* les filtre. IRC est pris en charge aussi, autant de réseaux que voulu ; WhatsApp est prévu mais pas implémenté.
 
 > [!note]
 > Telegram propose deux modes : **compte utilisateur** (QR code ou téléphone, code et éventuel mot de passe 2FA) et **bot** (token BotFather). Un bot ne voit que les messages reçus après sa connexion. Discord utilise un token utilisateur, pas un token de bot ni OAuth.
@@ -314,6 +314,7 @@ Le panneau se découpe en sections dès qu'il y a de quoi : une ligne d'en-tête
 | */telegram login* | redémarre Telegram après une déconnexion ou une erreur fatale : QR, ou téléphone et code |
 | */telegram logout* | ferme la session côté serveur (elle disparaît de **Telegram → Réglages → Appareils**) et se déconnecte |
 | */discord disconnect*, */telegram disconnect* | se déconnecte en gardant la session : *login* se reconnecte sans QR |
+| */irc*, */irc add*, */irc connect nom*, */irc disconnect nom* | les réseaux IRC, voir [Réseaux IRC](#réseaux-irc) |
 
 Un réseau dont la connexion se termine sur une erreur (token révoqué, session fermée) le dit en fenêtre 0 et s'arrête seul, pas le client : */discord login* ou */telegram login* le relance. Une commande *token_cmd* qui échoue au lancement laisse de même Discord arrêté, avec son erreur en fenêtre 0. Relancée par */discord login*, la commande tourne dans le terminal en mode brut : une commande qui interroge le tty (pinentry curses) ne fonctionne qu'au lancement ; prévoir un pinentry graphique ou un agent déverrouillé.
 
@@ -344,6 +345,38 @@ Les autres actions indisponibles le disent dans la fenêtre plutôt que de reste
 ```
 *** indisponible sur discord
 ```
+
+### Réseaux IRC
+
+IRC se passe de bouncer et de programme auxiliaire : TTYloom se connecte directement au serveur, autant de réseaux que voulu. Chacun est une table **[[irc]]** à la fin de **config.toml**, et */irc add* l'écrit pour vous depuis un formulaire :
+
+```toml
+[[irc]]
+name = "libera"              # clé du réseau : irc:libera
+host = "irc.libera.chat"
+port = 6697
+tls = true
+nick = "moi"
+user = "moi"                 # vide = nick
+realname = "moi"             # vide = nick
+nickserv_password = ""       # SASL PLAIN si le serveur l'offre, NickServ IDENTIFY sinon
+channels = ["#go-nuts"]      # tenu par le client : /join ajoute, /leave retire, rejoints au démarrage
+dcc_ip = ""                  # adresse annoncée par DCC SEND (derrière un NAT) ; vide = celle de la socket IRC
+dcc_ports = ""               # "5000-5010" pour fixer les ports DCC ; vide = n'importe quel port libre
+```
+
+Le nom est la clé du réseau (*irc:libera*) : */net irc:libera*, une section à son nom dans le panneau, l'exposant *ⁱ* devant ses conversations. Une conversation privée est un pseudo, un salon un canal ; */join #salon* et */query pseudo* les ouvrent (depuis une fenêtre du réseau quand il y en a plusieurs ; *#salon* ne va qu'aux réseaux IRC). La liste *channels* de la table est la mémoire du client entre deux sessions ; le cache disque fait l'historique, le serveur n'en garde aucun. Les codes gras, italique et souligné reçus sont conservés, les couleurs retirées ; les styles du brouillon (*Ctrl+B/I/U*) partent en codes mIRC. */whois*, *F3* (NAMES) et */me* fonctionnent ; éditions, réactions, accusés de lecture et recherche n'existent pas sur IRC et sont masqués. Une notice d'une personne ou d'un service (NickServ) arrive en fenêtre 0.
+
+| Commande | Effet |
+|---|---|
+| */irc* | état de chaque réseau IRC |
+| */irc add* | le formulaire : nom, hôte, port, TLS, pseudo, utilisateur, nom réel, mot de passe NickServ. Sur le champ hôte, ← → (ou Espace) font défiler les réseaux connus — Libera.Chat, OFTC, EFnet, DALnet, Undernet, IRCnet, QuakeNet, Rizon, hackint, GameSurge, EsperNet, Snoonet, tilde.chat — et remplissent hôte, port, TLS et nom ; taper donne un hôte à soi. Enregistré et connecté aussitôt |
+| */irc connect nom*, */irc disconnect nom* | démarre ou arrête un réseau |
+| */dcc* | offres DCC en attente et transferts en cours |
+| */dcc send pseudo chemin* | envoie un fichier directement à cette personne (DCC SEND) ; */send* dans une conversation privée IRC fait de même |
+| */dcc get [pseudo]* | accepte la dernière offre de la fenêtre, ou de la conversation de ce pseudo ; la touche de téléchargement sur la ligne du fichier aussi |
+
+Le DCC va de client à client en TCP : l'expéditeur écoute et annonce son adresse et son port, le destinataire se connecte. Derrière un NAT, mettre l'adresse publique dans *dcc_ip* et une plage redirigée dans *dcc_ports*. Une offre reçue apparaît comme une ligne fichier dans la conversation privée ; le fichier arrive dans *download_dir*. Les offres inversées (expéditeur derrière un NAT) sont acceptées. Pas de reprise, pas de DCC CHAT.
 
 ### Thème
 
@@ -410,6 +443,8 @@ Un message entrant pour une conversation sans fenêtre crée une fenêtre caché
 | */chats* | liste les conversations, non lues en surbrillance |
 | */net [réseau]* | filtre le panneau et la vue agrégée sur un réseau (*telegram*, *discord*, *all*) ; sans argument, cycle, comme *Shift+F2* |
 | */telegram [status\|login\|logout\|disconnect]*, */discord [status\|login\|logout\|disconnect]* | un réseau : son état, une nouvelle connexion (Discord relance *token_cmd*), une déconnexion qui garde la session, ou *logout* (Telegram ferme la session côté serveur) |
+| */irc [add\|connect nom\|disconnect nom]* | les réseaux IRC : état, ajout par formulaire, connexion, déconnexion |
+| */dcc [send pseudo chemin\|get [pseudo]]* | transferts DCC : envoi direct d'un fichier, acceptation d'une offre, liste |
 | */fold [section]* | plie ou déplie une section du panneau, comme un clic sur sa ligne d'en-tête ; la section se nomme par sa clé (*telegram*, *discord:Gophers*) ou par un préfixe du nom affiché ; sans argument, liste les sections et leur état (*[+]* pliée, *[-]* dépliée) |
 | */history N* | charge N messages plus anciens (*PgUp* en haut de l'écran fait de même) |
 | */clear* (*/c*) | vide la fenêtre ; *Ctrl+L* n'efface que l'écran, les lignes restent dans l'historique |
@@ -639,7 +674,7 @@ Dans une conversation, taper `@` ouvre aussi les suggestions de membres ayant un
 
 ## Version et limites
 
-Ce manuel décrit la version **1.2.0**. Consultez le [journal des changements](../CHANGELOG.md) et les [travaux prévus](../TODO.md). Les vidéos sont sans son, les binaires portables n’incluent pas Hunspell, Discord ne prend pas en charge fils, forums, vocal ou tokens de bot, et IRC/WhatsApp ne sont pas encore implémentés. Un seul compte par réseau est utilisé dans un même répertoire de configuration ; plusieurs instances doivent utiliser des `TTYLOOM_DIR` distincts.
+Ce manuel décrit la version **1.2.0**. Consultez le [journal des changements](../CHANGELOG.md) et les [travaux prévus](../TODO.md). Les vidéos sont sans son, les binaires portables n’incluent pas Hunspell, Discord ne prend pas en charge fils, forums, vocal ou tokens de bot, et WhatsApp n'est pas encore implémenté. Un seul compte par réseau est utilisé dans un même répertoire de configuration ; plusieurs instances doivent utiliser des `TTYLOOM_DIR` distincts.
 
 ## Déconnexion
 

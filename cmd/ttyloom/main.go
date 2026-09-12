@@ -17,6 +17,7 @@ import (
 	"github.com/govlog/ttyloom/internal/theme"
 	"github.com/govlog/ttyloom/internal/ui"
 	"github.com/govlog/ttyloom/protocols/dsc"
+	"github.com/govlog/ttyloom/protocols/irc"
 	"github.com/govlog/ttyloom/protocols/tgc"
 )
 
@@ -92,6 +93,13 @@ func backends(ctx context.Context, cfg *config.Config, events chan<- model.Envel
 			caches[model.NetDiscord] = cache.New(filepath.Join(root, model.NetDiscord), cfg.CacheMessages)
 		}
 	}
+	for _, n := range cfg.IRC {
+		net := model.IRCNet(n.Name)
+		nets = append(nets, net)
+		if cfg.Cache {
+			caches[net] = cache.New(filepath.Join(root, net), cfg.CacheMessages)
+		}
+	}
 	if len(nets) == 0 {
 		return nil, nil, nil, fmt.Errorf(i18n.T("main_no_networks"), cfg.Path())
 	}
@@ -129,6 +137,13 @@ func backends(ctx context.Context, cfg *config.Config, events chan<- model.Envel
 				return nil, err
 			}
 			return dsc.New(dsc.Config{Token: tok, TokenFile: tokenFile}, raw), nil
+		}
+		// An IRC network: its table is read now, not at start — /irc add
+		// writes one while the client runs.
+		if name := model.IRCName(net); name != "" {
+			if n := cfg.IRCByName(name); n != nil {
+				return irc.New(ircConfig(cfg, n), raw), nil
+			}
 		}
 		return nil, fmt.Errorf("%s: unknown network", net)
 	}
@@ -175,6 +190,18 @@ func backends(ctx context.Context, cfg *config.Config, events chan<- model.Envel
 		return b, nil
 	}
 	return nets, caches, launch, nil
+}
+
+// ircConfig : the backend configuration of one [[irc]] table. SaveChannels
+// writes the room list into the table and the file: the memory of the rooms
+// across sessions, there being no bouncer.
+func ircConfig(cfg *config.Config, n *config.IRCConfig) irc.Config {
+	return irc.Config{Name: n.Name, Host: n.Host, Port: n.Port, TLS: n.TLS, Nick: n.Nick, User: n.User,
+		RealName: n.RealName, Password: n.NickServPassword, Channels: n.Channels, DCCIP: n.DCCIP, DCCPorts: n.DCCPorts,
+		SaveChannels: func(list []string) error {
+			n.Channels = list
+			return cfg.Save()
+		}}
 }
 
 func run() error {
