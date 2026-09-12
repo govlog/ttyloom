@@ -422,10 +422,11 @@ func TestAggregatePerChatIDs(t *testing.T) {
 }
 
 func TestFocusDeferredRead(t *testing.T) {
-	u := &UI{ws: NewWindows(), agg: &Window{}}
+	u := &UI{ws: NewWindows(), agg: &Window{}, focused: true}
 	w := u.ws.Current()
 	w.Act = 3
 	u.key(term.Key{Code: term.FocusOut})
+	u.awayTick(time.Now().Add(awayDelay))
 	u.markRead(w)
 	if u.focused || w.Act != 3 {
 		t.Fatalf("absent: nothing is read (focused=%v act=%d)", u.focused, w.Act)
@@ -433,6 +434,28 @@ func TestFocusDeferredRead(t *testing.T) {
 	u.key(term.Key{Code: term.FocusIn})
 	if !u.focused || w.Act != 0 {
 		t.Fatalf("return: the current window is read (focused=%v act=%d)", u.focused, w.Act)
+	}
+}
+
+// TestFocusQuickReturn : the focus lost and back within awayDelay never counts
+// as away — the window is not read again (no MarkRead), and a message that
+// came meanwhile is seen, with no activity counted.
+func TestFocusQuickReturn(t *testing.T) {
+	u := netUI(model.NetDiscord)
+	u.ctx, u.focused = context.Background(), true
+	b := u.nets[model.NetDiscord].(*fakeBackend)
+	w := u.ws.Current()
+	w.Chat = u.chatList[0]
+	w.Merge([]*model.Msg{{ID: 5, ChatID: w.Chat.ID, Net: model.NetDiscord}})
+	w.ReadSent = 5
+	u.key(term.Key{Code: term.FocusOut})
+	if !u.focused || u.awayTick(time.Now()) {
+		t.Fatal("away at once: the delay is not kept")
+	}
+	u.key(term.Key{Code: term.FocusIn})
+	u.awayTick(time.Now().Add(2 * awayDelay))
+	if !u.focused || b.markRead != 0 || w.Act != 0 {
+		t.Fatalf("quick return: focused=%v, MarkRead calls=%d, act=%d", u.focused, b.markRead, w.Act)
 	}
 }
 
@@ -607,6 +630,7 @@ type fakeBackend struct {
 	search   int        // Search calls
 	since    int        // LoadHistorySince calls
 	history  int        // LoadHistory calls
+	markRead int        // MarkRead calls
 	photo    int        // SendPhoto calls
 	photoTmp int64      // tmpID of the last SendPhoto
 	file     int        // SendFile calls
@@ -638,6 +662,8 @@ func (f *fakeBackend) WhoRead(context.Context, *model.Chat, int, int) { f.whoRea
 func (f *fakeBackend) LoadHistorySince(context.Context, *model.Chat, int, int) { f.since++ }
 
 func (f *fakeBackend) LoadHistory(context.Context, *model.Chat, int, int) { f.history++ }
+
+func (f *fakeBackend) MarkRead(context.Context, *model.Chat, int) { f.markRead++ }
 
 // net routes by the Net of the chat; nil for a nil chat, one not stamped, or
 // one whose network is gone. Every call site skips the call on nil.

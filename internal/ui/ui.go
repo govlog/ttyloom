@@ -94,6 +94,7 @@ type UI struct {
 	tmpID      int64
 	conn       map[string]bool // connection state per network, keyed like u.self
 	focused    bool            // terminal in front (CSI ?1004): otherwise the read is put off
+	blurAt     time.Time       // focus lost at, while not away yet (see awayTick); zero otherwise
 	placed     []placed
 	hits       []rowHit            // map of the clicks of the message area, made again at each draw
 	drag       dragMode            // drag running: scrollbar or text selection
@@ -1734,7 +1735,11 @@ func (u *UI) key(k term.Key) {
 	// must swallow it.
 	switch k.Code {
 	case term.FocusOut:
-		u.focused = false
+		// Away only after awayDelay (awayTick): a quick switch of window and
+		// back keeps the redline, the counters and the bell where they are.
+		if u.focused && u.blurAt.IsZero() {
+			u.blurAt = time.Now()
+		}
 		if u.hover != nil { // the pointer left with no motion
 			u.hover.lines = nil
 			u.hover = nil
@@ -1742,6 +1747,10 @@ func (u *UI) key(k term.Key) {
 		u.who, u.zone = nil, zoneNone
 		return
 	case term.FocusIn:
+		if !u.blurAt.IsZero() { // back before being away: nothing changed
+			u.blurAt = time.Time{}
+			return
+		}
 		u.focused = true
 		// Catches up with what came while we were away. markRefresh before
 		// markRead: when messages came while we were away, the redline settles
@@ -2296,5 +2305,22 @@ func (u *UI) tick() bool {
 	if u.marqueeTick(now) { // always called (no lazy ||): its rate depends on it
 		redraw = true
 	}
+	if u.awayTick(now) {
+		redraw = true
+	}
 	return u.animate(now) || redraw
+}
+
+// awayDelay : time out of focus before we count as away.
+const awayDelay = 1500 * time.Millisecond
+
+// awayTick : the focus has been gone for awayDelay — away from now on. true
+// when the state changed (the status segment shows it).
+func (u *UI) awayTick(now time.Time) bool {
+	if u.blurAt.IsZero() || now.Sub(u.blurAt) < awayDelay {
+		return false
+	}
+	u.blurAt = time.Time{}
+	u.focused = false
+	return true
 }
