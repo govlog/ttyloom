@@ -3,6 +3,7 @@ package model
 import (
 	"context"
 	"fmt"
+	"runtime/debug"
 
 	"github.com/govlog/ttyloom/internal/i18n"
 )
@@ -117,6 +118,7 @@ func (p Poster) Guard(name string, onPanic func(err string)) {
 		return
 	}
 	p.PostNB(EvLog{Level: "ERROR", Msg: i18n.T("panic_in", name, r)})
+	p.PostNB(EvLog{Level: "DEBUG", Msg: name + ": " + string(debug.Stack())}) // /debug keeps the trace
 	if onPanic != nil {
 		onPanic(fmt.Sprint(r))
 	}
