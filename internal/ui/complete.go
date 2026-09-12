@@ -5,6 +5,7 @@ import (
 	"path"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/govlog/ttyloom/internal/config"
 	"github.com/govlog/ttyloom/internal/model"
@@ -276,7 +277,15 @@ func (u *UI) showCompletionChoices(list []string, expanded bool) {
 	if len(shown) > limit {
 		shown = append(slices.Clone(shown[:limit]), "…")
 	}
-	u.sys(i18n.T("complete_choices", strings.Join(shown, "  ")))
+	w := u.view()
+	w.Items = append(w.Items, &Item{Sys: i18n.T("complete_choices", strings.Join(shown, "  ")), At: time.Now(), Choices: true})
+	w.trim()
+}
+
+// dropChoices : Esc after a listing — the lists go from the current window.
+func (u *UI) dropChoices() {
+	w := u.view()
+	w.Items = slices.DeleteFunc(w.Items, func(it *Item) bool { return it.Choices })
 }
 
 // completeTab cycles command names from the original prefix. Chat targets

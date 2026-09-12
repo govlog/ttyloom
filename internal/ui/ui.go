@@ -1723,6 +1723,9 @@ func (u *UI) scroll(w *Window, delta int) {
 func (u *UI) key(k term.Key) {
 	if k.Code != term.Tab && k.Code != term.Mouse && k.Code != term.FocusIn && k.Code != term.FocusOut {
 		u.completion = nil
+		if k.Code == term.Esc {
+			u.dropChoices()
+		}
 	}
 	// Neither the release of a click nor a move is an action: otherwise they
 	// would close the overlay (emoji picker, pager, preview) that the press

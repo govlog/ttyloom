@@ -261,3 +261,24 @@ func TestChatCandidatesByCommand(t *testing.T) {
 		}
 	}
 }
+
+// TestEscDropsCompletionChoices : the lists of a Tab, Tab (short then long)
+// leave the window on Esc; the input stays.
+func TestEscDropsCompletionChoices(t *testing.T) {
+	u := listUI()
+	for i := 0; i < 35; i++ {
+		u.chatList = append(u.chatList, &model.Chat{Net: model.NetTelegram, ID: int64(i + 1), Kind: model.ChatUser,
+			Title: fmt.Sprintf("contact%02d", i), Username: fmt.Sprintf("contact%02d", i)})
+	}
+	u.ed.Set("/m ")
+	before := len(u.view().Items)
+	u.key(term.Key{Code: term.Tab})
+	u.key(term.Key{Code: term.Tab})
+	if n := len(u.view().Items); n != before+2 {
+		t.Fatalf("after Tab, Tab: %d items, want %d", n, before+2)
+	}
+	u.key(term.Key{Code: term.Esc})
+	if n := len(u.view().Items); n != before || u.ed.String() != "/m " {
+		t.Fatalf("after Esc: %d items (want %d), input %q", n, before, u.ed.String())
+	}
+}

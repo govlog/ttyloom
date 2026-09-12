@@ -34,6 +34,8 @@ type Item struct {
 	// Info : information line of a message (key "i"), dropped when the
 	// message is deselected. ponytail: a mark on the item, no list to keep.
 	Info bool
+	// Choices : list of the Tab completion, dropped by Esc. Same mark as Info.
+	Choices bool
 	// Reveal : deleted message whose content is shown (click on it).
 	Reveal bool
 	// gap : hole marker of the history — the two ids the hole lies between
