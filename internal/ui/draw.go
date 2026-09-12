@@ -202,12 +202,17 @@ func (u *UI) draw() {
 		}
 	}
 	fmt.Fprintf(&b, "\x1b[%d;%dH", curRow, x0+curCol+1)
-	if u.picker == nil && u.menu == nil && u.themePick == nil && u.gsearch == nil && u.newChat == nil && u.gifs == nil {
-		b.WriteString("\x1b[?25h") // overlay open: the input cursor stays hidden
+	if u.cursorShown() {
+		b.WriteString("\x1b[?25h")
 	}
 	u.noteShown()
 	u.t.WriteString(b.String())
 	u.t.Flush()
+}
+
+// cursorShown : the input cursor is drawn; an open overlay keeps it hidden.
+func (u *UI) cursorShown() bool {
+	return u.picker == nil && u.menu == nil && u.themePick == nil && u.gsearch == nil && u.newChat == nil && u.gifs == nil
 }
 
 // drawScrollbar : column kept free at the right of the message area. Always

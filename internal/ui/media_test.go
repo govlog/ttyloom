@@ -7,12 +7,14 @@ import (
 	"image/png"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/govlog/ttyloom/internal/config"
 	"github.com/govlog/ttyloom/internal/media"
 	"github.com/govlog/ttyloom/internal/model"
+	"github.com/govlog/ttyloom/internal/render"
 	"github.com/govlog/ttyloom/internal/term"
 )
 
@@ -308,5 +310,22 @@ func TestMapIsNotPrefetchedOffscreen(t *testing.T) {
 	u.autoMedia(m, false)
 	if m.Media.State != model.MediaNone {
 		t.Fatal("offscreen map started downloading")
+	}
+}
+
+// TestAnimateHidesCursor : a kitty frame moves the cursor onto the image and
+// back; hidden meanwhile, the terminal cannot draw it there between two chunks
+// of the frame (an erratic blink), and it comes back once the frame is out.
+func TestAnimateHidesCursor(t *testing.T) {
+	var out bytes.Buffer
+	u := &UI{ws: NewWindows(), agg: &Window{}, cfg: &config.Config{}, images: "kitty",
+		t: term.NewOffscreen(&out, 80, 24)}
+	md := &model.Media{State: model.MediaReady, Frames: [][]byte{{1}, {2}}, Delay: time.Millisecond}
+	u.placed = []placed{{row: 2, pid: 3, img: &render.Img{Media: md, Cols: 4, Rows: 2}}}
+	u.animate(time.Now().Add(time.Second))
+	s := out.String()
+	hide, show := strings.Index(s, "\x1b[?25l"), strings.LastIndex(s, "\x1b[?25h")
+	if hide < 0 || show < 0 || hide > strings.Index(s, "\x1b_G") || show < strings.LastIndex(s, "\x1b[u") {
+		t.Fatalf("cursor not hidden around the frame: %q", s)
 	}
 }

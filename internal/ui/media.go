@@ -473,7 +473,9 @@ func (u *UI) animate(now time.Time) bool {
 				md.KittyAlt = u.kittyID
 			}
 			pid := p.pid // same pid as draw(): replacement in place
-			u.t.WriteString("\x1b[s")
+			// Hidden for the frame: the terminal would draw the cursor on the
+			// image between two chunks of it — an erratic blink on the input line.
+			u.t.WriteString("\x1b[?25l\x1b[s")
 			u.t.WriteString("\x1b[" + itoa(p.row+1) + ";" + itoa(x0+p.img.Col+1) + "H")
 			// p.crop : the zoomed preview keeps its sub-rectangle from one frame to the next.
 			u.t.WriteString(media.KittyDisplay(md.KittyAlt, pid, md.Frames[md.Frame], p.img.Cols, p.img.Rows, p.crop))
@@ -522,6 +524,9 @@ func (u *UI) animate(now time.Time) bool {
 		}
 	}
 	if wrote {
+		if u.cursorShown() {
+			u.t.WriteString("\x1b[?25h")
+		}
 		u.t.Flush()
 	}
 	return redraw
