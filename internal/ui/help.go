@@ -51,6 +51,7 @@ var helpTopics = []topic{
 
 	// Messages
 	{"Alt+↑/↓", "help_alt_updown", "messages"},
+	{"Ctrl+↑/↓", "help_ctrl_updown", "messages"},
 	{"right click", "help_msg_menu", "messages"},
 	{"Ctrl+F", "help_ctrl_f", "messages"},
 	{"e", "help_key_e", "messages"},

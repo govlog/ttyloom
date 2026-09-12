@@ -317,3 +317,35 @@ func TestMsgMenuHover(t *testing.T) {
 		t.Fatalf("reaction row or outside: cur %d", u.menu.cur)
 	}
 }
+
+// Ctrl+↑ / Ctrl+↓: my messages in edit mode, from the last one up, then down
+// again; past the newest the edit is left, input emptied. A draft is kept.
+func TestEditStep(t *testing.T) {
+	u, _, w := msgUI(t)
+	u.ed.Set("brouillon")
+	u.editStep(w, -1)
+	if u.edit != nil || u.ed.String() != "brouillon" {
+		t.Fatalf("draft replaced: edit %v input %q", u.edit, u.ed.String())
+	}
+	u.ed.Set("")
+	u.editStep(w, -1)
+	if u.edit != w.Items[2] || u.ed.String() != "trois" {
+		t.Fatalf("first Ctrl+↑: edit %v input %q", u.edit, u.ed.String())
+	}
+	u.editStep(w, -1)
+	if u.edit != w.Items[0] || u.ed.String() != "un" {
+		t.Fatalf("second Ctrl+↑ (alice skipped): edit %v input %q", u.edit, u.ed.String())
+	}
+	u.editStep(w, -1) // nothing older of mine: stays
+	if u.edit != w.Items[0] {
+		t.Fatalf("top: edit %v", u.edit)
+	}
+	u.editStep(w, 1)
+	if u.edit != w.Items[2] || u.ed.String() != "trois" {
+		t.Fatalf("Ctrl+↓: edit %v input %q", u.edit, u.ed.String())
+	}
+	u.editStep(w, 1)
+	if u.edit != nil || u.ed.String() != "" || w.Sel != nil {
+		t.Fatalf("past the newest: edit %v input %q sel %v", u.edit, u.ed.String(), w.Sel)
+	}
+}

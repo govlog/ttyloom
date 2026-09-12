@@ -1868,6 +1868,10 @@ func (u *UI) key(k term.Key) {
 		u.selMove(w, -1)
 	case k.Alt && k.Code == term.Down:
 		u.selMove(w, 1)
+	case k.Ctrl && k.Code == term.Up:
+		u.editStep(w, -1)
+	case k.Ctrl && k.Code == term.Down:
+		u.editStep(w, 1)
 	case k.Alt && k.Code == term.Backspace:
 		u.ed.KillWord()
 	case k.Code == term.Esc:

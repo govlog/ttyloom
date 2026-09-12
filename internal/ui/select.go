@@ -631,12 +631,47 @@ func (u *UI) reactions(e model.EvReactions) {
 // not the same on each of them.
 func lastOwn(w *Window, own func(*model.Msg) bool) *Item {
 	for i := len(w.Items) - 1; i >= 0; i-- {
-		it := w.Items[i]
-		if selectable(it) && w.shown(it) && render.Actionable(it.Msg) && own(it.Msg) {
+		if it := w.Items[i]; editable(w, it, own) {
 			return it
 		}
 	}
 	return nil
+}
+
+// editable : a message of mine that can still be changed, and that is drawn.
+func editable(w *Window, it *Item, own func(*model.Msg) bool) bool {
+	return selectable(it) && w.shown(it) && render.Actionable(it.Msg) && own(it.Msg)
+}
+
+// editStep : Ctrl+↑ / Ctrl+↓ — walks my messages in edit mode. From an empty
+// input, Ctrl+↑ edits the last one; each Ctrl+↑ then goes one message of mine
+// up, Ctrl+↓ one down, and past the newest the edit is left, input emptied. A
+// draft in the input is never replaced: Ctrl+↑ then does nothing.
+func (u *UI) editStep(w *Window, d int) {
+	if w.Target != nil {
+		w = u.winFor(w.Target)
+	}
+	if u.edit == nil {
+		if d < 0 && u.ed.String() == "" && u.reply == nil {
+			if it := lastOwn(w, u.own); it != nil {
+				u.setSel(w, it)
+				u.startEdit(it)
+			}
+		}
+		return
+	}
+	i := slices.Index(w.Items, u.edit)
+	for j := i + d; i >= 0 && j >= 0 && j < len(w.Items); j += d {
+		if it := w.Items[j]; editable(w, it, u.own) {
+			u.setSel(w, it)
+			u.startEdit(it)
+			return
+		}
+	}
+	if d > 0 { // past my newest message: back to a plain input
+		u.cancelMode()
+		u.setSel(w, nil)
+	}
 }
 
 // quoteOf gives the local quote of the message being replied to, while waiting
