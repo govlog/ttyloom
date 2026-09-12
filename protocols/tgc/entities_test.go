@@ -1,6 +1,7 @@
 package tgc
 
 import (
+	"reflect"
 	"slices"
 	"testing"
 
@@ -58,7 +59,7 @@ func TestSpansOfKinds(t *testing.T) {
 func TestStylingOf(t *testing.T) {
 	var b entity.Builder
 	segs := []model.Seg{{Text: "a"}, {Text: "code", Kind: model.SegPre, Lang: "go"}, {Text: "c", Italic: true}}
-	if err := styling.Perform(&b, stylingOf(segs)...); err != nil {
+	if err := styling.Perform(&b, stylingOf(segs, nil)...); err != nil {
 		t.Fatalf("perform: %v", err)
 	}
 	text, ents := b.Complete()
@@ -80,7 +81,7 @@ func TestStylingOf(t *testing.T) {
 func TestStylingOfRuns(t *testing.T) {
 	var b entity.Builder
 	segs := []model.Seg{{Text: "a"}, {Text: "b", Bold: true, Underline: true}, {Text: "c"}}
-	if err := styling.Perform(&b, stylingOf(segs)...); err != nil {
+	if err := styling.Perform(&b, stylingOf(segs, nil)...); err != nil {
 		t.Fatalf("perform: %v", err)
 	}
 	text, ents := b.Complete()
@@ -91,5 +92,31 @@ func TestStylingOfRuns(t *testing.T) {
 	want := []model.Span{{Start: 1, End: 2, Kind: model.SpanBold}, {Start: 1, End: 2, Kind: model.SpanUnderline}}
 	if !slices.Equal(got, want) {
 		t.Fatalf("spans:\n got %+v\nwant %+v", got, want)
+	}
+}
+
+// A mention by id goes out as a MentionName entity; an unresolved user
+// leaves its name plain.
+func TestStylingOfMention(t *testing.T) {
+	segs := []model.Seg{{Text: "yo "}, {Text: "Bob", Kind: model.SegMention, UserID: 42}}
+	user := func(id int64) tg.InputUserClass {
+		if id != 42 {
+			return nil
+		}
+		return &tg.InputUser{UserID: id, AccessHash: 1}
+	}
+	var b entity.Builder
+	if err := styling.Perform(&b, stylingOf(segs, user)...); err != nil {
+		t.Fatalf("perform: %v", err)
+	}
+	text, ents := b.Complete()
+	want := &tg.InputMessageEntityMentionName{Offset: 3, Length: 3, UserID: &tg.InputUser{UserID: 42, AccessHash: 1}}
+	if text != "yo Bob" || len(ents) != 1 || !reflect.DeepEqual(ents[0], want) {
+		t.Fatalf("text %q entities %+v", text, ents)
+	}
+	b = entity.Builder{}
+	_ = styling.Perform(&b, stylingOf(segs, func(int64) tg.InputUserClass { return nil })...)
+	if _, ents := b.Complete(); len(ents) != 0 {
+		t.Fatalf("unresolved user: %+v", ents)
 	}
 }

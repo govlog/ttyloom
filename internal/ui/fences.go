@@ -77,8 +77,11 @@ func fenceEntities(segs []model.Seg) []model.Span {
 		add := func(k model.SpanKind) {
 			ents = append(ents, model.Span{Start: off, End: off + n, Kind: k, Lang: s.Lang})
 		}
-		if s.Kind == model.SegPre {
+		switch s.Kind {
+		case model.SegPre:
 			add(model.SpanPre)
+		case model.SegMention:
+			ents = append(ents, model.Span{Start: off, End: off + n, Kind: model.SpanMention, UserID: s.UserID})
 		}
 		for _, k := range []struct {
 			on bool

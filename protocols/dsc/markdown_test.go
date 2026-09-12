@@ -125,3 +125,10 @@ func TestRenderStyledRuns(t *testing.T) {
 	// ponytail: no round trip here — the incoming parser reads no nested
 	// run (the local echo takes its spans from the segments, not from it).
 }
+
+func TestRenderMention(t *testing.T) {
+	segs := []model.Seg{{Text: "yo "}, {Text: "Bob", Kind: model.SegMention, UserID: 42}}
+	if got := render(segs); got != "yo <@42>" {
+		t.Fatalf("render: %q", got)
+	}
+}

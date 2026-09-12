@@ -2092,7 +2092,15 @@ func (u *UI) sendWith(w *Window, text string, pre bool) {
 	}
 	var segs []model.Seg
 	if !pre && replyTo == 0 {
-		if segs = parseDraft(text); segs != nil {
+		segs = parseDraft(text)
+		plain := segs
+		if plain == nil {
+			plain = []model.Seg{{Text: text}}
+		}
+		if ms, ok := u.mentionSegs(w.Chat, plain); ok { // @Name of a member with no username
+			segs = ms
+		}
+		if segs != nil {
 			m.Text, m.Entities = fenceText(segs), fenceEntities(segs)
 		}
 	}

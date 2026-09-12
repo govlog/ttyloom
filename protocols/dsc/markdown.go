@@ -284,9 +284,12 @@ func render(segs []model.Seg) string {
 				open = append(open, m)
 			}
 		}
-		if len(open) > 0 {
+		switch {
+		case s.Kind == model.SegMention:
+			b.WriteString("<@" + strconv.FormatInt(s.UserID, 10) + ">")
+		case len(open) > 0:
 			b.WriteString(mdEscape.Replace(s.Text))
-		} else {
+		default:
 			b.WriteString(s.Text)
 		}
 	}

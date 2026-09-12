@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"slices"
 	"testing"
 	"time"
 
@@ -38,10 +39,14 @@ func TestMentionFilter(t *testing.T) {
 	all := []model.Participant{
 		{Text: "Alice", Query: "@alice"},
 		{Text: "Éloi Dupont", Query: "@edu"},
-		{Text: "Bob", Query: "42"}, // no @username: never offered
+		{Text: "Bob", Query: "42"}, // no @username: offered by name, mention by id
+		{Text: "3 admins"},         // header line: never offered
 	}
-	if got := mentionFilter(all, ""); len(got) != 2 {
-		t.Fatalf("empty filter: %d candidates, want 2", len(got))
+	if got := mentionFilter(all, ""); len(got) != 3 {
+		t.Fatalf("empty filter: %d candidates, want 3", len(got))
+	}
+	if got := mentionFilter(all, "bo"); len(got) != 1 || got[0].Query != "42" || mentionInsert(got[0]) != "@Bob" {
+		t.Fatalf("filter by name without username: %v", got)
 	}
 	if got := mentionFilter(all, "eloi"); len(got) != 1 || got[0].Query != "@edu" {
 		t.Fatalf("filter by folded name: %v", got)
@@ -100,5 +105,26 @@ func TestMentionScanAndPick(t *testing.T) {
 	}
 	if u.ed.String() != "yo @bob " || u.mention != nil {
 		t.Fatalf("insertion: %q", u.ed.String())
+	}
+}
+
+// A member with no @username: the pick inserts @Name, the send turns it into
+// a mention by id (the @ dropped), "Bob" leaving "@Bobby" alone.
+func TestMentionByID(t *testing.T) {
+	g := &model.Chat{ID: 7, Kind: model.ChatGroup, Title: "grp"}
+	u := &UI{partsCache: map[model.ChatKey]partsEntry{g.Key(): {at: time.Now(),
+		lines: []model.Participant{{Text: "Bob", Query: "42"}, {Text: "Kevin Homri", Query: "43"}, {Text: "Al", Query: "@al"}}}}}
+	segs, ok := u.mentionSegs(g, []model.Seg{{Text: "yo @Kevin Homri, @Bobby et @Bob", Bold: true}})
+	want := []model.Seg{{Text: "yo ", Bold: true}, {Text: "Kevin Homri", Kind: model.SegMention, UserID: 43, Bold: true},
+		{Text: ", @Bobby et ", Bold: true}, {Text: "Bob", Kind: model.SegMention, UserID: 42, Bold: true}}
+	if !ok || !slices.Equal(segs, want) {
+		t.Fatalf("segs:\n got %+v\nwant %+v", segs, want)
+	}
+	if _, ok := u.mentionSegs(g, []model.Seg{{Text: "yo @al"}}); ok {
+		t.Fatal("a @username is no mention by id")
+	}
+	ents := fenceEntities(segs)
+	if len(ents) != 6 || ents[1] != (model.Span{Start: 3, End: 14, Kind: model.SpanMention, UserID: 43}) {
+		t.Fatalf("echo spans: %+v", ents)
 	}
 }

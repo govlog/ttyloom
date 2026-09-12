@@ -1055,8 +1055,8 @@ func (c *Client) Send(ctx context.Context, chat *model.Chat, text string, tmpID 
 
 // SendStyled : like Send, with formatting on the segments (pre, italic…).
 func (c *Client) SendStyled(ctx context.Context, chat *model.Chat, segs []model.Seg, tmpID int64) {
-	opts := stylingOf(segs)
 	go func() {
+		opts := c.stylingOf(ctx, segs)
 		defer c.Guard("SendStyled", func(err string) { c.Post(model.EvSent{ChatID: chat.ID, TmpID: tmpID, Err: err}) })
 		id, err := unpack.MessageID(c.sender.To(c.peer(chat)).StyledText(ctx, opts...))
 		ev := model.EvSent{ChatID: chat.ID, TmpID: tmpID, ID: id}
@@ -1072,10 +1072,22 @@ func (c *Client) SendPre(ctx context.Context, chat *model.Chat, text string, tmp
 	c.SendStyled(ctx, chat, []model.Seg{{Text: text, Kind: model.SegPre}}, tmpID)
 }
 
+// stylingOf : the options of segs, the mentions by id resolved through the
+// peer cache (an unknown user leaves its name plain).
+func (c *Client) stylingOf(ctx context.Context, segs []model.Seg) []styling.StyledTextOption {
+	return stylingOf(segs, func(id int64) tg.InputUserClass {
+		u, err := c.peers.ResolveUserID(ctx, id)
+		if err != nil {
+			return nil
+		}
+		return u.InputUser()
+	})
+}
+
 // EditStyled : like Edit, with formatting on the segments (fences of the draft).
 func (c *Client) EditStyled(ctx context.Context, chat *model.Chat, id int, segs []model.Seg) {
-	opts := stylingOf(segs)
 	go func() {
+		opts := c.stylingOf(ctx, segs)
 		defer c.Guard("EditStyled", func(err string) { c.Post(model.EvEdited{ChatID: chat.ID, ID: id, Err: err}) })
 		ev := model.EvEdited{ChatID: chat.ID, ID: id}
 		if _, err := c.sender.To(c.peer(chat)).Edit(id).StyledText(ctx, opts...); err != nil {

@@ -173,8 +173,9 @@ type Span struct {
 type SegKind int
 
 const (
-	SegPlain SegKind = iota
-	SegPre           // Lang
+	SegPlain   SegKind = iota
+	SegPre             // Lang
+	SegMention         // UserID: a member with no @username, mentioned by id
 )
 
 // Seg : one block of a styled send (fences, /me, Ctrl+B/I/U runs), in
@@ -184,6 +185,7 @@ type Seg struct {
 	Kind                    SegKind
 	Lang                    string
 	Bold, Italic, Underline bool
+	UserID                  int64 // SegMention
 }
 
 // SegBreak : a line break sits between two segments only around a fence;

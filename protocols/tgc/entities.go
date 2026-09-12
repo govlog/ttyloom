@@ -70,8 +70,9 @@ func spansOf(text string, ents []tg.MessageEntityClass) []model.Span {
 
 // stylingOf turns neutral segments into gotd styling options. One "\n"
 // around a fence, like the local echo of the sender counts it; the styles
-// of a run stack as several entities over its range.
-func stylingOf(segs []model.Seg) []styling.StyledTextOption {
+// of a run stack as several entities over its range. user resolves the id
+// of a SegMention (nil: the name goes out plain).
+func stylingOf(segs []model.Seg, user func(int64) tg.InputUserClass) []styling.StyledTextOption {
 	out := make([]styling.StyledTextOption, 0, 2*len(segs))
 	for i, s := range segs {
 		if model.SegBreak(segs, i) {
@@ -88,6 +89,11 @@ func stylingOf(segs []model.Seg) []styling.StyledTextOption {
 		}{{s.Bold, entity.Bold()}, {s.Italic, entity.Italic()}, {s.Underline, entity.Underline()}} {
 			if f.on {
 				fs = append(fs, f.f)
+			}
+		}
+		if s.Kind == model.SegMention && user != nil {
+			if in := user(s.UserID); in != nil {
+				fs = append(fs, entity.MentionName(in))
 			}
 		}
 		if len(fs) == 0 {
