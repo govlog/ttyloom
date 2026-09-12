@@ -123,6 +123,7 @@ var helpTopics = []topic{
 	{"spell", "help_spell", "options"},
 	{"spell_quotes", "help_spell_quotes", "options"},
 	{"sidebar_sort", "help_sidebar_sort", "options"},
+	{"sidebar_split", "help_sidebar_split", "options"},
 	{"sidebar_width", "help_sidebar_width", "options"},
 	{"kitty_images", "help_kitty_images", "options"},
 	{"cache_messages", "help_cache_messages", "options"},

@@ -712,7 +712,7 @@ func (u *UI) drawInput(b *strings.Builder, row, x0, cols int) (curRow, curCol in
 		prompt = "[→ " + render.CleanLine(u.queryPending(u.view())) + "…] "
 	case u.view().Target != nil:
 		c := u.view().Target
-		label := kindPrefix(c.Kind) + render.CleanLine(u.title(c))
+		label := kindPrefix(c.Kind) + bareTitle(c, render.CleanLine(u.title(c)))
 		if u.multiNet() {
 			label = c.Net + ":" + label
 		}

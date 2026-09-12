@@ -101,6 +101,11 @@ func TestTitleAlias(t *testing.T) {
 	if u.aliases[c.Key()] != "maman" || u.title(c) != "maman" {
 		t.Fatalf("alias set: %v", u.aliases)
 	}
+	// The kind marker typed in the name is dropped: the lists draw it already.
+	u.command("rename", []string{"@maman"}, "@maman")
+	if u.aliases[c.Key()] != "maman" {
+		t.Fatalf("marker not stripped: %v", u.aliases)
+	}
 	line := body(sidebarLines(sideChats, u.chatList, u.ws.List, nil, u.ws.Cur, th, testSideW, 1, 0, false, false, 0, -1, false, u.title)[0])
 	if !strings.Contains(line, "maman") || strings.Contains(line, "Alice") {
 		t.Fatalf("sidebar: %q", line)

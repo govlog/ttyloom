@@ -131,6 +131,7 @@ type Config struct {
 	Separator         bool      `toml:"separator"`
 	Redline           bool      `toml:"redline"`
 	SidebarSort       string    `toml:"sidebar_sort"`
+	SidebarSplit      bool      `toml:"sidebar_split"`
 	Spell             string    `toml:"spell"`        // off | a hunspell code, chained with + (fr, us, en_GB, fr+us)
 	SpellQuotes       bool      `toml:"spell_quotes"` // check the > quotes and the ``` fences too
 	SidebarWidth      int       `toml:"sidebar_width"`
@@ -202,6 +203,7 @@ separator = true       # separator line above the status bar
 redline = true         # red last-read line (unread separator) in each window
 sidebar_sort = "recent" # sort of the F2 sidebar (F7 cycles it): recent | alpha | unread
 sidebar_width = 26      # width of the F2 sidebar; the vertical bar drags with the mouse
+sidebar_split = false   # windows list in two sections, channels then direct messages (⊟ of the header)
 lang = ""               # interface language: empty = $LANG, otherwise fr | en
 `
 

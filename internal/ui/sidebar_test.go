@@ -96,10 +96,10 @@ func TestSidebarLines(t *testing.T) {
 
 	ws[1].Act = 2
 	lines = sidebarLines(sideWindows, nil, ws, nil, 0, th, testSideW, 3, 0, false, false, 0, -1, false, nil)
-	if got := body(lines[0]); got != "*0: (none)" { // *: status window
+	if got := body(lines[0]); got != "0: *(none)" { // *: status window
 		t.Fatalf("window 0: %q", got)
 	}
-	if got := body(lines[1]); got != "@1: ancien (2)" { // @: private chat
+	if got := body(lines[1]); got != "1: @ancien (2)" { // @: private chat
 		t.Fatalf("window 1: %q", got)
 	}
 	if !hasReverse(lines[0]) || hasReverse(lines[1]) {
@@ -185,6 +185,8 @@ func TestSidebarKindPrefix(t *testing.T) {
 		if got := render.Width(render.LineText(l)); got != testSideW+1 {
 			t.Fatalf("window %d wide %d: %q", i, got, render.LineText(l))
 		}
+		// The marker sits right after "N: ", glued to the name.
+		b = strings.TrimPrefix(b, fmt.Sprintf("%d: ", i))
 		if pfx == "" {
 			if strings.HasPrefix(b, "#") || strings.HasPrefix(b, "&") {
 				t.Fatalf("window %d: unexpected prefix %q", i, b)
@@ -693,7 +695,7 @@ func TestSideSectionToggle(t *testing.T) {
 	if u.menu != nil {
 		t.Fatal("context menu on a header line")
 	}
-	u.sideClick(sideHdr)
+	u.sideClick(0, sideHdr)
 	if !u.folded[model.NetDiscord] {
 		t.Fatalf("click on the header: %v", u.folded)
 	}
@@ -706,7 +708,7 @@ func TestSideSectionToggle(t *testing.T) {
 	if c := u.sideChatAt(sideHdr + 2); c == nil || c.Net != model.NetTelegram {
 		t.Fatalf("mapping after the fold: %+v", c) // the hidden row is gone from the count
 	}
-	u.sideClick(sideHdr)
+	u.sideClick(0, sideHdr)
 	if u.folded[model.NetDiscord] {
 		t.Fatalf("second click: %v", u.folded)
 	}
@@ -789,7 +791,7 @@ func TestSidebarUnreadRed(t *testing.T) {
 // Window 0 (status) gets the * prefix in window mode.
 func TestSideHeader(t *testing.T) {
 	th := theme.Terminal()
-	hd := sideHeader(sideChats, "recent", th, testSideW, false)
+	hd := sideHeader(sideChats, "recent", false, th, testSideW, false)
 	if len(hd) != 2 {
 		t.Fatalf("header: %d lines", len(hd))
 	}
@@ -809,10 +811,10 @@ func TestSideWindowZeroPrefix(t *testing.T) {
 	th := theme.Terminal()
 	ws := []*Window{{}, {Chat: &model.Chat{ID: 1, Kind: model.ChatGroup, Title: "g"}}}
 	lines := sidebarLines(sideWindows, nil, ws, nil, 1, th, testSideW, 2, 0, false, false, 0, -1, false, nil)
-	if got := render.LineText(lines[0]); !strings.HasPrefix(got, "*0:") {
+	if got := render.LineText(lines[0]); !strings.HasPrefix(got, "0: *") {
 		t.Fatalf("window 0: %q, prefix * expected", got)
 	}
-	if got := render.LineText(lines[1]); !strings.HasPrefix(got, "#1:") {
+	if got := render.LineText(lines[1]); !strings.HasPrefix(got, "1: #") {
 		t.Fatalf("window 1: %q", got)
 	}
 }
@@ -831,7 +833,7 @@ func TestSideHeaderClick(t *testing.T) {
 	if u.sideChatAt(sideHdr) != c {
 		t.Fatalf("first list line: %v", u.sideChatAt(sideHdr))
 	}
-	u.sideClick(0)
+	u.sideClick(0, 0)
 	if u.cfg.SidebarSort != "alpha" {
 		t.Fatalf("header click: sort = %q, want alpha", u.cfg.SidebarSort)
 	}
@@ -841,12 +843,12 @@ func TestSideHeaderClick(t *testing.T) {
 // header carries the same [sort:…] tag and its title line answers the click.
 func TestSideHeaderWindowsSort(t *testing.T) {
 	t.Setenv("TTYLOOM_DIR", t.TempDir()) // cycleSort saves the config
-	l0 := render.LineText(sideHeader(sideWindows, "recent", theme.Terminal(), testSideW, false)[0])
+	l0 := render.LineText(sideHeader(sideWindows, "recent", false, theme.Terminal(), testSideW, false)[0])
 	if !strings.Contains(l0, i18n.T("sidebar_title_windows")) || !strings.Contains(l0, "["+i18n.T("sort_recent")+"]") {
 		t.Fatalf("windows title: %q", l0)
 	}
 	u := winSortUI() // side = sideWindows
-	u.sideClick(0)
+	u.sideClick(0, 0)
 	if u.cfg.SidebarSort != "alpha" {
 		t.Fatalf("header click in windows mode: sort = %q, want alpha", u.cfg.SidebarSort)
 	}
@@ -870,7 +872,7 @@ func TestSideWindowsHonoursNetFilter(t *testing.T) {
 			rows = append(rows, s)
 		}
 	}
-	if !slices.Equal(rows, []string{"*0: (none)", "@2: discord-chat"}) {
+	if !slices.Equal(rows, []string{"0: *(none)", "2: @discord-chat"}) {
 		t.Fatalf("filtered windows list: %v", rows)
 	}
 	if got := u.sideChatAt(sideHdr + 1); got != u.ws.List[2].Chat {
@@ -916,19 +918,19 @@ func TestSideToggleSaves(t *testing.T) {
 	t.Setenv("TTYLOOM_DIR", t.TempDir())
 	u := netUI(model.NetTelegram, model.NetDiscord)
 	u.th, u.side, u.sideW, u.folded = theme.Terminal(), sideChats, testSideW, map[string]bool{}
-	u.sideClick(sideHdr) // header of the discord section, first line of the list
+	u.sideClick(0, sideHdr) // header of the discord section, first line of the list
 	got, err := loadFolds(sidebarPath())
 	if err != nil || !got[model.NetDiscord] {
 		t.Fatalf("after the fold: %v, %v", got, err)
 	}
-	u.sideClick(sideHdr)
+	u.sideClick(0, sideHdr)
 	if got, err = loadFolds(sidebarPath()); err != nil || len(got) != 0 {
 		t.Fatalf("after the unfold: %v, %v", got, err)
 	}
 	// Directory gone: the fold still happens on the screen, and the failed
 	// write says so on one line.
 	t.Setenv("TTYLOOM_DIR", filepath.Join(t.TempDir(), "gone"))
-	u.sideClick(sideHdr)
+	u.sideClick(0, sideHdr)
 	if !u.folded[model.NetDiscord] {
 		t.Fatalf("fold dropped by the write failure: %v", u.folded)
 	}
@@ -1012,7 +1014,7 @@ func TestSideWinsClickMapping(t *testing.T) {
 		u.cfg.SidebarSort = sort
 		lines, _ := u.sideBlock(-1)
 		row := body(lines[sideHdr+1]) // second drawn line of the list
-		u.sideClick(sideHdr + 1)
+		u.sideClick(0, sideHdr+1)
 		if want := fmt.Sprintf("%d:", u.ws.Cur); !strings.Contains(row, want) {
 			t.Fatalf("sort %q: line %q opened window %d", sort, row, u.ws.Cur)
 		}
@@ -1183,10 +1185,50 @@ func TestSideWindowsActRed(t *testing.T) {
 	if act == nil || act.Style != red {
 		t.Fatalf("activity span: %+v", content(lines[1]))
 	}
-	if got := body(lines[1]); got != "@1: ancien (2)" {
+	if got := body(lines[1]); got != "1: @ancien (2)" {
 		t.Fatalf("window 1: %q", got)
 	}
 	if !oneBar(lines[0]) {
 		t.Fatalf("current line patchy: %+v", content(lines[0]))
+	}
+}
+
+// A Discord channel is already named "#general": the window list does not
+// double the marker.
+func TestSideWindowDiscordHashNotDoubled(t *testing.T) {
+	th := theme.Terminal()
+	ws := []*Window{{}, {Chat: &model.Chat{Net: model.NetDiscord, ID: 1, Kind: model.ChatGroup, Title: "#general"}}}
+	lines := sidebarLines(sideWindows, nil, ws, nil, 0, th, testSideW, 2, 0, false, false, 0, -1, false, nil)
+	if got := body(lines[1]); got != "1: #general" {
+		t.Fatalf("window 1: %q", got)
+	}
+}
+
+// sidebar_split: window 0, then the channels under their header, then the
+// direct messages under theirs, each part in the sort order; a click on the
+// ⊟ of the header toggles it, a click on a header line opens nothing.
+func TestSideWinsSplit(t *testing.T) {
+	u := winSortUI()
+	u.t = &term.Term{Cols: 80, Rows: 24}
+	u.cfg.SidebarSort, u.cfg.SidebarSplit = "alpha", true
+	kinds := map[int]model.ChatKind{1: model.ChatGroup, 2: model.ChatUser, 3: model.ChatChannel}
+	for i, k := range kinds {
+		u.ws.List[i].Chat.Kind = k
+	}
+	if got := u.sideWins(); !slices.Equal(got, []int{0, winSecChannels, 3, 1, winSecDirect, 2, 4}) {
+		t.Fatalf("split: %v", got)
+	}
+	lines := sidebarLines(sideWindows, nil, u.ws.List, u.sideWins(), 0, theme.Terminal(), testSideW, 7, 0, false, false, 0, -1, false, nil)
+	if got := body(lines[1]); !strings.HasPrefix(got, "── "+i18n.T("sidebar_sec_channels")+" ─") {
+		t.Fatalf("channels header: %q", got)
+	}
+	u.side, u.sideW = sideWindows, testSideW
+	u.sideClick(0, sideHdr+1) // the header line: nothing to go to
+	if u.ws.Cur != 0 {
+		t.Fatalf("header click moved to window %d", u.ws.Cur)
+	}
+	u.sideClick(sideIconCol(sideWindows, "alpha"), 0)
+	if u.cfg.SidebarSplit || u.cfg.SidebarSort != "alpha" {
+		t.Fatalf("icon click: split %v sort %q", u.cfg.SidebarSplit, u.cfg.SidebarSort)
 	}
 }

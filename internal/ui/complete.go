@@ -103,7 +103,7 @@ func complContext(line string, cursor int) (src complSource, tail string, setKey
 }
 
 // setKeys : keys that /set knows.
-var setKeys = []string{"timestamps", "timestamps_seconds", "cycle_mode", "multiline", "link_previews", "maps", "hover", "images", "images_hover", "video", "avatars", "auto_media_max_kb", "download_dir", "bell", "notify", "auto_open_days", "aggregate", "log", "log_dir", "separator", "redline", "sidebar_sort", "sidebar_width", "spell", "spell_quotes", "kitty_images", "cache_messages", "lang"}
+var setKeys = []string{"timestamps", "timestamps_seconds", "cycle_mode", "multiline", "link_previews", "maps", "hover", "images", "images_hover", "video", "avatars", "auto_media_max_kb", "download_dir", "bell", "notify", "auto_open_days", "aggregate", "log", "log_dir", "separator", "redline", "sidebar_sort", "sidebar_split", "sidebar_width", "spell", "spell_quotes", "kitty_images", "cache_messages", "lang"}
 
 // setValues gives the valid values of a /set key with a closed choice, nil otherwise.
 func setValues(key string) []string {
@@ -125,7 +125,7 @@ func setValues(key string) []string {
 		return append([]string{"off", "us"}, spell.Available(spell.DictDir)...)
 	case "lang":
 		return i18n.Langs() // a chain ("fr+en") is typed by hand
-	case "timestamps", "timestamps_seconds", "link_previews", "maps", "images_hover", "avatars", "bell", "aggregate", "log", "separator", "redline", "spell_quotes":
+	case "timestamps", "timestamps_seconds", "link_previews", "maps", "images_hover", "avatars", "bell", "aggregate", "log", "separator", "redline", "spell_quotes", "sidebar_split":
 		return []string{"on", "off"}
 	default:
 		return nil

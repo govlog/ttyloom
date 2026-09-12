@@ -543,6 +543,8 @@ func (u *UI) setCmd(args []string) {
 			w.AddSys("sidebar_sort = " + u.cfg.SidebarSort)
 		case "sidebar_width":
 			w.AddSys(fmt.Sprintf("sidebar_width = %d", u.cfg.SidebarWidth))
+		case "sidebar_split":
+			w.AddSys(fmt.Sprintf("sidebar_split = %v", u.cfg.SidebarSplit))
 		case "kitty_images":
 			w.AddSys(fmt.Sprintf("kitty_images = %d", u.cfg.KittyImages))
 		case "cache_messages":
@@ -679,6 +681,9 @@ func (u *UI) setCmd(args []string) {
 		u.cfg.SidebarSort = v
 		u.sideScroll = 0
 		u.marquee = marqueeState{}
+	case "sidebar_split":
+		u.cfg.SidebarSplit = onOff(v)
+		u.sideScroll = 0
 	case "sidebar_width":
 		n, err := strconv.Atoi(v)
 		if err != nil {

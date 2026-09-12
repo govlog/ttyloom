@@ -189,7 +189,8 @@ func (u *UI) rename(w *Window, text string) {
 		w.AddSys(i18n.T("rename_window_not_bound"))
 		return
 	}
-	name = strings.TrimSpace(render.CleanLine(name))
+	// The kind marker (#, &, @) is drawn by the lists: typed in the name it doubles.
+	name = strings.TrimSpace(strings.TrimPrefix(render.CleanLine(name), kindPrefix(c.Kind)))
 	if name == "" {
 		w.AddSys(i18n.T("usage_rename"))
 		return

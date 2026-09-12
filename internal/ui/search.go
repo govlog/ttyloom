@@ -345,7 +345,7 @@ func (g *globalSearch) Lines(th theme.Theme, w, h int, title func(*model.Chat) s
 			hi.Reverse = true
 		}
 		spans := []render.Span{
-			{Text: padTo("["+render.Truncate(kindPrefix(hit.Chat.Kind)+render.CleanLine(chatTitle(hit.Chat, title)), max(1, chatW-2), "…")+"]", chatW), Style: cell},
+			{Text: padTo("["+render.Truncate(kindPrefix(hit.Chat.Kind)+bareTitle(hit.Chat, render.CleanLine(chatTitle(hit.Chat, title))), max(1, chatW-2), "…")+"]", chatW), Style: cell},
 			{Text: "  " + hit.Date.Format("02/01 15:04") + "  ", Style: cell},
 			{Text: padTo("<"+render.CleanLine(hit.From)+">", fromW) + "  ", Style: st},
 			{Text: padTo(snippet(hit.Text, q, snipW), snipW), Style: st},

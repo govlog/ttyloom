@@ -151,7 +151,7 @@ func (n *newChatBox) Lines(th theme.Theme, w, h int, title func(*model.Chat) str
 			if j == n.cur { // current line: inverted, presence mark included
 				st, hi = sel, sel
 			}
-			label := kindPrefix(c.Kind) + " " + render.CleanLine(chatTitle(c, title))
+			label := kindPrefix(c.Kind) + " " + bareTitle(c, render.CleanLine(chatTitle(c, title)))
 			if c.Username != "" {
 				label += " (@" + render.CleanLine(c.Username) + ")"
 			}
