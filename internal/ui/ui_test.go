@@ -601,6 +601,7 @@ type fakeBackend struct {
 	members  []string   // tokens received by WhoisMember
 	whois    int        // Whois calls
 	reacts   int        // React calls
+	reacted  string     // emoji of the last React call
 	whoRead  int        // WhoRead calls
 	dialogs  int        // LoadDialogs calls
 	search   int        // Search calls
@@ -627,7 +628,10 @@ func (f *fakeBackend) Whois(context.Context, *model.Chat) { f.whois++ }
 
 func (f *fakeBackend) Search(context.Context, *model.Chat, string, int) { f.search++ }
 
-func (f *fakeBackend) React(context.Context, *model.Chat, int, string) { f.reacts++ }
+func (f *fakeBackend) React(_ context.Context, _ *model.Chat, _ int, e string) {
+	f.reacts++
+	f.reacted = e
+}
 
 func (f *fakeBackend) WhoRead(context.Context, *model.Chat, int, int) { f.whoRead++ }
 

@@ -66,7 +66,7 @@ func (c *Client) state() *ningen.State { return c.st.Load() }
 // and no name resolution: a pseudo that no dialog carries cannot become a chat
 // (/query, /join).
 func (c *Client) Caps() model.Caps {
-	return model.Caps{Reactions: true, Edit: true, Gifs: true, Search: true, GlobalSearch: true}
+	return model.Caps{Reactions: true, AnyReaction: true, Edit: true, Gifs: true, Search: true, GlobalSearch: true}
 }
 
 // Run blocks: QR login when there is no token yet, gateway connection, then
@@ -250,6 +250,7 @@ func readyIncomplete(r gateway.ReadyEvent) bool {
 // dialog : one line of the sidebar, read marks included.
 func (c *Client) dialog(ch *discord.Channel, guild string) *model.Chat {
 	chat := chatOf(ch, guild)
+	chat.Customs, chat.CustomLocs = c.customsOf(ch.GuildID)
 	c.readOf(chat, ch)
 	return chat
 }

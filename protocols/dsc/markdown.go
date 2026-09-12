@@ -156,15 +156,24 @@ func fence(body string) (text, lang string) {
 	return strings.TrimSuffix(body, "\n"), lang
 }
 
-// mention reads <@id> and <@!id> (a Mention span over "@name") or <#id>
-// (plain "#id": the channel names are not known here). Anything else, a role
-// <@&id> among them, stays text.
+// mention reads <@id> and <@!id> (a Mention span over "@name"), <#id>
+// (plain "#id": the channel names are not known here) or a custom emoji
+// <:name:id> / <a:name:id> (plain ":name:", the convention of emojiOf: a
+// text client has no glyph for it). Anything else, a role <@&id> among them,
+// stays text.
 func (p *parser) mention(s string) int {
-	if len(s) < 4 || s[0] != '<' || (s[1] != '@' && s[1] != '#') {
+	if len(s) < 4 || s[0] != '<' {
 		return 0
 	}
 	end := strings.IndexByte(s, '>')
 	if end < 0 {
+		return 0
+	}
+	if name, ok := customEmoji(s[1:end]); ok {
+		p.out = append(p.out, []rune(":"+name+":")...)
+		return end + 1
+	}
+	if s[1] != '@' && s[1] != '#' {
 		return 0
 	}
 	id, err := strconv.ParseUint(strings.TrimPrefix(s[2:end], "!"), 10, 64)
@@ -186,6 +195,19 @@ func (p *parser) mention(s string) int {
 	p.out = append(p.out, []rune("@"+name)...)
 	p.spans = append(p.spans, model.Span{Start: start, End: len(p.out), Kind: model.SpanMention, UserID: int64(id)})
 	return end + 1
+}
+
+// customEmoji reads the inside of <:name:id> or <a:name:id>: the name.
+func customEmoji(s string) (string, bool) {
+	s = strings.TrimPrefix(s, "a")
+	name, id, ok := strings.Cut(strings.TrimPrefix(s, ":"), ":")
+	if !ok || name == "" || !strings.HasPrefix(s, ":") {
+		return "", false
+	}
+	if _, err := strconv.ParseUint(id, 10, 64); err != nil {
+		return "", false
+	}
+	return name, true
 }
 
 // link reads a bare https?:// URL. The punctuation that ends a sentence or

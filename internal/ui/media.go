@@ -203,6 +203,10 @@ func (u *UI) downloaded(e model.EvDownloaded) {
 		u.gifDecode(md)
 		return
 	}
+	if u.customOwns(md) { // image of a custom emoji: the cell of the picker
+		u.customDecode(md)
+		return
+	}
 	if !md.Previewable() || u.images == "off" {
 		md.State = model.MediaReady
 		u.invalidateMedia(md)

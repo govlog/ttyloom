@@ -150,7 +150,29 @@ func (c *Client) chatFor(id discord.ChannelID) *model.Chat {
 		return &model.Chat{ID: int64(id), Kind: model.ChatGroup,
 			Peer: peer{Channel: uint64(id)}, Title: "#" + id.String()}
 	}
-	return chatOf(ch, c.guildName(ch.GuildID))
+	chat := chatOf(ch, c.guildName(ch.GuildID))
+	chat.Customs, chat.CustomLocs = c.customsOf(ch.GuildID)
+	return chat
+}
+
+// customsOf : the custom emojis of a guild as ":name:", and the image of each
+// one (".gif" when animated) as a download handle; none for a DM or a guild
+// not cached.
+func (c *Client) customsOf(guild discord.GuildID) ([]string, map[string]any) {
+	if !guild.IsValid() {
+		return nil, nil
+	}
+	es, err := c.state().Cabinet.Emojis(guild)
+	if err != nil {
+		return nil, nil
+	}
+	out := make([]string, 0, len(es))
+	locs := make(map[string]any, len(es))
+	for _, e := range es {
+		out = append(out, ":"+e.Name+":")
+		locs[":"+e.Name+":"] = fileURL(e.EmojiURL())
+	}
+	return out, locs
 }
 
 // guildName : name of a guild from the cache, "" when it is not known — the

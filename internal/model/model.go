@@ -46,7 +46,11 @@ type Chat struct {
 	// Reactions : reactions allowed in this chat. nil = every reaction of the
 	// account (ChatReactionsAll, or full record never read); empty non-nil =
 	// none (ChatReactionsNone).
-	Reactions  []string
+	Reactions []string
+	// Customs : custom emojis of the room (Discord guild), ":name:" each —
+	// offered by the picker, sent as they are (the backend knows the ids).
+	Customs    []string
+	CustomLocs map[string]any // image of each custom emoji, keyed like Customs (Discord CDN); nil with none
 	TopMessage int
 	LastDate   time.Time
 	PhotoLoc   any // profile photo (small size), nil with no photo

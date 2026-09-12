@@ -469,7 +469,12 @@ func (u *UI) edited(e model.EvEdited) {
 // captured: the choice comes later and the view may have changed meanwhile
 // (chat lookup, login prompt, fatal error).
 func (u *UI) openReactPicker(it *Item) {
-	list := u.allowed(u.chatOf(it.Msg))
+	c := u.chatOf(it.Msg)
+	if u.caps(c).AnyReaction { // the whole table, with the search
+		u.openPicker(c, func(e string) { u.react(it, e) })
+		return
+	}
+	list := u.allowed(c)
 	if len(list) == 0 {
 		u.flash(i18n.T("no_reaction_allowed"))
 		return
@@ -566,7 +571,7 @@ func (u *UI) react(it *Item, pick string) {
 	next := nextReaction(it.Msg.Reactions, pick)
 	// A drop always goes through; setting a reaction outside the list (custom
 	// of somebody else, restricted chat) would be refused by the server.
-	if next != "" && !slices.Contains(u.allowed(c), emoji.Base(next)) {
+	if next != "" && !u.caps(c).AnyReaction && !slices.Contains(u.allowed(c), emoji.Base(next)) {
 		u.reactFailed(c.Key(), model.EvReactionFailed{ChatID: c.ID, ID: it.Msg.ID,
 			Emoji: next, Reason: i18n.T("reaction_not_available")})
 		return

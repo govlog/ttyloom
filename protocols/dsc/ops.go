@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -119,7 +120,8 @@ func (c *Client) send(ctx context.Context, name string, chat *model.Chat, tmpID 
 	go func() {
 		ev := model.EvSent{ChatID: chat.ID, TmpID: tmpID}
 		defer c.Guard(name, func(err string) { c.Post(model.EvSent{ChatID: chat.ID, TmpID: tmpID, Err: err}) })
-		chID, _ := ids(chat)
+		chID, guild := ids(chat)
+		data.Content = c.customs(data.Content, guild)
 		m, err := c.rest(ctx).SendMessageComplex(chID, data)
 		switch {
 		case err != nil:
@@ -200,6 +202,33 @@ func (c *Client) upload(ctx context.Context, chat *model.Chat, path, caption str
 	}()
 }
 
+// reCustom : ":name:" as typed, the shape of a custom emoji name.
+var reCustom = regexp.MustCompile(`:([A-Za-z0-9_~]+):`)
+
+// customs turns every ":name:" the guild knows as a custom emoji into the
+// <:name:id> Discord shows as the image — the mirror of parse. An unknown
+// name stays text, and outside a guild nothing changes.
+// ponytail: the emojis of the other guilds are not looked at; add them when
+// somebody with Nitro asks.
+func (c *Client) customs(text string, guild discord.GuildID) string {
+	if !guild.IsValid() || !strings.Contains(text, ":") {
+		return text
+	}
+	es, err := c.state().Cabinet.Emojis(guild)
+	if err != nil || len(es) == 0 {
+		return text
+	}
+	return reCustom.ReplaceAllStringFunc(text, func(m string) string {
+		name := m[1 : len(m)-1]
+		for _, e := range es {
+			if e.Name == name {
+				return e.String() // <:name:id>, <a:name:id> when animated
+			}
+		}
+		return m
+	})
+}
+
 // --- edit, delete ---
 
 func (c *Client) Edit(ctx context.Context, chat *model.Chat, id int, text string) {
@@ -218,7 +247,8 @@ func (c *Client) edit(ctx context.Context, name string, chat *model.Chat, id int
 	go func() {
 		ev := model.EvEdited{ChatID: chat.ID, ID: id}
 		defer c.Guard(name, func(err string) { c.Post(model.EvEdited{ChatID: chat.ID, ID: id, Err: err}) })
-		chID, _ := ids(chat)
+		chID, guild := ids(chat)
+		text = c.customs(text, guild)
 		_, err := c.rest(ctx).EditMessageComplex(chID, discord.MessageID(id),
 			api.EditMessageData{Content: option.NewNullableString(text)})
 		if err != nil {

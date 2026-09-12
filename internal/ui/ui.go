@@ -113,41 +113,42 @@ type UI struct {
 	// it any more ("s", window closed, media freed, preview closed).
 	decodes     map[*model.Media]context.CancelFunc
 	clock       string
-	flashMsg    string                // temporary message of the status bar (copy)
-	flashUntil  time.Time             // end of the display of flashMsg
-	pager       *pager                // page waiting to be shown, only one at a time
-	pasteAsk    string                // multiline paste waiting for a decision (e/c/a)
-	pasteIns    bool                  // pasteAsk in the expanded editor: the choice inserts, it never sends
-	multi       bool                  // expanded input zone (/set multiline + Shift+Enter)
-	sendAsk     *sendAsk              // pasted image waiting for a decision (e/l/a)
-	selShow     bool                  // next draw: move the view to the selected message
-	edit        *Item                 // message being edited (the input carries its text)
-	editText    string                // text of the last edit sent, taken back when it fails
-	reply       *Item                 // message the next input answers
-	ask         *confirm              // confirmation (y/n) waiting: delete, block…
-	menu        *ctxMenu              // context menu of the sidebar (right click): it takes everything
-	parts       *partsBox             // member box shown (F3), nil = nothing to show
-	mention     *mentionBox           // @… box above the input, nil = closed
-	mentionMute int                   // 1+start of the @word muted by Esc; 0 = none
-	completion  *completionState      // repeated Tab on the current input
-	spell       spellChecker          // nil = off (config, error, or nospell build)
-	spellText   string                // input of the last spell scan
-	spellCache  []spell.Range         // its wrong words
-	spellFix    *spellFixBox          // correction box (Ctrl+R or right click)
-	inMap       inputMap              // input geometry of the last frame (mouse)
-	partsOn     bool                  // box asked for: it follows the shown window
-	picker      *picker               // emoji picker open: it takes every key
-	themePick   *themePicker          // theme picker open: it takes every key
-	reactList   map[string][]string   // reactions the account can use per network (EvReactionsList)
-	viewer      *viewer               // full screen preview open: it takes every key
-	search      *searchState          // Ctrl+F search running in the shown window
-	gsearch     *globalSearch         // 2nd Ctrl+F: overlay of the server results, it takes everything
-	newChat     *newChatBox           // "new chat" overlay: it takes everything
-	gifs        *gifBox               // GIF box (Ctrl+G): it takes everything
-	gifOrphan   map[*model.Media]bool // previews of a closed GIF box whose download still comes
-	contacts    []*model.Chat         // contacts of the account (contacts.getContacts), source of the overlay
-	gotContacts bool                  // contacts already asked for: once per session
-	jump        struct {              // message to join at the next history (global result)
+	flashMsg    string                  // temporary message of the status bar (copy)
+	flashUntil  time.Time               // end of the display of flashMsg
+	pager       *pager                  // page waiting to be shown, only one at a time
+	pasteAsk    string                  // multiline paste waiting for a decision (e/c/a)
+	pasteIns    bool                    // pasteAsk in the expanded editor: the choice inserts, it never sends
+	multi       bool                    // expanded input zone (/set multiline + Shift+Enter)
+	sendAsk     *sendAsk                // pasted image waiting for a decision (e/l/a)
+	selShow     bool                    // next draw: move the view to the selected message
+	edit        *Item                   // message being edited (the input carries its text)
+	editText    string                  // text of the last edit sent, taken back when it fails
+	reply       *Item                   // message the next input answers
+	ask         *confirm                // confirmation (y/n) waiting: delete, block…
+	menu        *ctxMenu                // context menu of the sidebar (right click): it takes everything
+	parts       *partsBox               // member box shown (F3), nil = nothing to show
+	mention     *mentionBox             // @… box above the input, nil = closed
+	mentionMute int                     // 1+start of the @word muted by Esc; 0 = none
+	completion  *completionState        // repeated Tab on the current input
+	spell       spellChecker            // nil = off (config, error, or nospell build)
+	spellText   string                  // input of the last spell scan
+	spellCache  []spell.Range           // its wrong words
+	spellFix    *spellFixBox            // correction box (Ctrl+R or right click)
+	inMap       inputMap                // input geometry of the last frame (mouse)
+	partsOn     bool                    // box asked for: it follows the shown window
+	picker      *picker                 // emoji picker open: it takes every key
+	themePick   *themePicker            // theme picker open: it takes every key
+	reactList   map[string][]string     // reactions the account can use per network (EvReactionsList)
+	viewer      *viewer                 // full screen preview open: it takes every key
+	search      *searchState            // Ctrl+F search running in the shown window
+	gsearch     *globalSearch           // 2nd Ctrl+F: overlay of the server results, it takes everything
+	newChat     *newChatBox             // "new chat" overlay: it takes everything
+	gifs        *gifBox                 // GIF box (Ctrl+G): it takes everything
+	customs     map[string]*model.Media // images of the custom emojis, by URL, kept for the session (customs.go)
+	gifOrphan   map[*model.Media]bool   // previews of a closed GIF box whose download still comes
+	contacts    []*model.Chat           // contacts of the account (contacts.getContacts), source of the overlay
+	gotContacts bool                    // contacts already asked for: once per session
+	jump        struct {                // message to join at the next history (global result)
 		chat  model.ChatKey
 		msgID int
 	}
@@ -1079,6 +1080,7 @@ func (u *UI) remember(c *model.Chat) *model.Chat {
 		u.readInbox(old, c.ReadInboxMaxID, c.Unread, true)
 		old.TopMessage, old.LastDate = c.TopMessage, c.LastDate
 		old.PhotoLoc = c.PhotoLoc // photo refreshed; the avatar already loaded does not move
+		old.Customs, old.CustomLocs = c.Customs, c.CustomLocs
 		return old
 	}
 	u.chats[c.Key()] = c
@@ -1832,7 +1834,7 @@ func (u *UI) key(k term.Key) {
 		case 'e':
 			u.edEnd()
 		case 't':
-			u.openPicker(func(s string) { u.ed.Insert(s) })
+			u.openPicker(u.view().Chat, func(s string) { u.ed.Insert(s) })
 		case 'v': // Ctrl+V (Ctrl+Insert sends it too): image from the clipboard
 			u.pasteClip()
 		case 'f':
@@ -1992,9 +1994,14 @@ func (u *UI) sendTyping(w *Window) {
 	}
 }
 
-// openPicker opens the centred emoji picker; onPick gets the choice.
-func (u *UI) openPicker(onPick func(string)) {
+// openPicker opens the centred emoji picker; onPick gets the choice. c (nil
+// in the aggregate) brings the custom emojis of its room.
+func (u *UI) openPicker(c *model.Chat, onPick func(string)) {
 	u.picker = newPicker(min(60, u.t.Cols-4), min(14, u.t.Rows-4), onPick)
+	if c != nil && len(c.Customs) > 0 {
+		u.picker.customs, u.picker.chat, u.picker.imgShown = c.Customs, c, u.customShown
+		u.picker.filter()
+	}
 }
 
 func (u *UI) submit() {

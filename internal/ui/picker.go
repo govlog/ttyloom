@@ -3,12 +3,14 @@ package ui
 import (
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"unicode/utf8"
 
 	"github.com/govlog/ttyloom/internal/config"
 	"github.com/govlog/ttyloom/internal/emoji"
 	"github.com/govlog/ttyloom/internal/i18n"
+	"github.com/govlog/ttyloom/internal/model"
 	"github.com/govlog/ttyloom/internal/render"
 	"github.com/govlog/ttyloom/internal/term"
 	"github.com/govlog/ttyloom/internal/theme"
@@ -22,14 +24,25 @@ import (
 // column on that line.
 const cellW = 3
 
+// reCustomName : ":name:" as typed, a custom emoji of the room (Discord). It
+// is sent as it is, the backend knows the id.
+var reCustomName = regexp.MustCompile(`^:[A-Za-z0-9_~]+:$`)
+
 type picker struct {
 	query  []rune
 	items  []emoji.Emoji
 	recent []string // recents read at opening time, first when query is empty
-	cur    int
-	cols   int // columns of the grid
-	rows   int // rows of the grid
-	onPick func(string)
+	// customs : custom emojis of the room (Chat.Customs), ":name:" each —
+	// listed first, searched by name, drawn by the two first letters of it.
+	customs []string
+	chat    *model.Chat // room of the customs: their images (CustomLocs) and their network
+	// imgShown : the image of a custom emoji is on its cell (kitty): the grid
+	// leaves the cell blank under it. nil: the name shows.
+	imgShown func(string) bool
+	cur      int
+	cols     int // columns of the grid
+	rows     int // rows of the grid
+	onPick   func(string)
 	// react : fixed list (reaction picker) — no search and no recents, the order
 	// of Telegram is the right one. nil = the whole Unicode table.
 	react []string
@@ -111,7 +124,10 @@ func (p *picker) filter() {
 		return
 	}
 	q := string(p.query)
-	p.items, p.cur = emoji.Search(q), 0
+	p.items, p.cur = append(p.customItems(q), emoji.Search(q)...), 0
+	if reCustomName.MatchString(q) { // a custom emoji the list does not hold (another guild, cache not yet filled)
+		p.items = append([]emoji.Emoji{{Char: q, Name: q, Group: customGroup}}, p.items...)
+	}
 	if q != "" || len(p.recent) == 0 {
 		return
 	}
@@ -171,6 +187,22 @@ func (p *picker) Key(k term.Key) bool {
 		p.filter()
 	}
 	return false
+}
+
+// customGroup : Group of a custom emoji item, the grid draws those by name.
+const customGroup = "custom"
+
+// customItems : the customs whose name holds q (case insensitive), as items.
+func (p *picker) customItems(q string) []emoji.Emoji {
+	q = strings.ToLower(q)
+	var out []emoji.Emoji
+	for _, c := range p.customs {
+		name := strings.Trim(c, ":")
+		if strings.Contains(strings.ToLower(name), q) {
+			out = append(out, emoji.Emoji{Char: c, Name: name, Group: customGroup})
+		}
+	}
+	return out
 }
 
 func (p *picker) move(d int) { p.cur = max(0, min(p.cur+d, len(p.items)-1)) }
@@ -237,6 +269,12 @@ func (p *picker) grid(edge, box, sel theme.Style, row, inner int) render.Line {
 		// emojiCell cleans the emoji (it can come raw from the server,
 		// reaction list) and brings it to the exact width of its cell.
 		char := emojiCell(p.items[i].Char)
+		if p.items[i].Group == customGroup { // no glyph on a terminal: the start of the name, or its image
+			char = padTo(p.items[i].Name, cellW-1)
+			if p.imgShown != nil && p.imgShown(p.items[i].Char) {
+				char = strings.Repeat(" ", cellW-1)
+			}
+		}
 		if i == p.cur {
 			flush()
 			spans = append(spans, render.Span{Text: char, Style: sel})

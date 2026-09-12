@@ -271,7 +271,7 @@ func (u *UI) command(name string, args []string, text string) {
 		w = u.view() // the view may have changed: the answer goes where the user looks
 		w.AddSys(fmt.Sprintf("debug = %v", u.showDebug))
 	case "emoji":
-		u.openPicker(func(s string) { u.ed.Insert(s) })
+		u.openPicker(u.view().Chat, func(s string) { u.ed.Insert(s) })
 	case "gif":
 		u.openGifs(text)
 	case "help":

@@ -38,6 +38,9 @@ func TestParse(t *testing.T) {
 		{"mention unknown", "<@!7>", "@7", []model.Span{{Start: 0, End: 2, Kind: model.SpanMention, UserID: 7}}},
 		{"channel has no span", "see <#99> now", "see #99 now", nil},
 		{"role mention stays text", "<@&5> hi", "<@&5> hi", nil},
+		{"custom emoji", "hi <:emoji_7:1488279885599473847>", "hi :emoji_7:", nil},
+		{"animated custom emoji", "<a:wave:12> x", ":wave: x", nil},
+		{"custom emoji without id stays text", "<:x:y>", "<:x:y>", nil},
 		{"bare url", "go https://x.io/a now", "go https://x.io/a now", []model.Span{{Start: 3, End: 17, Kind: model.SpanURL, URL: "https://x.io/a"}}},
 		// The closing punctuation of a sentence is not part of the target.
 		{"url in brackets", "see (https://x.io/a) now", "see (https://x.io/a) now", []model.Span{{Start: 5, End: 19, Kind: model.SpanURL, URL: "https://x.io/a"}}},

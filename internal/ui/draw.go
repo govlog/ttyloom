@@ -109,6 +109,7 @@ func (u *UI) draw() {
 	// The previews of the GIF box go with the images of the messages: same
 	// placement, same animation, same end-of-frame diff.
 	u.placed = append(u.placed, u.gifPlacements(x0)...)
+	u.placed = append(u.placed, u.customPlacements(x0)...)
 	if u.cfg.Separator { // separator line, column of the bar included
 		dim := theme.Style{FG: u.th.Color(theme.Dim), BG: u.th.BG}.SGR()
 		fmt.Fprintf(&b, "\x1b[%d;%dH%s%s\x1b[K", view+1, x0+1, dim, strings.Repeat("─", u.t.Cols-x0))
@@ -472,6 +473,7 @@ func (u *UI) overlay() overlays {
 		out = append(out, overlayBox{rect: r, lines: u.parts.Lines(u.th, r.w, r.h)})
 	}
 	if u.picker != nil {
+		u.customLoad() // the images of the custom emojis on the screen
 		r := u.pickerRect()
 		out = append(out, overlayBox{rect: r, lines: u.picker.Lines(u.th)})
 	}

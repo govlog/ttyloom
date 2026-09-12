@@ -28,7 +28,7 @@ var _ model.Backend = (*Client)(nil)
 // leaving a room and blocking included, so the context menu offers neither.
 func TestCaps(t *testing.T) {
 	got := New(Config{}, make(chan model.Event, 1)).Caps()
-	want := model.Caps{Reactions: true, Edit: true, Gifs: true, Search: true, GlobalSearch: true}
+	want := model.Caps{Reactions: true, AnyReaction: true, Edit: true, Gifs: true, Search: true, GlobalSearch: true}
 	if got != want {
 		t.Fatalf("Caps: %+v, want %+v", got, want)
 	}

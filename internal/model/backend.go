@@ -71,6 +71,10 @@ type Logouter interface {
 type Caps struct {
 	ReadReceipts bool // ✓✓ ticks + "who read" popup
 	Reactions    bool
+	// AnyReaction : every Unicode emoji is a reaction (Discord), no list of
+	// the account: the picker is the whole table, with the search. A custom
+	// emoji of the room goes as ":name:".
+	AnyReaction  bool
 	Edit         bool
 	Whois        bool
 	Search       bool // search inside a chat (/search)

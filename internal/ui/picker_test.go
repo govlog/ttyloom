@@ -147,6 +147,57 @@ func TestPickerReactions(t *testing.T) {
 	}
 }
 
+// A network that takes any reaction (Discord) gets the whole table with the
+// search, and a ":name:" typed is a custom emoji of the room, sent as it is.
+func TestOpenReactPickerAny(t *testing.T) {
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	c := &model.Chat{Net: "discord", ID: 5}
+	b := &fakeBackend{caps: model.Caps{Reactions: true, AnyReaction: true}}
+	u := &UI{ws: NewWindows(), agg: &Window{}, t: &term.Term{Cols: 80, Rows: 24},
+		chats: map[model.ChatKey]*model.Chat{c.Key(): c}, nets: map[string]model.Backend{"discord": b}}
+	it := &Item{Msg: &model.Msg{Net: "discord", ID: 7, ChatID: 5}}
+	u.openReactPicker(it)
+	if u.picker == nil || len(u.picker.items) < 1000 {
+		t.Fatalf("picker: %+v", u.picker)
+	}
+	for _, r := range ":emoji_7:" {
+		u.picker.Key(term.Key{Rune: r})
+	}
+	if u.picker.items[0].Char != ":emoji_7:" {
+		t.Fatalf("custom name typed: %+v", u.picker.items[:1])
+	}
+	u.picker.Key(term.Key{Code: term.Enter})
+	if b.reacted != ":emoji_7:" {
+		t.Fatalf("reaction sent = %q, want the custom name", b.reacted)
+	}
+}
+
+// The custom emojis of the room come first, answer the search by name and
+// are drawn by the start of their name; the choice is the ":name:" itself.
+func TestPickerCustoms(t *testing.T) {
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	var picked string
+	p := newPicker(31, 8, func(s string) { picked = s })
+	p.customs, p.recent = []string{":emoji_7:", ":profil:"}, nil // the recents stay first when there are some
+	p.filter()
+	if len(p.items) < 1000 || p.items[0].Char != ":emoji_7:" || p.items[1].Char != ":profil:" {
+		t.Fatalf("head of the items: %+v", p.items[:2])
+	}
+	if got := render.LineText(p.Lines(theme.Terminal())[2]); !strings.HasPrefix(got, "│em pr ") {
+		t.Fatalf("grid: %q", got)
+	}
+	for _, r := range "PROF" {
+		p.Key(term.Key{Rune: r})
+	}
+	if len(p.items) != 1 || p.items[0].Name != "profil" {
+		t.Fatalf("search by name: %+v", p.items)
+	}
+	p.Key(term.Key{Code: term.Enter})
+	if picked != ":profil:" {
+		t.Fatalf("picked %q", picked)
+	}
+}
+
 // openReactPicker : the list comes from the chat of the message; no reaction
 // allowed = no picker, just a status message.
 func TestOpenReactPicker(t *testing.T) {
@@ -234,5 +285,16 @@ func TestEmojiCellSingleLine(t *testing.T) {
 	got := emojiCell(strings.Repeat("\n", 500))
 	if strings.ContainsRune(got, '\n') || render.Width(got) != cellW-1 {
 		t.Fatalf("%q wide %d", got, render.Width(got))
+	}
+}
+
+// A chat already known (disk cache) takes the custom emojis of the fresh
+// dialog list: without them the picker of an old chat would list none.
+func TestRememberCustoms(t *testing.T) {
+	old := &model.Chat{Net: "discord", ID: 5}
+	u := &UI{chats: map[model.ChatKey]*model.Chat{old.Key(): old}}
+	got := u.remember(&model.Chat{Net: "discord", ID: 5, Customs: []string{":emoji_7:"}})
+	if got != old || len(old.Customs) != 1 {
+		t.Fatalf("customs after remember = %v", old.Customs)
 	}
 }
