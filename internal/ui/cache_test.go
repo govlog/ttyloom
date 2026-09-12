@@ -406,3 +406,21 @@ func TestSaveDialogsWithoutIdentity(t *testing.T) {
 		t.Fatalf("discord gob rewritten with no identity: %+v selfID %d err %v", chats, self, err)
 	}
 }
+
+// TestMergeFillsHole : a page holding messages missing from the middle of the
+// window (gateway down while they came, then live messages after it) puts them
+// at their place, not at the top of the window where nobody sees them.
+func TestMergeFillsHole(t *testing.T) {
+	w := &Window{}
+	w.Merge(msgRange(1, 100))
+	w.Merge(msgRange(201, 210)) // live messages after the cut
+	w.Merge(msgRange(150, 210)) // recent page after the reconnection
+	if len(w.Items) != 161 {
+		t.Fatalf("%d items, want 161 (1..100, 150..210 no duplicate)", len(w.Items))
+	}
+	for i := 1; i < len(w.Items); i++ {
+		if w.Items[i].Msg.ID <= w.Items[i-1].Msg.ID {
+			t.Fatalf("item %d: id %d after %d", i, w.Items[i].Msg.ID, w.Items[i-1].Msg.ID)
+		}
+	}
+}

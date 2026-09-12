@@ -906,6 +906,20 @@ func (u *UI) event(ev model.Event) {
 		}
 	case model.EvConnected:
 		u.conn[u.dispatchNet] = true
+		// Nothing promises the gateway replays what came while it was down
+		// (Discord after a sleep of the laptop opens a fresh session): every
+		// loaded window of the network reads its recent page again, the
+		// current one now, the others at their next visit. Merge puts the page
+		// in place and drops what is already there.
+		for _, w := range u.ws.List {
+			if w.Chat == nil || w.Chat.Net != u.dispatchNet || w.Search != "" || !w.Loaded {
+				continue
+			}
+			w.Loaded = false
+			if w == u.view() && !w.Loading && !u.selfOf(w.Chat.Net).Bot {
+				u.loadHistory(w, 0)
+			}
+		}
 	case model.EvDisconnected:
 		u.conn[u.dispatchNet] = false
 		if u.multiNet() { // with two networks, "disconnected" alone says nothing

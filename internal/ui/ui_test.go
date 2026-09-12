@@ -919,3 +919,29 @@ func (f *fakeBackend) SendPhoto(_ context.Context, _ *model.Chat, _, _ string, _
 func (f *fakeBackend) SendFile(_ context.Context, _ *model.Chat, _, _ string, _ bool, tmpID int64) {
 	f.file, f.fileTmp = f.file+1, tmpID
 }
+
+// TestReconnectReloadsWindows : a network back after a cut loads the recent
+// page of its loaded windows again — the current one now, the others at their
+// next visit. The first connection has nothing to do: no window is loaded yet.
+func TestReconnectReloadsWindows(t *testing.T) {
+	u := netUI(model.NetDiscord)
+	u.ctx = context.Background()
+	b := u.nets[model.NetDiscord].(*fakeBackend)
+	w := u.ws.New(false)
+	w.Chat = u.chatList[0]
+	x := u.ws.New(true)
+	x.Chat = u.chatList[0]
+	u.dispatch(model.Envelope{Net: model.NetDiscord, Ev: model.EvConnected{}})
+	if b.history != 0 {
+		t.Fatalf("first connection: %d loads, want 0", b.history)
+	}
+	w.Loaded, x.Loaded = true, true
+	u.dispatch(model.Envelope{Net: model.NetDiscord, Ev: model.EvDisconnected{}})
+	u.dispatch(model.Envelope{Net: model.NetDiscord, Ev: model.EvConnected{}})
+	if b.history != 1 || !w.Loading {
+		t.Fatalf("reconnection: %d loads, current window loading %v; want 1, true", b.history, w.Loading)
+	}
+	if x.Loaded {
+		t.Fatal("hidden window still loaded: its next visit would not fill the hole")
+	}
+}

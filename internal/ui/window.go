@@ -195,18 +195,28 @@ func (w *Window) Merge(ms []*model.Msg) {
 			have[it.Msg.ID] = true
 		}
 	}
-	last := w.LastID()
+	first, last := w.OldestID(), w.LastID()
 	var older, newer []*Item
+	var hole []*model.Msg
 	for _, m := range ms {
 		switch {
 		case have[m.ID]:
 		case m.ID > last: // ms comes from the oldest to the newest: the order holds
 			newer = append(newer, &Item{Msg: m})
-		default:
+		case m.ID < first:
 			older = append(older, &Item{Msg: m})
+		default:
+			hole = append(hole, m)
 		}
 	}
 	w.Items = append(append(older, w.Items...), newer...)
+	// Inside the range of the window: messages missed while the gateway was
+	// down, brought back by the recent page. Each goes before the first
+	// message above it — at the top of the window nobody would see them.
+	for _, m := range hole {
+		i := slices.IndexFunc(w.Items, func(it *Item) bool { return it.Msg != nil && it.Msg.ID > m.ID })
+		w.Items = slices.Insert(w.Items, i, &Item{Msg: m})
+	}
 	w.dropFilledGaps()
 	w.trim()
 }
