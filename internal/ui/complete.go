@@ -29,7 +29,7 @@ const (
 	complNet                             // /net <network>
 	complFold                            // /fold <section>
 	complPath                            // /send <path>: files of the disk
-	complNetCmd                          // /telegram /discord <status|login|logout>
+	complNetCmd                          // /telegram /discord <status|login|logout|disconnect>
 	complLog                             // /log <on|off>
 	complNone                            // /open /history …
 )

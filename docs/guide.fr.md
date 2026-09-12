@@ -313,6 +313,7 @@ Le panneau se découpe en sections dès qu'il y a de quoi : une ligne d'en-tête
 | */discord logout* | ferme la session côté serveur et supprime le fichier de token ; avec *token_cmd*, se déconnecte seulement |
 | */telegram login* | redémarre Telegram après une déconnexion ou une erreur fatale : QR, ou téléphone et code |
 | */telegram logout* | ferme la session côté serveur (elle disparaît de **Telegram → Réglages → Appareils**) et se déconnecte |
+| */discord disconnect*, */telegram disconnect* | se déconnecte en gardant la session : *login* se reconnecte sans QR |
 
 Un réseau dont la connexion se termine sur une erreur (token révoqué, session fermée) le dit en fenêtre 0 et s'arrête seul, pas le client : */discord login* ou */telegram login* le relance. Une commande *token_cmd* qui échoue au lancement laisse de même Discord arrêté, avec son erreur en fenêtre 0. Relancée par */discord login*, la commande tourne dans le terminal en mode brut : une commande qui interroge le tty (pinentry curses) ne fonctionne qu'au lancement ; prévoir un pinentry graphique ou un agent déverrouillé.
 
@@ -408,7 +409,7 @@ Un message entrant pour une conversation sans fenêtre crée une fenêtre caché
 | */msg nom texte* | envoie sans changer de fenêtre ; la ligne est reprise ici sous la forme `[msg(nom)] texte` |
 | */chats* | liste les conversations, non lues en surbrillance |
 | */net [réseau]* | filtre le panneau et la vue agrégée sur un réseau (*telegram*, *discord*, *all*) ; sans argument, cycle, comme *Shift+F2* |
-| */telegram [status\|login\|logout]*, */discord [status\|login\|logout]* | un réseau : son état, une nouvelle connexion (Discord relance *token_cmd*) ou une déconnexion (Telegram ferme la session côté serveur) |
+| */telegram [status\|login\|logout\|disconnect]*, */discord [status\|login\|logout\|disconnect]* | un réseau : son état, une nouvelle connexion (Discord relance *token_cmd*), une déconnexion qui garde la session, ou *logout* (Telegram ferme la session côté serveur) |
 | */fold [section]* | plie ou déplie une section du panneau, comme un clic sur sa ligne d'en-tête ; la section se nomme par sa clé (*telegram*, *discord:Gophers*) ou par un préfixe du nom affiché ; sans argument, liste les sections et leur état (*[+]* pliée, *[-]* dépliée) |
 | */history N* | charge N messages plus anciens (*PgUp* en haut de l'écran fait de même) |
 | */clear* (*/c*) | vide la fenêtre ; *Ctrl+L* n'efface que l'écran, les lignes restent dans l'historique |

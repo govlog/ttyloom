@@ -315,6 +315,7 @@ is saved in `sidebar.toml`. One network without a server needs no section header
 | `/discord logout` | End the session on the server and forget the token file; with `token_cmd`, only disconnect. |
 | `/telegram login` | Start Telegram again after a logout or a fatal error: QR, or phone and code. |
 | `/telegram logout` | End the session on the server (it leaves **Telegram → Settings → Devices**) and disconnect. |
+| `/discord disconnect`, `/telegram disconnect` | Disconnect and keep the session: `login` connects again without a QR. |
 
 A network whose connection ends with an error (a revoked token, a closed
 session) says so in window 0 and is stopped, not the client: `/discord login`

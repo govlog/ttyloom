@@ -472,10 +472,11 @@ func (u *UI) startNet(net string) {
 	u.nets[net], u.netCancel[net] = b, cancel
 }
 
-// stopNet : /<net> logout. The account session ends on the server when the
-// backend knows how (Telegram), then its context is cancelled; the backend
-// leaves u.nets at the EvStopped its Run posts on the way out.
-func (u *UI) stopNet(net string) {
+// stopNet : /<net> logout and /<net> disconnect. With logout the account
+// session ends on the server when the backend knows how (Telegram); then
+// its context is cancelled either way; the backend leaves u.nets at the
+// EvStopped its Run posts on the way out.
+func (u *UI) stopNet(net string, logout bool) {
 	b := u.nets[net]
 	if b == nil {
 		u.sys(i18n.T("net_not_up", net))
@@ -483,7 +484,7 @@ func (u *UI) stopNet(net string) {
 	}
 	cancel := u.netCancel[net]
 	l, ok := b.(model.Logouter)
-	if !ok {
+	if !ok || !logout {
 		cancel()
 		return
 	}
@@ -511,7 +512,8 @@ func (u *UI) netStatus(w *Window, net string) {
 	}
 }
 
-// netAction : /telegram and /discord — status (the default), login, logout.
+// netAction : /telegram and /discord — status (the default), login, logout,
+// disconnect (the session is kept: login connects again without a question).
 func (u *UI) netAction(w *Window, net, sub string) {
 	if !slices.Contains(u.netList, net) {
 		w.AddSys(i18n.T("net_unconfigured", net))
@@ -523,7 +525,9 @@ func (u *UI) netAction(w *Window, net, sub string) {
 	case "login":
 		u.startNet(net)
 	case "logout":
-		u.stopNet(net)
+		u.stopNet(net, true)
+	case "disconnect":
+		u.stopNet(net, false)
 	default:
 		w.AddSys(i18n.T("usage_net_cmd", net))
 	}
@@ -2241,7 +2245,7 @@ func (u *UI) candidates(word string, atStart bool) []string {
 	case complNet:
 		return append(u.netNames(), netAll)
 	case complNetCmd:
-		return []string{"status", "login", "logout"}
+		return []string{"status", "login", "logout", "disconnect"}
 	case complLog:
 		return []string{"on", "off"}
 	case complPath:

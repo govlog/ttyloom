@@ -1,5 +1,9 @@
 # Changelog
 
+## Non publié
+
+- **Réseaux** : `/telegram disconnect` et `/discord disconnect` coupent la connexion en gardant la session ; `login` reconnecte sans QR.
+
 ## v1.2.0 — 2026-09-10
 
 - **Documentation** : READMEs, manuels et aide intégrée (`/help`) vérifiés contre le code ; outils `wl-copy`/`xclip` de la copie d'image, fournisseur de GIF Discord (KLIPY, plus Tenor), *Alt+Retour arrière*, portée des styles de saisie.
