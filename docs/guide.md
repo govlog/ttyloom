@@ -144,6 +144,7 @@ hover = "menu"
 separator = true
 redline = true
 sidebar_sort = "recent"
+sidebar_split = false
 spell = "off"
 spell_quotes = false
 sidebar_width = 26
@@ -177,11 +178,12 @@ log_dir = "~/.local/share/ttyloom/logs"
 | `link_previews` | Display a recognized Telegram link’s site, title, description and thumbnail. `o` or a click on the label opens its page. |
 | `maps` | Fetch OpenStreetMap tiles for a visible Telegram location or an explicit viewer request. Attribution remains visible; tiles are cached by coordinates under `download_dir/maps`. Disabled by default because it contacts `tile.openstreetmap.org`. |
 | `avatars` | Small profile photos beside names and in the sidebar; kitty graphics only. |
-| `hover` | `menu`: highlight and show actions under the pointer. `highlight`: highlight only, with actions on selection. `off`: disable hover tracking. Old boolean values remain accepted. Also controls pointer tracking for sidebar wheel navigation. |
+| `hover` | `menu` and `highlight` highlight the message under the pointer; a right click opens its menu. `off`: disable hover tracking. Old boolean values remain accepted. Also controls pointer tracking for sidebar wheel navigation. |
 | `separator` | A horizontal rule between messages and the status bar. |
 | `redline` | An unread divider after the last read message. It stays in place during the visit and resets when you return to the window or regain focus. |
 | `sidebar_width` | Width in columns, from 12 to half the terminal width. Drag its vertical border to resize and save it. |
 | `sidebar_sort` | `recent`, `alpha` or `unread`. `F7` cycles these orders. |
+| `sidebar_split` | Windows list in two sections, channels then direct messages, each in `sidebar_sort` order. The `⊟` of the sidebar header toggles it. |
 | `spell` | `off`, or installed Hunspell dictionary codes joined with `+`, such as `fr+en_US`. Dictionaries are `.aff`/`.dic` pairs in `/usr/share/hunspell`. Two-letter prefixes resolve to installed dictionaries; `us` is an alias for `en_US`. Misspellings get a red underline. `Ctrl+R` cycles corrections; Enter applies, `i` ignores, `a` adds to `spell.txt`, Escape closes. Right-click a word to correct only that word. |
 | `spell_quotes` | Also check quoted lines and fenced code blocks; off by default. |
 | `timestamps` | Show a timestamp before each message. |
@@ -320,7 +322,10 @@ is saved in `sidebar.toml`. One network without a server needs no section header
 
 A network whose connection ends with an error (a revoked token, a closed
 session) says so in window 0 and is stopped, not the client: `/discord login`
-or `/telegram login` starts it again.
+or `/telegram login` starts it again. A network back after a cut (Discord
+after a sleep of the laptop) reads the recent page of its loaded windows
+again, the current one at once, the others at their next visit: the
+messages of the meantime take their place in the window.
 
 Filtering does not close windows. In the sidebar’s window mode, window 0 stays
 visible and F2 cycles network filters before hiding the panel. With one network,
@@ -345,6 +350,8 @@ Current limits:
 
 - No threads, forums, voice channels or categories in the list.
 - No `/whois`, contact directory or resolution of an unknown Discord username.
+- Custom emojis show as `:name:`; on kitty their image takes the cell of the
+  picker. Only the emojis of the current server are offered and sent.
 - No other-person read receipts, stickers or location cards.
 - Leave/report/block actions are hidden where unsupported. Closing a DM window
   only closes the local window. Deleting a server channel conversation is
@@ -611,7 +618,10 @@ unread order. Window 0 stays first; unbound windows follow in number order.
 Sorting changes display order, not actual window numbers.
 
 The sidebar uses `#` for a group, `&` for a channel, `@` for a username and `*`
-for the status window. Kitty can show avatars. A long current-chat title scrolls
+for the status window; in window mode the number comes first, right-aligned,
+then the marker glued to the name (a Discord `#general` keeps one `#`). The `⊟`
+of the header, or `sidebar_split`, puts the windows in two sections, channels
+then direct messages; the section rules take no click. Kitty can show avatars. A long current-chat title scrolls
 within the column. Drag the vertical border to resize and save the panel width.
 
 Click a conversation to open it; click a section header or use `/fold` to
@@ -666,8 +676,9 @@ the conversation at the message. Ctrl+F returns to local search; Escape closes.
 Each window keeps its own draft across window switches. `/me text` sends an
 italic action in IRC style.
 
-When the terminal loses focus, the status bar shows an away marker, read
-acknowledgments pause and unread counts increase even in the current window.
+When the terminal loses focus for more than 1.5 s, the status bar shows an away
+marker, read acknowledgments pause and unread counts increase even in the
+current window; a quicker switch and back changes nothing.
 Returning to the window marks visible messages read. Bell and notifications
 depend on absence or activity in other windows.
 
@@ -707,12 +718,18 @@ sent at most once every five seconds.
 ### Messages
 
 Select with Alt+Up/Down or a click outside links and images. The message gets
-a selection marker and clickable action labels. Click it again or press Escape
-to deselect. Hover can show the same actions without selecting or shifting text.
+a selection marker; the keys below act on it. Click it again or press Escape
+to deselect. Hover highlights the message under the pointer without selecting
+or shifting text.
 
-The first action emoji is a quick reaction: your existing reaction, the most
-popular one, or a choice based on the message. Click to toggle it. Double-click
-a message to toggle 👍. Clicking any reaction below a message also toggles it.
+A right click on a message opens its context menu at the pointer: the quick
+reactions the chat allows on the first row (click one to toggle it), then the
+actions of the message — reply, react, copy, info, open, view, play — with
+edit and delete last. The entry under the pointer is the current one; Enter or
+a click runs it, Escape closes. Double-click a message to toggle 👍. Clicking
+any reaction below a message also toggles it. A deleted message shows the
+"(deleted)" marker alone: a click on it reveals the content the cache still
+holds, the next click hides it again.
 The active mouse area controls the wheel: sidebar navigation over the sidebar,
 history scrolling over messages. `hover = "off"` disables hover tracking and
 sidebar wheel switching; normal message scrolling remains available.
@@ -722,7 +739,7 @@ sidebar wheel switching; normal message scrolling remains available.
 | `e` | Edit your message; Enter sends, Escape cancels. |
 | `d` | Delete your message after confirmation. |
 | `p` | Reply to the selected message. |
-| `r` | Choose a supported reaction; choosing it again removes it. Telegram chats can restrict the available set. |
+| `r` | Choose a supported reaction; choosing it again removes it. Telegram chats can restrict the available set; Discord takes any emoji, so the picker is the whole table with the search, and `:name:` sends a custom emoji of the server. |
 | `i` | Show message details: dates, ID, views, reaction participants and, where supported, read receipts. |
 | `o` | Open the message’s media externally. |
 | `v` | Open the built-in full-screen viewer. |
@@ -757,11 +774,12 @@ toggles and goes out plain.
 | Ctrl+Left/Right | Move by word. |
 | Ctrl+K, Ctrl+W, Alt+Backspace | Delete to the end of the line, or the previous word. |
 | Ctrl+B, Ctrl+I, Ctrl+U | Toggle bold, italic, underline at the cursor: what follows takes the style until the same key comes again, and the styles stack (Ctrl+U then Ctrl+I: underline+italic). The status bar shows the styles open at the cursor, `[bold+underline]`; Backspace on a toggle takes it back. Ctrl+I needs kitty keyboard support (Ghostty, kitty, WezTerm, foot): elsewhere it is Tab. |
-| Ctrl+T, `/emoji` | Search the emoji picker; arrows or a click choose, Enter inserts, Escape closes. Recent choices are saved. |
+| Ctrl+T, `/emoji` | Search the emoji picker; arrows or a click choose, Enter inserts, Escape closes. Recent choices are saved. In a Discord channel the custom emojis of the server come first, searched by name, inserted as `:name:`; kitty shows their image in the grid. |
 | Up/Down | Input history, or vertical movement in the expanded editor. Up on empty input can edit the last sent message. |
+| Ctrl+Up/Down | Walk my messages in edit mode: from an empty input Ctrl+Up edits the last one, each Ctrl+Up goes one message of mine up, Ctrl+Down one down; past the newest the edit is left and the input emptied. A draft is never replaced. |
 | Shift+Enter, Alt+Enter | Insert a line break. Shift+Enter needs kitty keyboard support; Alt+Enter is the fallback. With `multiline` enabled, open the expanded editor. |
 | Enter, Ctrl+Enter | Send the draft. |
-| Tab | Complete commands, chats (`/query`, `/join`, `/msg`: from the start of any word of a title, `@username` too), windows, settings, themes, help topics, `/send` paths, `/log` and `/telegram`/`/discord` arguments. Several names left and nothing more to add: a second Tab lists them. |
+| Tab | Complete commands, chats (`/query`, `/join`, `/msg`: from the start of any word of a title, `@username` too), windows, settings, themes, help topics, `/send` paths, `/log` and `/telegram`/`/discord` arguments. Several names left and nothing more to add: a second Tab lists them in the window; Escape removes those listings. |
 | PgUp/PgDn | Scroll history. An image cut by the edge of the window shows its visible part, so the scroll moves line by line over it. Scrolled up, a pill `↓ last message` at the bottom right of the messages brings back to the end on a click. |
 | Ctrl+L | Clear the window like a terminal `clear`: the lines stay in the history, Page Up or the wheel brings them back. |
 | Ctrl+C, `/quit`, `/exit` | Quit. |
@@ -779,8 +797,9 @@ text, send as a code block, or cancel, using the keys shown in your interface
 language. In the expanded editor it can instead insert text or a code block
 into the draft.
 
-Typing `@` opens member suggestions for people with usernames. Arrows choose,
-Tab or Enter inserts, and Escape closes. Spell correction and mention completion
+Typing `@` opens member suggestions. Arrows choose, Tab or Enter inserts, and
+Escape closes. A member with no username is inserted as `@Name` and sent as a
+mention by id, so the person is notified all the same. Spell correction and mention completion
 work without leaving the conversation.
 
 ```text

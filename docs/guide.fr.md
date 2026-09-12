@@ -132,10 +132,11 @@ video = "show"                      # video en ligne : show | hidden (etiquette 
 link_previews = true                # apercu des liens : titre, description, vignette
 maps = false                        # carte OpenStreetMap sous une position partagee (reseau vers tile.openstreetmap.org)
 avatars = true                      # photos de profil devant les pseudos (kitty)
-hover = "menu"                      # survol souris : menu (surbrillance + ligne d'aide) | highlight | off
+hover = "menu"                      # survol souris : menu | highlight (surbrillance du message sous le pointeur) | off
 separator = true                    # ligne entre les messages et la barre de statut
 redline = true                      # ligne rouge « non lus » sous le dernier message lu
 sidebar_sort = "recent"             # panneau : recent | alpha | unread (F7)
+sidebar_split = false               # liste des fenêtres en deux sections, salons puis messages directs (⊟ de l'en-tête)
 spell = "off"                       # correction de la saisie : off, ou un dico hunspell installé (fr, us, en_GB…), combinable avec + (Ctrl+R)
 spell_quotes = false                # true : vérifie aussi les citations > et les blocs ```
 sidebar_width = 26                  # largeur du panneau (glisser sa barre a la souris)
@@ -171,11 +172,12 @@ Détail des options :
 | *link_previews* | sous un message contenant un lien reconnu par Telegram, bloc *│* avec le site, le titre, la description et la vignette ; *o* ou un clic sur l'étiquette ouvre la page |
 | *maps* | *true* affiche une carte OpenStreetMap pour une position Telegram visible ou ouverte dans la visionneuse ; attribution visible, tuiles mises en cache par coordonnées dans *download_dir/maps* ; option désactivée par défaut car elle contacte *tile.openstreetmap.org* |
 | *avatars* | photos de profil (2 cellules) devant les pseudos et dans le panneau, en protocole kitty seulement |
-| *hover* | survol à la souris : *menu* surligne le message sous le pointeur et montre sa ligne d'aide, *highlight* surligne seulement (la ligne d'aide apparaît au clic), *off* ne fait rien au survol ; *true*/*false* restent acceptés ; règle aussi le suivi du pointeur (zone survolée éclairée, molette du panneau) |
+| *hover* | survol à la souris : *menu* et *highlight* surlignent tous deux le message sous le pointeur (un clic droit ouvre son menu), *off* ne fait rien au survol ; *true*/*false* restent acceptés ; règle aussi le suivi du pointeur (zone survolée éclairée, molette du panneau) |
 | *separator* | ligne *─* entre la zone des messages et la barre de statut |
 | *redline* | ligne rouge *─── ↑ non lus ───* placée après le dernier message lu quand une fenêtre est affichée (elle reste en place tant qu'on ne quitte pas la fenêtre, et se repositionne au retour ou après une absence) ; *false* la retire |
 | *sidebar_width* | largeur du panneau latéral en colonnes (12 à la moitié de l'écran) ; saisir la barre *│* à la souris la modifie et l'enregistre |
 | *sidebar_sort* | ordre du panneau : *recent* (dernier message), *alpha* (titre), *unread* (non-lus d'abord) ; *F7* cycle |
+| *sidebar_split* | liste des fenêtres en deux sections, les salons puis les messages directs, chacune dans l'ordre de *sidebar_sort* ; le *⊟* de l'en-tête du panneau la bascule d'un clic |
 | *spell* | correction orthographique de la saisie : *off*, ou tout code de dictionnaire présent dans */usr/share/hunspell* (paire *.aff*/*.dic*, ex. *fr_FR*), combinable avec *+* (*fr+en*) ; *us* (legacy) et les préfixes à deux lettres comme *fr* résolvent vers le dictionnaire correspondant (*en_US*, *fr_FR*…) — fautes en rouge, *Ctrl+R* les parcourt (*Entrée* corrige, *i* ignore, *a* ajoute au dico perso *spell.txt*, *Ctrl+R* saute, *Échap* quitte), clic droit sur un mot souligné pour le corriger seul |
 | *spell_quotes* | *on* : la correction vérifie aussi les lignes citées avec *>* et les blocs *```* (défaut *off*) |
 | *timestamps* | horodatage devant chaque message |
@@ -316,7 +318,7 @@ Le panneau se découpe en sections dès qu'il y a de quoi : une ligne d'en-tête
 | */discord disconnect*, */telegram disconnect* | se déconnecte en gardant la session : *login* se reconnecte sans QR |
 | */irc*, */irc add*, */irc connect nom*, */irc disconnect nom* | les réseaux IRC, voir [Réseaux IRC](#réseaux-irc) |
 
-Un réseau dont la connexion se termine sur une erreur (token révoqué, session fermée) le dit en fenêtre 0 et s'arrête seul, pas le client : */discord login* ou */telegram login* le relance. Une commande *token_cmd* qui échoue au lancement laisse de même Discord arrêté, avec son erreur en fenêtre 0. Relancée par */discord login*, la commande tourne dans le terminal en mode brut : une commande qui interroge le tty (pinentry curses) ne fonctionne qu'au lancement ; prévoir un pinentry graphique ou un agent déverrouillé.
+Un réseau dont la connexion se termine sur une erreur (token révoqué, session fermée) le dit en fenêtre 0 et s'arrête seul, pas le client : */discord login* ou */telegram login* le relance. Un réseau revenu après une coupure (Discord après une mise en veille du portable) relit la page récente de ses fenêtres chargées, la fenêtre affichée tout de suite, les autres à leur prochaine visite : les messages de l'intervalle prennent leur place dans la fenêtre. Une commande *token_cmd* qui échoue au lancement laisse de même Discord arrêté, avec son erreur en fenêtre 0. Relancée par */discord login*, la commande tourne dans le terminal en mode brut : une commande qui interroge le tty (pinentry curses) ne fonctionne qu'au lancement ; prévoir un pinentry graphique ou un agent déverrouillé.
 
 Le filtre ne ferme aucune fenêtre : il ne touche que le panneau — la liste des conversations comme celle des fenêtres, où seules celles liées au réseau choisi restent, la fenêtre 0 toujours — et la vue agrégée. En mode fenêtres, *F2* enchaîne les réseaux avant de masquer le panneau : fenêtres de tous les réseaux, puis de chacun dans l'ordre des noms, puis caché. Avec un seul réseau connecté, */net* se contente de le nommer.
 
@@ -337,6 +339,7 @@ Limites actuelles :
 - fils de discussion, forums, salons vocaux et catégories : ils ne sont pas listés
 - */whois*, carnet de contacts et */query* d'un pseudo inconnu — Discord ne résout pas un nom en conversation
 - accusés de lecture *✓✓* (*qui a lu*), stickers, cartes de position
+- les emojis personnalisés s'affichent *:nom:* ; en kitty, leur image prend la cellule du sélecteur. Seuls ceux du serveur courant sont proposés et envoyés
 - *partir du salon* et *signaler / bloquer* : les entrées n'apparaissent pas dans le menu contextuel d'une conversation Discord, ni *signaler / bloquer* sur un membre de la boîte des participants — plutôt qu'une confirmation suivie de rien. *fermer la conversation* reste proposée sur un message privé : elle ne ferme que la fenêtre, aucun réseau n'est sollicité. *supprimer la conversation* sur un salon de guilde reste muette, seule une ligne *WARN* du journal interne (*/debug*) en garde la trace
 - balayage de l'historique à la connexion : Discord ne le fait pas. Une page de salon coûte deux lectures REST, et une passe sur toute la liste des conversations à chaque démarrage ressemblerait à un client automatisé ; l'historique d'un salon est chargé à son ouverture, et le cache disque garde ce qui a déjà été lu
 
@@ -548,7 +551,7 @@ Choisissez un nom de sauvegarde qui n’existe pas encore. Les fichiers de sessi
 
 En mode fenêtres, les lignes suivent le même ordre de tri que le mode conversations (*F7*, */set sidebar_sort*) appliqué à la conversation de chaque fenêtre : la fenêtre 0 reste en tête, les fenêtres liées à aucune conversation ferment la marche dans l'ordre des numéros. Les numéros affichés restent les vrais numéros de fenêtre — seul leur ordre change, et le tri par défaut (*récents*) ne donne donc plus l'ordre des numéros.
 
-Chaque ligne est préfixée de *#* pour un salon, *&* pour un canal, *@* pour un pseudo, *\** pour la fenêtre de statut ; la photo de profil précède le titre en kitty. Le titre de la conversation courante défile de droite à gauche s'il dépasse la colonne. Un en-tête coiffe le panneau : le titre du mode et l'ordre de tri entre crochets, dans les deux modes — cliquer la ligne de titre change l'ordre, comme *F7* (*récents*, *a→z*, *non-lus* ; */set sidebar_sort*).
+Chaque ligne est préfixée de *#* pour un salon, *&* pour un canal, *@* pour un pseudo, *\** pour la fenêtre de statut ; en mode fenêtres le numéro vient d'abord, aligné à droite, puis le marqueur collé au nom (un *#general* Discord garde un seul *#*) ; la photo de profil précède le titre en kitty. Le *⊟* de l'en-tête, ou *sidebar_split*, coupe la liste des fenêtres en deux sections, les salons puis les messages directs ; leurs lignes de section ne prennent aucun clic. Le titre de la conversation courante défile de droite à gauche s'il dépasse la colonne. Un en-tête coiffe le panneau : le titre du mode et l'ordre de tri entre crochets, dans les deux modes — cliquer la ligne de titre change l'ordre, comme *F7* (*récents*, *a→z*, *non-lus* ; */set sidebar_sort*).
 
 Un clic sur une ligne du panneau ouvre ou rejoint la conversation ; un clic sur une ligne d'en-tête de section la plie ou la déplie (*/fold*) ; la molette au-dessus du panneau passe à la fenêtre précédente ou suivante dans l'ordre du panneau (en-têtes et conversations jamais ouvertes enjambés, aucun rebouclage aux extrémités) sans jamais en ouvrir une nouvelle — un clic reste nécessaire pour ouvrir ; une fenêtre jamais visitée (pré-ouverte par *auto_open_days*) charge sa première page d'historique à l'arrivée, comme par clic ou *Alt+N* ; atterrir sur une fenêtre à la molette la marque lue et rafraîchit la boîte des participants (*F3*) si elle est ouverte, comme un clic, *Alt+N* ou */win N*. La dernière ligne, *+ nouveau message* (ou */new*, *Ctrl+N*), ouvre une boîte de recherche : mes contacts et conversations filtrés en direct, puis, à partir de trois caractères ou d'un *@*, les résultats de Telegram dans une section *sur Telegram* ; *Entrée* ou un clic ouvre la conversation dans une fenêtre. Un clic droit ouvre un menu à l'endroit du clic : *partir du salon* (ou *fermer la conversation* pour un privé), *signaler / bloquer*, *supprimer la conversation*, *infos*, *rechercher* ; les actions irréversibles demandent une confirmation *(y/n)*. Le même menu existe sur un membre de la boîte des participants (*message privé*, *infos*, *signaler / bloquer*).
 
@@ -570,7 +573,7 @@ Sans cible fixée par `/q nom` ou `/j canal`, taper du texte dans la vue agrég�
 
 Chaque fenêtre garde son brouillon : le texte en cours de saisie survit à *Ctrl+X* et revient avec la fenêtre. */me <texte>* envoie une action en italique, comme sous **ircii**.
 
-**ttyloom** sait si le terminal a le focus : tant qu'il ne l'a pas, la barre de statut affiche *[absent]*, aucun accusé de lecture ne part et les compteurs de non-lus montent, y compris dans la fenêtre courante ; au retour du focus, la fenêtre affichée est marquée lue. Les notifications (*notify*) et la cloche ne partent que pendant l'absence ou pour une fenêtre non affichée.
+**ttyloom** sait si le terminal a le focus : perdu plus de 1,5 s, la barre de statut affiche *[absent]*, aucun accusé de lecture ne part et les compteurs de non-lus montent, y compris dans la fenêtre courante ; au retour du focus, la fenêtre affichée est marquée lue ; un aller-retour plus rapide ne change rien. Les notifications (*notify*) et la cloche ne partent que pendant l'absence ou pour une fenêtre non affichée.
 
 - Journaliser la fenêtre courante (bascule ; */log on* et */log off* forcent)
 
@@ -608,9 +611,9 @@ Les blocs de code reçus sont encadrés d'une barre *┃* et, à l'ouverture d'u
 
 ### Messages
 
-- Sélectionner un message avec *Alt+↑* / *Alt+↓* ou d'un clic (hors lien et hors image) : le bloc passe en surbrillance avec une barre *▌* et une ligne d'aide, *👍 · e éditer · d supprimer · p répondre · r réagir · i info · o ouvrir · v voir · l lire · c copier · Esc*, dont chaque mot est cliquable ; un second clic sur le message le désélectionne
+- Sélectionner un message avec *Alt+↑* / *Alt+↓* ou d'un clic (hors lien et hors image) : le bloc passe en surbrillance avec une barre *▌*, les touches ci-dessous agissent dessus ; un second clic sur le message le désélectionne
 
-Le survol à la souris (*hover*) surligne le message sous le pointeur et affiche la même ligne d'aide sans le sélectionner, sans déplacer le texte. L'emoji en tête de la ligne d'aide est la réaction rapide (ma réaction s'il y en a une, sinon la plus populaire, sinon un emoji déduit du contenu) : un clic dessus l'ajoute ou la retire. Un double-clic sur un message ajoute ou retire *👍*.
+Le survol à la souris (*hover*) surligne le message sous le pointeur sans le sélectionner, sans déplacer le texte. Un clic droit sur un message ouvre son menu contextuel à l'endroit du clic : les réactions rapides acceptées par la conversation sur la première ligne (un clic ajoute ou retire), puis les actions du message — répondre, réagir, copier, infos, ouvrir, voir, lire — éditer et supprimer en dernier ; l'entrée sous le pointeur est l'entrée courante, *Entrée* ou un clic l'exécute, *Échap* ferme. Un double-clic sur un message ajoute ou retire *👍*. Un message supprimé n'affiche que la marque *(supprimé)* : un clic dessus révèle le contenu que le cache garde encore, le clic suivant le cache de nouveau.
 
 La zone sous le pointeur prend aussi la molette : au-dessus du panneau, elle passe à la fenêtre précédente ou suivante (sans jamais en ouvrir une nouvelle) ; au-dessus des messages ou de l'ascenseur, elle fait défiler l'historique comme avant. La zone active se signale sans rien déplacer — barre *│* du panneau ou colonne de l'ascenseur en couleur d'accent, curseur *█* sur la colonne elle-même. *hover = off* coupe tout le suivi, molette comprise, et rend le comportement d'avant à l'octet près.
 
@@ -619,7 +622,7 @@ La zone sous le pointeur prend aussi la molette : au-dessus du panneau, elle pas
 | *e* | édite mon message : la saisie prend le prompt *✎ #id ›* préremplie, *Entrée* envoie, *Échap* annule |
 | *d* | supprime mon message pour tout le monde après confirmation *(y/n)* |
 | *p* | répond au message : prompt *↩ #id ›*, la citation apparaît sous ma réponse |
-| *r* | réagit : le sélecteur ne propose que les réactions acceptées par Telegram (et par le salon), un clic sur un emoji le choisit ; choisir de nouveau le même retire la réaction |
+| *r* | réagit : le sélecteur ne propose que les réactions acceptées par Telegram (et par le salon) ; Discord accepte n'importe quel emoji, le sélecteur est alors la table entière avec la recherche, et *:nom:* envoie un emoji personnalisé du serveur ; choisir de nouveau le même retire la réaction |
 | *i* | affiche sous le message sa date d'envoi, d'édition, son état de lecture (*lu ✓✓*, en groupe *lu par : alice, bob*) ou, pour un message d'autrui, ses vues et son numéro ; *Échap* retire ces lignes |
 | *o* | ouvre le média du message avec *xdg-open* |
 | *v* | aperçu plein écran du média |
@@ -628,7 +631,7 @@ La zone sous le pointeur prend aussi la molette : au-dessus du panneau, elle pas
 | *g* | va au message cité par une réponse (un clic sur la citation *│ …* fait de même), ou, dans une fenêtre de recherche, au message dans sa conversation ; l'historique manquant est chargé autour du message |
 | *Échap* | désélectionne |
 
-- Éditer mon dernier message sans le chercher : *↑* sur une saisie vide
+- Éditer mon dernier message sans le chercher : *↑* sur une saisie vide ; *Ctrl+↑* fait de même puis remonte de message en message parmi les miens, *Ctrl+↓* redescend, et passé le plus récent l'édition est quittée, la saisie vidée ; un brouillon en cours n'est jamais remplacé
 
 Un clic sur une réaction sous n'importe quel message l'ajoute ou la retire, sans passer par la sélection ; la ligne des réactions se met à jour dès la réponse de Telegram. Sur Telegram, mes messages portent en fin de première ligne *✓* (envoyé) puis *✓✓* (lu par le destinataire) ; les messages reçus portent *•* tant que je ne les ai pas lus, puis *✓✓*. *i* sur un message avec réactions indique qui a réagi (*réactions : 👍 alice, bob · ❤ moi*).
 
@@ -645,7 +648,7 @@ Un clic sur une réaction sous n'importe quel message l'ajoute ou la retire, san
 | *Ctrl+←*, *Ctrl+→* | saute de mot en mot |
 | *Ctrl+K*, *Ctrl+W*, *Alt+Retour arrière* | supprime jusqu'à la fin de la ligne, le mot précédent |
 | *Ctrl+B*, *Ctrl+I*, *Ctrl+U* | bascule gras, italique, souligné au curseur : ce qui suit prend le style jusqu'à la même touche, et les styles se cumulent (*Ctrl+U* puis *Ctrl+I* : souligné+italique) ; la barre d'état montre les styles ouverts au curseur, `[bold+underline]` ; *Retour arrière* sur une bascule l'annule ; *Ctrl+I* demande le protocole clavier kitty (Ghostty, kitty, WezTerm, foot), ailleurs c'est *Tab* |
-| *Ctrl+T* ou */emoji* | sélecteur d'emoji : la frappe filtre, les flèches ou un clic choisissent, *Entrée* insère, *Échap* ferme |
+| *Ctrl+T* ou */emoji* | sélecteur d'emoji : la frappe filtre, les flèches ou un clic choisissent, *Entrée* insère, *Échap* ferme ; dans un salon Discord, les emojis personnalisés du serveur viennent en tête, cherchés par leur nom, insérés *:nom:*, leur image dans la grille en kitty |
 | *↑*, *↓* | historique de saisie |
 | *Maj+Entrée* ou *Alt+Entrée* | saut de ligne dans la saisie (affiché *⏎*), *Entrée* ou *Ctrl+Entrée* envoie ; Maj+Entrée demande le protocole clavier kitty ; Alt+Entrée est le repli sans ce protocole, et le collage multiligne reste possible ; avec *multiline on*, ouvre la zone de saisie étendue (*↑*/*↓* y déplacent le curseur de ligne en ligne, un collage multiligne y propose insertion telle quelle ou en bloc de code) |
 | *Tab* | complète les commandes, les noms de conversations (depuis le début de n'importe quel mot du titre, *@pseudo* aussi), les fenêtres, les clés et valeurs de */set*, les thèmes, les sujets de */help*, les chemins de */send*, les arguments de */log*, */telegram* et */discord* ; plusieurs noms restants et rien à ajouter : un second *Tab* les liste |
@@ -661,9 +664,9 @@ Les sorties longues (*/chats*, */theme list*, */help*, */window list*) s'affiche
 
 Un collage de plus de 64 Ko est refusé ; un collage de plusieurs lignes ne part pas tout seul : la ligne de saisie propose *(e)* envoyer tel quel, *(c)* envoyer en bloc de code, *(a)* annuler.
 
-La touche *Tab* complète selon la commande : noms de conversations après */query*, */msg* et */join* (depuis le début de n'importe quel mot du titre, ou *@pseudo*), fenêtres après */win*, clés puis valeurs après */set*, thèmes après */theme*, chemins après */send*, *on*/*off* après */log*, *status*/*login*/*logout* après */telegram* et */discord*. Quand plusieurs noms restent et que rien ne peut être ajouté, un second *Tab* les liste dans la fenêtre. */query* accepte aussi un morceau pris à l'intérieur d'un titre quand il est seul à le contenir.
+La touche *Tab* complète selon la commande : noms de conversations après */query*, */msg* et */join* (depuis le début de n'importe quel mot du titre, ou *@pseudo*), fenêtres après */win*, clés puis valeurs après */set*, thèmes après */theme*, chemins après */send*, *on*/*off* après */log*, *status*/*login*/*logout* après */telegram* et */discord*. Quand plusieurs noms restent et que rien ne peut être ajouté, un second *Tab* les liste dans la fenêtre ; *Échap* retire ces listes. */query* accepte aussi un morceau pris à l'intérieur d'un titre quand il est seul à le contenir.
 
-Dans une conversation, taper `@` ouvre aussi les suggestions de membres ayant un pseudo : flèches pour choisir, `Tab` ou `Entrée` pour insérer, `Échap` pour fermer. Le sélecteur d’emoji garde les choix récents. La correction Hunspell (`Ctrl+R`) et les mentions complètent la saisie sans changer de fenêtre.
+Dans une conversation, taper `@` ouvre aussi les suggestions de membres : flèches pour choisir, `Tab` ou `Entrée` pour insérer, `Échap` pour fermer. Un membre sans pseudo est inséré `@Nom` et part en mention par identifiant : la personne est notifiée quand même. Le sélecteur d’emoji garde les choix récents. La correction Hunspell (`Ctrl+R`) et les mentions complètent la saisie sans changer de fenêtre.
 
 - Afficher ou modifier une option à chaud
 

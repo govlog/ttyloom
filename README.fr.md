@@ -22,9 +22,9 @@
 - **Ouvrez une image et explorez-la.** Cliquez ou pressez `v` pour la visionneuse intégrée. Zoomez jusqu’à 8× avec la molette ou `+`/`-`, **glissez avec la souris pour déplacer l’image**, utilisez les flèches et pressez `0` pour réajuster. [Commandes de la visionneuse](docs/guide.fr.md#viewer).
 - **Gardez les photos et GIF dans le fil.** Pixels natifs avec le protocole kitty, demi-blocs Unicode ailleurs. `F5` montre les images au survol seulement ; `Ctrl+G` ouvre un sélecteur avec recherche et aperçus de GIF animés.
 - **Passez d’une conversation à l’autre à votre façon.** Fenêtres numérotées, un brouillon par fenêtre, `/query`, `/join`, `/msg`, `/me` et cycle des fenêtres non lues. `F6` rassemble les conversations dans la fenêtre 0.
-- **Adaptez le panneau latéral.** Pliez réseaux et serveurs Discord, filtrez avec `/net`, triez par activité récente ou messages non lus, et glissez la bordure pour redimensionner. La molette passe entre les conversations ouvertes.
+- **Adaptez le panneau latéral.** Pliez réseaux et serveurs Discord, filtrez avec `/net`, triez par activité récente ou messages non lus, séparez salons et messages directs, et glissez la bordure pour redimensionner. La molette passe entre les conversations ouvertes.
 - **Trouvez un message, puis rejoignez-le.** `Ctrl+F` cherche localement ; pressez-le deux fois pour chercher sur les réseaux. Cliquez la citation d’une réponse pour revenir au message original, avec chargement de l’historique autour si nécessaire.
-- **Réagissez directement.** Actions au survol, réactions rapides, double-clic 👍, réponses, modifications et détails des messages. `F3` montre les membres et leur présence ; un clic sur un membre ouvre une conversation.
+- **Réagissez directement.** Un menu au clic droit avec les réactions rapides, double-clic 👍, réponses, modifications (`Ctrl+↑` parcourt vos messages précédents), emojis Discord personnalisés et détails des messages. `F3` montre les membres et leur présence ; un clic sur un membre ouvre une conversation.
 - **Donnez de la place au brouillon.** Dépliez l’éditeur multiligne, collez un bloc de code, complétez une `@mention`, choisissez un emoji ou collez une image avec `Ctrl+V`. `Ctrl+B`, `Ctrl+I` et `Ctrl+U` mettent le brouillon en gras, italique et souligné, envoyés en Markdown Discord ou en entités Telegram. Hunspell, facultatif, souligne les fautes ; `Ctrl+R` propose des corrections.
 - **Profitez des petits détails utiles.** Glissez pour copier plusieurs messages, prévisualisez les thèmes en direct, affichez les secondes, repérez la ligne des non-lus et gardez un cache local d’historique. Indications de saisie, état de lecture lié au focus et notifications configurables complètent l’interface.
 - **Changez de langue en discutant.** Interface française et anglaise, READMEs équivalents et manuels complets. `/set lang fr` ou `/set lang en` s’applique immédiatement.
@@ -180,7 +180,8 @@ Vérifiez `download_dir` et `log_dir` dans cette configuration. Les caches écri
 | Recherche locale / sur les réseaux | Ctrl+F / Ctrl+F encore |
 | GIF / emoji | Ctrl+G / Ctrl+T |
 | Sélectionner un message | Alt+↑ / Alt+↓ ou clic |
-| Répondre / modifier / réagir / copier | `p` / `e` / `r` / `c` |
+| Répondre / modifier / réagir / copier | `p` / `e` / `r` / `c`, ou le menu du clic droit |
+| Modifier mon message précédent, le suivant | Ctrl+↑ / Ctrl+↓ |
 | Coller / envoyer un fichier | Ctrl+V / `/send path [caption]` |
 | Gras / italique / souligné dans le brouillon | Ctrl+B / Ctrl+I / Ctrl+U |
 | Effacer l’écran, garder l’historique | Ctrl+L |
@@ -196,6 +197,7 @@ lang = "fr"                  # en, fr, ou une chaîne de repli comme fr+en
 images = "auto"              # auto, kitty, halfblock, off
 video = "show"               # première image ; l lit la vidéo sélectionnée
 sidebar_sort = "recent"      # recent, alpha, unread
+sidebar_split = false        # salons, puis messages directs
 spell = "off"                # fr+en_US active les dictionnaires installés
 notify = "terminal"          # terminal, desktop, off
 auto_media_max_kb = 5120      # 0 désactive les téléchargements automatiques

@@ -22,9 +22,9 @@
 - **Open an image and explore it.** Click or press `v` for the built-in viewer. Zoom up to 8× with the wheel or `+`/`-`, **drag with the mouse to pan**, use arrow keys, and press `0` to fit again. [Viewer controls](docs/guide.md#viewer).
 - **Keep photos and GIFs in the flow.** Native pixels through kitty graphics, Unicode half blocks elsewhere. `F5` shows images only on hover; `Ctrl+G` opens a searchable picker with animated GIF previews.
 - **Move between conversations your way.** Numbered windows, a draft in each, `/query`, `/join`, `/msg`, `/me`, and a cycle through unread windows. `F6` combines conversations in window 0.
-- **Make the sidebar work for you.** Fold networks and Discord servers, filter with `/net`, sort by recent activity or unread messages, and drag the border to resize. The wheel switches between open conversations.
+- **Make the sidebar work for you.** Fold networks and Discord servers, filter with `/net`, sort by recent activity or unread messages, split the windows into channels and direct messages, and drag the border to resize. The wheel switches between open conversations.
 - **Find a message, then jump to it.** `Ctrl+F` searches locally; press it twice to search across networks. Click a reply’s quote to return to its original message, loading the surrounding history when needed.
-- **React without a detour.** Hover actions, quick reactions, double-click 👍, replies, edits and message details. `F3` shows members and presence; click a member to open a conversation.
+- **React without a detour.** A right-click menu with quick reactions, double-click 👍, replies, edits (`Ctrl+↑` walks your previous messages), custom Discord emojis and message details. `F3` shows members and presence; click a member to open a conversation.
 - **Give your draft some room.** Expand the multiline editor, paste a code block, complete an `@mention`, pick an emoji or paste an image with `Ctrl+V`. `Ctrl+B`, `Ctrl+I` and `Ctrl+U` style the draft in bold, italic and underline, sent as Discord Markdown or Telegram entities. Optional Hunspell underlines misspellings; `Ctrl+R` offers corrections.
 - **Keep the useful little details.** Drag to copy several messages, preview themes live, show seconds in timestamps, spot the unread divider, and keep a local history cache. Typing indicators, focus-aware read state and configurable notifications complete the flow.
 - **Switch languages while chatting.** French and English interface, matching READMEs and full manuals. `/set lang fr` or `/set lang en` applies immediately.
@@ -180,7 +180,8 @@ Review `download_dir` and `log_dir` in that configuration. Caches written with e
 | Search here / search across networks | Ctrl+F / Ctrl+F again |
 | GIFs / emoji | Ctrl+G / Ctrl+T |
 | Select a message | Alt+↑ / Alt+↓ or click |
-| Reply / edit / react / copy selection | `p` / `e` / `r` / `c` |
+| Reply / edit / react / copy selection | `p` / `e` / `r` / `c`, or the right-click menu |
+| Edit my previous message, the next one | Ctrl+↑ / Ctrl+↓ |
 | Paste / send a file | Ctrl+V / `/send path [caption]` |
 | Bold / italic / underline in the draft | Ctrl+B / Ctrl+I / Ctrl+U |
 | Clear the screen, keep the history | Ctrl+L |
@@ -196,6 +197,7 @@ lang = "en"                  # en, fr, or a fallback chain such as fr+en
 images = "auto"              # auto, kitty, halfblock, off
 video = "show"               # first frame; l plays the selected video
 sidebar_sort = "recent"      # recent, alpha, unread
+sidebar_split = false        # channels, then direct messages
 spell = "off"                # fr+en_US enables installed dictionaries
 notify = "terminal"          # terminal, desktop, off
 auto_media_max_kb = 5120      # 0 disables automatic media downloads
