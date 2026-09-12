@@ -124,6 +124,12 @@ func (u *UI) mouse(m term.MouseEvent) {
 		u.view().Scroll = 0 // pill "↓ last message"
 		return
 	}
+	if m.Press && m.Button == 2 && m.Y < u.viewRows() { // right click: the menu of the message
+		if h := hitAt(u.hits, m.X-x0, m.Y); h.item != nil && selectable(h.item) {
+			u.openMsgMenu(h.item, m.X, m.Y)
+		}
+		return
+	}
 	switch {
 	case m.Button == 64: // wheel up
 		u.scroll(u.view(), 3)

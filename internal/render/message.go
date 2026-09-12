@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"image/png"
 	"math"
-	"slices"
 	"strings"
 	"time"
 
@@ -32,14 +31,12 @@ type Opts struct {
 	// and not an integer: the aggregated view and the search results mix
 	// networks, and each one has an identity of its own. nil = no identity
 	// (id 0): only the messages sent from here are mine.
-	Self      func(m *model.Msg) int64
-	Avatars   bool       // gutter of 3 cells before the nick (kitty)
-	ShowChat  bool       // aggregated view: put the chat title in front
-	Selected  *model.Msg // selected message: marker, background and help line
-	Hover     *model.Msg // message under the mouse: background, no marker
-	HoverHelp bool       // help line shown on hover too (menu mode), not only on selection
-	// TextSel : messages covered by a selection drag. Background only: no help
-	// line, which would change the height of the whole range.
+	Self     func(m *model.Msg) int64
+	Avatars  bool       // gutter of 3 cells before the nick (kitty)
+	ShowChat bool       // aggregated view: put the chat title in front
+	Selected *model.Msg // selected message: marker and background
+	Hover    *model.Msg // message under the mouse: background, no marker
+	// TextSel : messages covered by a selection drag. Background only.
 	TextSel map[*model.Msg]bool
 	// ReadOutbox : last of my messages read by the chat of the message. nil: no
 	// "read" tick (a function and not an integer: the aggregated view mixes
@@ -114,7 +111,6 @@ func SendEcho(m *model.Msg, o Opts) []Line {
 // Message draws a whole message (prefix, body, media, reactions).
 func Message(m *model.Msg, o Opts) []Line {
 	th := o.Theme
-	dim := th.Style(theme.Dim)
 	if m.Service != "" { // never selectable
 		return Plain("*** "+Clean(m.Service), th.Style(theme.System), o.Width)
 	}
@@ -122,9 +118,6 @@ func Message(m *model.Msg, o Opts) []Line {
 	// Hover: same background as the selection, without the marker. The selection
 	// wins, otherwise the message would carry two help lines.
 	hov := !sel && o.Hover == m
-	// helpHov : help line on hover, only in menu mode (HoverHelp); on selection
-	// it always shows, whatever the mode.
-	helpHov := hov && o.HoverHelp
 	tsel := !sel && !hov && o.TextSel[m]
 	if sel {
 		o.Width-- // column of the marker
@@ -137,11 +130,6 @@ func Message(m *model.Msg, o Opts) []Line {
 	}
 	tick, tickStyle := msgTick(m, o, caps)
 	prefix, indent, avCol := msgPrefix(m, o, fromID, own)
-	quick := "" // hover/selection: quick reaction emoji, raw — sent back to the server as it is
-	// Neither deleted nor still in flight: nothing to react to.
-	if (sel || helpHov) && Actionable(m) && caps.Reactions {
-		quick = quickEmoji(m, o.Reactions)
-	}
 	bw := o.Width - indent - Width(tick)
 	if bw < 10 { // screen too narrow: no prefix
 		bw, indent, prefix = o.Width-Width(tick), 0, nil
@@ -154,17 +142,6 @@ func Message(m *model.Msg, o Opts) []Line {
 	}
 	img, hoverMedia := msgImage(m, o, indent)
 	lines = append(lines, img...)
-	// --- help line ---
-	var acts []act
-	helpFrom := -1
-	if sel || helpHov {
-		acts = selActs(m, own, o.Jump, caps)
-		if quick != "" { // quick reaction emoji at the head of the help line, clickable
-			acts = append([]act{{KeyReact, Truncate(Clean(quick), 2, ""), quick, 0}}, acts...)
-		}
-		helpFrom = len(lines)
-		lines = append(lines, Wrap([]Span{{helpText(acts), dim}}, bw)...)
-	}
 	// --- avatar, padding and tick ---
 	if o.Avatars && len(prefix) > 0 { // screen not too narrow
 		lines[0].Avatar, lines[0].AvatarCol = fromID, avCol
@@ -194,19 +171,16 @@ func Message(m *model.Msg, o Opts) []Line {
 	}
 	// The "│ …" line of a reply points back to the quoted message.
 	if mk.reply >= 0 && m.Reply.ID != 0 {
-		lines[mk.reply].Actions = actionsIn(lines[mk.reply], []act{{KeyJump, quote, "", m.Reply.ID}})
+		lines[mk.reply].Actions = actionsIn(lines[mk.reply], []Act{{KeyJump, quote, "", m.Reply.ID}})
 	}
 	for i := mk.reactFirst; i < mk.reactLast; i++ {
 		lines[i].Actions = actionsIn(lines[i], ra)
-	}
-	for i := helpFrom; i >= 0 && i < len(lines); i++ {
-		lines[i].Actions = actionsIn(lines[i], acts)
 	}
 	// A click on the label of a photo, a video, a GIF or a map is the "v" of
 	// the palette: the preview, never the desktop. A link preview keeps its
 	// URL (the page) and a file has nothing to preview.
 	if md := m.Media; mk.label >= 0 && md.Kind != model.MediaWebPage && md.Previewable() && Actionable(m) {
-		lines[mk.label].Actions = append(lines[mk.label].Actions, actionsIn(lines[mk.label], []act{{KeyView, mk.labelText, "", 0}})...)
+		lines[mk.label].Actions = append(lines[mk.label].Actions, actionsIn(lines[mk.label], []Act{{KeyView, mk.labelText, "", 0}})...)
 	}
 	// After the indent and the marker: Col is the end of the label as it is
 	// drawn.
@@ -302,7 +276,7 @@ type msgMarks struct {
 // media label, error, reactions) wrapped to bw columns, with the marks the
 // actions need, the clickable reactions and the raw quote, which is the label
 // of its link back.
-func msgBody(m *model.Msg, o Opts, bw int) (lines []Line, mk msgMarks, ra []act, quote string) {
+func msgBody(m *model.Msg, o Opts, bw int) (lines []Line, mk msgMarks, ra []Act, quote string) {
 	th := o.Theme
 	dim := th.Style(theme.Dim)
 	var sections [][]Span
@@ -377,7 +351,7 @@ func msgBody(m *model.Msg, o Opts, bw int) (lines []Line, mk msgMarks, ra []act,
 			if m.Reactions[i].Mine {
 				st = accent
 			}
-			spans = append(spans, Span{a.label, st})
+			spans = append(spans, Span{a.Label, st})
 		}
 		reactSec = len(sections)
 		sections = append(sections, spans)
@@ -523,141 +497,72 @@ func Stoppable(md *model.Media) bool {
 	return Playing(md) && !(md.Paused && md.Frame == 0)
 }
 
-// act : action before the columns are made; label is the text shown.
-type act struct {
-	key   rune
-	label string
-	emoji string
-	id    int // KeyJump : message aimed at
+// Act : action of a message before the columns are made; Label is the text
+// shown ("e edit"), Key the key that runs it.
+type Act struct {
+	Key   rune
+	Label string
+	Emoji string
+	ID    int // KeyJump : message aimed at
 }
 
-// selActs : palette of the selected message. jump: search window, the result
+// SelActs : actions of a message — the entries of its context menu (right
+// click), each one the key of the selection. jump: search window, the result
 // points back to its chat rather than to the message it quotes. caps: what the
 // network of the message can do — an entry it has not is left out.
-func selActs(m *model.Msg, own, jump bool, caps model.Caps) []act {
-	var out []act
+func SelActs(m *model.Msg, own, jump bool, caps model.Caps) []Act {
+	var out []Act
 	switch {
 	case jump && m.ID != 0:
-		out = append(out, act{KeyJump, i18n.T("act_jump"), "", m.ID})
+		out = append(out, Act{KeyJump, i18n.T("act_jump"), "", m.ID})
 	case m.Reply != nil && m.Reply.ID != 0:
-		out = append(out, act{KeyJump, i18n.T("act_quoted"), "", m.Reply.ID})
+		out = append(out, Act{KeyJump, i18n.T("act_quoted"), "", m.Reply.ID})
 	}
 	if Actionable(m) {
 		if own {
 			if caps.Edit {
-				out = append(out, act{'e', i18n.T("act_edit"), "", 0})
+				out = append(out, Act{'e', i18n.T("act_edit"), "", 0})
 			}
-			out = append(out, act{'d', i18n.T("act_delete"), "", 0})
+			out = append(out, Act{'d', i18n.T("act_delete"), "", 0})
 		}
-		out = append(out, act{'p', i18n.T("act_reply"), "", 0})
+		out = append(out, Act{'p', i18n.T("act_reply"), "", 0})
 		if caps.Reactions {
-			out = append(out, act{'r', i18n.T("act_react"), "", 0})
+			out = append(out, Act{'r', i18n.T("act_react"), "", 0})
 		}
 		// "i info" stays whatever the network: every backend answers what it can.
-		out = append(out, act{'c', i18n.T("act_copy"), "", 0}, act{'i', i18n.T("act_info"), "", 0})
+		out = append(out, Act{'c', i18n.T("act_copy"), "", 0}, Act{'i', i18n.T("act_info"), "", 0})
 		if md := m.Media; Openable(md) {
-			out = append(out, act{'o', i18n.T("act_open"), "", 0})
+			out = append(out, Act{'o', i18n.T("act_open"), "", 0})
 			if md.Previewable() {
-				out = append(out, act{'v', i18n.T("act_view"), "", 0})
+				out = append(out, Act{'v', i18n.T("act_view"), "", 0})
 			}
 			switch {
 			case !Playable(m):
 			case !Stoppable(md): // at rest
-				out = append(out, act{'l', i18n.T("act_play"), "", 0})
+				out = append(out, Act{'l', i18n.T("act_play"), "", 0})
 			case md.Paused:
-				out = append(out, act{'l', i18n.T("act_resume"), "", 0}, act{'s', i18n.T("act_stop"), "", 0})
+				out = append(out, Act{'l', i18n.T("act_resume"), "", 0}, Act{'s', i18n.T("act_stop"), "", 0})
 			default:
-				out = append(out, act{'l', i18n.T("act_pause"), "", 0}, act{'s', i18n.T("act_stop"), "", 0})
+				out = append(out, Act{'l', i18n.T("act_pause"), "", 0}, Act{'s', i18n.T("act_stop"), "", 0})
 			}
 		}
-	}
-	return append(out, act{KeyEsc, "Esc", "", 0})
-}
-
-func helpText(acts []act) string {
-	labels := make([]string, len(acts))
-	for i, a := range acts {
-		labels[i] = a.label
-	}
-	return strings.Join(labels, " · ")
-}
-
-// reactActs : one action per reaction; raw emoji (the one sent back to the
-// server), clean label (the one drawn).
-func reactActs(rs []model.Reaction) []act {
-	out := make([]act, 0, len(rs))
-	for _, r := range rs {
-		out = append(out, act{KeyReact, fmt.Sprintf("%s %d", Clean(r.Emoji), r.Count), r.Emoji, 0})
 	}
 	return out
 }
 
-// quickEmoji : quick reaction emoji offered on hover, brought back to the
-// reactions the chat allows (allowed) — otherwise the server would refuse the
-// click. allowed nil = restriction unknown, the guess goes through as it is.
-func quickEmoji(m *model.Msg, allowed []string) string {
-	e := guessEmoji(m)
-	switch {
-	case allowed == nil || slices.Contains(allowed, e):
-		return e
-	case len(allowed) == 0:
-		return "" // chat with no reaction: nothing to offer
+// reactActs : one action per reaction; raw emoji (the one sent back to the
+// server), clean label (the one drawn).
+func reactActs(rs []model.Reaction) []Act {
+	out := make([]Act, 0, len(rs))
+	for _, r := range rs {
+		out = append(out, Act{KeyReact, fmt.Sprintf("%s %d", Clean(r.Emoji), r.Count), r.Emoji, 0})
 	}
-	return allowed[0]
-}
-
-// guessEmoji gives my reaction when I have one (a click removes it), else the
-// most frequent one, else a guess from the content. The words looked for below
-// are read in the message text, in French and in English: they never follow
-// the interface language.
-func guessEmoji(m *model.Msg) string {
-	best := -1
-	for i, r := range m.Reactions {
-		if r.Mine {
-			return r.Emoji
-		}
-		if best < 0 || r.Count > m.Reactions[best].Count {
-			best = i
-		}
-	}
-	if best >= 0 {
-		return m.Reactions[best].Emoji
-	}
-	t := " " + Fold(m.Text) + " " // spaces: "gg" is looked for as a whole word
-	has := func(subs ...string) bool {
-		for _, s := range subs {
-			if strings.Contains(t, s) {
-				return true
-			}
-		}
-		return false
-	}
-	switch {
-	case strings.HasSuffix(strings.TrimSpace(t), "?"):
-		return "🤔"
-	case has("merci", "thanks"):
-		return "🙏"
-	case has("bravo", " gg ", "felicit"):
-		return "👏"
-	case has("lol", "mdr", "😂"):
-		return "🤣" // 😂 is detected but never posted: not in the Telegram list
-	case has("triste", "desole", "rip"):
-		return "😢"
-	}
-	if md := m.Media; md != nil {
-		switch md.Kind {
-		case model.MediaPhoto, model.MediaVideo, model.MediaGIF:
-			return "🔥"
-		case model.MediaSticker:
-			return "❤" // no variation selector: Telegram refuses ❤️
-		}
-	}
-	return "👍"
+	return out
 }
 
 // actionsIn gives the columns of the labels of acts in the drawn line. A
 // label cut by the line break simply is not clickable.
-func actionsIn(l Line, acts []act) []Action {
+func actionsIn(l Line, acts []Act) []Action {
 	text := ""
 	for _, sp := range l.Spans {
 		text += sp.Text
@@ -665,14 +570,14 @@ func actionsIn(l Line, acts []act) []Action {
 	var out []Action
 	from := 0
 	for _, a := range acts {
-		i := strings.Index(text[from:], a.label)
+		i := strings.Index(text[from:], a.Label)
 		if i < 0 {
 			continue
 		}
 		i += from
-		from = i + len(a.label)
+		from = i + len(a.Label)
 		col := Width(text[:i])
-		out = append(out, Action{Col0: col, Col1: col + Width(a.label), Key: a.key, Emoji: a.emoji, ID: a.id})
+		out = append(out, Action{Col0: col, Col1: col + Width(a.Label), Key: a.Key, Emoji: a.Emoji, ID: a.ID})
 	}
 	return out
 }

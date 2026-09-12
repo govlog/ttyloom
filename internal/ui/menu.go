@@ -11,19 +11,110 @@ import (
 	"github.com/govlog/ttyloom/internal/theme"
 )
 
-// Context menu: right click on a chat line of the sidebar (F2) or on a member
-// of the member box (F3), a small box on top anchored at the click. While it
-// is open it takes the keyboard and the mouse like the emoji picker, and the
-// line aimed at stays highlighted.
+// Context menu: right click on a chat line of the sidebar (F2), on a member
+// of the member box (F3) or on a message, a small box on top anchored at the
+// click. While it is open it takes the keyboard and the mouse like the emoji
+// picker, and the line aimed at stays highlighted.
 
-type menuEntry struct{ label, key string }
+type menuEntry struct {
+	label, key string
+	danger     bool // drawn in the error colour (delete)
+}
 
 type ctxMenu struct {
 	chat    *model.Chat // target: line of the sidebar…
-	member  string      // …or member of the member box (@name or id)
+	member  string      // …or member of the member box (@name or id)…
+	item    *Item       // …or a message; win is its window
+	win     *Window
+	reacts  []string // message: quick reactions on the first row, clickable
 	entries []menuEntry
 	x, y    int // anchor: the click
 	cur     int
+}
+
+// menuReacts : quick reactions of the message menu, at most.
+const menuReacts = 7
+
+// msgEntries : entries of the menu of a message — its actions (SelActs), the
+// edit and the delete moved last, the delete in the error colour.
+func msgEntries(acts []render.Act) []menuEntry {
+	var es, own []menuEntry
+	for _, a := range acts {
+		e := menuEntry{label: a.Label, key: string(a.Key), danger: a.Key == 'd'}
+		if a.Key == 'e' || a.Key == 'd' {
+			own = append(own, e)
+		} else {
+			es = append(es, e)
+		}
+	}
+	return append(es, own...)
+}
+
+// reactRow : the quick reactions drawn on one row, one space between.
+func reactRow(reacts []string) string {
+	out := make([]string, len(reacts))
+	for i, r := range reacts {
+		out[i] = render.Truncate(render.CleanLine(r), 2, "")
+	}
+	return strings.Join(out, " ")
+}
+
+// reactAt : the reaction under column x of the row (0 = first cell inside
+// the border), "" between two or past the end.
+func reactAt(reacts []string, x int) string {
+	col := 0
+	for _, r := range reacts {
+		w := render.Width(render.Truncate(render.CleanLine(r), 2, ""))
+		if x >= col && x < col+w {
+			return r
+		}
+		col += w + 1
+	}
+	return ""
+}
+
+// openMsgMenu : right click on a message — its actions, and the quick
+// reactions of its chat. The message is selected: the entries are its keys.
+func (u *UI) openMsgMenu(it *Item, x, y int) {
+	w := u.view()
+	m := it.Msg
+	if !render.Actionable(m) {
+		return
+	}
+	u.setSel(w, it)
+	c := u.chatOf(m)
+	caps := u.capsOf(m)
+	var reacts []string
+	if caps.Reactions {
+		reacts = u.allowed(c)
+		reacts = reacts[:min(len(reacts), menuReacts)]
+	}
+	es := msgEntries(render.SelActs(m, u.own(m), w.Search != "", caps))
+	if len(es) == 0 && len(reacts) == 0 {
+		return
+	}
+	u.menu = &ctxMenu{item: it, win: w, reacts: reacts, entries: es, x: x, y: y}
+}
+
+// menuHover : the pointer over an entry makes it the current one (follow-mouse).
+// true when the current entry changed.
+func (u *UI) menuHover(x, y int) bool {
+	m := u.menu
+	r := u.menuBox()
+	i := y - r.row - m.head()
+	if !r.hits(y, x, 1, 1) || i < 0 || i >= len(m.entries) || i == m.cur {
+		return false
+	}
+	m.cur = i
+	return true
+}
+
+// head : lines between the top border and the first entry (the reaction row).
+func (m *ctxMenu) head() int {
+	if len(m.reacts) > 0 {
+		return 2
+	}
+	return 1
 }
 
 // menuEntries gives the entries of the target. A member has neither a room
@@ -36,46 +127,46 @@ type ctxMenu struct {
 func menuEntries(kind model.ChatKind, member bool, caps model.Caps) []menuEntry {
 	if member {
 		es := []menuEntry{
-			{i18n.T("menu_private_message"), "query"},
-			{i18n.T("menu_info"), "info"},
+			{label: i18n.T("menu_private_message"), key: "query"},
+			{label: i18n.T("menu_info"), key: "info"},
 		}
 		if caps.Block {
-			es = append(es, menuEntry{i18n.T("menu_report_block"), "block"})
+			es = append(es, menuEntry{label: i18n.T("menu_report_block"), key: "block"})
 		}
 		return es
 	}
 	es := make([]menuEntry, 0, 5)
 	switch {
 	case kind == model.ChatUser:
-		es = append(es, menuEntry{i18n.T("menu_close_chat"), "leave"})
+		es = append(es, menuEntry{label: i18n.T("menu_close_chat"), key: "leave"})
 	case caps.Leave:
-		es = append(es, menuEntry{i18n.T("menu_leave_room"), "leave"})
+		es = append(es, menuEntry{label: i18n.T("menu_leave_room"), key: "leave"})
 	}
 	if caps.Block {
-		es = append(es, menuEntry{i18n.T("menu_report_block"), "block"})
+		es = append(es, menuEntry{label: i18n.T("menu_report_block"), key: "block"})
 	}
 	return append(es,
-		menuEntry{i18n.T("menu_delete_chat"), "delete"},
-		menuEntry{i18n.T("menu_info"), "info"},
-		menuEntry{i18n.T("menu_search"), "search"})
+		menuEntry{label: i18n.T("menu_delete_chat"), key: "delete"},
+		menuEntry{label: i18n.T("menu_info"), key: "info"},
+		menuEntry{label: i18n.T("menu_search"), key: "search"})
 }
 
 // menuRect gives the box of the entries (borders included, width = longest
 // label + 2), anchored at the click (x, y) and only moved sideways or up to
 // stay on the screen — cols columns, rows lines, status and input left out.
-func menuRect(es []menuEntry, x, y, cols, rows int) rect {
-	w := 0
+func menuRect(es []menuEntry, reacts []string, x, y, cols, rows int) rect {
+	w := render.Width(reactRow(reacts))
 	for _, e := range es {
 		w = max(w, render.Width(e.label))
 	}
 	w = min(w+2, max(2, cols)) // floors at 2: the box keeps its borders
-	h := min(len(es)+2, max(2, rows))
+	h := min(len(es)+2+min(len(reacts), 1), max(2, rows))
 	return rect{row: max(0, min(y, rows-h)), col: max(0, min(x, cols-w)), h: h, w: w}
 }
 
 // menuBox gives the open menu, in screen coordinates.
 func (u *UI) menuBox() rect {
-	return menuRect(u.menu.entries, u.menu.x, u.menu.y, u.t.Cols, u.viewRows())
+	return menuRect(u.menu.entries, u.menu.reacts, u.menu.x, u.menu.y, u.t.Cols, u.viewRows())
 }
 
 // Lines gives the whole box, one render.Line per screen line; the current
@@ -86,8 +177,14 @@ func (m *ctxMenu) Lines(th theme.Theme, w, h int) []render.Line {
 	inner := max(0, w-2)
 	side := render.Span{Text: "│", Style: edge}
 	out := []render.Line{{Spans: []render.Span{{Text: "┌" + strings.Repeat("─", inner) + "┐", Style: edge}}}}
+	if len(m.reacts) > 0 {
+		out = append(out, render.Line{Spans: []render.Span{side, {Text: padTo(reactRow(m.reacts), inner)}, side}})
+	}
 	for i, e := range m.entries {
 		st := theme.Style{}
+		if e.danger {
+			st.FG = th.Color(theme.Error)
+		}
 		if i == m.cur {
 			st = on
 		}
@@ -138,7 +235,7 @@ func (u *UI) menuList() listOverlay {
 		u.closeMenu()
 		u.menuDo(m, m.entries[i].key)
 	}
-	return listOverlay{r: u.menuBox(), head: 1, rows: len(m.entries), n: len(m.entries),
+	return listOverlay{r: u.menuBox(), head: m.head(), rows: len(m.entries), n: len(m.entries),
 		move: m.move, click: run, enter: func() { run(m.cur) }, close: u.closeMenu}
 }
 
@@ -160,13 +257,28 @@ func (u *UI) menuKey(k term.Key) {
 
 // menuMouse : left click on an entry = action, wheel = move, click outside the
 // box = close.
-func (u *UI) menuMouse(e term.MouseEvent) { u.menuList().mouse(e) }
+func (u *UI) menuMouse(e term.MouseEvent) {
+	m := u.menu
+	if r := u.menuBox(); len(m.reacts) > 0 && e.Button == 0 && e.Y == r.row+1 && r.hits(e.Y, e.X, 1, 1) {
+		if pick := reactAt(m.reacts, e.X-r.col-1); pick != "" { // reaction row: the emoji under the click
+			u.closeMenu()
+			u.react(m.item, pick)
+		}
+		return
+	}
+	u.menuList().mouse(e)
+}
 
 // menuDo runs the entry chosen on the target of the menu, never on the current
 // window.
 func (u *UI) menuDo(m *ctxMenu, key string) {
 	if m.member != "" {
 		u.menuMember(m, key)
+		return
+	}
+	if m.item != nil { // message: the entry is the key of the selection
+		u.setSel(m.win, m.item)
+		u.selKey(m.win, []rune(key)[0])
 		return
 	}
 	c := m.chat

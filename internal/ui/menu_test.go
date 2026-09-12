@@ -1,9 +1,12 @@
 package ui
 
 import (
+	"github.com/govlog/ttyloom/internal/config"
+	"github.com/govlog/ttyloom/internal/term"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/govlog/ttyloom/internal/i18n"
 	"github.com/govlog/ttyloom/internal/model"
@@ -73,7 +76,7 @@ func TestMenuEntriesMember(t *testing.T) {
 	if len(es) != 3 {
 		t.Fatalf("%d entries", len(es))
 	}
-	for i, want := range []menuEntry{{"message privé", "query"}, {"infos", "info"}, {"signaler / bloquer", "block"}} {
+	for i, want := range []menuEntry{{label: "message privé", key: "query"}, {label: "infos", key: "info"}, {label: "signaler / bloquer", key: "block"}} {
 		if es[i] != want {
 			t.Fatalf("entry %d = %+v, want %+v", i, es[i], want)
 		}
@@ -89,7 +92,7 @@ func TestMenuRect(t *testing.T) {
 	es := menuEntries(model.ChatGroup, false, model.AllCaps())
 	w := len("supprimer la conversation") + 2                          // longest label + borders
 	for _, c := range []struct{ x, y int }{{27, 3}, {5, 0}, {0, 12}} { // the click, even in the sidebar
-		if r := menuRect(es, c.x, c.y, 100, 30); r.col != c.x || r.row != c.y || r.w != w || r.h != len(es)+2 {
+		if r := menuRect(es, nil, c.x, c.y, 100, 30); r.col != c.x || r.row != c.y || r.w != w || r.h != len(es)+2 {
 			t.Fatalf("anchor (%d,%d): %+v", c.x, c.y, r)
 		}
 	}
@@ -98,7 +101,7 @@ func TestMenuRect(t *testing.T) {
 		{27, 3, 100, 30}, {27, 28, 100, 30}, {95, 25, 100, 30},
 		{0, 0, 10, 3}, {27, 5, 30, 6}, {200, 200, 80, 24},
 	} {
-		r := menuRect(es, tc.x, tc.y, tc.cols, tc.rows)
+		r := menuRect(es, nil, tc.x, tc.y, tc.cols, tc.rows)
 		if r.col < 0 || r.row < 0 || r.col+r.w > tc.cols || r.row+r.h > tc.rows {
 			t.Fatalf("off screen %dx%d at (%d,%d): %+v", tc.cols, tc.rows, tc.x, tc.y, r)
 		}
@@ -112,7 +115,7 @@ func TestMenuRect(t *testing.T) {
 // inverted, never more lines than the rect.
 func TestMenuLines(t *testing.T) {
 	es := menuEntries(model.ChatGroup, false, model.AllCaps())
-	r := menuRect(es, 0, 0, 100, 30)
+	r := menuRect(es, nil, 0, 0, 100, 30)
 	m := &ctxMenu{entries: es, cur: 2}
 	lines := m.Lines(theme.Terminal(), r.w, r.h)
 	if len(lines) != len(es)+2 {
@@ -223,5 +226,94 @@ func TestMenuEntriesCaps(t *testing.T) {
 	u.openMemberMenu("@alice", 0, 0, 0)
 	if got := keys(u.menu.entries); slices.Contains(got, "block") {
 		t.Fatalf("member menu of a network with no Block: %v", got)
+	}
+}
+
+// msgUI : a UI with one window on a Telegram chat, a message of mine and one
+// of alice, the network taking reactions.
+func msgUI(t *testing.T) (*UI, *fakeBackend, *Window) {
+	t.Helper()
+	b := &fakeBackend{caps: model.AllCaps()}
+	u := &UI{ws: NewWindows(), agg: &Window{}, debug: &Window{}, cfg: &config.Config{}, th: theme.Terminal(),
+		t: &term.Term{Cols: 100, Rows: 30}, chats: map[model.ChatKey]*model.Chat{},
+		nets: map[string]model.Backend{model.NetTelegram: b}, dispatchNet: model.NetTelegram,
+		reactList: map[string][]string{model.NetTelegram: {"👍", "❤", "🔥"}}, parts: &partsBox{mark: -1}}
+	c := &model.Chat{Net: model.NetTelegram, ID: 5, Kind: model.ChatGroup, Title: "grp"}
+	u.chats[c.Key()] = c
+	w := u.ws.New(true)
+	w.Chat = c
+	u.ws.Cur = len(u.ws.List) - 1
+	d := time.Date(2026, 9, 10, 9, 0, 0, 0, time.UTC)
+	for _, m := range []*model.Msg{
+		{Net: model.NetTelegram, ChatID: 5, ID: 1, Date: d, From: "moi", Out: true, Text: "un"},
+		{Net: model.NetTelegram, ChatID: 5, ID: 2, Date: d, From: "alice", FromID: 9, Text: "deux"},
+		{Net: model.NetTelegram, ChatID: 5, ID: 3, Date: d, From: "moi", Out: true, Text: "trois"},
+	} {
+		w.Upsert(m)
+	}
+	return u, b, w
+}
+
+// Right click on a message: its menu — quick reactions on the first row, the
+// actions of the message, edit and delete last; the entry chosen is the key
+// of the selection, a click on a reaction reacts.
+func TestMsgMenu(t *testing.T) {
+	u, b, w := msgUI(t)
+	mine, alice := w.Items[2], w.Items[1]
+	u.hits = []rowHit{{item: alice}, {item: mine}} // screen lines 0 and 1
+	u.mouse(term.MouseEvent{Press: true, Button: 2, X: 10, Y: 1})
+	m := u.menu
+	if m == nil || m.item != mine || w.Sel != mine {
+		t.Fatalf("menu: %+v sel %v", m, w.Sel)
+	}
+	keys := ""
+	for _, e := range m.entries {
+		keys += e.key
+	}
+	if keys != "prcied" || !m.entries[len(m.entries)-1].danger || !slices.Equal(m.reacts, []string{"👍", "❤", "🔥"}) {
+		t.Fatalf("entries %q reacts %v", keys, m.reacts)
+	}
+	lines := m.Lines(u.th, u.menuBox().w, u.menuBox().h)
+	checkBox(t, "message menu", lines, u.menuBox().w)
+	if got := render.LineText(lines[1]); !strings.Contains(got, "👍 ❤ 🔥") {
+		t.Fatalf("reaction row: %q", got)
+	}
+	u.menuDo(m, "p")
+	if u.reply != mine {
+		t.Fatalf("reply: %v", u.reply)
+	}
+	u.reply = nil
+	// The reaction row: the emoji under the click goes to the network.
+	u.openMsgMenu(alice, 10, 0)
+	r := u.menuBox()
+	u.menuMouse(term.MouseEvent{Press: true, Button: 0, X: r.col + 1 + 3, Y: r.row + 1}) // "❤": after "👍 "
+	if b.reacts != 1 || u.menu != nil {
+		t.Fatalf("reaction click: %d call(s), menu %v", b.reacts, u.menu)
+	}
+	// Someone else's message: no edit, no delete.
+	u.openMsgMenu(alice, 10, 0)
+	keys = ""
+	for _, e := range u.menu.entries {
+		keys += e.key
+	}
+	if keys != "prci" {
+		t.Fatalf("alice's entries: %q", keys)
+	}
+}
+
+// The pointer over an entry makes it the current one; outside the entries
+// nothing moves.
+func TestMsgMenuHover(t *testing.T) {
+	u, _, w := msgUI(t)
+	u.openMsgMenu(w.Items[2], 10, 0)
+	r := u.menuBox()
+	if !u.menuHover(r.col+1, r.row+u.menu.head()+2) || u.menu.cur != 2 {
+		t.Fatalf("hover on the 3rd entry: cur %d", u.menu.cur)
+	}
+	if u.menuHover(r.col+1, r.row+u.menu.head()+2) {
+		t.Fatal("same entry: no change")
+	}
+	if u.menuHover(r.col+1, r.row+1) || u.menuHover(r.col+r.w+5, r.row+2) || u.menu.cur != 2 {
+		t.Fatalf("reaction row or outside: cur %d", u.menu.cur)
 	}
 }

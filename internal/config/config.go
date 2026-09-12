@@ -18,7 +18,7 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
-// HoverMode : level of mouse hover — menu (background + help line, default),
+// HoverMode : level of mouse hover — menu (alias of highlight, default),
 // highlight (background only, help line on selection) or off (nothing on
 // hover). MarshalText/UnmarshalText also cover the TOML compatibility: an old
 // boolean field (true/false) is taken at load time and read back as menu/off.
@@ -189,7 +189,7 @@ timestamps_seconds = false # 15:04:05 instead of 15:04 before each message
 cycle_mode = "next"   # Ctrl+X: next (window after the current one) | last_unread (unread windows in turn, then back)
 link_previews = true   # link preview: title, description and thumbnail under the message
 maps = false           # OpenStreetMap map under a position (third-party network, off by default)
-hover = "menu"         # mouse hover: menu (background + help line) | highlight (background only) | off
+hover = "menu"         # mouse hover: menu | highlight (both: background of the message under the pointer) | off
 bell = true            # bell (\a) on a private message or a mention
 notify = "terminal"    # notification on a private message or a mention: terminal (OSC 777) | desktop (notify-send) | off
 auto_open_days = 7     # opens at start the chats active for N days (0 = off)

@@ -242,7 +242,8 @@ func Run(ctx context.Context, cancel context.CancelFunc, t *term.Term, cfg *conf
 				// Dropped by key(): only a hover, popup or zone change is worth a
 				// repaint (?1003 sends dozens of moves per second).
 				hov, who := u.hoverAt(k.Mouse.X, k.Mouse.Y), u.whoAt(k.Mouse.X, k.Mouse.Y)
-				if zon := u.zoneAt(k.Mouse.X, k.Mouse.Y); !k.Mouse.Motion || (!hov && !who && !zon) {
+				menu := u.menu != nil && u.menuHover(k.Mouse.X, k.Mouse.Y) // the entry follows the pointer
+				if zon := u.zoneAt(k.Mouse.X, k.Mouse.Y); !k.Mouse.Motion || (!hov && !who && !zon && !menu) {
 					continue
 				}
 			case k.Code == term.Mouse && k.Mouse.Motion && k.Mouse.Button == 0 && u.drag == dragText:
@@ -775,7 +776,7 @@ func (u *UI) opts() render.Opts {
 	o := render.Opts{Width: u.width(), Theme: u.th, Timestamps: u.cfg.Timestamps, Seconds: u.cfg.TimestampsSeconds, Images: u.images, LinkPreviews: u.cfg.LinkPreviews,
 		CellW: cellW, CellH: cellH, MaxImgCols: maxCols, MaxImgRows: maxRows, Self: u.selfID,
 		Avatars: u.avatarsOn(), ShowChat: v == u.agg, ReadOutbox: u.readOutboxOf, ReadInbox: u.readInboxOf,
-		ImagesHover: u.cfg.ImagesHover, Video: u.cfg.Video, ChatKind: u.chatKindOf, HoverHelp: u.cfg.Hover == config.HoverMenu,
+		ImagesHover: u.cfg.ImagesHover, Video: u.cfg.Video, ChatKind: u.chatKindOf,
 		Alias: u.aliasOf, Redline: u.cfg.Redline, Caps: u.capsOf,
 		// Search window: the palette offers "g go" (join the message in its chat)
 		// rather than "g quoted".

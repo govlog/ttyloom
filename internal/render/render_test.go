@@ -195,98 +195,12 @@ func TestMessageSelected(t *testing.T) {
 			t.Fatalf("line %d too wide: %q", i, got[i])
 		}
 	}
-	all := strings.Join(got, "\n")
-	if last := got[len(got)-1]; !strings.Contains(last, "Esc") {
-		t.Fatalf("help missing: %q", last)
-	}
-	if !strings.Contains(all, "e éditer") || !strings.Contains(all, "d supprimer") {
-		t.Fatalf("my message: %q", all)
-	}
-	if strings.Contains(all, "o ouvrir") {
-		t.Fatalf("no media: %q", all)
-	}
-
-	// Message of somebody else, with media: no edit, but "o open".
-	other := &model.Msg{ID: 2, Date: m.Date, From: "alice", FromID: 9, Text: "coucou",
-		Media: &model.Media{Label: "[photo]", Loc: &tg.InputPhotoFileLocation{}}}
-	// Width 70: the help line fits on one line, no word is cut.
-	all = strings.Join(texts(Message(other, Opts{Width: 70, Theme: theme.Terminal(), Images: "off", Self: self7, Selected: other, Caps: allCaps})), "\n")
-	if strings.Contains(all, "e éditer") || strings.Contains(all, "d supprimer") {
-		t.Fatalf("someone else's message: %q", all)
-	}
-	if !strings.Contains(all, "o ouvrir") || !strings.Contains(all, "p répondre") {
-		t.Fatalf("media: %q", all)
-	}
-
 	// Service message: never selectable.
 	svc := &model.Msg{ID: 3, Date: m.Date, Service: "alice a rejoint"}
 	for _, l := range Message(svc, Opts{Width: 40, Theme: theme.Terminal(), Images: "off", Selected: svc}) {
 		if len(l.Spans) > 0 && l.Spans[0].Text == "▌" {
 			t.Fatal("service selected")
 		}
-	}
-}
-
-// Hover: same clickable help line as the selection, background, but no
-// marker; selected and hovered at once, only one help line.
-func TestHoverHelpLine(t *testing.T) {
-	m := &model.Msg{ID: 1, Date: time.Date(2026, 8, 30, 12, 1, 0, 0, time.UTC), From: "alice", FromID: 9, Text: "coucou"}
-	o := Opts{Width: 70, Theme: theme.Terminal(), Images: "off", Self: self7, Hover: m, HoverHelp: true}
-	lines := Message(m, o)
-	got := texts(lines)
-	if last := got[len(got)-1]; !strings.Contains(last, "Esc") || !strings.Contains(last, "p répondre") {
-		t.Fatalf("help missing: %q", last)
-	}
-	for i, l := range lines {
-		if len(l.Spans) > 0 && l.Spans[0].Text == selMark {
-			t.Fatalf("marker on line %d", i)
-		}
-		if l.Spans[0].Style.BG.Kind == 0 {
-			t.Fatalf("line %d without hover background", i)
-		}
-	}
-	if len(lines[len(lines)-1].Actions) == 0 {
-		t.Fatal("help line not clickable")
-	}
-
-	o.Selected = m
-	lines = Message(m, o)
-	n := 0
-	for _, l := range texts(lines) {
-		if strings.Contains(l, "Esc") {
-			n++
-		}
-	}
-	if n != 1 {
-		t.Fatalf("help lines: %d", n)
-	}
-	if lines[0].Spans[0].Text != selMark {
-		t.Fatalf("marker missing: %q", texts(lines)[0])
-	}
-}
-
-// TestHoverModes : highlight = background only (no help line on hover);
-// menu (HoverHelp) = background and help line, as before.
-func TestHoverModes(t *testing.T) {
-	m := &model.Msg{ID: 1, Date: time.Date(2026, 8, 30, 12, 1, 0, 0, time.UTC), From: "alice", FromID: 9, Text: "coucou"}
-	o := Opts{Width: 70, Theme: theme.Terminal(), Images: "off", Self: self7, Hover: m} // highlight: HoverHelp false
-	lines := Message(m, o)
-	if lines[0].Spans[0].Style.BG.Kind == 0 {
-		t.Fatal("highlight: hover background missing")
-	}
-	for _, l := range texts(lines) {
-		if strings.Contains(l, "Esc") {
-			t.Fatalf("highlight: help line present: %q", l)
-		}
-	}
-
-	o.HoverHelp = true // menu
-	lines = Message(m, o)
-	if last := texts(lines)[len(lines)-1]; !strings.Contains(last, "Esc") {
-		t.Fatalf("menu: help line missing: %q", last)
-	}
-	if lines[0].Spans[0].Style.BG.Kind == 0 {
-		t.Fatal("menu: hover background missing")
 	}
 }
 
@@ -429,33 +343,54 @@ func colText(text string, c0, c1 int) string {
 
 // The columns of each action frame its label exactly in the drawn line,
 // selection marker and indent included.
-func TestHelpActions(t *testing.T) {
-	labels := map[rune]string{KeyReact: "🔥", KeyTicks: " ✓", 'e': "e éditer", 'd': "d supprimer", 'p': "p répondre",
-		'r': "r réagir", 'c': "c copier", 'i': "i info", 'o': "o ouvrir", 'v': "v voir", KeyEsc: "Esc", KeyView: "[photo]"}
+func TestMsgActions(t *testing.T) {
+	labels := map[rune]string{KeyTicks: " ✓", KeyView: "[photo]"}
 	m := &model.Msg{ID: 1, Date: time.Date(2026, 8, 30, 12, 1, 0, 0, time.UTC), From: "moi", FromID: 7,
 		Out: true, Text: "salut", Media: &model.Media{Label: "[photo]", Loc: &tg.InputPhotoFileLocation{}}}
-	check := func(width int) map[rune]bool {
-		seen := map[rune]bool{}
-		for _, l := range Message(m, Opts{Width: width, Theme: theme.Terminal(), Images: "off", Self: self7, Selected: m, Caps: allCaps}) {
-			text := LineText(l)
-			for _, a := range l.Actions {
-				want, ok := labels[a.Key]
-				if !ok {
-					t.Fatalf("unknown action: %q", a.Key)
-				}
-				if got := colText(text, a.Col0, a.Col1); got != want {
-					t.Fatalf("width %d, action %q: columns %d-%d → %q, want %q",
-						width, a.Key, a.Col0, a.Col1, got, want)
-				}
-				seen[a.Key] = true
+	seen := map[rune]bool{}
+	lines := Message(m, Opts{Width: 100, Theme: theme.Terminal(), Images: "off", Self: self7, Selected: m, Caps: allCaps})
+	for _, l := range lines {
+		text := LineText(l)
+		for _, a := range l.Actions {
+			want, ok := labels[a.Key]
+			if !ok {
+				t.Fatalf("unknown action: %q", a.Key)
 			}
+			if got := colText(text, a.Col0, a.Col1); got != want {
+				t.Fatalf("action %q: columns %d-%d → %q, want %q", a.Key, a.Col0, a.Col1, got, want)
+			}
+			seen[a.Key] = true
 		}
-		return seen
 	}
-	if seen := check(100); len(seen) != len(labels) { // everything fits on one line
+	if len(seen) != len(labels) {
 		t.Fatalf("actions placed: %d of %d", len(seen), len(labels))
 	}
-	check(40) // wrapped help: a cut label loses its action, the others hold
+	// No help line under the selected message: the marker lines are the body only.
+	if n := len(lines); n != 2 || strings.Contains(LineText(lines[n-1]), "Esc") {
+		t.Fatalf("selected message lines: %q", texts(lines))
+	}
+}
+
+// SelActs : the entries of the message menu — mine carries edit and delete,
+// someone else's does not; no Esc entry, the menu has its own exits.
+func TestSelActs(t *testing.T) {
+	keys := func(acts []Act) string {
+		s := ""
+		for _, a := range acts {
+			s += string(a.Key)
+		}
+		return s
+	}
+	m := &model.Msg{ID: 1, Text: "salut", Media: &model.Media{Label: "[photo]", Loc: &tg.InputPhotoFileLocation{}}}
+	if got := keys(SelActs(m, true, false, model.AllCaps())); got != "edprciov" {
+		t.Fatalf("mine: %q", got)
+	}
+	if got := keys(SelActs(m, false, false, model.AllCaps())); got != "prciov" {
+		t.Fatalf("someone else's: %q", got)
+	}
+	if got := keys(SelActs(&model.Msg{ID: 1, Text: "x"}, true, false, model.Caps{})); got != "dpci" {
+		t.Fatalf("nothing allowed: %q", got)
+	}
 }
 
 func TestTicks(t *testing.T) {
@@ -617,135 +552,6 @@ func TestVideoModes(t *testing.T) {
 	}
 }
 
-// quickEmoji : my reaction first, else the most frequent one, else the content.
-func TestQuickEmoji(t *testing.T) {
-	mine := &model.Msg{Text: "coucou", Reactions: []model.Reaction{{Emoji: "🔥", Count: 5}, {Emoji: "👏", Count: 1, Mine: true}}}
-	if got := quickEmoji(mine, nil); got != "👏" {
-		t.Fatalf("my reaction: %q", got)
-	}
-	pop := &model.Msg{Text: "merci", Reactions: []model.Reaction{{Emoji: "🔥", Count: 2}, {Emoji: "👏", Count: 5}}}
-	if got := quickEmoji(pop, nil); got != "👏" {
-		t.Fatalf("most frequent reaction: %q", got)
-	}
-	// Allowed list: a guessed emoji outside the list falls back to the first one,
-	// an empty list (chat with no reaction) offers nothing.
-	if got := quickEmoji(pop, []string{"👍", "🔥"}); got != "👍" {
-		t.Fatalf("outside the list: %q", got)
-	}
-	if got := quickEmoji(pop, []string{"👏", "👍"}); got != "👏" {
-		t.Fatalf("in the list: %q", got)
-	}
-	if got := quickEmoji(pop, []string{}); got != "" {
-		t.Fatalf("no reaction allowed: %q", got)
-	}
-	for _, c := range []struct {
-		msg  *model.Msg
-		want string
-	}{
-		{&model.Msg{Text: "Ça marche ?"}, "🤔"},
-		{&model.Msg{Text: "Merci beaucoup"}, "🙏"},
-		{&model.Msg{Text: "thanks a lot"}, "🙏"},
-		{&model.Msg{Text: "Bravo"}, "👏"},
-		{&model.Msg{Text: "gg"}, "👏"},
-		{&model.Msg{Text: "Félicitations"}, "👏"},
-		{&model.Msg{Text: "mdr"}, "🤣"},
-		{&model.Msg{Text: "😂"}, "🤣"},
-		{&model.Msg{Text: "désolé"}, "😢"},
-		{&model.Msg{Text: "rip"}, "😢"},
-		{&model.Msg{Media: &model.Media{Kind: model.MediaVideo}}, "🔥"},
-		{&model.Msg{Media: &model.Media{Kind: model.MediaSticker}}, "❤"},
-		{&model.Msg{Text: "merci", Media: &model.Media{Kind: model.MediaPhoto}}, "🙏"}, // the text wins
-		{&model.Msg{Text: "salut"}, "👍"},
-	} {
-		if got := quickEmoji(c.msg, nil); got != c.want {
-			t.Fatalf("%q → %q, want %q", c.msg.Text, got, c.want)
-		}
-	}
-}
-
-// Hover/selection: the quick reaction emoji is the first entry of the help
-// line, clickable; it never moves the body of the message (no preamble left
-// and no gutter taken over, see user feedback H22).
-func TestHoverQuickAction(t *testing.T) {
-	m := &model.Msg{ID: 1, Date: time.Date(2026, 8, 30, 12, 1, 0, 0, time.UTC), From: "alice", FromID: 9, Text: "coucou"}
-	o := Opts{Width: 70, Theme: theme.Terminal(), Images: "off", Self: self7, HoverHelp: true, Caps: allCaps} // menu mode
-	plain := Message(m, o)
-	for _, a := range plain[0].Actions {
-		if a.Key == KeyReact {
-			t.Fatalf("reaction action without hover: %+v", a)
-		}
-	}
-
-	o.Hover = m
-	lines := Message(m, o)
-	if got, want := LineText(lines[0]), LineText(plain[0]); got != want {
-		t.Fatalf("body shifted on hover: %q, want %q", got, want)
-	}
-	help := lines[len(lines)-1] // help line: always the last one placed
-	var act *Action
-	for i, a := range help.Actions {
-		if a.Key == KeyReact {
-			act = &help.Actions[i]
-		}
-	}
-	if act == nil {
-		t.Fatalf("no reaction action in the help: %q", texts(lines))
-	}
-	if act.Emoji != "👍" {
-		t.Fatalf("emoji: %q", act.Emoji)
-	}
-	if got := colText(LineText(help), act.Col0, act.Col1); got != "👍" {
-		t.Fatalf("columns %d-%d → %q", act.Col0, act.Col1, got)
-	}
-	if got := strings.TrimLeft(LineText(help), " "); !strings.HasPrefix(got, "👍 · ") {
-		t.Fatalf("emoji not at the head of the help: %q", got)
-	}
-
-	// Wrap width: nothing sticks out.
-	long := &model.Msg{ID: 2, Date: m.Date, From: "alice", FromID: 9, Text: strings.Repeat("mot ", 40)}
-	for _, l := range Message(long, Opts{Width: 40, Theme: theme.Terminal(), Images: "off", Self: self7, Hover: long, HoverHelp: true, Caps: allCaps}) {
-		if w := Width(LineText(l)); w > 40 {
-			t.Fatalf("line of %d columns for 40", w)
-		}
-	}
-
-	// Emoji from the server: cleaned when drawn (no terminal sequence), but sent
-	// back raw to the server through the action.
-	hostile := &model.Msg{ID: 3, Date: m.Date, From: "alice", FromID: 9, Text: "coucou",
-		Reactions: []model.Reaction{{Emoji: "\x1b[31mX", Count: 1, Mine: true}}}
-	hl := Message(hostile, Opts{Width: 70, Theme: theme.Terminal(), Images: "off", Self: self7, Hover: hostile, HoverHelp: true, Caps: allCaps})
-	for _, l := range hl {
-		if strings.ContainsRune(LineText(l), 0x1b) {
-			t.Fatalf("terminal sequence rendered: %q", LineText(l))
-		}
-	}
-	if got, want := LineText(hl[0]), LineText(plain[0]); got != want {
-		t.Fatalf("body shifted (hostile emoji): %q, want %q", got, want)
-	}
-	hHelp := hl[len(hl)-1]
-	var hact *Action
-	for i, a := range hHelp.Actions {
-		if a.Key == KeyReact {
-			hact = &hHelp.Actions[i]
-		}
-	}
-	if hact == nil || hact.Emoji != "\x1b[31mX" {
-		t.Fatalf("raw action emoji: %+v", hact)
-	}
-
-	// Avatar: hover no longer moves it nor drops it.
-	o.Avatars = true
-	hov := Message(m, o)
-	o.Hover = nil
-	noHov := Message(m, o)
-	if hov[0].Avatar != noHov[0].Avatar || hov[0].AvatarCol != noHov[0].AvatarCol {
-		t.Fatalf("avatar moved on hover: %+v vs %+v", hov[0], noHov[0])
-	}
-	if a, b := Width(LineText(hov[0])), Width(LineText(noHov[0])); a != b {
-		t.Fatalf("body shifted (avatars): widths %d vs %d", a, b)
-	}
-}
-
 // "l play" is offered only for a downloaded video, "s stop" once the play has
 // started.
 func TestHelpActionsVideo(t *testing.T) {
@@ -753,10 +559,8 @@ func TestHelpActionsVideo(t *testing.T) {
 	m := &model.Msg{ID: 1, Date: time.Date(2026, 8, 30, 12, 1, 0, 0, time.UTC), From: "alice", FromID: 9, Media: md}
 	keys := func() string {
 		s := ""
-		for _, l := range Message(m, Opts{Width: 100, Theme: theme.Terminal(), Images: "off", Self: self7, Selected: m}) {
-			for _, a := range l.Actions {
-				s += string(a.Key)
-			}
+		for _, a := range SelActs(m, false, false, model.AllCaps()) {
+			s += string(a.Key)
 		}
 		return s
 	}
@@ -874,14 +678,13 @@ func TestJumpAction(t *testing.T) {
 		t.Fatalf("jump zone: %+v", a)
 	}
 
-	o.Selected = m
-	if all := strings.Join(texts(Message(m, o)), "\n"); !strings.Contains(all, "g cité") {
-		t.Fatalf("palette without \"g cité\": %q", all)
+	// The menu: "g cité" in a chat, "g aller" in a search window (the result
+	// points back to its chat).
+	if acts := SelActs(m, false, false, model.AllCaps()); acts[0].Key != KeyJump || acts[0].Label != "g cité" || acts[0].ID != 4 {
+		t.Fatalf("menu without \"g cité\": %+v", acts)
 	}
-	o.Jump = true // search window: the result points back to its chat
-	all := strings.Join(texts(Message(m, o)), "\n")
-	if !strings.Contains(all, "g aller") || strings.Contains(all, "g cité") {
-		t.Fatalf("search palette: %q", all)
+	if acts := SelActs(m, false, true, model.AllCaps()); acts[0].Label != "g aller" || acts[0].ID != m.ID {
+		t.Fatalf("search menu: %+v", acts)
 	}
 }
 
@@ -928,8 +731,8 @@ func capsFunc(c model.Caps) func(*model.Msg) model.Caps {
 // for Telegram.
 var allCaps = capsFunc(model.AllCaps())
 
-// A capability off takes what it carries out of the drawing: no "r réagir" nor
-// quick emoji with no reactions, no tick nor KeyTicks zone with no read
+// A capability off takes what it carries out of the drawing and of the menu:
+// no "r réagir" with no reactions, no tick nor KeyTicks zone with no read
 // receipts, no "e éditer" with no edit.
 func TestCapsGating(t *testing.T) {
 	m := &model.Msg{ID: 5, ChatID: 3, Date: time.Date(2026, 9, 1, 12, 1, 0, 0, time.UTC),
@@ -952,39 +755,39 @@ func TestCapsGating(t *testing.T) {
 		}
 		return false
 	}
+	keys := func(caps model.Caps) string {
+		s := ""
+		for _, a := range SelActs(m, true, false, caps) {
+			s += string(a.Key)
+		}
+		return s
+	}
 
 	all, acts := draw(model.AllCaps())
-	if !strings.Contains(all, "r réagir") || !strings.Contains(all, "e éditer") || !strings.Contains(all, " ✓") {
-		t.Fatalf("every capability on: %q", all)
+	if !strings.Contains(all, " ✓") || !has(acts, KeyTicks) {
+		t.Fatalf("every capability on: %q %+v", all, acts)
 	}
-	if !has(acts, KeyReact) || !has(acts, KeyTicks) {
-		t.Fatalf("every capability on, actions: %+v", acts)
+	if got := keys(model.AllCaps()); got != "edprci" {
+		t.Fatalf("every capability on, menu: %q", got)
 	}
 
 	caps := model.AllCaps()
 	caps.Reactions = false
-	all, acts = draw(caps)
-	if strings.Contains(all, "r réagir") {
-		t.Fatalf("no reactions: %q", all)
-	}
-	if has(acts, KeyReact) { // quick emoji of the help line
-		t.Fatalf("no reactions, actions: %+v", acts)
+	if got := keys(caps); got != "edpci" {
+		t.Fatalf("no reactions, menu: %q", got)
 	}
 
 	caps = model.AllCaps()
 	caps.ReadReceipts = false
 	all, acts = draw(caps)
-	if strings.Contains(all, "✓") {
-		t.Fatalf("no read receipts: %q", all)
-	}
-	if has(acts, KeyTicks) {
-		t.Fatalf("no read receipts, actions: %+v", acts)
+	if strings.Contains(all, "✓") || has(acts, KeyTicks) {
+		t.Fatalf("no read receipts: %q %+v", all, acts)
 	}
 
 	caps = model.AllCaps()
 	caps.Edit = false
-	if all, _ = draw(caps); strings.Contains(all, "e éditer") || !strings.Contains(all, "d supprimer") {
-		t.Fatalf("no edit: %q", all)
+	if got := keys(caps); got != "dprci" {
+		t.Fatalf("no edit, menu: %q", got)
 	}
 }
 
