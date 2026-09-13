@@ -154,7 +154,10 @@ background = #1e1e2e
 foreground = #cdd6f4
 `
 
-const shotCols, shotRows = 112, 34
+// shotCols leaves the message area 110 cells (the sidebar takes 27 of them,
+// the scrollbar one): enough for the status line to hold the tabs and the
+// activity at the same time.
+const shotCols, shotRows = 138, 34
 
 var shotTime = time.Date(2026, 9, 5, 15, 42, 0, 0, time.UTC)
 

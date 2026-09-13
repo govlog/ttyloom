@@ -1,10 +1,10 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="928" height="644" viewBox="0 0 928 644" font-family="JetBrains Mono, Fira Code, Cascadia Code, DejaVu Sans Mono, Menlo, Noto Color Emoji, Apple Color Emoji, Segoe UI Emoji, monospace" font-size="13.2">
-<rect width="928" height="644" rx="12" fill="#11111b"/>
-<rect x="16" y="50" width="896" height="578" fill="#1e1e2e"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="1136" height="644" viewBox="0 0 1136 644" font-family="JetBrains Mono, Fira Code, Cascadia Code, DejaVu Sans Mono, Menlo, Noto Color Emoji, Apple Color Emoji, Segoe UI Emoji, monospace" font-size="13.2">
+<rect width="1136" height="644" rx="12" fill="#11111b"/>
+<rect x="16" y="50" width="1104" height="578" fill="#1e1e2e"/>
 <circle cx="26" cy="31.0" r="6" fill="#f38ba8"/><circle cx="46" cy="31.0" r="6" fill="#f9e2af"/><circle cx="66" cy="31.0" r="6" fill="#a6e3a1"/>
-<text x="464" y="36.0" text-anchor="middle" fill="#a6adc8" font-size="12">TTYloom · tabs</text>
+<text x="568" y="36.0" text-anchor="middle" fill="#a6adc8" font-size="12">TTYloom · tabs</text>
 <text x="16.0" y="62.5" fill="#89b4fa" textLength="208.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs" font-weight="bold">Chat List [recent]        </text>
-<text x="224.0" y="62.5" fill="#585b70" textLength="680.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">│──────────────────────────────── September 5, 2026 ─────────────────────────────────</text>
+<text x="224.0" y="62.5" fill="#585b70" textLength="888.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">│───────────────────────────────────────────── September 5, 2026 ──────────────────────────────────────────────</text>
 <text x="16.0" y="79.5" fill="#585b70" textLength="216.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">──────────────────────────│</text>
 <text x="232.0" y="79.5" fill="#a6e3a1" textLength="184.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">*** You have joined #go</text>
 <rect x="16.0" y="84.0" width="24.0" height="17.0" fill="#cdd6f4"/>
@@ -21,15 +21,15 @@
 <text x="224.0" y="113.5" fill="#585b70" textLength="64.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">│15:36 &lt;</text>
 <text x="288.0" y="113.5" fill="#94e2d5" textLength="40.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">alice</text>
 <text x="328.0" y="113.5" fill="#585b70" textLength="16.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">&gt; </text>
-<text x="344.0" y="113.5" fill="#cdd6f4" textLength="568.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">The WHOIS of this server answers with the channel list too.            </text>
+<text x="344.0" y="113.5" fill="#cdd6f4" textLength="776.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">The WHOIS of this server answers with the channel list too.                                      </text>
 <text x="224.0" y="130.5" fill="#585b70" textLength="64.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">│15:38 &lt;</text>
 <text x="288.0" y="130.5" fill="#f38ba8" textLength="24.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">bob</text>
 <text x="312.0" y="130.5" fill="#585b70" textLength="16.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">&gt; </text>
-<text x="328.0" y="130.5" fill="#cdd6f4" textLength="584.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">And /ctcp alice VERSION comes back as a line of the window.              </text>
+<text x="328.0" y="130.5" fill="#cdd6f4" textLength="792.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">And /ctcp alice VERSION comes back as a line of the window.                                        </text>
 <text x="224.0" y="147.5" fill="#585b70" textLength="64.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">│15:40 &lt;</text>
 <text x="288.0" y="147.5" fill="#a6adc8" textLength="40.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs" font-weight="bold">chris</text>
 <text x="328.0" y="147.5" fill="#585b70" textLength="16.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">&gt; </text>
-<text x="344.0" y="147.5" fill="#cdd6f4" textLength="568.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">Both, yes. F9 keeps every network on its own tab.                      </text>
+<text x="344.0" y="147.5" fill="#cdd6f4" textLength="776.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">Both, yes. F9 keeps every network on its own tab.                                                </text>
 <text x="224.0" y="164.5" fill="#585b70" textLength="8.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">│</text>
 <text x="232.0" y="164.5" fill="#a6e3a1" textLength="248.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">*** ┌ alice (~alice@user/alice)</text>
 <text x="224.0" y="181.5" fill="#585b70" textLength="8.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">│</text>
@@ -62,32 +62,40 @@
 <text x="224.0" y="538.5" fill="#585b70" textLength="8.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">│</text>
 <text x="224.0" y="555.5" fill="#585b70" textLength="8.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">│</text>
 <text x="224.0" y="572.5" fill="#585b70" textLength="8.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">│</text>
-<text x="224.0" y="589.5" fill="#585b70" textLength="688.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">├─────────────────────────────────────────────────────────────────────────────────────</text>
+<text x="224.0" y="589.5" fill="#585b70" textLength="896.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">├───────────────────────────────────────────────────────────────────────────────────────────────────────────────</text>
 <text x="224.0" y="606.5" fill="#585b70" textLength="8.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">│</text>
 <rect x="232.0" y="594.0" width="160.0" height="17.0" fill="#45475a"/>
 <text x="232.0" y="606.5" fill="#cdd6f4" textLength="160.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">[15:42] [@chris] [2:</text>
 <rect x="392.0" y="594.0" width="24.0" height="17.0" fill="#45475a"/>
 <text x="392.0" y="606.5" fill="#89b4fa" textLength="24.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs" font-weight="bold">#go</text>
-<rect x="416.0" y="594.0" width="208.0" height="17.0" fill="#45475a"/>
-<text x="416.0" y="606.5" fill="#cdd6f4" textLength="208.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">] [img:kitty] [*] [discord</text>
-<rect x="624.0" y="594.0" width="32.0" height="17.0" fill="#45475a"/>
-<text x="624.0" y="606.5" fill="#f9e2af" textLength="32.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">(15)</text>
-<rect x="656.0" y="594.0" width="16.0" height="17.0" fill="#45475a"/>
-<text x="656.0" y="606.5" fill="#cdd6f4" textLength="16.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">] </text>
-<rect x="672.0" y="594.0" width="88.0" height="17.0" fill="#45475a"/>
-<text x="672.0" y="606.5" fill="#89b4fa" textLength="88.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs" font-weight="bold">[irc:libera</text>
-<rect x="760.0" y="594.0" width="24.0" height="17.0" fill="#f5c2e7"/>
-<text x="760.0" y="606.5" fill="#45475a" textLength="24.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs" font-weight="bold">(2)</text>
-<rect x="784.0" y="594.0" width="8.0" height="17.0" fill="#45475a"/>
-<text x="784.0" y="606.5" fill="#89b4fa" textLength="8.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs" font-weight="bold">]</text>
-<rect x="792.0" y="594.0" width="80.0" height="17.0" fill="#45475a"/>
-<text x="792.0" y="606.5" fill="#cdd6f4" textLength="80.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs"> [telegram</text>
-<rect x="872.0" y="594.0" width="24.0" height="17.0" fill="#45475a"/>
-<text x="872.0" y="606.5" fill="#f9e2af" textLength="24.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">(3)</text>
-<rect x="896.0" y="594.0" width="16.0" height="17.0" fill="#45475a"/>
-<text x="896.0" y="606.5" fill="#cdd6f4" textLength="16.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">] </text>
+<rect x="416.0" y="594.0" width="160.0" height="17.0" fill="#45475a"/>
+<text x="416.0" y="606.5" fill="#cdd6f4" textLength="160.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">] [img:kitty] [Act: </text>
+<rect x="576.0" y="594.0" width="32.0" height="17.0" fill="#f5c2e7"/>
+<text x="576.0" y="606.5" fill="#45475a" textLength="32.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs" font-weight="bold">3(2)</text>
+<rect x="608.0" y="594.0" width="8.0" height="17.0" fill="#45475a"/>
+<text x="608.0" y="606.5" fill="#cdd6f4" textLength="8.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">]</text>
+<rect x="616.0" y="594.0" width="112.0" height="17.0" fill="#45475a"/>
+<text x="616.0" y="606.5" fill="#585b70" textLength="112.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs"> [away: lunch]</text>
+<rect x="728.0" y="594.0" width="104.0" height="17.0" fill="#45475a"/>
+<text x="728.0" y="606.5" fill="#cdd6f4" textLength="104.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs"> [*] [discord</text>
+<rect x="832.0" y="594.0" width="32.0" height="17.0" fill="#45475a"/>
+<text x="832.0" y="606.5" fill="#f9e2af" textLength="32.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">(15)</text>
+<rect x="864.0" y="594.0" width="16.0" height="17.0" fill="#45475a"/>
+<text x="864.0" y="606.5" fill="#cdd6f4" textLength="16.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">] </text>
+<rect x="880.0" y="594.0" width="88.0" height="17.0" fill="#45475a"/>
+<text x="880.0" y="606.5" fill="#89b4fa" textLength="88.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs" font-weight="bold">[irc:libera</text>
+<rect x="968.0" y="594.0" width="24.0" height="17.0" fill="#f5c2e7"/>
+<text x="968.0" y="606.5" fill="#45475a" textLength="24.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs" font-weight="bold">(2)</text>
+<rect x="992.0" y="594.0" width="8.0" height="17.0" fill="#45475a"/>
+<text x="992.0" y="606.5" fill="#89b4fa" textLength="8.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs" font-weight="bold">]</text>
+<rect x="1000.0" y="594.0" width="80.0" height="17.0" fill="#45475a"/>
+<text x="1000.0" y="606.5" fill="#cdd6f4" textLength="80.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs"> [telegram</text>
+<rect x="1080.0" y="594.0" width="24.0" height="17.0" fill="#45475a"/>
+<text x="1080.0" y="606.5" fill="#f9e2af" textLength="24.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">(3)</text>
+<rect x="1104.0" y="594.0" width="16.0" height="17.0" fill="#45475a"/>
+<text x="1104.0" y="606.5" fill="#cdd6f4" textLength="16.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">] </text>
 <text x="16.0" y="623.5" fill="#89b4fa" textLength="208.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs" font-weight="bold"> + new message            </text>
 <text x="224.0" y="623.5" fill="#585b70" textLength="8.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">│</text>
 <text x="232.0" y="623.5" fill="#89b4fa" textLength="48.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs" font-weight="bold">[#go] </text>
-<text x="280.0" y="623.5" fill="#cdd6f4" textLength="632.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">/mode #go +ntk                                                                 </text>
+<text x="280.0" y="623.5" fill="#cdd6f4" textLength="840.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">/mode #go +ntk                                                                                           </text>
 </svg>
