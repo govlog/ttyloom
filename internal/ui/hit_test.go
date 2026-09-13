@@ -323,3 +323,24 @@ func TestFollowMouseHoverOff(t *testing.T) {
 		}
 	}
 }
+
+// A left click on a tab of the bar shows that network; on that same row the
+// columns of the sidebar stay the sidebar's.
+func TestTabBarClick(t *testing.T) {
+	u := tabsUI()
+	u.th = theme.Terminal()
+	u.cfg.Tabs = true
+	u.side, u.sideW = sideWindows, 20
+	u.t.Rows = 6 // the bar lands on a window line of the panel: [0 2 1], line 1
+	x0, _ := u.layout()
+	_, u.tabHits = u.tabSpans(x0)
+	u.mouse(term.MouseEvent{Button: 0, X: x0 + 7, Y: u.tabRow(), Press: true}) // "[discord]"
+	if u.netFilter != model.NetDiscord {
+		t.Fatalf("click on the discord tab: filter %q", u.netFilter)
+	}
+	u.tabTo("")
+	u.mouse(term.MouseEvent{Button: 0, X: 2, Y: u.tabRow(), Press: true}) // sidebar column
+	if u.netFilter != "" || u.ws.Cur != 2 {
+		t.Fatalf("click in the panel taken by the bar: filter %q cur %d", u.netFilter, u.ws.Cur)
+	}
+}

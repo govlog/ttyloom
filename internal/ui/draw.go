@@ -148,6 +148,10 @@ func (u *UI) draw() {
 			}
 		}
 	}
+	u.tabHits = u.tabHits[:0]
+	if u.tabsOn() {
+		u.drawTabs(&b, rows-u.inputRows()-1, x0, cols)
+	}
 	u.drawStatus(&b, rows-u.inputRows(), x0, cols)
 	curRow, curCol := u.drawInput(&b, rows, x0, cols)
 	var cur map[kplace]bool
@@ -599,6 +603,82 @@ func (u *UI) actSpans(plain, act theme.Style) []render.Span {
 		out = append(out, render.Span{Text: fmt.Sprintf("%d(%d)", i, w.Act), Style: st})
 	}
 	return out
+}
+
+// tabHit : the columns of one tab of the bar, for the click.
+type tabHit struct {
+	col0, col1 int // [col0, col1), screen columns
+	net        string
+}
+
+// tabRow : screen line (0-based) of the tab bar — just above the status bar.
+func (u *UI) tabRow() int { return u.t.Rows - u.inputRows() - 2 }
+
+// tabSpans : the tab bar — [all], then one tab per network in name order,
+// the unread sum of its windows in brackets (hot when one of them is), the
+// current tab in accent. x0: first screen column of the bar, for the hits.
+func (u *UI) tabSpans(x0 int) ([]render.Span, []tabHit) {
+	st := u.th.Style(theme.StatusBG)
+	acc, act := st, st
+	acc.FG, acc.Bold = u.th.Color(theme.Accent), true
+	act.FG = u.th.Color(theme.Act)
+	var spans []render.Span
+	var hits []tabHit
+	col := x0
+	add := func(s string, style theme.Style) {
+		spans = append(spans, render.Span{Text: s, Style: style})
+		col += render.Width(s)
+	}
+	for i, net := range append([]string{""}, u.netNames()...) {
+		if i > 0 {
+			add(" ", st)
+		}
+		label, n, hot := "all", 0, false
+		if net != "" {
+			label = net
+			for _, w := range u.ws.List {
+				if w.Chat != nil && w.Chat.Net == net {
+					n += w.Act
+					hot = hot || w.Hot
+				}
+			}
+		}
+		cur := st
+		if net == u.netFilter {
+			cur = acc
+		}
+		start := col
+		add("["+label, cur)
+		if n > 0 {
+			cnt := act
+			if hot {
+				cnt = u.hotStyle(act)
+			}
+			add(fmt.Sprintf("(%d)", n), cnt)
+		}
+		add("]", cur)
+		hits = append(hits, tabHit{col0: start, col1: col, net: net})
+	}
+	return spans, hits
+}
+
+// tabAt : the tab under screen column x, if any.
+func (u *UI) tabAt(x int) (string, bool) {
+	for _, h := range u.tabHits {
+		if x >= h.col0 && x < h.col1 {
+			return h.net, true
+		}
+	}
+	return "", false
+}
+
+// drawTabs writes the tab bar on row (1-based) and keeps the hits.
+func (u *UI) drawTabs(b *strings.Builder, row, x0, cols int) {
+	st := u.th.Style(theme.StatusBG)
+	fmt.Fprintf(b, "\x1b[%d;%dH%s\x1b[K", row, x0+1, st.SGR())
+	spans, hits := u.tabSpans(x0)
+	u.tabHits = hits
+	u.writeLine(b, render.Line{Spans: spans}, cols, nil)
 }
 
 func (u *UI) drawStatus(b *strings.Builder, row, x0, cols int) {

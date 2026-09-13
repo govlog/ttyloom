@@ -94,6 +94,14 @@ func (u *UI) mouse(m term.MouseEvent) {
 	if u.spellFix != nil && u.spellFixMouse(m) {
 		return
 	}
+	// The bar holds the columns of the message area only: on that row the
+	// sidebar keeps its own clicks.
+	if m.Press && m.Button == 0 && u.tabsOn() && m.Y == u.tabRow() && m.X >= x0 {
+		if net, ok := u.tabAt(m.X); ok {
+			u.tabTo(net)
+		}
+		return
+	}
 	if m.Press && m.Button == 2 && m.Y >= u.t.Rows-u.inputRows() {
 		u.spellClick(m.X, m.Y) // right click on a misspelled word of the input
 		return

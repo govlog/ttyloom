@@ -354,3 +354,39 @@ func TestActSpansHot(t *testing.T) {
 		t.Fatalf("hot entry: %+v", sp[2].Style)
 	}
 }
+
+// The tab bar: [all] first, one tab per network in name order, the unread
+// sum of the network in brackets, the current tab in accent, and a column
+// range per tab for the click.
+func TestTabSpans(t *testing.T) {
+	u := tabsUI()
+	u.th = theme.Terminal()
+	u.cfg.Tabs = true
+	u.ws.List[1].Act = 2 // discord
+	u.ws.List[2].Act, u.ws.List[2].Hot = 1, true
+	u.netFilter = model.NetDiscord
+	spans, hits := u.tabSpans(5)
+	var text strings.Builder
+	for _, s := range spans {
+		text.WriteString(s.Text)
+	}
+	if got, want := text.String(), "[all] [discord(2)] [telegram(1)]"; got != want {
+		t.Fatalf("bar: %q, want %q", got, want)
+	}
+	if len(hits) != 3 || hits[0].net != "" || hits[1].net != model.NetDiscord || hits[2].net != model.NetTelegram {
+		t.Fatalf("hits: %+v", hits)
+	}
+	if hits[0].col0 != 5 || hits[0].col1 != 10 || hits[1].col0 != 11 { // "[all]" is 5 columns from x0 = 5
+		t.Fatalf("columns: %+v", hits)
+	}
+	u.tabHits = hits
+	if net, ok := u.tabAt(12); !ok || net != model.NetDiscord {
+		t.Fatalf("tabAt(12): %q %v", net, ok)
+	}
+	if _, ok := u.tabAt(10); ok { // the blank between two tabs
+		t.Fatal("tabAt on a blank: hit")
+	}
+	if !u.tabsOn() || u.viewRows() != 24-1-1-1 { // rows − status − input − tab bar (separator off)
+		t.Fatalf("viewRows: %d", u.viewRows())
+	}
+}

@@ -167,7 +167,9 @@ type UI struct {
 	// "" = all. Always empty with a single backend.
 	netFilter string
 	// tabLast : last window shown per network — where a tab comes back to.
-	tabLast    map[string]*Window
+	tabLast map[string]*Window
+	// tabHits : column range of each tab of the bar, made again at each repaint.
+	tabHits    []tabHit
 	side       sideMode        // sidebar (F2)
 	sideW      int             // width of its content (sidebar_width, drag of the bar)
 	sideScroll int             // first entry shown in the sidebar
