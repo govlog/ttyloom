@@ -669,28 +669,80 @@ func (u *UI) tabAt(x int) (string, bool) {
 	return "", false
 }
 
+// statusSeg : one segment of the left part of the status line — what a
+// bracketed group writes. The tabs take their room from the end of that part,
+// segment by segment; keep marks the ones that never go (clock, account,
+// window).
+type statusSeg struct {
+	spans []render.Span
+	keep  bool
+}
+
 // withTabs puts the tabs at the right end of the status line and keeps their
-// hits at their real screen columns. The left part is cut to leave them room,
-// plus one blank of separation; when the tabs alone do not fit, they are
-// dropped and take no click.
-func (u *UI) withTabs(left []render.Span, x0, cols int, st theme.Style) []render.Span {
+// hits at their real screen columns. The left part gives up whole segments to
+// leave them room, plus one blank of separation; when the tabs alone do not
+// fit, they are dropped and take no click.
+func (u *UI) withTabs(left []statusSeg, x0, cols int, st theme.Style) []render.Span {
 	tabs, hits := u.tabSpans(0)
-	tw := 0
-	for _, s := range tabs {
-		tw += render.Width(s.Text)
-	}
+	tw := spansWidth(tabs)
 	if tw >= cols {
-		return left
+		return joinSegs(left)
 	}
 	start := cols - tw // column of the first tab, relative to x0
-	left, w := truncSpans(left, start-1)
+	spans, w := fitSegs(left, start-1)
 	for i := range hits {
 		hits[i].col0 += x0 + start
 		hits[i].col1 += x0 + start
 	}
 	u.tabHits = append(u.tabHits, hits...)
-	left = append(left, render.Span{Text: strings.Repeat(" ", start-w), Style: st})
-	return append(left, tabs...)
+	spans = append(spans, render.Span{Text: strings.Repeat(" ", start-w), Style: st})
+	return append(spans, tabs...)
+}
+
+// joinSegs : the spans of the segments, in order.
+func joinSegs(segs []statusSeg) []render.Span {
+	var out []render.Span
+	for _, s := range segs {
+		out = append(out, s.spans...)
+	}
+	return out
+}
+
+// spansWidth : cells taken by the spans.
+func spansWidth(spans []render.Span) int {
+	w := 0
+	for _, sp := range spans {
+		w += render.Width(sp.Text)
+	}
+	return w
+}
+
+// fitSegs joins the segments into at most cols cells and gives the width kept.
+// A segment is dropped whole, from the end (the flash first, then the away
+// message, the activity, …), so the line never ends in the middle of one; the
+// kept segments stay, and are cut by cells only when they overflow on their own.
+func fitSegs(segs []statusSeg, cols int) ([]render.Span, int) {
+	w := 0
+	for _, s := range segs {
+		w += spansWidth(s.spans)
+	}
+	drop := make([]bool, len(segs))
+	for i := len(segs) - 1; i >= 0 && w > cols; i-- {
+		if segs[i].keep {
+			continue
+		}
+		drop[i], w = true, w-spansWidth(segs[i].spans)
+	}
+	var out []render.Span
+	for i, s := range segs {
+		if !drop[i] {
+			out = append(out, s.spans...)
+		}
+	}
+	if w > cols { // the kept segments alone are too wide: last resort
+		return truncSpans(out, cols)
+	}
+	return out, w
 }
 
 // truncSpans cuts spans to at most cols cells and gives the width kept.
@@ -726,11 +778,20 @@ func (u *UI) drawStatus(b *strings.Builder, row, x0, cols int) {
 		return
 	}
 	w := u.view()
-	var spans []render.Span
-	add := func(s string, style theme.Style) { spans = append(spans, render.Span{Text: s, Style: style}) }
+	var segs []statusSeg
+	var cur []render.Span
+	add := func(s string, style theme.Style) { cur = append(cur, render.Span{Text: s, Style: style}) }
+	// end closes the segment being written; keep: it survives the tabs.
+	end := func(keep bool) {
+		if len(cur) > 0 {
+			segs, cur = append(segs, statusSeg{spans: cur, keep: keep}), nil
+		}
+	}
 	add(time.Now().Format("[15:04]"), st)
+	end(true)
 	if who := u.selfName(w.Chat); who != "" { // account of the network in front
 		add(" [@"+who+"]", st)
+		end(true)
 	}
 	add(fmt.Sprintf(" [%d:", u.ws.Cur), st)
 	name := u.winName(w)
@@ -741,36 +802,47 @@ func (u *UI) drawStatus(b *strings.Builder, row, x0, cols int) {
 		name = "debug"
 	}
 	add(render.CleanLine(name), acc) // remote title: never a raw sequence, only one line
+	end(true)
 	// Presence: only in a private chat, and bounded so as not to eat the bar.
+	// Its own segment, between the name and the bracket that closes it: it goes
+	// before them when the room runs out.
 	if w.Chat != nil && w.Chat.Kind == model.ChatUser {
 		if p := u.presence[w.Chat.Key()]; p != "" {
 			add(" · "+render.Truncate(p, 20, "…"), st)
+			end(false)
 		}
 	}
 	add("]", st)
+	end(true)
 	// Network of the current chat, silent with one backend; in tab mode its
 	// tab, in its own colour at the right, already names it.
 	if u.multiNet() && w.Chat != nil && !u.tabsOn() {
 		add(" ["+w.Chat.Net+"]", st)
+		end(false)
 	}
 	if w.Log {
 		add(" [log]", st)
+		end(false)
 	}
 	mode := u.images // current mode, cycles with F4; ·hover = images_hover (F5)
 	if u.cfg.ImagesHover && u.images != "off" {
 		mode += i18n.T("status_hover_suffix")
 	}
 	add(" [img:"+mode+"]", st)
+	end(false)
 	if l := styleLabel([]rune(u.ed.String())[:u.ed.Cursor()]); l != "" { // Ctrl+B/I/U open at the cursor
 		add(" ["+l+"]", acc)
+		end(false)
 	}
 	if l := u.actSpans(st, act); len(l) > 0 {
 		add(" [Act: ", st)
-		spans = append(spans, l...)
+		cur = append(cur, l...)
 		add("]", st)
+		end(false)
 	}
 	if s := u.search; s != nil {
 		add(i18n.T("status_search", s.cur+1, len(s.hits)), acc)
+		end(false)
 	}
 	if w.Chat != nil {
 		if t, ok := u.typing[w.Chat.Key()]; ok {
@@ -779,26 +851,32 @@ func (u *UI) drawStatus(b *strings.Builder, row, x0, cols int) {
 				who = a // in a private chat the one who types is the peer: their local name
 			}
 			add(i18n.T("status_typing", who), st)
+			end(false)
 		}
 	}
 	if !u.focused {
 		dim := st
 		dim.FG = u.th.Color(theme.Dim)
 		add(i18n.T("status_away"), dim)
+		end(false)
 	}
 	if msg := u.awayOf(w.Chat); msg != "" {
 		dim := st
 		dim.FG = u.th.Color(theme.Dim)
 		add(i18n.T("status_away_set", render.Truncate(msg, 20, "…")), dim)
+		end(false)
 	}
 	if s := u.connStatus(); s != "" {
 		add(s, errS)
+		end(false)
 	}
 	if u.flashMsg != "" { // last of the left part: temporary, so it moves nothing
 		add(" ["+u.flashMsg+"]", acc)
+		end(false)
 	}
+	spans := joinSegs(segs)
 	if u.tabsOn() {
-		spans = u.withTabs(spans, x0, cols, st)
+		spans = u.withTabs(segs, x0, cols, st)
 	}
 	u.writeLine(b, render.Line{Spans: spans}, cols, nil)
 }

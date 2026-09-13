@@ -529,8 +529,10 @@ name order → `all`. They sit at the right of the status line, clickable:
 The current tab is highlighted; the others carry the unread count of their
 windows. `[*]` is all the networks. The current tab already names the network
 of the window shown, so the `[net]` segment of the status line goes while the
-tabs are on; when the line is too narrow, its left part is cut first, and the
-tabs go only when they no longer fit alone. A network tab shows only the
+tabs are on; when the line is too narrow, whole segments of its left part go
+first, from the end (flash message, `[away: …]`, `[Act: …]`, `[img: …]`, …),
+the clock, the account and the window always staying, and the tabs go only when
+they no longer fit alone. A network tab shows only the
 windows of that network, window 0 included: Ctrl+X and Alt+Left/Right stay
 inside it, the sidebar and the aggregate view are cut to it, and `[Act: …]`
 lists its windows only. It is the same filter as `/net` and Shift+F2.

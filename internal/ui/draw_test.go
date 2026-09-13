@@ -418,3 +418,27 @@ func TestTabSpans(t *testing.T) {
 		t.Fatalf("viewRows: %d", u.viewRows())
 	}
 }
+
+// A status line too narrow for everything gives its room to the tabs by whole
+// segments, from the end: [Act: …] goes, [img:kitty] stays entire.
+func TestStatusSegmentsDropped(t *testing.T) {
+	u := tabsUI()
+	u.th = theme.Terminal()
+	u.cfg.Tabs = true
+	u.images = "kitty"
+	u.ws.Cur = 1
+	u.ws.List[1].Act, u.ws.List[2].Act = 2, 1
+	x0, _ := u.layout()
+	var b strings.Builder
+	u.drawStatus(&b, u.t.Rows-u.inputRows(), x0, 70)
+	line := b.String()
+	if strings.Contains(line, "[Act: ") {
+		t.Fatalf("the activity should have gone: %q", line)
+	}
+	if !strings.Contains(line, " [img:kitty]") {
+		t.Fatalf("[img:kitty] cut instead of dropped whole: %q", line)
+	}
+	if len(u.tabHits) != 3 || u.tabHits[2].col1 != x0+70 {
+		t.Fatalf("the tabs no longer end at the right edge: %+v", u.tabHits)
+	}
+}
