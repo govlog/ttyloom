@@ -885,7 +885,7 @@ func (u *UI) sendWin() *Window {
 		return u.winFor(c)
 	}
 	if name := u.queryPending(w); name != "" {
-		w.AddSys(i18n.T("query_waiting", name))
+		w.AddSys(i18n.T("query_waiting", displayQuery(name)))
 		return nil
 	}
 	return w

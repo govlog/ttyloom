@@ -82,6 +82,23 @@ func TestDisplayQueryHidesKey(t *testing.T) {
 	}
 }
 
+// The key must not show either while the lookup is pending: the line that
+// says a send is waiting names the room only.
+func TestQueryWaitingHidesKey(t *testing.T) {
+	u, _, _, _ := queryUI()
+	u.ws.Cur = 1
+	input(u, "/j #priv secret")
+	input(u, "too early")
+	if got := lastSys(u.view()); !strings.Contains(got, "#priv") || strings.Contains(got, "secret") {
+		t.Fatalf("query_waiting line: %q", got)
+	}
+	var prompt strings.Builder
+	u.drawInput(&prompt, 24, 0, 80)
+	if got := prompt.String(); !strings.Contains(got, "#priv") || strings.Contains(got, "secret") {
+		t.Fatalf("pending prompt: %s", got)
+	}
+}
+
 func TestQueryPersistentAcrossViews(t *testing.T) {
 	for _, mode := range []string{"aggregate", "channel", "status", "search", "debug", "empty"} {
 		t.Run(mode, func(t *testing.T) {

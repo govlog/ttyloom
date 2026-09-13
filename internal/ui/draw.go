@@ -823,7 +823,7 @@ func (u *UI) drawInput(b *strings.Builder, row, x0, cols int) (curRow, curCol in
 	case u.reply != nil:
 		prompt = fmt.Sprintf("↩ #%d › ", u.reply.Msg.ID)
 	case u.queryPending(u.view()) != "":
-		prompt = "[→ " + render.CleanLine(u.queryPending(u.view())) + "…] "
+		prompt = "[→ " + render.CleanLine(displayQuery(u.queryPending(u.view()))) + "…] "
 	case u.view().Target != nil:
 		c := u.view().Target
 		label := kindPrefix(c.Kind) + bareTitle(c, render.CleanLine(u.title(c)))

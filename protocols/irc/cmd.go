@@ -101,8 +101,8 @@ func (c *Client) command(reply int64, room, name string, args []string, text str
 		if !ok {
 			return usage
 		}
-		ask("topic")
 		if len(more) == 0 {
+			ask("topic") // a topic that is set is answered by TOPIC, not by 332
 			return c.send("TOPIC", ch)
 		}
 		return c.send("TOPIC", ch, strings.Join(more, " "))

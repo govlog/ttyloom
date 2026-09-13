@@ -73,6 +73,17 @@ func TestModeKickPartCycle(t *testing.T) {
 	if l := waitLines(t, events, "hello world"); l.ChatID != 7 {
 		t.Fatalf("332 answers the asking window: %+v", l)
 	}
+	// A topic that is set is answered by TOPIC, not by 332: the next on-join
+	// 332 of another room must not land in the window that set it.
+	cmd(c, 7, "#go", "topic", "new subject")
+	if l := s.expect("TOPIC"); l != "TOPIC #go :new subject" {
+		t.Fatalf("topic set: %q", l)
+	}
+	s.send(":srv 332 me #other :stale")
+	s.send(":srv 221 me +i") // an answer that does land in window 0
+	if l := waitLines(t, events, ""); l.ChatID != 0 {
+		t.Fatalf("the topic set kept the answer window: %+v", l)
+	}
 	cmd(c, 7, "#go", "kick", "bob too loud")
 	if l := s.expect("KICK"); l != "KICK #go bob :too loud" {
 		t.Fatalf("kick: %q", l)
