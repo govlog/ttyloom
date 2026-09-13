@@ -87,7 +87,10 @@ func New(cfg Config, events chan<- model.Event) *Client {
 		members: map[string][]string{}, names: map[string][]string{}, queries: map[string]string{},
 		joining: map[string][]model.EvChat{}, naming: map[string]*model.Chat{}, whois: map[string]*whoisReq{},
 		offers: map[string]dccOffer{}, asked: map[string]int64{}, bans: map[string]banReq{},
-		pings: map[string]time.Time{}, ignores: slices.Clone(cfg.Ignores)}
+		pings: map[string]time.Time{}}
+	for _, m := range cfg.Ignores { // a hand-written "bob" is the mask bob!*@*
+		c.ignores = append(c.ignores, ignoreMask(m))
+	}
 	for _, ch := range cfg.Channels {
 		if isChannel(ch) && !slices.Contains(c.channels, ch) {
 			c.channels = append(c.channels, ch)

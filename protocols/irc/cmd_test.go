@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/govlog/ttyloom/internal/i18n"
 	"github.com/govlog/ttyloom/internal/model"
 )
 
@@ -58,6 +59,10 @@ func TestModeKickPartCycle(t *testing.T) {
 	if l := waitLines(t, events, "+nt"); l.ChatID != 7 {
 		t.Fatalf("324 reply target: %+v", l)
 	}
+	s.send(":srv 329 me #go 1700000000") // closes the answer of /mode
+	if l := waitLines(t, events, "created"); l.ChatID != 7 {
+		t.Fatalf("329 reply target: %+v", l)
+	}
 	cmd(c, 7, "#go", "kick", "bob too loud")
 	if l := s.expect("KICK"); l != "KICK #go bob :too loud" {
 		t.Fatalf("kick: %q", l)
@@ -105,6 +110,21 @@ func TestBanByUserhost(t *testing.T) {
 	cmd(c, 0, "#go", "ban", "ghost")
 	s.expect("USERHOST ghost")
 	s.send(":srv 302 me :ghost=")
+	s.never("MODE", 200*time.Millisecond)
+}
+
+// A /ban of a nick that is not connected says so: the server names nobody in
+// its 302, and a moderation command must not fail silently.
+func TestBanUnknownNick(t *testing.T) {
+	c, s, events, _ := start(t, Config{}, false)
+	cmd(c, 6, "#go", "ban", "nobody")
+	if l := s.expect("USERHOST"); l != "USERHOST nobody" {
+		t.Fatalf("userhost: %q", l)
+	}
+	s.send(":srv 302 me :")
+	if l := waitLines(t, events, "nobody"); l.ChatID != 6 || !strings.Contains(l.Lines[0], i18n.T("irc_no_such_nick")) {
+		t.Fatalf("unknown nick: %+v", l)
+	}
 	s.never("MODE", 200*time.Millisecond)
 }
 
@@ -167,6 +187,16 @@ func TestIgnore(t *testing.T) {
 	}
 }
 
+// A mask read from the configuration is normalised like a typed one.
+func TestIgnoreFromConfig(t *testing.T) {
+	_, s, events, _ := start(t, Config{Ignores: []string{"bob"}}, false)
+	s.send(":bob!b@h PRIVMSG #go :spam")
+	s.send(":carol!c@h PRIVMSG #go :hello")
+	if m := waitMsg(t, events, func(model.EvNewMessage) bool { return true }); m.Msg.From != "carol" {
+		t.Fatalf("config mask did not match: %+v", m.Msg)
+	}
+}
+
 // /ctcp, /quote and /away on the wire; a CTCP reply shows as [ctcp(nick)].
 func TestCtcpQuoteAway(t *testing.T) {
 	c, s, events, _ := start(t, Config{}, false)
@@ -177,6 +207,10 @@ func TestCtcpQuoteAway(t *testing.T) {
 	s.send(":bob!b@h NOTICE me :\x01VERSION ttyloom 1\x01")
 	if l := waitLines(t, events, "[ctcp(bob)] VERSION ttyloom 1"); l.ChatID != 3 {
 		t.Fatalf("ctcp reply: %+v", l)
+	}
+	cmd(c, 3, "", "ctcp", "bob  TIME zone") // two spaces before the command
+	if l := s.expect("PRIVMSG bob"); !strings.HasSuffix(l, "\x01TIME zone\x01") {
+		t.Fatalf("ctcp spacing: %q", l)
 	}
 	cmd(c, 0, "", "quote", "PRIVMSG #go :raw line")
 	if l := s.expect("PRIVMSG #go"); l != "PRIVMSG #go :raw line" {

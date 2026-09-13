@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/ergochat/irc-go/ircevent"
 	"github.com/ergochat/irc-go/ircmsg"
@@ -56,13 +57,20 @@ func roomArg(args []string, room string) (string, []string, bool) {
 	return room, args, room != ""
 }
 
-// rest : text after the first n words of text.
+// rest : what follows the first n words of text. The blanks are walked one
+// word at a time — a prefix rebuilt with single spaces would not match a text
+// where two words are set apart by more than one.
 func rest(text string, n int) string {
-	f := strings.Fields(text)
-	if len(f) <= n {
-		return ""
+	s := text
+	for ; n > 0; n-- {
+		s = strings.TrimLeftFunc(s, unicode.IsSpace)
+		i := strings.IndexFunc(s, unicode.IsSpace)
+		if i < 0 {
+			return ""
+		}
+		s = s[i:]
 	}
-	return strings.TrimSpace(strings.TrimPrefix(text, strings.Join(f[:n], " ")))
+	return strings.TrimSpace(s)
 }
 
 func (c *Client) command(reply int64, room, name string, args []string, text string) error {
@@ -236,6 +244,21 @@ func (c *Client) onUserhost(e ircmsg.Message) {
 	if len(e.Params) < 2 {
 		return
 	}
+	if strings.TrimSpace(e.Params[1]) == "" {
+		// An unknown nick gets an empty answer, naming nobody: the bans waiting
+		// would sit there for ever and a moderation command would look done.
+		c.mu.Lock()
+		pending := make([]banReq, 0, len(c.bans))
+		for _, req := range c.bans {
+			pending = append(pending, req)
+		}
+		clear(c.bans)
+		c.mu.Unlock()
+		for _, req := range pending {
+			c.Post(model.EvLines{ChatID: req.reply, Lines: []string{req.nick + ": " + i18n.T("irc_no_such_nick")}})
+		}
+		return
+	}
 	for _, f := range strings.Fields(e.Params[1]) {
 		nick, uh, ok := strings.Cut(f, "=")
 		if !ok {
@@ -320,7 +343,17 @@ func (c *Client) onModeReply(e ircmsg.Message) {
 	default: // the lists (367, 346, 348) and their ends
 		text = strings.Join(e.Params[1:], " ")
 	}
-	if text != "" {
+	if text == "" {
+		return
+	}
+	// The answer is over on a list end (368, 347, 349), on the 329 that follows
+	// the 324 of a channel, and on the 221 of a user mode: the asking window is
+	// forgotten there, kept on every numeric before it.
+	switch e.Command {
+	case ircevent.RPL_ENDOFBANLIST, ircevent.RPL_ENDOFINVITELIST, ircevent.RPL_ENDOFEXCEPTLIST,
+		ircevent.RPL_CREATIONTIME, ircevent.RPL_UMODEIS:
+		c.Post(model.EvLines{ChatID: c.replyTo("mode"), Lines: []string{text}})
+	default:
 		c.lines("mode", text)
 	}
 }
@@ -328,6 +361,9 @@ func (c *Client) onModeReply(e ircmsg.Message) {
 // onWho : 352 "me #chan user host server nick flags :hops realname" — one
 // line per user, "nick user@host (realname) flags #chan server".
 func (c *Client) onWho(e ircmsg.Message) {
+	if len(e.Params) < 2 {
+		return
+	}
 	if e.Command == ircevent.RPL_WHOSPCRPL || len(e.Params) < 8 {
 		c.lines("who", strings.Join(e.Params[1:], " "))
 		return
@@ -340,6 +376,9 @@ func (c *Client) onWho(e ircmsg.Message) {
 }
 
 func (c *Client) onWhoEnd(e ircmsg.Message) {
+	if len(e.Params) < 2 {
+		return
+	}
 	c.Post(model.EvLines{ChatID: c.replyTo("who"), Lines: []string{strings.Join(e.Params[1:], " ")}})
 }
 
@@ -352,6 +391,9 @@ func (c *Client) onWhowas(e ircmsg.Message) {
 }
 
 func (c *Client) onWhowasEnd(e ircmsg.Message) {
+	if len(e.Params) < 2 {
+		return
+	}
 	c.Post(model.EvLines{ChatID: c.replyTo("whowas"), Lines: []string{strings.Join(e.Params[1:], " ")}})
 }
 
