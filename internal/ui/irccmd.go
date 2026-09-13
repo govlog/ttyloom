@@ -67,8 +67,13 @@ func (u *UI) ircNicks() []string {
 		return nil
 	}
 	for _, c := range []*model.Chat{w.Target, w.Chat} {
-		if c != nil && c.Net == net { // a private chat has its peer
-			return l.Members(c)
+		if c != nil && c.Net == net && isIRCRoom(c.Title) {
+			return l.Members(c) // the room first: a query target must not hide it
+		}
+	}
+	for _, c := range []*model.Chat{w.Target, w.Chat} {
+		if c != nil && c.Net == net {
+			return l.Members(c) // else a private chat, which has its peer
 		}
 	}
 	return nil

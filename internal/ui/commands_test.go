@@ -767,6 +767,13 @@ func TestIRCArgCompletion(t *testing.T) {
 	if got := u.candidates("c", false); !slices.Contains(got, "carol") {
 		t.Fatalf("private chat: %v", got)
 	}
+	// A query target inside a room does not hide the members of the room.
+	u.goTo(1)
+	u.view().Target = carol
+	u.ed.Set("/kick a")
+	if got := u.candidates("a", false); !slices.Contains(got, "alice") {
+		t.Fatalf("room with a query target: %v", got)
+	}
 }
 
 // A private IRC window has no room: a bare /part must not aim at the peer.
