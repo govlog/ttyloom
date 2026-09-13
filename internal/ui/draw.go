@@ -148,10 +148,6 @@ func (u *UI) draw() {
 			}
 		}
 	}
-	u.tabHits = u.tabHits[:0]
-	if u.tabsOn() {
-		u.drawTabs(&b, rows-u.inputRows()-1, x0, cols)
-	}
 	u.drawStatus(&b, rows-u.inputRows(), x0, cols)
 	curRow, curCol := u.drawInput(&b, rows, x0, cols)
 	var cur map[kplace]bool
@@ -611,12 +607,13 @@ type tabHit struct {
 	net        string
 }
 
-// tabRow : screen line (0-based) of the tab bar — just above the status bar.
-func (u *UI) tabRow() int { return u.t.Rows - u.inputRows() - 2 }
+// tabRow : screen line (0-based) of the tabs — the status line carries them.
+func (u *UI) tabRow() int { return u.t.Rows - u.inputRows() - 1 }
 
-// tabSpans : the tab bar — [all], then one tab per network in name order,
-// the unread sum of its windows in brackets (hot when one of them is), the
-// current tab in accent. x0: first screen column of the bar, for the hits.
+// tabSpans : the tabs — [*] for all the networks, then one tab per network in
+// name order, the unread sum of its windows in brackets (hot when one of them
+// is), the current tab in accent. x0: first screen column of the tabs, for the
+// hits.
 func (u *UI) tabSpans(x0 int) ([]render.Span, []tabHit) {
 	st := u.th.Style(theme.StatusBG)
 	acc, act := st, st
@@ -633,7 +630,7 @@ func (u *UI) tabSpans(x0 int) ([]render.Span, []tabHit) {
 		if i > 0 {
 			add(" ", st)
 		}
-		label, n, hot := "all", 0, false
+		label, n, hot := "*", 0, false
 		if net != "" {
 			label = net
 			for _, w := range u.ws.List {
@@ -672,22 +669,47 @@ func (u *UI) tabAt(x int) (string, bool) {
 	return "", false
 }
 
-// drawTabs writes the tab bar on row (1-based) and keeps the hits.
-func (u *UI) drawTabs(b *strings.Builder, row, x0, cols int) {
-	st := u.th.Style(theme.StatusBG)
-	fmt.Fprintf(b, "\x1b[%d;%dH%s\x1b[K", row, x0+1, st.SGR())
-	spans, hits := u.tabSpans(x0)
-	// writeLine cuts at cols: a tab past the edge is not on the screen, and
-	// must not take a click either.
-	u.tabHits = nil
-	for _, h := range hits {
-		if h.col0 >= x0+cols {
-			break
-		}
-		h.col1 = min(h.col1, x0+cols)
-		u.tabHits = append(u.tabHits, h)
+// withTabs puts the tabs at the right end of the status line and keeps their
+// hits at their real screen columns. The left part is cut to leave them room,
+// plus one blank of separation; when the tabs alone do not fit, they are
+// dropped and take no click.
+func (u *UI) withTabs(left []render.Span, x0, cols int, st theme.Style) []render.Span {
+	tabs, hits := u.tabSpans(0)
+	tw := 0
+	for _, s := range tabs {
+		tw += render.Width(s.Text)
 	}
-	u.writeLine(b, render.Line{Spans: spans}, cols, nil)
+	if tw >= cols {
+		return left
+	}
+	start := cols - tw // column of the first tab, relative to x0
+	left, w := truncSpans(left, start-1)
+	for i := range hits {
+		hits[i].col0 += x0 + start
+		hits[i].col1 += x0 + start
+	}
+	u.tabHits = append(u.tabHits, hits...)
+	left = append(left, render.Span{Text: strings.Repeat(" ", start-w), Style: st})
+	return append(left, tabs...)
+}
+
+// truncSpans cuts spans to at most cols cells and gives the width kept.
+func truncSpans(spans []render.Span, cols int) ([]render.Span, int) {
+	w := 0
+	for i, sp := range spans {
+		tw := render.Width(sp.Text)
+		if w+tw <= cols {
+			w += tw
+			continue
+		}
+		sp.Text = render.Truncate(sp.Text, cols-w, "")
+		out := spans[:i:i]
+		if sp.Text == "" {
+			return out, w
+		}
+		return append(out, sp), w + render.Width(sp.Text)
+	}
+	return spans, w
 }
 
 func (u *UI) drawStatus(b *strings.Builder, row, x0, cols int) {
@@ -696,6 +718,7 @@ func (u *UI) drawStatus(b *strings.Builder, row, x0, cols int) {
 	acc.FG, acc.Bold = u.th.Color(theme.Accent), true
 	act.FG = u.th.Color(theme.Act)
 	errS.FG = u.th.Color(theme.Error)
+	u.tabHits = u.tabHits[:0] // made again at each repaint, like u.hits
 	fmt.Fprintf(b, "\x1b[%d;%dH%s\x1b[K", row, x0+1, st.SGR())
 	if u.pager != nil {
 		msg := i18n.T("pager_more", len(u.pager.rest))
@@ -725,7 +748,9 @@ func (u *UI) drawStatus(b *strings.Builder, row, x0, cols int) {
 		}
 	}
 	add("]", st)
-	if u.multiNet() && w.Chat != nil { // network of the current chat, silent with one backend
+	// Network of the current chat, silent with one backend; in tab mode its
+	// tab, in its own colour at the right, already names it.
+	if u.multiNet() && w.Chat != nil && !u.tabsOn() {
 		add(" ["+w.Chat.Net+"]", st)
 	}
 	if w.Log {
@@ -769,8 +794,11 @@ func (u *UI) drawStatus(b *strings.Builder, row, x0, cols int) {
 	if s := u.connStatus(); s != "" {
 		add(s, errS)
 	}
-	if u.flashMsg != "" { // last: it is temporary, so it does not move the rest
+	if u.flashMsg != "" { // last of the left part: temporary, so it moves nothing
 		add(" ["+u.flashMsg+"]", acc)
+	}
+	if u.tabsOn() {
+		spans = u.withTabs(spans, x0, cols, st)
 	}
 	u.writeLine(b, render.Line{Spans: spans}, cols, nil)
 }

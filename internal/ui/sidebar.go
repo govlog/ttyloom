@@ -1081,9 +1081,6 @@ func (u *UI) viewRows() int {
 	if u.cfg.Separator {
 		v--
 	}
-	if u.tabsOn() {
-		v--
-	}
 	return v
 }
 

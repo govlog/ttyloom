@@ -194,7 +194,7 @@ log_dir = "~/.local/share/ttyloom/logs"
 | `bell` | Terminal bell for a private message or mention outside the active window. |
 | `auto_open_days` | Create hidden windows for conversations active within N days on startup; 0 disables this. |
 | `aggregate` | Combine open conversations in window 0; `F6` toggles it. |
-| `tabs` | One tab per network above the status bar, clickable; `F9` turns it on and walks the tabs. Nothing with a single network. |
+| `tabs` | One tab per network at the right of the status line, clickable; `F9` turns them on and walks the tabs. Nothing with a single network. |
 | `cache` | Save dialogs and recent message history on disk. False disables the history cache. |
 | `cache_messages` | Recent messages kept per conversation on disk; window memory follows the same message-count setting. |
 | `notify` | `terminal` for native terminal notifications, `desktop` for `notify-send`, or `off`. Notification delivery also depends on focus. |
@@ -519,23 +519,25 @@ window and adds its activity to `[Act: …]` in the status bar.
 
 #### Tab mode (F9)
 
-F9 turns the tab bar on (`tabs = true`) and cycles `all` → each network, in
-name order → `all`. The bar sits just above the status bar, and its tabs are
-clickable:
+F9 turns the tabs on (`tabs = true`) and cycles `all` → each network, in
+name order → `all`. They sit at the right of the status line, clickable:
 
 ```text
-[all] [telegram(6)] [discord(5)] [irc:libera]
+[15:42] [@chris] [2:#go]        [*] [telegram(6)] [discord(5)] [irc:libera]
 ```
 
 The current tab is highlighted; the others carry the unread count of their
-windows. A network tab shows only the windows of that network, window 0
-included: Ctrl+X and Alt+Left/Right stay inside it, the sidebar and the
-aggregate view are cut to it, and `[Act: …]` lists its windows only. It is the
-same filter as `/net` and Shift+F2.
+windows. `[*]` is all the networks. The current tab already names the network
+of the window shown, so the `[net]` segment of the status line goes while the
+tabs are on; when the line is too narrow, its left part is cut first, and the
+tabs go only when they no longer fit alone. A network tab shows only the
+windows of that network, window 0 included: Ctrl+X and Alt+Left/Right stay
+inside it, the sidebar and the aggregate view are cut to it, and `[Act: …]`
+lists its windows only. It is the same filter as `/net` and Shift+F2.
 
 Alt+1…9, `/win N`, `/N` and a click still reach any window, and the tab follows
 the window shown. Coming back to a network tab returns to the last window shown
-on that network. `/set tabs off` removes the bar and makes the window cycle
+on that network. `/set tabs off` removes the tabs and makes the window cycle
 global again. A single network has no tabs.
 
 ### Conversations

@@ -365,38 +365,56 @@ func TestTabSpans(t *testing.T) {
 	u.ws.List[1].Act = 2 // discord
 	u.ws.List[2].Act, u.ws.List[2].Hot = 1, true
 	u.netFilter = model.NetDiscord
+	u.ws.Cur = 1 // a discord window: the status line can name its network
 	spans, hits := u.tabSpans(5)
 	var text strings.Builder
 	for _, s := range spans {
 		text.WriteString(s.Text)
 	}
-	if got, want := text.String(), "[all] [discord(2)] [telegram(1)]"; got != want {
-		t.Fatalf("bar: %q, want %q", got, want)
+	if got, want := text.String(), "[*] [discord(2)] [telegram(1)]"; got != want {
+		t.Fatalf("tabs: %q, want %q", got, want)
 	}
 	if len(hits) != 3 || hits[0].net != "" || hits[1].net != model.NetDiscord || hits[2].net != model.NetTelegram {
 		t.Fatalf("hits: %+v", hits)
 	}
-	if hits[0].col0 != 5 || hits[0].col1 != 10 || hits[1].col0 != 11 { // "[all]" is 5 columns from x0 = 5
+	if hits[0].col0 != 5 || hits[0].col1 != 8 || hits[1].col0 != 9 { // "[*]" is 3 columns from x0 = 5
 		t.Fatalf("columns: %+v", hits)
 	}
 	u.tabHits = hits
-	if net, ok := u.tabAt(12); !ok || net != model.NetDiscord {
-		t.Fatalf("tabAt(12): %q %v", net, ok)
+	if net, ok := u.tabAt(10); !ok || net != model.NetDiscord {
+		t.Fatalf("tabAt(10): %q %v", net, ok)
 	}
-	if _, ok := u.tabAt(10); ok { // the blank between two tabs
+	if _, ok := u.tabAt(8); ok { // the blank between two tabs
 		t.Fatal("tabAt on a blank: hit")
 	}
-	// A narrow screen cuts the bar: the tabs writeLine dropped take no click.
+	// On the status line the tabs are pushed to the right edge, and take the
+	// place of the [net] segment.
 	var b strings.Builder
-	u.drawTabs(&b, 1, 5, 12) // "[all] [discor" — telegram is off the screen
-	if _, ok := u.tabAt(25); ok {
-		t.Fatal("a tab past the right edge took a click")
+	x0, cols := u.layout()
+	u.drawStatus(&b, u.t.Rows-u.inputRows(), x0, cols)
+	if len(u.tabHits) != 3 || u.tabHits[2].col1 != x0+cols {
+		t.Fatalf("the tabs do not end at the right edge (x0=%d cols=%d): %+v", x0, cols, u.tabHits)
 	}
-	if net, ok := u.tabAt(12); !ok || net != model.NetDiscord {
-		t.Fatalf("tab still on the screen: %q %v", net, ok)
+	if net, ok := u.tabAt(u.tabHits[1].col0); !ok || net != model.NetDiscord {
+		t.Fatalf("tabAt on the discord tab: %q %v", net, ok)
 	}
-	u.tabHits = hits
-	if !u.tabsOn() || u.viewRows() != 24-1-1-1 { // rows − status − input − tab bar (separator off)
+	if strings.Contains(b.String(), " ["+model.NetDiscord+"]") {
+		t.Fatal("the [net] segment is still on the status line in tab mode")
+	}
+	u.cfg.Tabs = false
+	b.Reset()
+	u.drawStatus(&b, u.t.Rows-u.inputRows(), x0, cols)
+	if !strings.Contains(b.String(), " ["+model.NetDiscord+"]") || len(u.tabHits) != 0 {
+		t.Fatalf("tabs off: [net] segment %q, hits %+v", b.String(), u.tabHits)
+	}
+	// A screen too narrow for the tabs alone: the left part only, no click.
+	u.cfg.Tabs = true
+	b.Reset()
+	u.drawStatus(&b, u.t.Rows-u.inputRows(), x0, 12)
+	if len(u.tabHits) != 0 {
+		t.Fatalf("tabs kept on a screen too narrow: %+v", u.tabHits)
+	}
+	if !u.tabsOn() || u.viewRows() != 24-1-1 { // rows − status − input (separator off)
 		t.Fatalf("viewRows: %d", u.viewRows())
 	}
 }

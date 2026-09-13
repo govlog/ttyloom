@@ -153,7 +153,7 @@ type Config struct {
 	Notify            string    `toml:"notify"`
 	AutoOpenDays      int       `toml:"auto_open_days"`
 	Aggregate         bool      `toml:"aggregate"`
-	Tabs              bool      `toml:"tabs"` // tab bar per network above the status bar (F9)
+	Tabs              bool      `toml:"tabs"` // tabs per network at the right of the status line (F9)
 	Cache             bool      `toml:"cache"`
 	CacheMessages     int       `toml:"cache_messages"`
 	LogDir            string    `toml:"log_dir"`
@@ -236,7 +236,7 @@ bell = true            # bell (\a) on a private message or a mention
 notify = "terminal"    # notification on a private message or a mention: terminal (OSC 777) | desktop (notify-send) | off
 auto_open_days = 7     # opens at start the chats active for N days (0 = off)
 aggregate = false      # window 0: stream of every message received (Alt+A)
-tabs = false           # tab bar per network above the status bar, F9 switches (several networks only)
+tabs = false           # tabs per network at the right of the status line, F9 switches (several networks only)
 cache = true           # local cache (dialogs, history) for a fast start
 cache_messages = 2000  # messages kept per chat in the disk cache; scrolling up loads the rest from the network
 log_dir = "~/.local/share/ttyloom/logs"

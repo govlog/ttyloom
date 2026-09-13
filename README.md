@@ -47,7 +47,7 @@ Discord user-token access is unsupported by Discord and can lead to account susp
 <tr><td align="center">Discord, with the same windows and shortcuts</td><td align="center">Search across networks with Ctrl+F twice</td></tr>
 <tr><td><img src="docs/screenshots/gifs.svg" alt="GIF picker with landscape previews"></td><td><img src="docs/screenshots/members.svg" alt="Group members and contextual actions"></td></tr>
 <tr><td align="center">Ctrl+G opens the GIF picker</td><td align="center">F3 opens the member list</td></tr>
-<tr><td colspan="2"><img src="docs/screenshots/tabs.svg" alt="Tab bar per network, an IRC channel and a WHOIS answer"></td></tr>
+<tr><td colspan="2"><img src="docs/screenshots/tabs.svg" alt="Tabs per network on the status line, an IRC channel and a WHOIS answer"></td></tr>
 <tr><td colspan="2" align="center">Tab per network with F9, IRC channel and WHOIS</td></tr>
 </table>
 
