@@ -150,22 +150,27 @@ func (c *Client) Resolve(_ context.Context, q string, _ bool, request uint64) {
 		c.refuse("Resolve", model.EvChat{Request: request, Query: q, Chat: c.chatOf(nick)})
 		return
 	}
+	name, key, _ := strings.Cut(q, " ") // "#room key" joins a room with a key
 	c.mu.Lock()
-	_, in := c.members[c.casefold(q)]
+	_, in := c.members[c.casefold(name)]
 	if !in {
-		c.joining[c.casefold(q)] = append(c.joining[c.casefold(q)], model.EvChat{Request: request, Query: q})
+		c.joining[c.casefold(name)] = append(c.joining[c.casefold(name)], model.EvChat{Request: request, Query: q})
 	}
 	c.mu.Unlock()
 	if in {
-		c.refuse("Resolve", model.EvChat{Request: request, Query: q, Chat: c.chatOf(q)})
+		c.refuse("Resolve", model.EvChat{Request: request, Query: q, Chat: c.chatOf(name)})
 		return
 	}
 	go func() {
 		defer c.Guard("Resolve", nil)
-		if err := c.send("JOIN", q); err != nil {
+		params := []string{name}
+		if key != "" {
+			params = append(params, key)
+		}
+		if err := c.send("JOIN", params...); err != nil {
 			c.mu.Lock()
-			waiting := c.joining[c.casefold(q)]
-			delete(c.joining, c.casefold(q))
+			waiting := c.joining[c.casefold(name)]
+			delete(c.joining, c.casefold(name))
 			c.mu.Unlock()
 			for _, ev := range waiting {
 				ev.Err = err.Error()
@@ -255,16 +260,26 @@ func (c *Client) Leave(_ context.Context, chat *model.Chat) {
 		c.DeleteChat(context.Background(), chat)
 		return
 	}
+	go func() {
+		defer c.Guard("Leave", nil)
+		c.part(name, "")
+	}()
+}
+
+// part : PART with a reason, the room out of the list and of the file; the
+// UI drops the window on EvChatGone.
+func (c *Client) part(name, reason string) {
 	c.mu.Lock()
 	c.channels = slices.DeleteFunc(c.channels, func(x string) bool { return c.casefold(x) == c.casefold(name) })
 	delete(c.members, c.casefold(name))
 	c.saveChannelsLocked()
 	c.mu.Unlock()
-	go func() {
-		defer c.Guard("Leave", nil)
-		_ = c.send("PART", name) // not connected: the room is out of the list all the same
-		c.Post(model.EvChatGone{ChatID: chat.ID})
-	}()
+	params := []string{name}
+	if reason != "" {
+		params = append(params, reason)
+	}
+	_ = c.send("PART", params...) // not connected: the room is out of the list all the same
+	c.Post(model.EvChatGone{ChatID: c.chatID(name)})
 }
 
 // DeleteChat : a private chat closes — nothing on the server. A room goes

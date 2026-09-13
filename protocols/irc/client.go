@@ -40,6 +40,7 @@ type Config struct {
 	Channels []string
 	DCCIP    string
 	DCCPorts string
+	Ignores  []string // nick!user@host masks whose lines are dropped (/ignore)
 	// SaveChannels writes the channel list back to the configuration — after
 	// a join or a part, so that the next start finds the same rooms.
 	SaveChannels func([]string) error
@@ -62,17 +63,22 @@ type Client struct {
 	joining  map[string][]model.EvChat // folded channel -> Resolve query waiting for the JOIN
 	naming   map[string]*model.Chat
 	whois    map[string]*whoisReq
-	offers   map[string]dccOffer // folded nick -> last DCC offer received
-	xfers    []string            // DCC transfers running, one label each
+	offers   map[string]dccOffer  // folded nick -> last DCC offer received
+	xfers    []string             // DCC transfers running, one label each
+	asked    map[string]int64     // kind of command ("who", "motd", "ctcp:<nick>"…) -> chat its answer goes to
+	bans     map[string]banReq    // folded nick -> ban waiting for its USERHOST answer
+	motd     []string             // MOTD lines gathered until 376/422
+	ignores  []string             // /ignore masks, nick!user@host with * and ?
+	pings    map[string]time.Time // folded nick -> CTCP PING sent at
 	saslOK   bool
 	ready    bool // EvReady posted (once per Run)
 	sock     net.Conn
 }
 
-// whoisReq : one WHOIS in flight, the lines gathered until 318.
+// whoisReq : one WHOIS in flight, the numerics gathered until 318.
 type whoisReq struct {
 	chatID int64
-	lines  []string
+	raw    []ircmsg.Message
 }
 
 // New builds the client; nothing connects before Run.
@@ -80,7 +86,8 @@ func New(cfg Config, events chan<- model.Event) *Client {
 	c := &Client{Poster: model.Poster{Events: events}, cfg: cfg,
 		members: map[string][]string{}, names: map[string][]string{}, queries: map[string]string{},
 		joining: map[string][]model.EvChat{}, naming: map[string]*model.Chat{}, whois: map[string]*whoisReq{},
-		offers: map[string]dccOffer{}}
+		offers: map[string]dccOffer{}, asked: map[string]int64{}, bans: map[string]banReq{},
+		pings: map[string]time.Time{}, ignores: slices.Clone(cfg.Ignores)}
 	for _, ch := range cfg.Channels {
 		if isChannel(ch) && !slices.Contains(c.channels, ch) {
 			c.channels = append(c.channels, ch)
@@ -240,6 +247,34 @@ func (c *Client) wire(conn *ircevent.Connection) {
 	conn.AddCallback("KILL", func(e ircmsg.Message) {
 		c.Post(model.EvLog{Level: "ERROR", Msg: c.net() + ": KILL " + strings.Join(e.Params, " ")})
 	})
+	// The numerics that answer the slash commands of cmd.go.
+	for _, code := range []string{ircevent.RPL_MOTDSTART, ircevent.RPL_MOTD} {
+		conn.AddCallback(code, c.onMotdLine)
+	}
+	conn.AddCallback(ircevent.RPL_ENDOFMOTD, c.onMotdEnd)
+	conn.AddCallback(ircevent.ERR_NOMOTD, c.onMotdEnd)
+	conn.AddCallback(ircevent.RPL_WHOREPLY, c.onWho)
+	conn.AddCallback(ircevent.RPL_WHOSPCRPL, c.onWho)
+	conn.AddCallback(ircevent.RPL_ENDOFWHO, c.onWhoEnd)
+	conn.AddCallback(ircevent.RPL_WHOWASUSER, c.onWhowas)
+	conn.AddCallback(ircevent.RPL_ENDOFWHOWAS, c.onWhowasEnd)
+	conn.AddCallback(ircevent.ERR_WASNOSUCHNICK, c.onWhowasEnd)
+	conn.AddCallback(ircevent.RPL_USERHOST, c.onUserhost)
+	for _, code := range []string{ircevent.RPL_CHANNELMODEIS, ircevent.RPL_CREATIONTIME, ircevent.RPL_UMODEIS,
+		ircevent.RPL_BANLIST, ircevent.RPL_ENDOFBANLIST, ircevent.RPL_INVITELIST, ircevent.RPL_ENDOFINVITELIST,
+		ircevent.RPL_EXCEPTLIST, ircevent.RPL_ENDOFEXCEPTLIST} {
+		conn.AddCallback(code, c.onModeReply)
+	}
+	conn.AddCallback(ircevent.RPL_NOTOPIC, c.reply("topic"))
+	conn.AddCallback(ircevent.RPL_INVITING, c.reply("invite"))
+	conn.AddCallback(ircevent.RPL_NOWAWAY, c.reply("away"))
+	conn.AddCallback(ircevent.RPL_UNAWAY, c.reply("away"))
+	for _, code := range []string{ircevent.ERR_UNKNOWNCOMMAND, ircevent.ERR_NEEDMOREPARAMS, ircevent.ERR_CHANOPRIVSNEEDED,
+		ircevent.ERR_USERNOTINCHANNEL, ircevent.ERR_NOTONCHANNEL, ircevent.ERR_NICKNAMEINUSE, ircevent.ERR_ERRONEUSNICKNAME,
+		ircevent.ERR_NOSUCHSERVER, ircevent.ERR_NOTEXTTOSEND, ircevent.ERR_USERONCHANNEL, ircevent.ERR_UNKNOWNMODE,
+		ircevent.ERR_NOPRIVILEGES, ircevent.ERR_UMODEUNKNOWNFLAG, ircevent.ERR_USERSDONTMATCH} {
+		conn.AddCallback(code, c.onError)
+	}
 }
 
 // me : the nick the server knows us by.
@@ -303,7 +338,7 @@ func (c *Client) target(e ircmsg.Message) *model.Chat {
 }
 
 func (c *Client) onPrivmsg(e ircmsg.Message) {
-	if len(e.Params) < 2 {
+	if c.ignored(e) || len(e.Params) < 2 {
 		return
 	}
 	chat := c.target(e)
@@ -314,7 +349,12 @@ func (c *Client) onPrivmsg(e ircmsg.Message) {
 // from a person opens no window — it goes to the status window, as ircii
 // does — and one from the server too.
 func (c *Client) onNotice(e ircmsg.Message) {
-	if len(e.Params) < 2 {
+	if len(e.Params) < 2 || (e.Nick() != "" && c.ignored(e)) {
+		return
+	}
+	// A NOTICE wrapped in \x01 is the answer of a /ctcp, not a message.
+	if t := e.Params[1]; len(t) > 2 && t[0] == 1 && t[len(t)-1] == 1 && e.Nick() != "" {
+		c.onCTCPReply(e.Nick(), t[1:len(t)-1])
 		return
 	}
 	if isChannel(e.Params[0]) {
@@ -334,7 +374,7 @@ func (c *Client) onNotice(e ircmsg.Message) {
 
 // onAction : CTCP ACTION, "* nick does" in italics.
 func (c *Client) onAction(e ircmsg.Message) {
-	if len(e.Params) < 2 {
+	if c.ignored(e) || len(e.Params) < 2 {
 		return
 	}
 	chat := c.target(e)
@@ -351,7 +391,7 @@ func (c *Client) onAction(e ircmsg.Message) {
 // onCTCP : every CTCP the library does not answer itself. DCC SEND becomes a
 // file offer in the private chat of the sender; the rest is dropped.
 func (c *Client) onCTCP(e ircmsg.Message) {
-	if len(e.Params) < 2 || !strings.HasPrefix(strings.ToUpper(e.Params[1]), "DCC SEND ") {
+	if c.ignored(e) || len(e.Params) < 2 || !strings.HasPrefix(strings.ToUpper(e.Params[1]), "DCC SEND ") {
 		return
 	}
 	off, err := parseOffer(e.Nick(), e.Params[1][len("DCC SEND "):])
@@ -553,7 +593,12 @@ func (c *Client) onEndOfNames(e ircmsg.Message) {
 	}
 	chat := c.naming[k]
 	delete(c.naming, k)
+	reply, asked := c.asked["names:"+k]
+	delete(c.asked, "names:"+k)
 	c.mu.Unlock()
+	if asked { // /names: the list as it comes, prefixes and all
+		c.Post(model.EvLines{ChatID: reply, Lines: []string{"Users on " + e.Params[1] + ": " + strings.Join(names, " ")}})
+	}
 	if chat == nil {
 		return
 	}
@@ -565,32 +610,23 @@ func (c *Client) onEndOfNames(e ircmsg.Message) {
 	c.Post(ev)
 }
 
-// onWhoisLine : one numeric of a WHOIS, kept as it comes (without the two
-// leading params: our nick and theirs).
+// onWhoisLine : one numeric of a WHOIS, kept raw — formatWhois lays the whole
+// lot out on 318.
 func (c *Client) onWhoisLine(e ircmsg.Message) {
 	if len(e.Params) < 2 {
 		return
 	}
 	c.mu.Lock()
-	defer c.mu.Unlock()
 	r := c.whois[c.casefold(e.Params[1])]
-	if r == nil {
-		return
+	if r != nil {
+		r.raw = append(r.raw, e)
 	}
-	line := strings.Join(e.Params[2:], " ")
-	switch e.Command {
-	case ircevent.RPL_WHOISUSER: // nick user host * :realname
-		if len(e.Params) >= 6 {
-			line = e.Params[1] + "!" + e.Params[2] + "@" + e.Params[3] + " · " + e.Params[5]
-		}
-	case ircevent.RPL_WHOISIDLE: // nick idle signon :seconds idle, signon time
-		if len(e.Params) >= 3 {
-			if s, err := strconv.Atoi(e.Params[2]); err == nil {
-				line = i18n.T("irc_whois_idle", (time.Duration(s) * time.Second).String())
-			}
-		}
+	_, whowas := c.asked["whowas"]
+	c.mu.Unlock()
+	// 312 also answers a WHOWAS: the server the gone nick was last on.
+	if r == nil && whowas && e.Command == ircevent.RPL_WHOISSERVER {
+		c.lines("whowas", e.Params[1]+" was on "+strings.Join(e.Params[2:], " "))
 	}
-	r.lines = append(r.lines, line)
 }
 
 func (c *Client) onEndOfWhois(e ircmsg.Message) {
@@ -602,7 +638,7 @@ func (c *Client) onEndOfWhois(e ircmsg.Message) {
 	delete(c.whois, c.casefold(e.Params[1]))
 	c.mu.Unlock()
 	if r != nil {
-		c.Post(model.EvWhois{ChatID: r.chatID, Lines: r.lines})
+		c.Post(model.EvWhois{ChatID: r.chatID, Lines: formatWhois(e.Params[1], append(r.raw, e))})
 	}
 }
 
@@ -663,6 +699,14 @@ func (c *Client) send(cmd string, params ...string) error {
 		return errors.New(i18n.T("irc_not_connected", c.net()))
 	}
 	return c.conn.Send(cmd, params...)
+}
+
+// sendRaw writes one line as it was typed (/quote); same guard as send.
+func (c *Client) sendRaw(line string) error {
+	if c.conn == nil || !c.conn.Connected() {
+		return errors.New(i18n.T("irc_not_connected", c.net()))
+	}
+	return c.conn.SendRaw(line)
 }
 
 // localIP : the address of the IRC socket, what DCC SEND announces when the

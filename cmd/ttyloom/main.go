@@ -198,7 +198,7 @@ func backends(ctx context.Context, cfg *config.Config, events chan<- model.Envel
 // ircConfig sends channel changes to the UI, which owns configuration writes.
 func ircConfig(ctx context.Context, n *config.IRCConfig, events chan<- model.Event) irc.Config {
 	return irc.Config{Name: n.Name, Host: n.Host, Port: n.Port, TLS: n.TLS, Nick: n.Nick, User: n.User,
-		RealName: n.RealName, Password: n.NickServPassword, Channels: n.Channels, DCCIP: n.DCCIP, DCCPorts: n.DCCPorts,
+		RealName: n.RealName, Password: n.NickServPassword, Channels: n.Channels, DCCIP: n.DCCIP, DCCPorts: n.DCCPorts, Ignores: n.Ignores,
 		SaveChannels: func(list []string) error {
 			select {
 			case events <- model.EvIRCChannels{Channels: list}:

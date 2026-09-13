@@ -330,7 +330,9 @@ func TestWhoisNamesQuit(t *testing.T) {
 	s.send(":srv 317 me alice 120 1700000000 :seconds idle, signon time")
 	s.send(":srv 318 me alice :End of WHOIS")
 	w := waitFor[model.EvWhois](t, events)
-	if w.ChatID != chatID("alice") || len(w.Lines) != 3 || w.Lines[0] != "alice!al@host.example · Alice A" || w.Lines[1] != "@#go #dev" || !strings.Contains(w.Lines[2], "2m0s") {
+	if w.ChatID != chatID("alice") || len(w.Lines) != 5 || w.Lines[0] != "┌ alice (al@host.example)" ||
+		w.Lines[1] != "│ ircname  : Alice A" || w.Lines[2] != "│ channels : @#go #dev" ||
+		!strings.Contains(w.Lines[3], "idle     : 2m0s") || !strings.HasPrefix(w.Lines[4], "└ ") {
 		t.Fatalf("whois: %+v", w)
 	}
 	c.WhoisMember(context.Background(), "ghost")
