@@ -104,6 +104,7 @@ external executable does not make it part of this source archive.
 | --- | --- | --- |
 | `internal/emoji/emoji.txt` | Unicode Emoji 17.0, Unicode License V3 | [Unicode license](licenses/unicode/LICENSE.txt), [source and checksum](licenses/unicode/SOURCE.md) |
 | Screenshot palette in `internal/ui/shot_test.go` | Catppuccin Mocha, MIT | [Catppuccin notice](licenses/assets/catppuccin-LICENSE) |
+| GIF tiles in `docs/screenshots/fixtures/` | Frames of third-party GIF returned by the Discord and Telegram GIF searches, property of their authors, used for illustration only | [Tile list and origins](docs/screenshots/fixtures/SOURCES.md) |
 | TTYloom logo and landscape fixtures | Created for this project; project-owned artwork | Project license applies |
 | Screenshot conversations | Fictional test data, drawn by the actual UI renderer | No private conversations or third-party photos included |
 
