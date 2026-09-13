@@ -122,35 +122,27 @@
 <text x="224.0" y="521.5" fill="#585b70" textLength="8.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">│</text>
 <text x="224.0" y="538.5" fill="#585b70" textLength="8.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">│</text>
 <text x="224.0" y="555.5" fill="#585b70" textLength="8.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">│</text>
-<text x="224.0" y="572.5" fill="#585b70" textLength="688.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">├─────────────────────────────────────────────────────────────────────────────────────</text>
-<text x="224.0" y="589.5" fill="#585b70" textLength="8.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">│</text>
-<rect x="232.0" y="577.0" width="40.0" height="17.0" fill="#45475a"/>
-<text x="232.0" y="589.5" fill="#89b4fa" textLength="40.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs" font-weight="bold">[all]</text>
-<rect x="272.0" y="577.0" width="72.0" height="17.0" fill="#45475a"/>
-<text x="272.0" y="589.5" fill="#cdd6f4" textLength="72.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs"> [discord</text>
-<rect x="344.0" y="577.0" width="32.0" height="17.0" fill="#45475a"/>
-<text x="344.0" y="589.5" fill="#f9e2af" textLength="32.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">(15)</text>
-<rect x="376.0" y="577.0" width="192.0" height="17.0" fill="#45475a"/>
-<text x="376.0" y="589.5" fill="#cdd6f4" textLength="192.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">] [irc:libera] [telegram</text>
-<rect x="568.0" y="577.0" width="24.0" height="17.0" fill="#45475a"/>
-<text x="568.0" y="589.5" fill="#f9e2af" textLength="24.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">(3)</text>
-<rect x="592.0" y="577.0" width="320.0" height="17.0" fill="#45475a"/>
-<text x="592.0" y="589.5" fill="#cdd6f4" textLength="320.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">]                                       </text>
+<text x="224.0" y="572.5" fill="#585b70" textLength="8.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">│</text>
+<text x="224.0" y="589.5" fill="#585b70" textLength="688.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">├─────────────────────────────────────────────────────────────────────────────────────</text>
 <text x="224.0" y="606.5" fill="#585b70" textLength="8.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">│</text>
 <rect x="232.0" y="594.0" width="160.0" height="17.0" fill="#45475a"/>
 <text x="232.0" y="606.5" fill="#cdd6f4" textLength="160.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">[15:42] [@chris] [1:</text>
 <rect x="392.0" y="594.0" width="56.0" height="17.0" fill="#45475a"/>
 <text x="392.0" y="606.5" fill="#89b4fa" textLength="56.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs" font-weight="bold">Gophers</text>
-<rect x="448.0" y="594.0" width="248.0" height="17.0" fill="#45475a"/>
-<text x="448.0" y="606.5" fill="#cdd6f4" textLength="248.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">] [telegram] [img:kitty] [Act: </text>
-<rect x="696.0" y="594.0" width="40.0" height="17.0" fill="#45475a"/>
-<text x="696.0" y="606.5" fill="#f9e2af" textLength="40.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">4(15)</text>
-<rect x="736.0" y="594.0" width="8.0" height="17.0" fill="#45475a"/>
-<text x="736.0" y="606.5" fill="#cdd6f4" textLength="8.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">,</text>
-<rect x="744.0" y="594.0" width="32.0" height="17.0" fill="#45475a"/>
-<text x="744.0" y="606.5" fill="#f9e2af" textLength="32.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">5(3)</text>
-<rect x="776.0" y="594.0" width="136.0" height="17.0" fill="#45475a"/>
-<text x="776.0" y="606.5" fill="#cdd6f4" textLength="136.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">] [alice typing… </text>
+<rect x="448.0" y="594.0" width="104.0" height="17.0" fill="#45475a"/>
+<text x="448.0" y="606.5" fill="#cdd6f4" textLength="104.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">] [img:kitty </text>
+<rect x="552.0" y="594.0" width="24.0" height="17.0" fill="#45475a"/>
+<text x="552.0" y="606.5" fill="#89b4fa" textLength="24.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs" font-weight="bold">[*]</text>
+<rect x="576.0" y="594.0" width="72.0" height="17.0" fill="#45475a"/>
+<text x="576.0" y="606.5" fill="#cdd6f4" textLength="72.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs"> [discord</text>
+<rect x="648.0" y="594.0" width="32.0" height="17.0" fill="#45475a"/>
+<text x="648.0" y="606.5" fill="#f9e2af" textLength="32.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">(15)</text>
+<rect x="680.0" y="594.0" width="192.0" height="17.0" fill="#45475a"/>
+<text x="680.0" y="606.5" fill="#cdd6f4" textLength="192.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">] [irc:libera] [telegram</text>
+<rect x="872.0" y="594.0" width="24.0" height="17.0" fill="#45475a"/>
+<text x="872.0" y="606.5" fill="#f9e2af" textLength="24.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">(3)</text>
+<rect x="896.0" y="594.0" width="16.0" height="17.0" fill="#45475a"/>
+<text x="896.0" y="606.5" fill="#cdd6f4" textLength="16.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">] </text>
 <text x="16.0" y="623.5" fill="#89b4fa" textLength="208.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs" font-weight="bold"> + new message            </text>
 <text x="224.0" y="623.5" fill="#585b70" textLength="8.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">│</text>
 <text x="232.0" y="623.5" fill="#89b4fa" textLength="80.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs" font-weight="bold">[Gophers] </text>
