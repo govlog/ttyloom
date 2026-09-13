@@ -210,7 +210,7 @@ const defaultFile = `# ttyloom
 #   tls = true
 #   nick = "me"
 #   nickserv_password = ""       # SASL PLAIN, or NickServ IDENTIFY without SASL
-#   channels = ["#go-nuts"]      # kept up to date by /join and /leave, joined again at start
+#   channels = ["#go-nuts"]      # kept up to date by /join and /part, joined again at start
 #   ignores = ["spammer!*@*"]    # kept up to date by /ignore: lines of those masks are dropped
 # Sections go at the END of the file: a plain key written after [discord]
 # would be read as one of its keys.

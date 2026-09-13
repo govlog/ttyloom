@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **Screenshots and documentation**: the screenshots are regenerated with real frames of the Discord and Telegram GIF searches (`scripts/gifshots.go`, fixtures in `docs/screenshots/fixtures/`), a new tab mode scene shows an IRC channel, a WHOIS answer, a hot counter and the away segment, and the SVG exporter now takes the cell widths from the renderer and a colour emoji font, so emoji keep their size and colours and the overlays stay aligned. The documentation is in English only: the French README, manuals and screenshots are gone, a Languages table in the README lists the interface languages, and the changelog is in English. The manual, the README and the built-in help were checked line by line against the code: `/join #room [key]`, the IRC `/whois` rule, `/away`, the tab scoping of *Ctrl+X* and *Alt+←/→*, the Tab completion sources, `/part` instead of the non-existent `/leave`, the `g` key, `disconnect` on `/telegram` and `/discord`, `irc:<name>` on `/net`, IRC in the account setup guide.
+
 ## v0.5-beta — 2026-09-13
 
 - **Versioning**: the project stays in beta; versions 1.0.0, 1.1.0, 1.1.1 and 1.2.0 become 0.1-beta to 0.4-beta below, the v1.x GitHub releases are withdrawn and the next versions follow the `v0.N-beta` form.
