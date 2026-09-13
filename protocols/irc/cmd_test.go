@@ -63,6 +63,10 @@ func TestModeKickPartCycle(t *testing.T) {
 	if l := waitLines(t, events, "created"); l.ChatID != 7 {
 		t.Fatalf("329 reply target: %+v", l)
 	}
+	s.send(":srv 221 me +i") // unasked, the /mode answer being over: window 0
+	if l := waitLines(t, events, "user mode"); l.ChatID != 0 {
+		t.Fatalf("221 after the end of the answer: %+v", l)
+	}
 	cmd(c, 7, "#go", "kick", "bob too loud")
 	if l := s.expect("KICK"); l != "KICK #go bob :too loud" {
 		t.Fatalf("kick: %q", l)
@@ -126,6 +130,24 @@ func TestBanUnknownNick(t *testing.T) {
 		t.Fatalf("unknown nick: %+v", l)
 	}
 	s.never("MODE", 200*time.Millisecond)
+}
+
+// Two bans in flight and the first nick gone: the empty 302 gives up that one
+// alone, the second still gets its ban.
+func TestBanUnknownNickThenKnown(t *testing.T) {
+	c, s, events, _ := start(t, Config{}, false)
+	cmd(c, 6, "#go", "ban", "ghost")
+	s.expect("USERHOST ghost")
+	cmd(c, 6, "#go", "ban", "bob")
+	s.expect("USERHOST bob")
+	s.send(":srv 302 me :")
+	if l := waitLines(t, events, "ghost"); !strings.Contains(l.Lines[0], i18n.T("irc_no_such_nick")) {
+		t.Fatalf("head given up: %+v", l)
+	}
+	s.send(":srv 302 me :bob=+b@h.example")
+	if l := s.expect("MODE"); l != "MODE #go +b *!*@h.example" {
+		t.Fatalf("second ban: %q", l)
+	}
 }
 
 // WHO, WHOWAS and MOTD answer in the window that asked; the MOTD of the

@@ -66,7 +66,7 @@ type Client struct {
 	offers   map[string]dccOffer  // folded nick -> last DCC offer received
 	xfers    []string             // DCC transfers running, one label each
 	asked    map[string]int64     // kind of command ("who", "motd", "ctcp:<nick>"…) -> chat its answer goes to
-	bans     map[string]banReq    // folded nick -> ban waiting for its USERHOST answer
+	bans     []banReq             // bans waiting for their USERHOST answer, in the order asked
 	motd     []string             // MOTD lines gathered until 376/422
 	ignores  []string             // /ignore masks, nick!user@host with * and ?
 	pings    map[string]time.Time // folded nick -> CTCP PING sent at
@@ -86,8 +86,7 @@ func New(cfg Config, events chan<- model.Event) *Client {
 	c := &Client{Poster: model.Poster{Events: events}, cfg: cfg,
 		members: map[string][]string{}, names: map[string][]string{}, queries: map[string]string{},
 		joining: map[string][]model.EvChat{}, naming: map[string]*model.Chat{}, whois: map[string]*whoisReq{},
-		offers: map[string]dccOffer{}, asked: map[string]int64{}, bans: map[string]banReq{},
-		pings: map[string]time.Time{}}
+		offers: map[string]dccOffer{}, asked: map[string]int64{}, pings: map[string]time.Time{}}
 	for _, m := range cfg.Ignores { // a hand-written "bob" is the mask bob!*@*
 		c.ignores = append(c.ignores, ignoreMask(m))
 	}

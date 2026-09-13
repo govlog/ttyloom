@@ -162,7 +162,7 @@ func (c *Client) command(reply int64, room, name string, args []string, text str
 			return c.ban(req, req.nick)
 		}
 		c.mu.Lock()
-		c.bans[c.casefold(req.nick)] = req
+		c.bans = append(c.bans, req)
 		c.mu.Unlock()
 		return c.send("USERHOST", req.nick)
 	case "who":
@@ -239,22 +239,25 @@ func banMask(userhost string) string {
 }
 
 // onUserhost : 302 "<me> :nick=+user@host nick2=-user@host" — the bans
-// waiting for these nicks go out.
+// waiting for these nicks go out. A server answers the commands of a
+// connection in order, so the bans waiting are a queue: this 302 answers the
+// request at its head.
 func (c *Client) onUserhost(e ircmsg.Message) {
 	if len(e.Params) < 2 {
 		return
 	}
 	if strings.TrimSpace(e.Params[1]) == "" {
-		// An unknown nick gets an empty answer, naming nobody: the bans waiting
-		// would sit there for ever and a moderation command would look done.
+		// An empty answer names nobody: the nick of the head request is not
+		// connected. Only that one is given up — a ban asked after it is still
+		// waiting for its own 302.
 		c.mu.Lock()
-		pending := make([]banReq, 0, len(c.bans))
-		for _, req := range c.bans {
-			pending = append(pending, req)
+		var req banReq
+		waiting := len(c.bans) > 0
+		if waiting {
+			req, c.bans = c.bans[0], c.bans[1:]
 		}
-		clear(c.bans)
 		c.mu.Unlock()
-		for _, req := range pending {
+		if waiting {
 			c.Post(model.EvLines{ChatID: req.reply, Lines: []string{req.nick + ": " + i18n.T("irc_no_such_nick")}})
 		}
 		return
@@ -267,10 +270,14 @@ func (c *Client) onUserhost(e ircmsg.Message) {
 		nick = strings.TrimSuffix(nick, "*") // an operator is "nick*"
 		uh = strings.TrimLeft(uh, "+-")      // away flag
 		c.mu.Lock()
-		req, waiting := c.bans[c.casefold(nick)]
-		delete(c.bans, c.casefold(nick))
+		i := slices.IndexFunc(c.bans, func(r banReq) bool { return c.casefold(r.nick) == c.casefold(nick) })
+		var req banReq
+		if i >= 0 {
+			req = c.bans[i]
+			c.bans = slices.Delete(c.bans, i, i+1)
+		}
 		c.mu.Unlock()
-		if !waiting {
+		if i < 0 {
 			continue
 		}
 		if _, host, _ := strings.Cut(uh, "@"); host == "" {
