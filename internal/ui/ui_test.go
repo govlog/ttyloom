@@ -567,7 +567,7 @@ func TestImagesCycle(t *testing.T) {
 // Last net before xdg-open: our paths go through, a scheme that is not
 // http(s) is refused. The URLs from the network are already filtered by render.SafeURL.
 func TestOpenable(t *testing.T) {
-	ok := []string{"/home/me/Downloads/x.jpg", "/home/me/100%.png", "https://exemple.fr/a?b=1", "http://exemple.fr", "mailto:a@b.fr"}
+	ok := []string{"/tmp/Downloads/x.jpg", "/tmp/100%.png", "https://exemple.fr/a?b=1", "http://exemple.fr", "mailto:a@b.fr"}
 	ko := []string{"file:///etc/passwd", "javascript:alert(1)", "ssh://exemple.fr", "data:text/html,<script>",
 		"https://exemple.fr/\x1b]0;x\a"}
 	for _, s := range ok {
@@ -609,7 +609,7 @@ func TestMultilineInsert(t *testing.T) {
 // type is not on the allow list of tgc.extOf) is never handed to xdg-open.
 func TestOpenRefusesBin(t *testing.T) {
 	u := &UI{ws: NewWindows(), agg: &Window{}}
-	u.open("/home/me/Downloads/ttyloom/20260830-120000_chat_12.bin")
+	u.open("/tmp/ttyloom/20260830-120000_chat_12.bin")
 	items := u.view().Items
 	if len(items) != 1 || !strings.Contains(items[0].Sys, "20260830-120000_chat_12.bin") {
 		t.Fatalf("items: %+v", items)
