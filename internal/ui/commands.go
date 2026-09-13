@@ -25,7 +25,7 @@ var commandNames = []string{"/window", "/close", "/query", "/join", "/new", "/ms
 
 // ParseCommand : "/win new hide" → ("window", [new hide], "new hide", true).
 // "//x" → text "/x"; with no slash → text as it is, ok=false.
-func ParseCommand(line string) (name string, args []string, text string, ok bool) {
+func ParseCommand(line string, names []string) (name string, args []string, text string, ok bool) {
 	if strings.HasPrefix(line, "//") {
 		return "", nil, line[1:], false
 	}
@@ -34,7 +34,7 @@ func ParseCommand(line string) (name string, args []string, text string, ok bool
 	}
 	name, text, _ = strings.Cut(line[1:], " ")
 	name = strings.ToLower(name)
-	name = resolveCommand(name)
+	name = resolveCommand(name, names)
 	text = strings.TrimSpace(text)
 	return name, strings.Fields(text), text, true
 }
@@ -42,15 +42,15 @@ func ParseCommand(line string) (name string, args []string, text string, ok bool
 // resolveCommand keeps aliases exact, then accepts a command prefix when it
 // names one command only. /qu is an explicit alias: query and quit would
 // otherwise both match it. Ambiguous prefixes stay available for Tab cycling.
-func resolveCommand(name string) string {
+func resolveCommand(name string, names []string) string {
 	if a, ok := aliases[name]; ok {
 		return a
 	}
-	if slices.Contains(commandNames, "/"+name) {
+	if slices.Contains(names, "/"+name) {
 		return name
 	}
 	var match string
-	for _, command := range commandNames {
+	for _, command := range names {
 		candidate := strings.TrimPrefix(command, "/")
 		if candidate == name {
 			return candidate
@@ -79,6 +79,17 @@ func (u *UI) command(name string, args []string, text string) {
 			return args[i]
 		}
 		return ""
+	}
+	// The IRC commands need a network: the one of the window, of the tab, or
+	// the only one configured. With none configured at all they stay unknown.
+	if isIRCCommand(name) && len(u.ircNets()) > 0 {
+		net := u.ircNetFor(w)
+		if net == "" {
+			w.AddSys(i18n.T("irc_which_net"))
+			return
+		}
+		u.ircCommand(w, net, name, args, text)
+		return
 	}
 	switch name {
 	case "window":
@@ -197,6 +208,15 @@ func (u *UI) command(name string, args []string, text string) {
 			b.Search(u.backendContext(b), w.Chat, text, searchLimit)
 		}
 	case "whois":
+		// On IRC a nick needs no chat: the network answers on the token. Not
+		// from a window on another network, where /whois still names a contact
+		// (a single IRC network configured makes every window an IRC context).
+		if net := u.ircNetFor(w); net != "" && arg(0) != "" && winOn(w, net) {
+			if b := u.nets[net]; b != nil {
+				b.WhoisMember(u.netContext(net), strings.TrimPrefix(arg(0), "@"))
+			}
+			return
+		}
 		c := w.Chat
 		if arg(0) != "" {
 			var ambiguous bool

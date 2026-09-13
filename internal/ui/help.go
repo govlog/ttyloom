@@ -16,7 +16,7 @@ type topic struct{ name, key, section string }
 
 // helpSections : display order of /help; each name is a suffix of an i18n key
 // (help_section_<name>).
-var helpSections = []string{"windows", "chats", "messages", "media", "sidebar", "input", "options"}
+var helpSections = []string{"windows", "chats", "irc", "messages", "media", "sidebar", "input", "options"}
 
 // helpTopics : one entry per command of commandNames, per notable key and per
 // key of setKeys. Descriptions condensed from README.md.
@@ -51,6 +51,25 @@ var helpTopics = []topic{
 	{"/unrename", "help_unrename", "chats"},
 	{"/clear", "help_clear", "chats"},
 	{"/help", "help_help", "chats"},
+
+	// IRC
+	{"/part", "help_part", "irc"},
+	{"/cycle", "help_cycle", "irc"},
+	{"/topic", "help_topic", "irc"},
+	{"/nick", "help_nick", "irc"},
+	{"/notice", "help_notice", "irc"},
+	{"/invite", "help_invite", "irc"},
+	{"/names", "help_names", "irc"},
+	{"/mode", "help_mode", "irc"},
+	{"/kick", "help_kick", "irc"},
+	{"/ban", "help_ban", "irc"},
+	{"/kickban", "help_kickban", "irc"},
+	{"/who", "help_who", "irc"},
+	{"/whowas", "help_whowas", "irc"},
+	{"/motd", "help_motd", "irc"},
+	{"/ctcp", "help_ctcp", "irc"},
+	{"/quote", "help_quote", "irc"},
+	{"/ignore", "help_ignore", "irc"},
 
 	// Messages
 	{"Alt+↑/↓", "help_alt_updown", "messages"},

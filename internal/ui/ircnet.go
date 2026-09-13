@@ -188,6 +188,9 @@ func (u *UI) ircNetFor(w *Window) string {
 			return c.Net
 		}
 	}
+	if model.IRCName(u.netFilter) != "" { // the IRC tab (or /net irc:x) names the network
+		return u.netFilter
+	}
 	if nets := u.ircNets(); len(nets) == 1 {
 		return nets[0]
 	}

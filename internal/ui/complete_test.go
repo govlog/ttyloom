@@ -43,7 +43,7 @@ func TestComplContext(t *testing.T) {
 		{"/log o", complLog, "o", ""},
 	}
 	for _, c := range cases {
-		src, tail, key := complContext(c.line, len([]rune(c.line)))
+		src, tail, key := complContext(c.line, len([]rune(c.line)), commandNames)
 		if src != c.src || tail != c.tail || key != c.key {
 			t.Errorf("%q: got %v %q %q", c.line, src, tail, key)
 		}
@@ -67,7 +67,7 @@ func TestSetValueCandidates(t *testing.T) {
 
 // TestComplFold : Tab after /fold completes a section name.
 func TestComplFold(t *testing.T) {
-	src, tail, _ := complContext("/fold goph", len("/fold goph"))
+	src, tail, _ := complContext("/fold goph", len("/fold goph"), commandNames)
 	if src != complFold || tail != "goph" {
 		t.Fatalf("got %v %q", src, tail)
 	}
@@ -83,7 +83,7 @@ func TestCompletePath(t *testing.T) {
 		os.WriteFile(filepath.Join(dir, n), nil, 0o600)
 	}
 	os.Mkdir(filepath.Join(dir, "docs"), 0o700)
-	u := &UI{}
+	u := &UI{ws: NewWindows()} // candidates() reads the shown window (IRC context)
 	try := func(line, want string) {
 		t.Helper()
 		u.ed.Set(line)
@@ -105,7 +105,7 @@ func TestCompletePath(t *testing.T) {
 // title, not only its first, and "@" before a username is understood — the
 // two ways /query and /join are typed.
 func TestChatCandidates(t *testing.T) {
-	u := &UI{cfg: &config.Config{}, chatList: []*model.Chat{
+	u := &UI{ws: NewWindows(), cfg: &config.Config{}, chatList: []*model.Chat{
 		{Net: "telegram", ID: 1, Title: "Les copains du foot"},
 		{Net: "telegram", ID: 2, Title: "Go", Username: "golang", Kind: model.ChatChannel},
 	}}
@@ -127,7 +127,7 @@ func TestChatCandidates(t *testing.T) {
 // add, Complete gives them back so that the UI can list them — a second Tab
 // on "/q Jean Du" says Dupont and Durand instead of staying mute.
 func TestCompleteListsWhenStuck(t *testing.T) {
-	u := &UI{cfg: &config.Config{}, chatList: []*model.Chat{
+	u := &UI{ws: NewWindows(), cfg: &config.Config{}, chatList: []*model.Chat{
 		{Net: "telegram", ID: 1, Title: "Jean Dupont"}, {Net: "telegram", ID: 2, Title: "Jean Durand"}}}
 	u.ed.Set("/q Je")
 	if got := u.ed.Complete(u.candidates); u.ed.String() != "/q Jean Du" || got != nil {
@@ -230,13 +230,13 @@ func TestCommandPrefixesOnSubmit(t *testing.T) {
 		"/qu blop": "query", "/quer blop": "query", "/Q blop": "query", "/qui": "quit",
 		"/ne": "ne", "/se": "se", "/win 2": "window", "/42": "42", "/blah": "blah", "/": "",
 	} {
-		name, _, _, _ := ParseCommand(input)
+		name, _, _, _ := ParseCommand(input, commandNames)
 		if name != want {
 			t.Errorf("%s resolved to %q, want %q", input, name, want)
 		}
 	}
 	for _, name := range commandNames {
-		if got, _, _, _ := ParseCommand(name); got != name[1:] {
+		if got, _, _, _ := ParseCommand(name, commandNames); got != name[1:] {
 			t.Errorf("exact command %s resolved to %s", name, got)
 		}
 	}

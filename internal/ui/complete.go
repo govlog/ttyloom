@@ -38,7 +38,7 @@ const (
 // complContext gives the completion source and the line "tail" to complete
 // (everything after the command, for the candidates of several words). cursor
 // is a rune index; only the part of the line before the cursor is read.
-func complContext(line string, cursor int) (src complSource, tail string, setKey string) {
+func complContext(line string, cursor int, names []string) (src complSource, tail string, setKey string) {
 	r := []rune(line)
 	if cursor < 0 {
 		cursor = 0
@@ -58,7 +58,7 @@ func complContext(line string, cursor int) (src complSource, tail string, setKey
 	if !strings.HasPrefix(before, "/") {
 		return complChats, s[strings.LastIndexAny(s, " \n")+1:], ""
 	}
-	name := resolveCommand(strings.ToLower(before[1:]))
+	name := resolveCommand(strings.ToLower(before[1:]), names)
 	switch name {
 	case "query", "msg", "join", "whois", "rename", "unrename":
 		// After the target, the rest is free text (message, new name).
@@ -251,7 +251,7 @@ func chatKinds(line string) func(*model.Chat) bool {
 		return nil
 	}
 	name, _, _ := strings.Cut(line[1:], " ")
-	switch resolveCommand(strings.ToLower(name)) {
+	switch resolveCommand(strings.ToLower(name), commandNames) {
 	case "join":
 		return func(c *model.Chat) bool { return c.Kind != model.ChatUser }
 	case "query":
@@ -303,7 +303,7 @@ func (u *UI) completeTab() {
 			s.line, s.cursor = u.ed.String(), u.ed.Cursor()
 		} else {
 			// Presence may have changed between the two presses.
-			src, tail, _ := complContext(line, cursor)
+			src, tail, _ := complContext(line, cursor, u.commandNames())
 			if src == complChats {
 				start := cursor
 				for start > 0 && !sep(u.ed.buf[start-1]) {
@@ -316,10 +316,10 @@ func (u *UI) completeTab() {
 		return
 	}
 	u.completion = nil
-	src, tail, _ := complContext(line, cursor)
+	src, tail, _ := complContext(line, cursor, u.commandNames())
 	var list []string
 	if src == complCommands {
-		for _, name := range commandNames {
+		for _, name := range u.commandNames() {
 			if strings.HasPrefix(name, strings.ToLower(tail)) {
 				list = append(list, name)
 			}

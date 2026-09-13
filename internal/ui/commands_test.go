@@ -3,6 +3,7 @@ package ui
 import (
 	"context"
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -350,7 +351,7 @@ func TestDigitWindowCommand(t *testing.T) {
 	u.ws.New(true) // window 1
 	u.ws.New(true) // window 2
 	run := func(line string) {
-		name, args, text, ok := ParseCommand(line)
+		name, args, text, ok := ParseCommand(line, commandNames)
 		if !ok {
 			t.Fatalf("%q: not read as a command", line)
 		}
@@ -640,5 +641,103 @@ func TestSetTabsAndNet(t *testing.T) {
 	u.command("set", []string{"tabs", "off"}, "tabs off")
 	if u.cfg.Tabs || u.tabsOn() {
 		t.Fatal("/set tabs off: still on")
+	}
+}
+
+// fakeIRC : an IRC-like backend that records the commands routed to it.
+type fakeIRC struct {
+	fakeBackend
+	cmds []string // "name|room|reply|text"
+}
+
+func (f *fakeIRC) Command(_ context.Context, reply int64, room, name string, _ []string, text string) {
+	f.cmds = append(f.cmds, fmt.Sprintf("%s|%s|%d|%s", name, room, reply, text))
+}
+
+// ircUI : one Telegram network and two IRC networks (so no single IRC network
+// can be inferred), window 1 on the #go room of libera, window 2 on the
+// Telegram chat. The fake returned is the one of libera.
+func ircUI() (*UI, *fakeIRC) {
+	u := netUI(model.NetTelegram)
+	irc := &fakeIRC{}
+	u.nets[model.IRCNet("libera")] = irc
+	u.nets[model.IRCNet("oftc")] = &fakeIRC{}
+	u.netList = []string{model.NetTelegram, model.IRCNet("libera"), model.IRCNet("oftc")}
+	u.chats = map[model.ChatKey]*model.Chat{}
+	room := &model.Chat{Net: model.IRCNet("libera"), ID: 77, Kind: model.ChatGroup, Title: "#go"}
+	u.chats[room.Key()] = room
+	u.bindChat(u.ws.New(true), room)
+	u.chats[u.chatList[0].Key()] = u.chatList[0]
+	u.bindChat(u.ws.New(true), u.chatList[0])
+	return u, irc
+}
+
+// An IRC command typed in an IRC room goes to that network with the room and
+// the window's chat as reply target; the same name outside an IRC context
+// asks which network, and the completion only lists it inside one.
+func TestIRCCommandRouting(t *testing.T) {
+	u, irc := ircUI()
+	u.goTo(1)
+	name, args, text, ok := ParseCommand("/kick bob flood", u.commandNames())
+	if !ok || name != "kick" {
+		t.Fatalf("parse in IRC context: %q %v", name, ok)
+	}
+	u.command(name, args, text)
+	if len(irc.cmds) != 1 || irc.cmds[0] != "kick|#go|77|bob flood" {
+		t.Fatalf("routed: %v", irc.cmds)
+	}
+	if !slices.Contains(u.commandNames(), "/kick") {
+		t.Fatal("completion: /kick missing in IRC context")
+	}
+	u.goTo(2) // Telegram window: no IRC context (two networks, none IRC in front)
+	u.netFilter = ""
+	if slices.Contains(u.commandNames(), "/kick") {
+		t.Fatal("completion: /kick offered outside IRC context")
+	}
+	name, args, text, _ = ParseCommand("/kick bob", u.commandNames())
+	u.command(name, args, text)
+	if got := lastSys(u.view()); got != i18n.T("irc_which_net") {
+		t.Fatalf("outside IRC: %q", got)
+	}
+	// The IRC tab makes the context: from window 0 the command reaches the network with no room.
+	u.goTo(0)
+	u.netFilter = model.IRCNet("libera")
+	u.command("motd", nil, "")
+	if len(irc.cmds) != 2 || irc.cmds[1] != "motd||0|" {
+		t.Fatalf("from window 0 on the IRC tab: %v", irc.cmds)
+	}
+}
+
+// EvLines lands in the window of its chat (activity counted when it is not
+// shown), in window 0 for ChatID 0.
+func TestEvLines(t *testing.T) {
+	u, _ := ircUI()
+	u.goTo(2)
+	u.dispatch(model.Envelope{Net: model.IRCNet("libera"), Ev: model.EvLines{ChatID: 77, Lines: []string{"a", "b"}}})
+	if w := u.ws.List[1]; lastSys(w) != "b" || w.Act != 1 {
+		t.Fatalf("room window: last=%q act=%d", lastSys(w), w.Act)
+	}
+	u.dispatch(model.Envelope{Net: model.IRCNet("libera"), Ev: model.EvLines{Lines: []string{"motd"}}})
+	if lastSys(u.ws.List[0]) != "motd" {
+		t.Fatalf("window 0: %q", lastSys(u.ws.List[0]))
+	}
+}
+
+// /whois <nick> in an IRC context asks the network straight away, with no
+// chat to find first.
+func TestIRCWhoisNick(t *testing.T) {
+	u, irc := ircUI()
+	u.goTo(1)
+	u.command("whois", []string{"ghost"}, "ghost")
+	if !slices.Equal(irc.members, []string{"ghost"}) {
+		t.Fatalf("WhoisMember: %v", irc.members)
+	}
+	// A single IRC network makes every window an IRC context: /whois in the
+	// Telegram window still looks the contact up, and asks IRC nothing.
+	u.netList = []string{model.NetTelegram, model.IRCNet("libera")}
+	u.goTo(2)
+	u.command("whois", []string{"@telegram-chat"}, "@telegram-chat")
+	if !slices.Equal(irc.members, []string{"ghost"}) {
+		t.Fatalf("WhoisMember from the Telegram window: %v", irc.members)
 	}
 }

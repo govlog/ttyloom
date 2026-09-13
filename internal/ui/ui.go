@@ -1025,6 +1025,13 @@ func (u *UI) event(ev model.Event) {
 			n.Channels = slices.Clone(e.Channels)
 			u.saveCfg()
 		}
+	case model.EvIRCIgnores:
+		if n := u.cfg.IRCByName(model.IRCName(u.dispatchNet)); n != nil {
+			n.Ignores = slices.Clone(e.Ignores)
+			u.saveCfg()
+		}
+	case model.EvLines:
+		u.lines(e)
 	case model.EvAuthPrompt:
 		u.authStart(u.dispatchNet, e)
 	case model.EvQR:
@@ -1831,6 +1838,28 @@ func (u *UI) whois(e model.EvWhois) {
 	}
 }
 
+// lines : the answer of an IRC command. ChatID 0: the status window (the
+// aggregate too, as status0 does). Otherwise the window of that chat, else
+// the shown one; a window that is not shown counts the lines as activity.
+func (u *UI) lines(e model.EvLines) {
+	if e.ChatID == 0 {
+		for _, l := range e.Lines {
+			u.status0(l)
+		}
+		return
+	}
+	w := u.view()
+	if i := u.ws.ForChat(u.evKey(e.ChatID)); i >= 0 {
+		w = u.ws.List[i]
+	}
+	for _, l := range e.Lines {
+		w.AddSys(l)
+	}
+	if w != u.view() {
+		w.Act++
+	}
+}
+
 // findChat : exact name (username, title or local name) then unique prefix,
 // case insensitive.
 func (u *UI) findChat(q string) (chat *model.Chat, ambiguous bool) {
@@ -2230,7 +2259,7 @@ func (u *UI) submit() {
 		}
 		return
 	}
-	name, args, text, ok := ParseCommand(line)
+	name, args, text, ok := ParseCommand(line, u.commandNames())
 	if ok {
 		if strings.Contains(line, "\n") { // a command fits on one line
 			u.sys(i18n.T("multiline_command_refused"))
@@ -2386,10 +2415,10 @@ func (u *UI) sendMe(w *Window, arg string) {
 
 // candidates for Tab: dispatch by command context (complContext).
 func (u *UI) candidates(word string, atStart bool) []string {
-	src, tail, setKey := complContext(u.ed.String(), u.ed.Cursor())
+	src, tail, setKey := complContext(u.ed.String(), u.ed.Cursor(), u.commandNames())
 	switch src {
 	case complCommands:
-		return commandNames
+		return u.commandNames()
 	case complChats:
 		return u.chatCandidates(word, tail)
 	case complWindows:
