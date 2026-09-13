@@ -1,6 +1,6 @@
 # TTYloom manual
 
-[English](guide.md) · [Français](guide.fr.md) · [Overview](../README.md) · [Account setup](authentication.md)
+[Overview](../README.md) · [Account setup](authentication.md)
 
 Manual for **0.5-beta**, checked against the code on **September 13, 2026**.
 
@@ -167,7 +167,7 @@ log_dir = "~/.local/share/ttyloom/logs"
 | --- | --- |
 | `api_id`, `api_hash` | Telegram application credentials; required only for Telegram. |
 | `bot_token` | Empty for a user account; a BotFather token for Telegram bot mode. |
-| `lang` | `en`, `fr`, or a fallback chain such as `fr+en`. The first language also selects plural rules. Empty follows `LC_ALL`/`LANG`: French for `fr_*`, otherwise English. `/set lang` changes it live and rejects unknown languages. |
+| `lang` | `en`, `fr`, or a fallback chain such as `fr+en`. The first language also selects plural rules. Empty follows `LC_ALL`/`LANG`: French for `fr_*`, otherwise English. `/set lang` changes it live and rejects unknown languages. See the Languages table of the README. |
 | `theme` | Ghostty theme name. Empty reads the `theme` setting in `~/.config/ghostty/config`; `terminal` uses the terminal’s ANSI colors. |
 | `download_dir` | Downloaded media directory. Names include date, network, chat ID, title and message ID. |
 | `auto_media_max_kb` | Automatic download threshold in KiB, from 0 to 524288. **0 disables all automatic media downloads**, including unknown sizes. `/open` and `/view` remain explicit requests. |

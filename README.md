@@ -7,7 +7,7 @@
 <a href="https://go.dev/dl/"><img src="https://img.shields.io/badge/Go-1.26.7+-00ADD8?logo=go&amp;logoColor=white" alt="Go 1.26.7 or newer"></a>
 <img src="https://img.shields.io/badge/platform-Linux-FCC624?logo=linux&amp;logoColor=black" alt="Linux">
 <a href="LICENSE.md"><img src="https://img.shields.io/badge/license-MIT-89b4fa" alt="MIT license"></a><br>
-<a href="README.fr.md">Français</a> · <a href="docs/guide.md">Full manual</a> · <a href="docs/authentication.md">Account setup</a>
+<a href="docs/guide.md">Full manual</a> · <a href="docs/authentication.md">Account setup</a>
 </p>
 
 ![TTYloom: Telegram messages, Discord channels, replies, reactions, an inline GIF and one tab per network](docs/screenshots/main.svg)
@@ -27,7 +27,7 @@
 - **React without a detour.** A right-click menu with quick reactions, double-click 👍, replies, edits (`Ctrl+↑` walks your previous messages), custom Discord emojis and message details. `F3` shows members and presence; click a member to open a conversation.
 - **Give your draft some room.** Expand the multiline editor, paste a code block, complete an `@mention`, pick an emoji or paste an image with `Ctrl+V`. `Ctrl+B`, `Ctrl+I` and `Ctrl+U` style the draft in bold, italic and underline, sent as Discord Markdown or Telegram entities. Optional Hunspell underlines misspellings; `Ctrl+R` offers corrections.
 - **Keep the useful little details.** Drag to copy several messages, preview themes live, show seconds in timestamps, spot the unread divider, and keep a local history cache. Typing indicators, focus-aware read state and configurable notifications complete the flow.
-- **Switch languages while chatting.** French and English interface, matching READMEs and full manuals. `/set lang fr` or `/set lang en` applies immediately.
+- **Switch languages while chatting.** French and English interface: `/set lang fr` or `/set lang en` applies immediately.
 
 Capabilities depend on the network. Unsupported actions are hidden.
 
@@ -59,9 +59,7 @@ These frames use **the actual UI renderer with fictional data** and the Catppucc
 | --- | --- |
 | [Full user manual](docs/guide.md) | Installation, every setting, commands, mouse controls, media, cache and troubleshooting |
 | [Account setup](docs/authentication.md) | Telegram API credentials, QR/phone/bot login, Discord tokens, IRC passwords and session handling |
-| [Contributing](CONTRIBUTING.md) | Testing, feedback, translations, development and checks, in English and French |
-
-Prefer French? [Switch the entire overview](README.fr.md) or open the [French manual](docs/guide.fr.md).
+| [Contributing](CONTRIBUTING.md) | Testing, feedback, translations, development and checks |
 
 ## Install
 
@@ -194,6 +192,15 @@ Review `download_dir` and `log_dir` in that configuration. Caches written with e
 | Away message | `/away not here`, `/away` back |
 | Help | `/help` or `/help topic` |
 
+## Languages
+
+| Language | Code | How to select |
+| --- | --- | --- |
+| English | `en` | Default unless `LANG`/`LC_ALL` names French |
+| Français | `fr` | `lang = "fr"` in `config.toml`, or `/set lang fr` live; `fr+en` falls back to English for a missing text |
+
+The documentation is written in English; the interface follows `lang`.
+
 ## Make it yours
 
 Use `/set key value` to change supported settings live. The generated configuration describes every option; `/theme` opens the theme picker.
@@ -246,7 +253,7 @@ flowchart LR
 
 ## Development
 
-**Testers are welcome!** Try TTYloom with your terminal and chat networks, and share bugs or usability feedback through [GitHub Issues](https://github.com/govlog/ttyloom/issues). The [contribution guide](CONTRIBUTING.md) covers useful reports, translations, code changes and checks in English and French.
+**Testers are welcome!** Try TTYloom with your terminal and chat networks, and share bugs or usability feedback through [GitHub Issues](https://github.com/govlog/ttyloom/issues). The [contribution guide](CONTRIBUTING.md) covers useful reports, translations, code changes and checks.
 
 Please follow the [code of conduct](CODE_OF_CONDUCT.md). Report vulnerabilities privately using the [security policy](SECURITY.md).
 

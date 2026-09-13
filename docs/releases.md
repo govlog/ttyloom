@@ -1,6 +1,6 @@
 # Publishing a release
 
-[Français](releases.fr.md) · [Contributing](../CONTRIBUTING.md)
+[Contributing](../CONTRIBUTING.md)
 
 TTYloom publishes portable Linux binaries for x86-64 (`amd64`) and ARM64
 (`arm64`). They use `CGO_ENABLED=0` and `nospell`; Hunspell is available in source
