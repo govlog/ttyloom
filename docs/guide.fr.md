@@ -2,7 +2,7 @@
 
 [Français](guide.fr.md) · [English](guide.md) · [Présentation](../README.fr.md) · [Connexion aux comptes](authentication.fr.md)
 
-Manuel de la version **1.2.0**, vérifié par rapport au code le **10 septembre 2026**.
+Manuel de la version **0.5-beta**, vérifié par rapport au code le **13 septembre 2026**.
 
 <details>
 <summary>Sommaire</summary>
@@ -60,12 +60,12 @@ sudo apt install build-essential libhunspell-dev hunspell-fr hunspell-en-us
 
 ### Binaire prêt à lancer
 
-Téléchargez l’archive Linux adaptée à votre processeur (`amd64` pour x86-64, `arm64` pour ARM64) et `SHA256SUMS` depuis la [version 1.2.0](https://github.com/govlog/ttyloom/releases/tag/v1.2.0).
+Téléchargez l’archive Linux adaptée à votre processeur (`amd64` pour x86-64, `arm64` pour ARM64) et `SHA256SUMS` depuis la [version 0.5-beta](https://github.com/govlog/ttyloom/releases/tag/v0.5-beta).
 
 ```bash
 sha256sum --check --ignore-missing SHA256SUMS
-tar -xzf ttyloom_1.2.0_linux_amd64.tar.gz
-cd ttyloom_1.2.0_linux_amd64
+tar -xzf ttyloom_0.5-beta_linux_amd64.tar.gz
+cd ttyloom_0.5-beta_linux_amd64
 ./ttyloom --version
 ./ttyloom
 ```
@@ -728,7 +728,7 @@ Dans une conversation, taper `@` ouvre aussi les suggestions de membres : flèch
 
 ## Version et limites
 
-Ce manuel décrit la version **1.2.0**. Consultez le [journal des changements](../CHANGELOG.md) et les [travaux prévus](../TODO.md). Les vidéos sont sans son, les binaires portables n’incluent pas Hunspell, Discord ne prend pas en charge fils, forums, vocal ou tokens de bot, et WhatsApp n'est pas encore implémenté. Un seul compte par réseau est utilisé dans un même répertoire de configuration ; plusieurs instances doivent utiliser des `TTYLOOM_DIR` distincts.
+Ce manuel décrit la version **0.5-beta**. Consultez le [journal des changements](../CHANGELOG.md) et les [travaux prévus](../TODO.md). Les vidéos sont sans son, les binaires portables n’incluent pas Hunspell, Discord ne prend pas en charge fils, forums, vocal ou tokens de bot, et WhatsApp n'est pas encore implémenté. Un seul compte par réseau est utilisé dans un même répertoire de configuration ; plusieurs instances doivent utiliser des `TTYLOOM_DIR` distincts.
 
 ## Déconnexion
 

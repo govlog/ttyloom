@@ -12,18 +12,20 @@ commit et `SHA256SUMS`. Les archives binaires incluent les READMEs, la documenta
 les notices et les licences. `BUILD.txt` indique version, commit, compilateur Go
 et options ; `ttyloom --version` affiche la version et le commit.
 
+Tant que TTYloom est en beta, les versions sont numérotées `v0.N-beta` (`v0.5-beta`, puis `v0.6-beta`) et chaque release GitHub est marquée comme préversion.
+
 ## Préparer et publier
 
 1. Mettre à jour le journal des changements et la version dans les deux READMEs
    et manuels. Vérifier les notices si `go.mod`, du code copié, des illustrations
    ou les plateformes de compilation changent.
 2. Exécuter les vérifications de `.github/workflows/ci.yml`, puis committer.
-3. Créer un tag et le pousser, en remplaçant `v1.1.0` par la nouvelle version :
+3. Créer un tag et le pousser, en remplaçant `v0.5-beta` par la nouvelle version :
 
    ```bash
-   git tag -a v1.1.0 -m 'TTYloom v1.1.0'
+   git tag -a v0.5-beta -m 'TTYloom v0.5-beta'
    git push origin main
-   git push origin v1.1.0
+   git push origin v0.5-beta
    ```
 
 4. Attendre CI et le workflow Release. Celui-ci teste le build portable, produit
@@ -32,7 +34,7 @@ et options ; `ttyloom --version` affiche la version et le commit.
 5. Vérifier les fichiers et les notes, puis publier depuis GitHub ou avec :
 
    ```bash
-   gh release edit v1.1.0 --draft=false --latest
+   gh release edit v0.5-beta --draft=false --prerelease --latest
    ```
 
 Ces tests de lancement ne remplacent pas les essais avec des comptes réels ou
@@ -44,8 +46,8 @@ un tag publié : créer une nouvelle version pour les corrections.
 Sur Linux, avec la version Go de `go.mod`, Git, Bash, GNU tar et gzip :
 
 ```bash
-bash scripts/release.sh v1.1.0
-cd dist/v1.1.0
+bash scripts/release.sh v0.5-beta
+cd dist/v0.5-beta
 sha256sum --check SHA256SUMS
 ```
 

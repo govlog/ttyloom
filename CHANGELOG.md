@@ -1,7 +1,8 @@
 # Changelog
 
-## Non publié
+## v0.5-beta — 2026-09-13
 
+- **Numérotation** : le projet reste en beta ; les versions 1.0.0, 1.1.0, 1.1.1 et 1.2.0 deviennent 0.1-beta à 0.4-beta ci-dessous, les releases GitHub v1.x sont retirées et les prochaines versions suivent la forme `v0.N-beta`.
 - **Onglets par réseau** : *F9* active une barre `[all] [telegram(6)] [discord(5)] [irc:libera]` au-dessus de la barre d'état et passe d'un onglet à l'autre (un clic aussi), dans l'ordre des noms de réseau ; un onglet réseau ne montre que ses fenêtres (*Ctrl+X*, *Alt+←/→*, panneau, agrégé, *[Act: …]*), la fenêtre 0 comprise, *Alt+N*, */win N* et */N* atteignent tout et l'onglet suit, et y revenir ramène à la dernière fenêtre vue sur ce réseau ; `tabs = false` dans la configuration, `/set tabs off` retire la barre. Même filtre que `/net` et *Maj+F2*, sans effet avec un seul réseau.
 - **Fenêtres chaudes** : un message privé ou une mention en attente colore le compteur `(N)` de la fenêtre dans la couleur des mentions, en gras, avec une pulsation d'une seconde sur deux, dans la barre d'état, sur l'onglet du réseau et dans le panneau ; la visite de la fenêtre l'éteint.
 - **Commandes IRC** : `/part`, `/cycle`, `/topic`, `/nick`, `/notice`, `/invite`, `/names`, `/mode` (`/mode #salon +ntk clé`), `/kick`, `/ban` et `/kickban` (masque `*!*@hôte` par USERHOST), `/who`, `/whowas`, `/whois <pseudo>` au format encadré, `/motd` (et le MOTD en fenêtre 0 à la connexion), `/ctcp`, `/quote`, `/ignore` (masques persistants dans `ignores` de la table `[[irc]]`) ; `/join #salon clé`. Disponibles dans un contexte IRC seulement, fenêtre du réseau, onglet IRC ou réseau IRC unique ; les réponses arrivent dans la fenêtre d'origine, les erreurs du serveur en fenêtre 0. Complétion Tab des pseudos et salons en argument, des noms CTCP et des masques ; un pseudo en début de message devient `pseudo: `.
@@ -19,7 +20,7 @@
 - **Complétion** : les listes de choix d'un double *Tab* sont retirées de la fenêtre par *Échap*.
 - **Affichage** : le curseur est masqué pendant l'écriture d'une image kitty (plus de clignotement erratique sur la ligne de saisie) ; la trace d'une panique rattrapée dans un réseau va dans `/debug`.
 
-## v1.2.0 — 2026-09-10
+## v0.4-beta — 2026-09-10
 
 - **Documentation** : READMEs, manuels et aide intégrée (`/help`) vérifiés contre le code ; outils `wl-copy`/`xclip` de la copie d'image, fournisseur de GIF Discord (KLIPY, plus Tenor), *Alt+Retour arrière*, portée des styles de saisie.
 - **Visionneuse** : *c* copie l'image affichée dans le presse-papier système (`wl-copy` sous Wayland, `xclip` sous X11), collable dans une autre application ; une vidéo est refusée.
@@ -38,13 +39,13 @@
 - **Fenêtre 0** : avec `timestamps`, les lignes système des fenêtres d'état (fenêtre 0, vue agrégée, journal) portent l'heure de leur arrivée.
 - **Panneau** : en mode fenêtres (*F2*), le compteur d'activité *(N)* est en rouge, comme le badge de non-lus du mode conversations.
 
-## v1.1.1 — 2026-09-05
+## v0.3-beta — 2026-09-05
 
 - **Licence** : licence MIT pour le code original, la documentation et les illustrations ; les composants tiers conservent leurs licences. Les archives de cette version incluent ces textes.
 - **Communauté** : onglets GitHub de contribution, code de conduite et sécurité, avec textes anglais et français et signalement privé des vulnérabilités.
 - **Documentation** : READMEs en miroir, fonctions mises en avant, manuel anglais complet et manuel français mis à jour ; commandes de la visionneuse, chemins des caches, installation et limites propres aux réseaux vérifiés dans le code.
 
-## v1.1.0 — 2026-09-05
+## v0.2-beta — 2026-09-05
 
 - **Distribution** : binaires Linux amd64 et arm64 sans Hunspell, archives avec licences, sources correspondantes et sommes SHA-256. `ttyloom --version` affiche la version et le commit source. Un tag crée un brouillon de version dans GitHub Actions.
 
@@ -94,7 +95,7 @@
 - **Navigation par mots** : Ctrl+←/→ saute de mot en mot (partout, protocole kitty ou séquences CSI classiques).
 - **Collage en zone étendue** : un collage multiligne propose l'insertion telle quelle (`e`) ou en bloc de code (`c`, clôturé par ` ``` `) au lieu d'envoyer ; à l'envoi, les blocs ` ``` ` du brouillon partent en entité `pre` (langue optionnelle sur la clôture ouvrante), à l'édition aussi.
 
-## v1.0.0 — 2026-08-31
+## v0.1-beta — 2026-08-31
 
 Première version publique. Client Telegram en mode texte, dans l'esprit d'ircii/BitchX, pour Ghostty et kitty.
 

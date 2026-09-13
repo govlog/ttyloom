@@ -2,7 +2,7 @@
 
 [English](guide.md) · [Français](guide.fr.md) · [Overview](../README.md) · [Account setup](authentication.md)
 
-Manual for **1.2.0**, checked against the code on **September 10, 2026**.
+Manual for **0.5-beta**, checked against the code on **September 13, 2026**.
 
 <details>
 <summary>Contents</summary>
@@ -69,12 +69,12 @@ Install only the optional components you intend to use.
 ### Ready-to-run binary
 
 Download the Linux archive for your CPU (`amd64` for x86-64, `arm64` for ARM64)
-and `SHA256SUMS` from [v1.2.0](https://github.com/govlog/ttyloom/releases/tag/v1.2.0).
+and `SHA256SUMS` from [v0.5-beta](https://github.com/govlog/ttyloom/releases/tag/v0.5-beta).
 
 ```bash
 sha256sum --check --ignore-missing SHA256SUMS
-tar -xzf ttyloom_1.2.0_linux_amd64.tar.gz
-cd ttyloom_1.2.0_linux_amd64
+tar -xzf ttyloom_0.5-beta_linux_amd64.tar.gz
+cd ttyloom_0.5-beta_linux_amd64
 ./ttyloom --version
 ./ttyloom
 ```
@@ -892,7 +892,7 @@ work without leaving the conversation.
 
 ## Version and limits
 
-This manual describes **1.2.0**. See the [changelog](../CHANGELOG.md) and
+This manual describes **0.5-beta**. See the [changelog](../CHANGELOG.md) and
 [planned work](../TODO.md). Videos play without sound. Portable binaries omit
 Hunspell. Discord threads, forums, voice and bot tokens are not supported;
 WhatsApp is not implemented. One configuration directory holds one

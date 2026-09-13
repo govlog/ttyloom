@@ -65,14 +65,14 @@ Vous préférez l’anglais ? [Changez la langue de toute la présentation](READ
 
 ### Télécharger un binaire
 
-[Téléchargez TTYloom v1.2.0](https://github.com/govlog/ttyloom/releases/tag/v1.2.0) pour **Linux x86-64 (`amd64`)** ou **ARM64 (`arm64`)**. Ces binaires ne nécessitent ni Go ni bibliothèque C. Ils n’incluent pas la correction Hunspell ; la compilation depuis les sources ci-dessous la permet.
+[Téléchargez TTYloom v0.5-beta](https://github.com/govlog/ttyloom/releases/tag/v0.5-beta) pour **Linux x86-64 (`amd64`)** ou **ARM64 (`arm64`)**. Ces binaires ne nécessitent ni Go ni bibliothèque C. Ils n’incluent pas la correction Hunspell ; la compilation depuis les sources ci-dessous la permet.
 
 Téléchargez l’archive `.tar.gz` de votre architecture et `SHA256SUMS` depuis cette version, dans le même dossier, puis :
 
 ```bash
 sha256sum --check --ignore-missing SHA256SUMS
-tar -xzf ttyloom_1.2.0_linux_amd64.tar.gz
-cd ttyloom_1.2.0_linux_amd64
+tar -xzf ttyloom_0.5-beta_linux_amd64.tar.gz
+cd ttyloom_0.5-beta_linux_amd64
 ./ttyloom --version
 ./ttyloom
 ```

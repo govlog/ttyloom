@@ -3,9 +3,9 @@ set -euo pipefail
 umask 022
 
 cd "$(git rev-parse --show-toplevel)"
-version=${1:?Usage: scripts/release.sh vMAJOR.MINOR.PATCH}
-if [[ ! $version =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-    echo "Expected a release version such as v1.1.0" >&2
+version=${1:?Usage: scripts/release.sh v0.N-beta}
+if [[ ! $version =~ ^v[0-9]+\.[0-9]+(\.[0-9]+)?(-[0-9A-Za-z.]+)?$ ]]; then
+    echo "Expected a release version such as v0.5-beta" >&2
     exit 1
 fi
 if [[ -n $(git status --porcelain --untracked-files=normal) ]]; then
