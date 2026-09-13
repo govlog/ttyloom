@@ -109,7 +109,7 @@ func (u *UI) ircCommand(w *Window, net, name string, args []string, text string)
 	}
 	room := ""
 	for _, c := range []*model.Chat{w.Target, w.Chat} {
-		if c != nil && c.Net == net { // a private chat has its peer
+		if c != nil && c.Net == net && isIRCRoom(c.Title) { // a private window has no default room
 			room = c.Title
 			break
 		}

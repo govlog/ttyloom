@@ -84,6 +84,10 @@ func TestModeKickPartCycle(t *testing.T) {
 	if l := waitLines(t, events, ""); l.ChatID != 0 {
 		t.Fatalf("the topic set kept the answer window: %+v", l)
 	}
+	// A private window gives no room: the command answers its usage line.
+	cmd(c, 0, "carol", "part", "")
+	waitLines(t, events, "usage")
+	s.never("PART", 200*time.Millisecond)
 	cmd(c, 7, "#go", "kick", "bob too loud")
 	if l := s.expect("KICK"); l != "KICK #go bob :too loud" {
 		t.Fatalf("kick: %q", l)

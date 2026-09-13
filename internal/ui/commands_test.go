@@ -769,6 +769,19 @@ func TestIRCArgCompletion(t *testing.T) {
 	}
 }
 
+// A private IRC window has no room: a bare /part must not aim at the peer.
+func TestIRCCommandPrivateNoRoom(t *testing.T) {
+	u, irc := ircUI()
+	carol := &model.Chat{Net: model.IRCNet("libera"), ID: 88, Kind: model.ChatUser, Title: "carol"}
+	u.chats[carol.Key()] = carol
+	u.bindChat(u.ws.New(true), carol)
+	u.goTo(3)
+	u.command("part", nil, "")
+	if len(irc.cmds) != 1 || irc.cmds[0] != "part||88|" {
+		t.Fatalf("private window: %v", irc.cmds)
+	}
+}
+
 // EvLines lands in the window of its chat (activity counted when it is not
 // shown), in window 0 for ChatID 0.
 func TestEvLines(t *testing.T) {

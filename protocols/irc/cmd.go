@@ -54,7 +54,7 @@ func roomArg(args []string, room string) (string, []string, bool) {
 	if len(args) > 0 && isChannel(args[0]) {
 		return args[0], args[1:], true
 	}
-	return room, args, room != ""
+	return room, args, isChannel(room) // a private window gives no room to fall back on
 }
 
 // rest : what follows the first n words of text. The blanks are walked one
