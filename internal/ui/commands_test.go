@@ -654,6 +654,8 @@ func (f *fakeIRC) Command(_ context.Context, reply int64, room, name string, _ [
 	f.cmds = append(f.cmds, fmt.Sprintf("%s|%s|%d|%s", name, room, reply, text))
 }
 
+func (f *fakeIRC) Members(*model.Chat) []string { return []string{"alice", "bob"} }
+
 // ircUI : one Telegram network and two IRC networks (so no single IRC network
 // can be inferred), window 1 on the #go room of libera, window 2 on the
 // Telegram chat. The fake returned is the one of libera.
@@ -720,6 +722,30 @@ func TestIRCCommandRouting(t *testing.T) {
 	u.command("kick", []string{"bob"}, "bob")
 	if got := lastSys(u.view()); got != i18n.T("unknown_command", "kick") {
 		t.Fatalf("no IRC network: %q", got)
+	}
+}
+
+// Tab in an IRC room completes the arguments of the IRC commands: the members
+// of the room, the rooms joined, the CTCP names; a nick opening a message
+// addresses it.
+func TestIRCArgCompletion(t *testing.T) {
+	u, _ := ircUI()
+	u.goTo(1)
+	u.listChat(u.view().Chat) // the room is listed, as after a join
+	for _, c := range []struct {
+		line, word string
+		atStart    bool
+		want       string
+	}{
+		{"/kick b", "b", false, "bob"},
+		{"/ctcp alice V", "V", false, "VERSION"},
+		{"/part #", "#", false, "#go"},
+		{"al", "al", true, "alice: "},
+	} {
+		u.ed.Set(c.line)
+		if got := u.candidates(c.word, c.atStart); !slices.Contains(got, c.want) {
+			t.Fatalf("%q: %v, want %q", c.line, got, c.want)
+		}
 	}
 }
 

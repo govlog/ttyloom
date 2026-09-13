@@ -47,6 +47,55 @@ func winOn(w *Window, net string) bool {
 	return true
 }
 
+// memberLister : a backend that knows who is in a chat (protocols/irc), for
+// the Tab completion of the nick arguments.
+type memberLister interface {
+	Members(chat *model.Chat) []string
+}
+
+// ctcpNames : the CTCP requests /ctcp completes.
+var ctcpNames = []string{"VERSION", "PING", "TIME", "USERINFO", "CLIENTINFO", "SOURCE", "FINGER"}
+
+// ircNicks : the members of the IRC room of the shown window — its send
+// target when it is a room, else its chat. None outside a room.
+func (u *UI) ircNicks() []string {
+	w := u.view()
+	net := u.ircNetFor(w)
+	l, ok := u.nets[net].(memberLister)
+	if !ok {
+		return nil
+	}
+	for _, c := range []*model.Chat{w.Target, w.Chat} {
+		if c != nil && c.Net == net && c.Kind != model.ChatUser {
+			return l.Members(c)
+		}
+	}
+	return nil
+}
+
+// ircChans : the rooms joined on the IRC network of the shown window.
+func (u *UI) ircChans() []string {
+	net := u.ircNetFor(u.view())
+	if net == "" {
+		return nil
+	}
+	var out []string
+	for _, c := range u.chatList {
+		if c.Net == net && c.Kind != model.ChatUser {
+			out = append(out, c.Title)
+		}
+	}
+	return out
+}
+
+// ircIgnores : the masks /ignore already holds on that network.
+func (u *UI) ircIgnores() []string {
+	if n := u.cfg.IRCByName(model.IRCName(u.ircNetFor(u.view()))); n != nil {
+		return n.Ignores
+	}
+	return nil
+}
+
 // ircCommand routes one IRC command typed in w to the network net.
 func (u *UI) ircCommand(w *Window, net, name string, args []string, text string) {
 	b, ok := u.nets[net].(ircCommander)

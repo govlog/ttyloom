@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -349,6 +350,9 @@ func TestWhoisNamesQuit(t *testing.T) {
 	p := waitFor[model.EvParticipants](t, events)
 	if len(p.Lines) != 3 || p.Lines[0].Text != "@alice" || p.Lines[0].Query != "alice" || p.Lines[1].Query != "bob" {
 		t.Fatalf("participants: %+v", p)
+	}
+	if m := c.Members(chatOf("#go")); !slices.Equal(m, []string{"alice", "bob", "me"}) {
+		t.Fatalf("members: %v", m)
 	}
 	s.send(":bob!b@h QUIT :bye")
 	m := waitMsg(t, events, func(m model.EvNewMessage) bool { return m.Msg.Service != "" })

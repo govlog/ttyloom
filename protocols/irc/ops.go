@@ -180,6 +180,19 @@ func (c *Client) Resolve(_ context.Context, q string, _ bool, request uint64) {
 	}()
 }
 
+// Members : who the client knows in chat, as the UI completes them — the
+// member list of the room, kept up to date by NAMES and JOIN/PART, or the
+// peer alone for a private chat.
+func (c *Client) Members(chat *model.Chat) []string {
+	name := nameOf(chat)
+	if !isChannel(name) {
+		return []string{name}
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return slices.Clone(c.members[c.casefold(name)])
+}
+
 // Participants : NAMES of the room (the answer lands on 366); a private chat
 // has the two of us.
 func (c *Client) Participants(_ context.Context, chat *model.Chat) {

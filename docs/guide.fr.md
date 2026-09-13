@@ -409,6 +409,8 @@ Les commandes IRC habituelles demandent un contexte IRC : une fenêtre sur une c
 | */ignore [pseudo \| masque]* | liste, ajoute ou retire un masque ignoré, gardé dans *ignores* |
 | */away [message]* | me marque absent sur les réseaux qui le savent faire ; */away* seul fait revenir |
 
+*Tab* complète les arguments de ces commandes : le pseudo ou le salon là où l'un est attendu, les noms CTCP après */ctcp*, les masques après */ignore* ; un pseudo tapé en début de message devient *pseudo:* suivi d'une espace.
+
 */ignore* seul liste les masques. Un pseudo devient *pseudo!\*@\**, un *user@hôte* devient *\*!user@hôte*, et *\** et *?* sont des jokers ; retaper un masque existant le retire. La liste vit dans la clé *ignores* de la table **[[irc]]**, et une entrée écrite à la main est normalisée de la même façon. Messages, notices, actions et CTCP d'une source correspondante sont jetés par le réseau.
 
 Depuis la fenêtre 0, avec un seul réseau IRC, */whois nom* cherche d'abord le nom parmi les contacts et n'interroge IRC que si rien ne correspond.

@@ -32,8 +32,21 @@ const (
 	complNetCmd                          // /telegram /discord <status|login|logout|disconnect>
 	complIrc                             // /irc <add|connect|disconnect> [name]
 	complLog                             // /log <on|off>
+	complIrcNick                         // /kick /invite /ctcp /whowas : a member of the room
+	complIrcChan                         // /part /mode /names … : a room joined on the network
+	complIrcTarget                       // /who /notice, first argument of /kick : a nick, or a room when it starts with "#"
+	complCtcp                            // /ctcp <nick> <request>
+	complIrcIgnore                       // /ignore : the members of the room and the masks already set
 	complNone                            // /open /history …
 )
+
+// ircArg : the argument of an IRC command being typed in rest (everything
+// after the command) — its index, a trailing space starting the next one,
+// and its text.
+func ircArg(rest string) (int, string) {
+	args := strings.Split(rest, " ")
+	return len(args) - 1, args[len(args)-1]
+}
 
 // complContext gives the completion source and the line "tail" to complete
 // (everything after the command, for the candidates of several words). cursor
@@ -94,6 +107,47 @@ func complContext(line string, cursor int, names []string) (src complSource, tai
 		return complIrc, rest, ""
 	case "log":
 		return complLog, rest, ""
+	case "kick", "kickban", "ban":
+		// <target> <nick> <reason…>: a room takes a nick after it, the rest is free text.
+		switch i, arg := ircArg(rest); {
+		case i == 0:
+			return complIrcTarget, arg, ""
+		case i == 1 && strings.HasPrefix(rest, "#"):
+			return complIrcNick, arg, ""
+		}
+		return complNone, "", ""
+	case "who", "notice":
+		if i, arg := ircArg(rest); i == 0 {
+			return complIrcTarget, arg, ""
+		}
+		return complNone, "", ""
+	case "whowas":
+		if i, arg := ircArg(rest); i == 0 {
+			return complIrcNick, arg, ""
+		}
+		return complNone, "", ""
+	case "invite", "ctcp":
+		i, arg := ircArg(rest)
+		if i == 0 {
+			return complIrcNick, arg, ""
+		}
+		if i == 1 {
+			if name == "ctcp" {
+				return complCtcp, arg, ""
+			}
+			return complIrcChan, arg, ""
+		}
+		return complNone, "", ""
+	case "ignore":
+		if i, arg := ircArg(rest); i == 0 {
+			return complIrcIgnore, arg, ""
+		}
+		return complNone, "", ""
+	case "part", "cycle", "names", "topic", "mode":
+		if i, arg := ircArg(rest); i == 0 {
+			return complIrcChan, arg, ""
+		}
+		return complNone, "", ""
 	case "send":
 		// The whole tail: a path may hold spaces (splitSendArgs allows it);
 		// once it names a file, the rest is the caption.
@@ -302,14 +356,14 @@ func (u *UI) completeTab() {
 			u.ed.Replace(0, cursor, s.matches[s.index])
 			s.line, s.cursor = u.ed.String(), u.ed.Cursor()
 		} else {
-			// Presence may have changed between the two presses.
-			src, tail, _ := complContext(line, cursor, u.commandNames())
+			// Presence and the member list may have changed between the two presses.
+			src, _, _ := complContext(line, cursor, u.commandNames())
 			if src == complChats {
 				start := cursor
 				for start > 0 && !sep(u.ed.buf[start-1]) {
 					start--
 				}
-				s.matches = u.chatCandidates(string(u.ed.buf[start:cursor]), tail)
+				s.matches = u.candidates(string(u.ed.buf[start:cursor]), start == 0)
 			}
 			u.showCompletionChoices(s.matches, true)
 		}

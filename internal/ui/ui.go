@@ -2459,7 +2459,19 @@ func (u *UI) candidates(word string, atStart bool) []string {
 	case complCommands:
 		return u.commandNames()
 	case complChats:
-		return u.chatCandidates(word, tail)
+		out := u.chatCandidates(word, tail)
+		nicks := slices.Clone(u.ircNicks())
+		if atStart { // irssi style: a nick opening a message addresses it
+			for i, n := range nicks {
+				nicks[i] = n + ": "
+			}
+		}
+		for _, n := range multiWord(word, tail, nicks) {
+			if !slices.ContainsFunc(out, func(s string) bool { return strings.EqualFold(s, n) }) {
+				out = append(out, n)
+			}
+		}
+		return out
 	case complWindows:
 		out := []string{"new", "close", "list"}
 		for i, w := range u.ws.List {
@@ -2508,6 +2520,19 @@ func (u *UI) candidates(word string, atStart bool) []string {
 		return out
 	case complFold:
 		return multiWord(word, tail, sectionKeys(u.foldSections()))
+	case complIrcNick:
+		return multiWord(word, tail, u.ircNicks())
+	case complIrcChan:
+		return multiWord(word, tail, u.ircChans())
+	case complIrcTarget:
+		if strings.HasPrefix(tail, "#") {
+			return multiWord(word, tail, u.ircChans())
+		}
+		return multiWord(word, tail, u.ircNicks())
+	case complCtcp:
+		return multiWord(word, tail, ctcpNames)
+	case complIrcIgnore:
+		return multiWord(word, tail, append(u.ircNicks(), u.ircIgnores()...))
 	default:
 		return nil
 	}

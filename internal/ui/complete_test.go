@@ -48,6 +48,28 @@ func TestComplContext(t *testing.T) {
 			t.Errorf("%q: got %v %q %q", c.line, src, tail, key)
 		}
 	}
+	// From an IRC context, the arguments of the IRC commands complete too.
+	irc := []struct {
+		line string
+		src  complSource
+		tail string
+	}{
+		{"/kick bo", complIrcTarget, "bo"},
+		{"/kick #go b", complIrcNick, "b"},
+		{"/kick #go bob re", complNone, ""}, // the reason is free text
+		{"/invite bob #", complIrcChan, "#"},
+		{"/ctcp bob VE", complCtcp, "VE"},
+		{"/part #g", complIrcChan, "#g"},
+		{"/ignore sp", complIrcIgnore, "sp"},
+		{"/quote PRIV", complNone, ""},
+	}
+	names := append(slices.Clone(commandNames), ircCommandNames...)
+	for _, c := range irc {
+		src, tail, _ := complContext(c.line, len([]rune(c.line)), names)
+		if src != c.src || tail != c.tail {
+			t.Errorf("%q: got %v %q", c.line, src, tail)
+		}
+	}
 }
 
 func TestSetValueCandidates(t *testing.T) {

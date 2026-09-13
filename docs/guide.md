@@ -443,6 +443,10 @@ goes to the generic commands first: `/i` is `/irc` and `/wh` is `/whois`, while
 | `/ignore [nick \| mask]` | List, add or remove an ignored mask, saved in `ignores`. |
 | `/away [message]` | Mark me away on the networks that can; `/away` alone comes back. |
 
+Tab completes the arguments of those commands: the nick or the room where one
+is expected, the CTCP names after `/ctcp`, the masks after `/ignore`; a nick
+typed at the start of a message becomes `nick: `.
+
 `/ignore` alone lists the masks. A nick becomes `nick!*@*`, a `user@host`
 becomes `*!user@host`, and `*` and `?` are wildcards; typing an existing mask
 removes it. The list lives in the `ignores` key of the `[[irc]]` table, and a
