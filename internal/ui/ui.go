@@ -417,10 +417,10 @@ func (u *UI) awayOf(c *model.Chat) string {
 	if c != nil {
 		return u.away[c.Net]
 	}
-	for _, n := range slices.Sorted(maps.Keys(u.away)) {
-		return u.away[n]
+	if len(u.away) == 0 {
+		return ""
 	}
-	return ""
+	return u.away[slices.Min(slices.Collect(maps.Keys(u.away)))]
 }
 
 // botOnly : every network that answered is a bot account. The account-level
@@ -788,11 +788,20 @@ func (u *UI) applyImages(v string) {
 
 // status0 : line in window 0. AddSys goes through render.Plain, which
 // neutralises the control characters: safe for remote text.
-func (u *UI) status0(s string) {
-	u.ws.List[0].AddSys(s)
-	// The aggregated view replaces window 0: with no copy, a state message
-	// (disconnection, fatal error) would not show there.
-	u.agg.AddSys(s)
+func (u *UI) status0(s string) { u.status0Lines([]string{s}) }
+
+// status0Lines : the lines of one event in window 0, counted as a single
+// activity — a 40-line MOTD is one thing that happened, not forty.
+func (u *UI) status0Lines(lines []string) {
+	if len(lines) == 0 {
+		return
+	}
+	for _, s := range lines {
+		u.ws.List[0].AddSys(s)
+		// The aggregated view replaces window 0: with no copy, a state message
+		// (disconnection, fatal error) would not show there.
+		u.agg.AddSys(s)
+	}
 	if u.ws.Cur != 0 {
 		u.ws.List[0].Act++
 	}
@@ -1875,9 +1884,7 @@ func (u *UI) whois(e model.EvWhois) {
 // the shown one; a window that is not shown counts the lines as activity.
 func (u *UI) lines(e model.EvLines) {
 	if e.ChatID == 0 {
-		for _, l := range e.Lines {
-			u.status0(l)
-		}
+		u.status0Lines(e.Lines)
 		return
 	}
 	w := u.view()

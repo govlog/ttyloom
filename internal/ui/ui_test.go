@@ -112,7 +112,7 @@ func TestWindowsFlow(t *testing.T) {
 	if ws.Cur != 0 || len(ws.List) != 2 {
 		t.Fatalf("hide: cur=%d n=%d", ws.Cur, len(ws.List))
 	}
-	ws.Next() // Ctrl+X
+	ws.Next() // the next window in the ring; Ctrl+X goes through cycleTarget
 	if ws.Cur != 1 {
 		t.Fatalf("next: %d", ws.Cur)
 	}

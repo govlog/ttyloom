@@ -677,7 +677,16 @@ func (u *UI) drawTabs(b *strings.Builder, row, x0, cols int) {
 	st := u.th.Style(theme.StatusBG)
 	fmt.Fprintf(b, "\x1b[%d;%dH%s\x1b[K", row, x0+1, st.SGR())
 	spans, hits := u.tabSpans(x0)
-	u.tabHits = hits
+	// writeLine cuts at cols: a tab past the edge is not on the screen, and
+	// must not take a click either.
+	u.tabHits = nil
+	for _, h := range hits {
+		if h.col0 >= x0+cols {
+			break
+		}
+		h.col1 = min(h.col1, x0+cols)
+		u.tabHits = append(u.tabHits, h)
+	}
 	u.writeLine(b, render.Line{Spans: spans}, cols, nil)
 }
 

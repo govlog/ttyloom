@@ -690,7 +690,7 @@ func (c *Client) Away(ctx context.Context, msg string) {
 		defer c.Guard("Away", nil)
 		st := c.state()
 		if st == nil || !st.GatewayIsAlive() {
-			c.Post(model.EvLog{Level: "ERROR", Msg: "discord: away: not connected"})
+			c.Post(model.EvLog{Level: "ERROR", Msg: i18n.T("discord_away_not_connected")})
 			return
 		}
 		cmd := &gateway.UpdatePresenceCommand{Status: discord.OnlineStatus, Activities: []discord.Activity{}}
@@ -700,7 +700,7 @@ func (c *Client) Away(ctx context.Context, msg string) {
 			cmd.Activities = []discord.Activity{{Name: "Custom Status", Type: discord.CustomActivity, State: msg}}
 		}
 		if err := st.Gateway().Send(ctx, cmd); err != nil {
-			c.Post(model.EvLog{Level: "ERROR", Msg: "discord: away: " + err.Error()})
+			c.Post(model.EvLog{Level: "ERROR", Msg: i18n.T("discord_away_error", err)})
 		}
 	}()
 }

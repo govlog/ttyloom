@@ -224,9 +224,17 @@ func (c *Client) wire(conn *ircevent.Connection) {
 			c.Post(model.EvLog{Level: "INFO", Msg: i18n.T("irc_invited", c.net(), e.Nick(), e.Params[1])})
 		}
 	})
-	conn.AddCallback(ircevent.RPL_TOPIC, func(e ircmsg.Message) { // 332 on join
-		if len(e.Params) > 2 {
-			c.service(e.Params[1], i18n.T("irc_topic_is", e.Params[2]), e)
+	conn.AddCallback(ircevent.RPL_TOPIC, func(e ircmsg.Message) { // 332 on join, and answer of /topic
+		if len(e.Params) < 3 {
+			return
+		}
+		c.service(e.Params[1], i18n.T("irc_topic_is", e.Params[2]), e)
+		c.mu.Lock()
+		reply, pending := c.asked["topic"]
+		delete(c.asked, "topic")
+		c.mu.Unlock()
+		if pending { // the room line alone would not show in the asking window
+			c.Post(model.EvLines{ChatID: reply, Lines: []string{i18n.T("irc_topic_is", e.Params[2]) + " (" + e.Params[1] + ")"}})
 		}
 	})
 	conn.AddCallback(ircevent.RPL_NAMREPLY, c.onNames)
@@ -589,9 +597,14 @@ func (c *Client) onEndOfNames(e ircmsg.Message) {
 	c.mu.Lock()
 	names := c.names[k]
 	delete(c.names, k)
-	c.members[k] = nil
-	for _, n := range names {
-		c.members[k] = append(c.members[k], strings.TrimLeft(n, "~&@%+"))
+	// Only a room we are in has a member list: the key is set by the self
+	// JOIN. A 366 for any other room (/names #other) must not create one, or
+	// Resolve would read it as "already joined" and skip the JOIN.
+	if _, joined := c.members[k]; joined {
+		c.members[k] = nil
+		for _, n := range names {
+			c.members[k] = append(c.members[k], strings.TrimLeft(n, "~&@%+"))
+		}
 	}
 	chat := c.naming[k]
 	delete(c.naming, k)
@@ -599,7 +612,7 @@ func (c *Client) onEndOfNames(e ircmsg.Message) {
 	delete(c.asked, "names:"+k)
 	c.mu.Unlock()
 	if asked { // /names: the list as it comes, prefixes and all
-		c.Post(model.EvLines{ChatID: reply, Lines: []string{"Users on " + e.Params[1] + ": " + strings.Join(names, " ")}})
+		c.Post(model.EvLines{ChatID: reply, Lines: []string{i18n.T("irc_names", e.Params[1], strings.Join(names, " "))}})
 	}
 	if chat == nil {
 		return
@@ -627,7 +640,7 @@ func (c *Client) onWhoisLine(e ircmsg.Message) {
 	c.mu.Unlock()
 	// 312 also answers a WHOWAS: the server the gone nick was last on.
 	if r == nil && whowas && e.Command == ircevent.RPL_WHOISSERVER {
-		c.lines("whowas", e.Params[1]+" was on "+strings.Join(e.Params[2:], " "))
+		c.lines("whowas", i18n.T("irc_whowas_server", e.Params[1], strings.Join(e.Params[2:], " ")))
 	}
 }
 
@@ -703,8 +716,13 @@ func (c *Client) send(cmd string, params ...string) error {
 	return c.conn.Send(cmd, params...)
 }
 
-// sendRaw writes one line as it was typed (/quote); same guard as send.
+// sendRaw writes one line as it was typed (/quote); same guard as send, plus
+// the CR/LF/NUL check the built commands get from ircmsg: a raw line carrying
+// one of those would smuggle a second command onto the wire.
 func (c *Client) sendRaw(line string) error {
+	if strings.ContainsAny(line, "\r\n\x00") {
+		return errors.New(i18n.T("irc_usage", usages["quote"]))
+	}
 	if c.conn == nil || !c.conn.Connected() {
 		return errors.New(i18n.T("irc_not_connected", c.net()))
 	}

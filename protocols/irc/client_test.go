@@ -341,6 +341,7 @@ func TestWhoisNamesQuit(t *testing.T) {
 	if w = waitFor[model.EvWhois](t, events); w.Err == "" || w.ChatID != chatID("ghost") {
 		t.Fatalf("whois error: %+v", w)
 	}
+	s.send(":me!u@h JOIN #go") // the member box is opened on a room we are in
 	c.Participants(context.Background(), chatOf("#go"))
 	s.expect("NAMES #go")
 	s.send(":srv 353 me = #go :@alice +bob me")

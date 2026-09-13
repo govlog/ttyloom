@@ -386,6 +386,16 @@ func TestTabSpans(t *testing.T) {
 	if _, ok := u.tabAt(10); ok { // the blank between two tabs
 		t.Fatal("tabAt on a blank: hit")
 	}
+	// A narrow screen cuts the bar: the tabs writeLine dropped take no click.
+	var b strings.Builder
+	u.drawTabs(&b, 1, 5, 12) // "[all] [discor" — telegram is off the screen
+	if _, ok := u.tabAt(25); ok {
+		t.Fatal("a tab past the right edge took a click")
+	}
+	if net, ok := u.tabAt(12); !ok || net != model.NetDiscord {
+		t.Fatalf("tab still on the screen: %q %v", net, ok)
+	}
+	u.tabHits = hits
 	if !u.tabsOn() || u.viewRows() != 24-1-1-1 { // rows − status − input − tab bar (separator off)
 		t.Fatalf("viewRows: %d", u.viewRows())
 	}

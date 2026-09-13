@@ -666,7 +666,6 @@ func (u *UI) setMaxItems(n int) {
 }
 
 func (ws *Windows) Next() { ws.Cur = (ws.Cur + 1) % len(ws.List) }
-func (ws *Windows) Prev() { ws.Cur = (ws.Cur + len(ws.List) - 1) % len(ws.List) }
 
 func (ws *Windows) Switch(n int) bool {
 	if n < 0 || n >= len(ws.List) {

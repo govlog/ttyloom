@@ -38,6 +38,17 @@ func (u *UI) resolve(w *Window, name string, join bool, backends []model.Backend
 	}
 }
 
+// displayQuery : what a query may be shown as. "#room key" joins a channel
+// with its key: the key has nothing to do on the screen, nor in the log of
+// the window.
+func displayQuery(q string) string {
+	if strings.HasPrefix(q, "#") {
+		name, _, _ := strings.Cut(q, " ")
+		return name
+	}
+	return q
+}
+
 func (u *UI) chatResolved(e model.EvChat) {
 	req := u.lookups[e.Request]
 	if req == nil || !req.wait[u.dispatchNet] || req.query != e.Query {
@@ -58,7 +69,7 @@ func (u *UI) chatResolved(e model.EvChat) {
 		return
 	}
 	if len(req.chats) == 0 {
-		w.AddSys(i18n.T("resolve_failed", req.query, strings.Join(req.errors, "; ")))
+		w.AddSys(i18n.T("resolve_failed", displayQuery(req.query), strings.Join(req.errors, "; ")))
 		return
 	}
 	if len(req.chats) > 1 {

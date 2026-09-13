@@ -92,7 +92,7 @@ func (c *Client) command(reply int64, room, name string, args []string, text str
 		if !ok {
 			return usage
 		}
-		if err := c.send("PART", ch, "cycling"); err != nil {
+		if err := c.send("PART", ch); err != nil {
 			return err
 		}
 		return c.send("JOIN", ch)
@@ -338,7 +338,7 @@ func (c *Client) onModeReply(e ircmsg.Message) {
 	var text string
 	switch e.Command {
 	case ircevent.RPL_CHANNELMODEIS: // me #chan +modes [params]
-		text = "mode/" + e.Params[1] + " [" + strings.Join(e.Params[2:], " ") + "]"
+		text = i18n.T("irc_channel_mode", e.Params[1], strings.Join(e.Params[2:], " "))
 	case ircevent.RPL_CREATIONTIME: // me #chan <unix>
 		if len(e.Params) >= 3 {
 			if s, err := strconv.ParseInt(e.Params[2], 10, 64); err == nil {
@@ -346,7 +346,7 @@ func (c *Client) onModeReply(e ircmsg.Message) {
 			}
 		}
 	case ircevent.RPL_UMODEIS: // me +modes
-		text = "your user mode is " + strings.Join(e.Params[1:], " ")
+		text = i18n.T("irc_user_mode", strings.Join(e.Params[1:], " "))
 	default: // the lists (367, 346, 348) and their ends
 		text = strings.Join(e.Params[1:], " ")
 	}

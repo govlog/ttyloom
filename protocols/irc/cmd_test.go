@@ -67,6 +67,12 @@ func TestModeKickPartCycle(t *testing.T) {
 	if l := waitLines(t, events, "user mode"); l.ChatID != 0 {
 		t.Fatalf("221 after the end of the answer: %+v", l)
 	}
+	cmd(c, 7, "#go", "topic", "")
+	s.expect("TOPIC #go")
+	s.send(":srv 332 me #go :hello world")
+	if l := waitLines(t, events, "hello world"); l.ChatID != 7 {
+		t.Fatalf("332 answers the asking window: %+v", l)
+	}
 	cmd(c, 7, "#go", "kick", "bob too loud")
 	if l := s.expect("KICK"); l != "KICK #go bob :too loud" {
 		t.Fatalf("kick: %q", l)
@@ -190,6 +196,21 @@ func TestWhoWhowasMotd(t *testing.T) {
 	}
 }
 
+// /names on a room we are not in lists it without passing for a join: the
+// /join that follows still reaches the server.
+func TestNamesOutsideRoom(t *testing.T) {
+	c, s, events, _ := start(t, Config{}, false)
+	cmd(c, 0, "", "names", "#other")
+	s.expect("NAMES #other")
+	s.send(":srv 353 me = #other :@alice bob")
+	s.send(":srv 366 me #other :End of NAMES")
+	waitLines(t, events, "alice")
+	c.Resolve(context.Background(), "#other", true, 9)
+	if l := s.expect("JOIN"); l != "JOIN #other" {
+		t.Fatalf("join after a names of the same room: %q", l)
+	}
+}
+
 // /ignore drops the lines of a matching source and saves the list.
 func TestIgnore(t *testing.T) {
 	c, s, events, _ := start(t, Config{}, false)
@@ -238,6 +259,11 @@ func TestCtcpQuoteAway(t *testing.T) {
 	if l := s.expect("PRIVMSG #go"); l != "PRIVMSG #go :raw line" {
 		t.Fatalf("quote: %q", l)
 	}
+	cmd(c, 4, "", "quote", "PRIVMSG #go :a\r\nQUIT")
+	if l := waitLines(t, events, "usage"); l.ChatID != 4 {
+		t.Fatalf("quote with CRLF: %+v", l)
+	}
+	s.never("QUIT", 200*time.Millisecond)
 	c.Away(context.Background(), "be right back")
 	if l := s.expect("AWAY"); l != "AWAY :be right back" {
 		t.Fatalf("away: %q", l)

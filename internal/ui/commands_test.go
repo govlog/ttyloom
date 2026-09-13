@@ -732,9 +732,9 @@ func TestEvLines(t *testing.T) {
 	if w := u.ws.List[1]; lastSys(w) != "b" || w.Act != 1 {
 		t.Fatalf("room window: last=%q act=%d", lastSys(w), w.Act)
 	}
-	u.dispatch(model.Envelope{Net: model.IRCNet("libera"), Ev: model.EvLines{Lines: []string{"motd"}}})
-	if lastSys(u.ws.List[0]) != "motd" {
-		t.Fatalf("window 0: %q", lastSys(u.ws.List[0]))
+	u.dispatch(model.Envelope{Net: model.IRCNet("libera"), Ev: model.EvLines{Lines: []string{"a", "b", "motd"}}})
+	if w := u.ws.List[0]; lastSys(w) != "motd" || w.Act != 1 { // one event, one activity
+		t.Fatalf("window 0: last=%q act=%d", lastSys(w), w.Act)
 	}
 }
 

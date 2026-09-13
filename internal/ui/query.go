@@ -60,7 +60,7 @@ func (u *UI) query(w *Window, name string, join bool) {
 	}
 	u.cancelQuery(w)
 	u.cancelMode()
-	w.AddSys(i18n.T("resolving", name))
+	w.AddSys(i18n.T("resolving", displayQuery(name)))
 	u.resolve(w, name, join, resolvers, false, "")
 }
 

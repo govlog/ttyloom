@@ -71,6 +71,17 @@ func input(u *UI, line string) {
 	u.key(term.Key{Code: term.Enter})
 }
 
+// A channel key is typed with the room ("/join #priv secret") and must not be
+// shown, nor written to the log of the window.
+func TestDisplayQueryHidesKey(t *testing.T) {
+	if got := displayQuery("#priv secret"); got != "#priv" {
+		t.Fatalf("channel key shown: %q", got)
+	}
+	if got := displayQuery("@bob smith"); got != "@bob smith" {
+		t.Fatalf("plain query changed: %q", got)
+	}
+}
+
 func TestQueryPersistentAcrossViews(t *testing.T) {
 	for _, mode := range []string{"aggregate", "channel", "status", "search", "debug", "empty"} {
 		t.Run(mode, func(t *testing.T) {
