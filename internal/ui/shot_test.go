@@ -201,7 +201,7 @@ func shotUI(t *testing.T, th theme.Theme, out *bytes.Buffer) *UI {
 	m3.Out = true
 	m3.Entities = []model.Span{span(m3.Text, "https://github.com/govlog/ttyloom", model.SpanURL, "https://github.com/govlog/ttyloom")}
 	m4 := msg(4, "alice", 7, -31*time.Minute, "")
-	m4.Media = gif(t, "gif-telegram-4.png")
+	m4.Media = gif(t, "gif-telegram-7.png")
 	m5 := msg(5, "carol", 11, -30*time.Minute, "")
 	m5.Service = "carol joined the group"
 	m6 := msg(6, "dave", 9, -12*time.Minute, "TTY means terminal. A loom weaves threads together. That is where the name comes from.")
