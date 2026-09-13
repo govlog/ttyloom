@@ -23,9 +23,15 @@ done
 
 Python 3 uses only its standard library. `ansi2svg.py` reads cursor moves,
 colours, text and the uncropped PNG placements emitted by the kitty renderer.
-The test also writes a `<name>.widths` sidecar next to each frame — the cell
-width the Go renderer gives to every non-ASCII grapheme cluster it holds — so
-the exporter puts an emoji on exactly the columns the client drew it on.
+The test also writes a `<name>.widths` sidecar next to each frame — for every
+non-ASCII grapheme cluster it holds, the cell width the Go renderer gives it
+and whether it is an emoji — so the exporter puts an emoji on exactly the
+columns the client drew it on. The exporter then rasterises every emoji with
+`pango-view` and the Noto Color Emoji font and puts it in the SVG as a PNG
+image of its own, in the box of its cells: the colours and the advance of an
+emoji owe nothing to the fonts of whoever opens the file. Regenerating the
+images needs those two (`pango1.0-tools` and `fonts-noto-color-emoji` on
+Debian); without them the exporter says so and falls back to text.
 The terminal chrome is added by the exporter. The fixtures fix message times
 and the status clock; date labels can depend on the day of generation.
 

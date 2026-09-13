@@ -12,12 +12,14 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/clipperhouse/uax29/v2/graphemes"
 
 	"github.com/govlog/ttyloom/internal/config"
+	"github.com/govlog/ttyloom/internal/emoji"
 	"github.com/govlog/ttyloom/internal/i18n"
 	"github.com/govlog/ttyloom/internal/model"
 	"github.com/govlog/ttyloom/internal/render"
@@ -65,25 +67,61 @@ func TestScreenshots(t *testing.T) {
 }
 
 // clusterWidths : the grapheme clusters of a frame that are not plain ASCII,
-// each with the width render.Width gives it, as JSON. ansi2svg.py reads that
-// sidecar next to the frame so the exporter measures an emoji exactly like the
-// renderer that drew it, instead of guessing from its own Unicode tables.
+// each with the width render.Width gives it and whether it is an emoji, as
+// JSON — {"😂":{"w":2,"emoji":true},"é":{"w":1}}. ansi2svg.py reads that
+// sidecar next to the frame: the width says on how many columns the renderer
+// that drew the frame put the cluster, the emoji flag says to rasterise it
+// with a colour font instead of trusting the fonts of the reader.
 // Escape sequences are ASCII and drop out of the table on their own.
 func clusterWidths(frame []byte) []byte {
-	table := map[string]int{}
+	type cluster struct {
+		W     int  `json:"w"`
+		Emoji bool `json:"emoji,omitempty"`
+	}
+	table := map[string]cluster{}
 	g := graphemes.FromString(string(frame))
 	for g.Next() {
 		cl := g.Value()
 		if isASCII(cl) {
 			continue
 		}
-		table[cl] = render.Width(cl)
+		w := render.Width(cl)
+		table[cl] = cluster{W: w, Emoji: w == 2 && isPictograph(cl)}
 	}
 	out, err := json.Marshal(table) // sorted keys: the sidecar is stable
 	if err != nil {
 		panic(err)
 	}
 	return out
+}
+
+// emojiTable : the Unicode emoji of internal/emoji, fully-qualified and
+// without the variation selector, as a set built once.
+var emojiTable = sync.OnceValue(func() map[string]bool {
+	set := map[string]bool{}
+	for _, e := range emoji.All() {
+		set[e.Char], set[emoji.Base(e.Char)] = true, true
+	}
+	return set
+})
+
+// isPictograph : the cluster is in the Unicode emoji table, or holds a code
+// point above U+1F000 — flags included, the regional indicators start at
+// U+1F1E6. clusterWidths keeps it as an emoji only when the renderer also
+// gave it two cells, which is its own test for the emoji presentation: ↪ is
+// in the table (as ↪️) but the client prints it as a one-cell text glyph, in
+// the colour of the text, and the export must do the same.
+func isPictograph(cl string) bool {
+	set := emojiTable()
+	if set[cl] || set[emoji.Base(cl)] {
+		return true
+	}
+	for _, r := range cl {
+		if r >= 0x1F000 {
+			return true
+		}
+	}
+	return false
 }
 
 func isASCII(s string) bool {

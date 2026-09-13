@@ -8,9 +8,13 @@ with 24-bit colours, OSC 8 links and kitty PNG images) into an SVG terminal wind
 A small virtual terminal: a grid of cells with a style each, filled by the
 sequences the client emits. Anything unknown is skipped, never drawn.
 """
+import base64
 import json
+import os
 import re
+import subprocess
 import sys
+import tempfile
 import unicodedata
 from dataclasses import dataclass, replace
 from html import escape
@@ -21,6 +25,12 @@ CHROME = "#11111b"
 PALETTE = ["#45475a", "#f38ba8", "#a6e3a1", "#f9e2af", "#89b4fa", "#f5c2e7", "#94e2d5", "#bac2de",
            "#585b70", "#f38ba8", "#a6e3a1", "#f9e2af", "#89b4fa", "#f5c2e7", "#94e2d5", "#a6adc8"]
 CW, CH, FS = 8.0, 17.0, 13.2  # cell width, cell height, font size (px)
+# 11 points give an 18x18 px glyph, enough for the 2*CW x CH box of an emoji.
+# ponytail: a missing colour font makes pango fall back without a word; the
+# README asks for it.
+EMOJI_FONT = "Noto Color Emoji 11"
+PNGS = {}          # cluster -> base64 PNG, or None when pango-view failed
+have_pango = True  # a missing binary is said once, then no call is tried
 
 
 @dataclass(frozen=True)
@@ -43,7 +53,8 @@ def width(ch):
 
 def widths(src):
     """The <frame>.widths sidecar TestScreenshots writes: every non-ASCII
-    grapheme cluster of the frame with the width the Go renderer gave it. That
+    grapheme cluster of the frame with the width the Go renderer gave it and
+    whether it is an emoji — {"\U0001f602": {"w": 2, "emoji": true}}. That
     renderer is the source of truth, its own measure decided where the cells
     after it went. Without the file, the exporter measures with unicodedata.
     """
@@ -52,6 +63,36 @@ def widths(src):
             return json.load(f)
     except FileNotFoundError:
         return {}
+
+
+def emoji_png(cluster):
+    """One emoji cluster as a transparent PNG in base64, drawn by pango-view
+    with a colour font, once per run. The SVG then carries the picture itself
+    and neither the colours nor the advance of the glyph depend on the fonts of
+    whoever opens it. None when pango-view is missing or fails: the caller
+    falls back to a text run.
+    """
+    global have_pango
+    if cluster in PNGS:
+        return PNGS[cluster]
+    png = None
+    if have_pango:
+        with tempfile.TemporaryDirectory() as tmp:
+            out = os.path.join(tmp, "emoji.png")
+            try:
+                # argv, never a shell; -t takes the next element as its value,
+                # even one starting with a dash.
+                subprocess.run(["pango-view", "--font=" + EMOJI_FONT, "-q", "--background=transparent",
+                                "--margin=0", "-o", out, "-t", cluster], check=True, capture_output=True)
+                with open(out, "rb") as f:
+                    png = base64.b64encode(f.read()).decode("ascii")
+            except FileNotFoundError:
+                have_pango = False
+                print("ansi2svg: no pango-view, the emoji stay text runs", file=sys.stderr)
+            except (OSError, subprocess.CalledProcessError) as err:
+                print(f"ansi2svg: pango-view failed on {cluster!r} ({err}), text run instead", file=sys.stderr)
+    PNGS[cluster] = png
+    return png
 
 
 def sgr(style, params):
@@ -188,7 +229,7 @@ def render(data, table=None):
                 for k in range(min(longest, n - i), 0, -1):
                     if data[i:i + k] in table:
                         cl = data[i:i + k]
-                        w = table[cl]
+                        w = table[cl]["w"]
                         break
             if w == 0 and col > 0 and row < ROWS:
                 c, st = grid[row][col - 1]
@@ -206,7 +247,7 @@ def render(data, table=None):
     return grid, images
 
 
-def svg(frame, title):
+def svg(frame, title, emojis=frozenset()):
     grid, images = frame
     pad, bar = 16, 34
     w, h = COLS * CW + 2 * pad, ROWS * CH + 2 * pad + bar
@@ -228,8 +269,8 @@ def svg(frame, title):
             if wide:
                 while c < COLS and cells[c][0] == "":
                     c += 1
-            else:
-                while c < COLS and cells[c][1] == st and cells[c][0] != "" and not (c + 1 < COLS and cells[c + 1][0] == ""):
+            elif ch not in emojis:  # an emoji is a run of its own, it becomes a picture
+                while c < COLS and cells[c][1] == st and cells[c][0] != "" and cells[c][0] not in emojis and not (c + 1 < COLS and cells[c + 1][0] == ""):
                     c += 1
             text = "".join(cells[k][0] for k in range(start, c))
             fg, bg = st.fg or FG, st.bg or BG
@@ -240,7 +281,11 @@ def svg(frame, title):
             width_px = (c - start) * CW
             if bg != BG:
                 out.append(f'<rect x="{pad + start * CW:.1f}" y="{y:.1f}" width="{width_px:.1f}" height="{CH}" fill="{bg}"/>')
-            if text.strip():
+            png = emoji_png(text) if text in emojis else None
+            if png:
+                out.append(f'<image x="{pad + start * CW:.1f}" y="{y:.1f}" width="{width_px:.1f}" height="{CH}" '
+                           f'preserveAspectRatio="xMidYMid meet" href="data:image/png;base64,{png}"/>')
+            elif text.strip():
                 attrs = f'x="{pad + start * CW:.1f}" y="{y + CH - 4.5:.1f}" fill="{fg}" textLength="{width_px:.1f}" xml:space="preserve"'
                 if not wide:
                     attrs += ' lengthAdjust="spacingAndGlyphs"'
@@ -260,7 +305,8 @@ def svg(frame, title):
 
 if __name__ == "__main__":
     src, dst, title = sys.argv[1], sys.argv[2], sys.argv[3] if len(sys.argv) > 3 else "ttyloom"
+    table = widths(src)
     with open(src, encoding="utf-8") as f:
-        grid = render(f.read(), widths(src))
+        grid = render(f.read(), table)
     with open(dst, "w", encoding="utf-8") as f:
-        f.write(svg(grid, title))
+        f.write(svg(grid, title, {cl for cl, v in table.items() if v.get("emoji")}))
