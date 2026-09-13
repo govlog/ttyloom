@@ -87,7 +87,7 @@ func (u *UI) customLoad() {
 		switch {
 		case md.State == model.MediaNone:
 			md.State = model.MediaLoading
-			b.Download(u.ctx, md, filepath.Join(config.CacheDir(), "emoji", p.chat.Net, gifName(md)))
+			b.Download(u.backendContext(b), md, filepath.Join(config.CacheDir(), "emoji", p.chat.Net, gifName(md)))
 		case md.State == model.MediaReady && len(md.Frames) == 0 && md.Want == 0 && md.Path != "":
 			u.customDecode(md)
 		}

@@ -85,7 +85,7 @@ func (u *UI) loadParts() {
 		// does not start it again. The error, though, wipes the entry.
 		e = partsEntry{lines: []model.Participant{{Text: i18n.T("loading")}}, at: time.Now()}
 		u.partsCache[c.Key()] = e
-		b.Participants(u.ctx, c)
+		b.Participants(u.backendContext(b), c)
 	}
 	p.lines = e.lines
 	u.parts = p
@@ -245,7 +245,11 @@ func (u *UI) openMember(net, q string) {
 	}
 	u.ws.New(true) // hidden: goTo does the full switch (draft, selection)
 	u.goTo(len(u.ws.List) - 1)
-	u.bind(u.view(), q, false)
+	if c != nil {
+		u.attach(u.view(), c)
+	} else {
+		u.resolve(u.view(), q, false, []model.Backend{u.netOf(net)}, true, "")
+	}
 }
 
 // memberChat gives the chat already known behind a member token — TDLib id (=
@@ -264,6 +268,5 @@ func (u *UI) memberChat(net, q string) (*model.Chat, bool) {
 			return c, false
 		}
 	}
-	_, amb := u.findChat(q)
-	return nil, amb
+	return nil, false
 }

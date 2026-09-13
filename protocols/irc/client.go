@@ -17,6 +17,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ergochat/irc-go/ircevent"
@@ -48,16 +49,17 @@ type Config struct {
 
 type Client struct {
 	model.Poster
-	cfg  Config
-	conn *ircevent.Connection
-	ids  idGen
+	cfg     Config
+	conn    *ircevent.Connection
+	ids     idGen
+	casemap atomic.Value
 
 	mu       sync.Mutex
-	channels []string            // rooms to be in: the config list, joined at each connection
-	members  map[string][]string // folded channel -> nicks seen (NAMES, JOIN, PART…)
-	names    map[string][]string // NAMES in progress, folded channel -> nicks
-	queries  map[string]string   // folded nick -> nick, private chats open
-	joining  map[string]string   // folded channel -> Resolve query waiting for the JOIN
+	channels []string                  // rooms to be in: the config list, joined at each connection
+	members  map[string][]string       // folded channel -> nicks seen (NAMES, JOIN, PART…)
+	names    map[string][]string       // NAMES in progress, folded channel -> nicks
+	queries  map[string]string         // folded nick -> nick, private chats open
+	joining  map[string][]model.EvChat // folded channel -> Resolve query waiting for the JOIN
 	naming   map[string]*model.Chat
 	whois    map[string]*whoisReq
 	offers   map[string]dccOffer // folded nick -> last DCC offer received
@@ -77,7 +79,7 @@ type whoisReq struct {
 func New(cfg Config, events chan<- model.Event) *Client {
 	c := &Client{Poster: model.Poster{Events: events}, cfg: cfg,
 		members: map[string][]string{}, names: map[string][]string{}, queries: map[string]string{},
-		joining: map[string]string{}, naming: map[string]*model.Chat{}, whois: map[string]*whoisReq{},
+		joining: map[string][]model.EvChat{}, naming: map[string]*model.Chat{}, whois: map[string]*whoisReq{},
 		offers: map[string]dccOffer{}}
 	for _, ch := range cfg.Channels {
 		if isChannel(ch) && !slices.Contains(c.channels, ch) {
@@ -244,12 +246,19 @@ func (c *Client) wire(conn *ircevent.Connection) {
 func (c *Client) me() string { return c.conn.CurrentNick() }
 
 // isMe : e comes from us (our own JOIN, NICK…).
-func (c *Client) isMe(nick string) bool { return casefold(nick) == casefold(c.me()) }
+func (c *Client) isMe(nick string) bool { return c.casefold(nick) == c.casefold(c.me()) }
 
 // connected : end of the registration, on every connection. EvReady once,
 // then the rooms of the list joined again and NickServ told when SASL did not
 // do it.
 func (c *Client) connected() {
+	mode := c.conn.ISupport()["CASEMAPPING"]
+	switch mode {
+	case "ascii", "rfc1459", "rfc1459-strict", "strict-rfc1459":
+	default:
+		mode = "rfc1459"
+	}
+	c.casemap.Store(mode)
 	c.mu.Lock()
 	first := !c.ready
 	c.ready = true
@@ -257,7 +266,7 @@ func (c *Client) connected() {
 	sasl := c.saslOK
 	c.mu.Unlock()
 	if first {
-		c.Post(model.EvReady{SelfID: chatID(c.me()), SelfName: c.me()})
+		c.Post(model.EvReady{SelfID: chatID(c.me(), "ascii"), SelfName: c.me()})
 	}
 	c.Post(model.EvConnected{})
 	if c.cfg.Password != "" && !sasl {
@@ -273,7 +282,7 @@ func (c *Client) msgOf(e ircmsg.Message, chat *model.Chat, text string) model.Ms
 	nick := e.Nick()
 	clean, spans := spansOf(text)
 	return model.Msg{ID: c.ids.next(), ChatID: chat.ID, ChatLabel: chat.Title, Date: serverTime(e.GetTag("time")),
-		From: nick, FromID: chatID(nick), Out: c.isMe(nick), Text: clean, Entities: spans}
+		From: nick, FromID: c.chatID(nick), Out: c.isMe(nick), Text: clean, Entities: spans}
 }
 
 // target : the chat a message to target from nick lands in — the channel, or
@@ -281,16 +290,16 @@ func (c *Client) msgOf(e ircmsg.Message, chat *model.Chat, text string) model.Ms
 func (c *Client) target(e ircmsg.Message) *model.Chat {
 	to := e.Params[0]
 	if isChannel(to) {
-		return chatOf(to)
+		return c.chatOf(to)
 	}
 	nick := e.Nick()
 	if c.isMe(nick) {
 		nick = to
 	}
 	c.mu.Lock()
-	c.queries[casefold(nick)] = nick
+	c.queries[c.casefold(nick)] = nick
 	c.mu.Unlock()
-	return chatOf(nick)
+	return c.chatOf(nick)
 }
 
 func (c *Client) onPrivmsg(e ircmsg.Message) {
@@ -309,7 +318,7 @@ func (c *Client) onNotice(e ircmsg.Message) {
 		return
 	}
 	if isChannel(e.Params[0]) {
-		chat := chatOf(e.Params[0])
+		chat := c.chatOf(e.Params[0])
 		m := c.msgOf(e, chat, e.Params[1])
 		m.Text = "-" + e.Nick() + "- " + m.Text
 		c.Post(model.EvNewMessage{Msg: m, Chat: chat})
@@ -351,10 +360,10 @@ func (c *Client) onCTCP(e ircmsg.Message) {
 		return
 	}
 	c.mu.Lock()
-	c.offers[casefold(off.Nick)] = off
-	c.queries[casefold(off.Nick)] = off.Nick
+	c.offers[c.casefold(off.Nick)] = off
+	c.queries[c.casefold(off.Nick)] = off.Nick
 	c.mu.Unlock()
-	chat := chatOf(off.Nick)
+	chat := c.chatOf(off.Nick)
 	m := c.msgOf(e, chat, "")
 	m.Media = off.media()
 	c.Post(model.EvNewMessage{Msg: m, Chat: chat})
@@ -362,7 +371,7 @@ func (c *Client) onCTCP(e ircmsg.Message) {
 
 // service posts a service line ("alice joined") in channel.
 func (c *Client) service(channel, text string, e ircmsg.Message) {
-	chat := chatOf(channel)
+	chat := c.chatOf(channel)
 	m := model.Msg{ID: c.ids.next(), ChatID: chat.ID, ChatLabel: chat.Title,
 		Date: serverTime(e.GetTag("time")), Service: text}
 	c.Post(model.EvNewMessage{Msg: m, Chat: chat})
@@ -373,8 +382,8 @@ func (c *Client) service(channel, text string, e ircmsg.Message) {
 func (c *Client) addMember(channel, nick string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	k := casefold(channel)
-	if !slices.ContainsFunc(c.members[k], func(n string) bool { return casefold(n) == casefold(nick) }) {
+	k := c.casefold(channel)
+	if !slices.ContainsFunc(c.members[k], func(n string) bool { return c.casefold(n) == c.casefold(nick) }) {
 		c.members[k] = append(c.members[k], nick)
 	}
 }
@@ -382,8 +391,8 @@ func (c *Client) addMember(channel, nick string) {
 func (c *Client) dropMember(channel, nick string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	k := casefold(channel)
-	c.members[k] = slices.DeleteFunc(c.members[k], func(n string) bool { return casefold(n) == casefold(nick) })
+	k := c.casefold(channel)
+	c.members[k] = slices.DeleteFunc(c.members[k], func(n string) bool { return c.casefold(n) == c.casefold(nick) })
 }
 
 // channelsOf : the channels nick is seen in.
@@ -392,7 +401,7 @@ func (c *Client) channelsOf(nick string) []string {
 	defer c.mu.Unlock()
 	var out []string
 	for ch, ns := range c.members {
-		if slices.ContainsFunc(ns, func(n string) bool { return casefold(n) == casefold(nick) }) {
+		if slices.ContainsFunc(ns, func(n string) bool { return c.casefold(n) == c.casefold(nick) }) {
 			out = append(out, ch)
 		}
 	}
@@ -407,17 +416,20 @@ func (c *Client) onJoin(e ircmsg.Message) {
 	ch, nick := e.Params[0], e.Nick()
 	if c.isMe(nick) {
 		c.mu.Lock()
-		if !slices.ContainsFunc(c.channels, func(x string) bool { return casefold(x) == casefold(ch) }) {
+		if !slices.ContainsFunc(c.channels, func(x string) bool { return c.casefold(x) == c.casefold(ch) }) {
 			c.channels = append(c.channels, ch)
 			c.saveChannelsLocked()
 		}
-		c.members[casefold(ch)] = nil
-		q, waiting := c.joining[casefold(ch)]
-		delete(c.joining, casefold(ch))
+		c.members[c.casefold(ch)] = nil
+		q, waiting := c.joining[c.casefold(ch)]
+		delete(c.joining, c.casefold(ch))
 		c.mu.Unlock()
-		chat := chatOf(ch)
+		chat := c.chatOf(ch)
 		if waiting {
-			c.Post(model.EvChat{Query: q, Chat: chat})
+			for _, ev := range q {
+				ev.Chat = chat
+				c.Post(ev)
+			}
 		}
 		c.service(ch, i18n.T("irc_you_joined", ch), e)
 		return
@@ -433,7 +445,7 @@ func (c *Client) onPart(e ircmsg.Message) {
 	ch, nick := e.Params[0], e.Nick()
 	if c.isMe(nick) {
 		c.mu.Lock()
-		delete(c.members, casefold(ch))
+		delete(c.members, c.casefold(ch))
 		c.mu.Unlock()
 		return // Leave already told the UI (EvChatGone)
 	}
@@ -486,17 +498,17 @@ func (c *Client) onNick(e ircmsg.Message) {
 		c.addMember(ch, now)
 		c.service(ch, i18n.T("irc_renamed", old, now), e)
 	}
-	if casefold(old) == casefold(now) {
+	if c.casefold(old) == c.casefold(now) {
 		return
 	}
 	// A private chat follows the person: the old window is gone, the new
 	// one opens at the next line. ponytail: no move of the history.
 	c.mu.Lock()
-	_, open := c.queries[casefold(old)]
-	delete(c.queries, casefold(old))
+	_, open := c.queries[c.casefold(old)]
+	delete(c.queries, c.casefold(old))
 	c.mu.Unlock()
 	if open {
-		c.Post(model.EvChatGone{ChatID: chatID(old)})
+		c.Post(model.EvChatGone{ChatID: c.chatID(old)})
 	}
 }
 
@@ -519,7 +531,7 @@ func (c *Client) onNames(e ircmsg.Message) {
 	if len(e.Params) < 4 {
 		return
 	}
-	k := casefold(e.Params[2])
+	k := c.casefold(e.Params[2])
 	c.mu.Lock()
 	c.names[k] = append(c.names[k], strings.Fields(e.Params[3])...)
 	c.mu.Unlock()
@@ -531,7 +543,7 @@ func (c *Client) onEndOfNames(e ircmsg.Message) {
 	if len(e.Params) < 2 {
 		return
 	}
-	k := casefold(e.Params[1])
+	k := c.casefold(e.Params[1])
 	c.mu.Lock()
 	names := c.names[k]
 	delete(c.names, k)
@@ -561,7 +573,7 @@ func (c *Client) onWhoisLine(e ircmsg.Message) {
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	r := c.whois[casefold(e.Params[1])]
+	r := c.whois[c.casefold(e.Params[1])]
 	if r == nil {
 		return
 	}
@@ -586,8 +598,8 @@ func (c *Client) onEndOfWhois(e ircmsg.Message) {
 		return
 	}
 	c.mu.Lock()
-	r := c.whois[casefold(e.Params[1])]
-	delete(c.whois, casefold(e.Params[1]))
+	r := c.whois[c.casefold(e.Params[1])]
+	delete(c.whois, c.casefold(e.Params[1]))
 	c.mu.Unlock()
 	if r != nil {
 		c.Post(model.EvWhois{ChatID: r.chatID, Lines: r.lines})
@@ -602,8 +614,8 @@ func (c *Client) onNoSuchNick(e ircmsg.Message) {
 	}
 	nick := e.Params[1]
 	c.mu.Lock()
-	r := c.whois[casefold(nick)]
-	delete(c.whois, casefold(nick))
+	r := c.whois[c.casefold(nick)]
+	delete(c.whois, c.casefold(nick))
 	c.mu.Unlock()
 	if r != nil {
 		c.Post(model.EvWhois{ChatID: r.chatID, Err: i18n.T("irc_no_such_nick")})
@@ -621,11 +633,14 @@ func (c *Client) onChannelError(e ircmsg.Message) {
 	ch := e.Params[1]
 	reason := strings.Join(e.Params[2:], " ")
 	c.mu.Lock()
-	q, waiting := c.joining[casefold(ch)]
-	delete(c.joining, casefold(ch))
+	q, waiting := c.joining[c.casefold(ch)]
+	delete(c.joining, c.casefold(ch))
 	c.mu.Unlock()
 	if waiting {
-		c.Post(model.EvChat{Query: q, Err: reason})
+		for _, ev := range q {
+			ev.Err = reason
+			c.Post(ev)
+		}
 		return
 	}
 	c.Post(model.EvLog{Level: "ERROR", Msg: c.net() + ": " + ch + ": " + reason})
@@ -637,12 +652,9 @@ func (c *Client) saveChannelsLocked() {
 		return
 	}
 	list := slices.Clone(c.channels)
-	go func() {
-		defer c.Guard("SaveChannels", nil)
-		if err := c.cfg.SaveChannels(list); err != nil {
-			c.Post(model.EvLog{Level: "ERROR", Msg: c.net() + ": " + err.Error()})
-		}
-	}()
+	if err := c.cfg.SaveChannels(list); err != nil {
+		c.Post(model.EvLog{Level: "ERROR", Msg: c.net() + ": " + err.Error()})
+	}
 }
 
 // send writes one raw command; a connection that is down is the error.

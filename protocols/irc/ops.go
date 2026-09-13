@@ -35,10 +35,10 @@ func (c *Client) LoadDialogs(context.Context) {
 	c.mu.Lock()
 	var chats []*model.Chat
 	for _, ch := range c.channels {
-		chats = append(chats, chatOf(ch))
+		chats = append(chats, c.chatOf(ch))
 	}
 	for _, n := range c.queries {
-		chats = append(chats, chatOf(n))
+		chats = append(chats, c.chatOf(n))
 	}
 	c.mu.Unlock()
 	c.refuse("LoadDialogs", model.EvDialogs{Chats: chats})
@@ -136,37 +136,41 @@ func (c *Client) Contacts(context.Context) {
 
 // Resolve : "#room" joins it (the answer comes with the JOIN, or with the
 // error numeric); anything else is a nick, a private chat opens at once.
-func (c *Client) Resolve(_ context.Context, q string, _ bool) {
+func (c *Client) Resolve(_ context.Context, q string, _ bool, request uint64) {
 	q = strings.TrimSpace(q)
 	if !isChannel(q) {
 		nick := strings.TrimPrefix(q, "@")
 		if nick == "" || strings.ContainsAny(nick, " ,") {
-			c.refuse("Resolve", model.EvChat{Query: q, Err: i18n.T("irc_bad_nick")})
+			c.refuse("Resolve", model.EvChat{Request: request, Query: q, Err: i18n.T("irc_bad_nick")})
 			return
 		}
 		c.mu.Lock()
-		c.queries[casefold(nick)] = nick
+		c.queries[c.casefold(nick)] = nick
 		c.mu.Unlock()
-		c.refuse("Resolve", model.EvChat{Query: q, Chat: chatOf(nick)})
+		c.refuse("Resolve", model.EvChat{Request: request, Query: q, Chat: c.chatOf(nick)})
 		return
 	}
 	c.mu.Lock()
-	_, in := c.members[casefold(q)]
+	_, in := c.members[c.casefold(q)]
 	if !in {
-		c.joining[casefold(q)] = q
+		c.joining[c.casefold(q)] = append(c.joining[c.casefold(q)], model.EvChat{Request: request, Query: q})
 	}
 	c.mu.Unlock()
 	if in {
-		c.refuse("Resolve", model.EvChat{Query: q, Chat: chatOf(q)})
+		c.refuse("Resolve", model.EvChat{Request: request, Query: q, Chat: c.chatOf(q)})
 		return
 	}
 	go func() {
 		defer c.Guard("Resolve", nil)
 		if err := c.send("JOIN", q); err != nil {
 			c.mu.Lock()
-			delete(c.joining, casefold(q))
+			waiting := c.joining[c.casefold(q)]
+			delete(c.joining, c.casefold(q))
 			c.mu.Unlock()
-			c.Post(model.EvChat{Query: q, Err: err.Error()})
+			for _, ev := range waiting {
+				ev.Err = err.Error()
+				c.Post(ev)
+			}
 		}
 	}()
 }
@@ -181,13 +185,13 @@ func (c *Client) Participants(_ context.Context, chat *model.Chat) {
 		return
 	}
 	c.mu.Lock()
-	c.naming[casefold(name)] = chat
+	c.naming[c.casefold(name)] = chat
 	c.mu.Unlock()
 	go func() {
 		defer c.Guard("Participants", nil)
 		if err := c.send("NAMES", name); err != nil {
 			c.mu.Lock()
-			delete(c.naming, casefold(name))
+			delete(c.naming, c.casefold(name))
 			c.mu.Unlock()
 			c.Post(model.EvParticipants{ChatID: chat.ID, Err: err.Error()})
 		}
@@ -197,7 +201,7 @@ func (c *Client) Participants(_ context.Context, chat *model.Chat) {
 // whoisNick : WHOIS nick, the lines gathered until 318 (or 401). A silent
 // server would leave the request hanging: ten seconds, then an error.
 func (c *Client) whoisNick(nick string, chatID int64) {
-	k := casefold(nick)
+	k := c.casefold(nick)
 	req := &whoisReq{chatID: chatID}
 	c.mu.Lock()
 	c.whois[k] = req
@@ -227,7 +231,7 @@ func (c *Client) whoisNick(nick string, chatID int64) {
 func (c *Client) Whois(_ context.Context, chat *model.Chat) { c.whoisNick(nameOf(chat), chat.ID) }
 
 // WhoisMember : token is the Query of a participant line — the nick.
-func (c *Client) WhoisMember(_ context.Context, token string) { c.whoisNick(token, chatID(token)) }
+func (c *Client) WhoisMember(_ context.Context, token string) { c.whoisNick(token, c.chatID(token)) }
 
 func (c *Client) WhoRead(_ context.Context, chat *model.Chat, id, _ int) {
 	c.refuse("WhoRead", model.EvWho{ChatID: chat.ID, ID: id, Text: c.unsupported()})
@@ -252,8 +256,8 @@ func (c *Client) Leave(_ context.Context, chat *model.Chat) {
 		return
 	}
 	c.mu.Lock()
-	c.channels = slices.DeleteFunc(c.channels, func(x string) bool { return casefold(x) == casefold(name) })
-	delete(c.members, casefold(name))
+	c.channels = slices.DeleteFunc(c.channels, func(x string) bool { return c.casefold(x) == c.casefold(name) })
+	delete(c.members, c.casefold(name))
 	c.saveChannelsLocked()
 	c.mu.Unlock()
 	go func() {
@@ -272,8 +276,8 @@ func (c *Client) DeleteChat(ctx context.Context, chat *model.Chat) {
 		return
 	}
 	c.mu.Lock()
-	delete(c.queries, casefold(name))
-	delete(c.offers, casefold(name))
+	delete(c.queries, c.casefold(name))
+	delete(c.offers, c.casefold(name))
 	c.mu.Unlock()
 	c.refuse("DeleteChat", model.EvChatGone{ChatID: chat.ID})
 }

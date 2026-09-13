@@ -167,7 +167,7 @@ func (t *Term) readLoop() {
 			close(t.keys)
 		}
 	}()
-	var pending []byte
+	var decoder Decoder
 	buf := make([]byte, 4096)
 	for {
 		n, err := t.in.Read(buf)
@@ -175,15 +175,12 @@ func (t *Term) readLoop() {
 			close(t.keys)
 			return
 		}
-		pending = append(pending, buf[:n]...)
-		keys, rest := Parse(pending, false)
+		keys := decoder.Feed(buf[:n], false)
 		// With the keyboard protocol, Esc comes as CSI 27 u: nothing left to
 		// guess, a pending ESC is a cut sequence for sure.
-		if len(rest) > 0 && !t.KittyKbd && !pasteOpen(rest) && !t.wait(30*time.Millisecond) { // lone ESC or cut sequence
-			more, _ := Parse(rest, true)
-			keys, rest = append(keys, more...), nil
+		if len(decoder.pending) > 0 && !decoder.discardPaste && !t.KittyKbd && !pasteOpen(decoder.pending) && !t.wait(30*time.Millisecond) {
+			keys = append(keys, decoder.Feed(nil, true)...)
 		}
-		pending = rest
 		for _, k := range keys {
 			t.keys <- k
 		}

@@ -185,7 +185,7 @@ const searchLimit = 50
 // reuseMsgs gives the messages of the result, using again the *model.Msg of
 // the first window when it already has that id. Edit, reaction and delete then
 // act on the same message in both views.
-func reuseMsgs(origin *Window, msgs []model.Msg) []*model.Msg {
+func reuseMsgs(origin *Window, msgs []model.Msg, started ...time.Time) []*model.Msg {
 	have := make(map[int]*model.Msg, len(origin.Items))
 	for _, it := range origin.Items {
 		if it.Msg != nil && it.Msg.ID != 0 {
@@ -195,6 +195,7 @@ func reuseMsgs(origin *Window, msgs []model.Msg) []*model.Msg {
 	out := make([]*model.Msg, len(msgs))
 	for i := range msgs {
 		if m := have[msgs[i].ID]; m != nil {
+			reconcileMsg(m, &msgs[i], started...)
 			out[i] = m
 			continue
 		}
@@ -223,8 +224,9 @@ func (u *UI) searchResult(e model.EvSearch) {
 	w := u.ws.New(true)
 	w.Search, w.Loaded, w.Full = e.Query, true, true
 	u.bindChat(w, origin.Chat)
-	msgs := reuseMsgs(origin, e.Msgs)
+	msgs := reuseMsgs(origin, e.Msgs, e.Started)
 	w.Merge(msgs)
+	u.clear()
 	for _, m := range msgs {
 		u.autoMedia(m, false)
 	}
@@ -385,7 +387,7 @@ func (u *UI) gsSend() {
 		if !b.Caps().GlobalSearch || (u.netFilter != "" && name != u.netFilter) {
 			continue
 		}
-		b.SearchGlobal(u.ctx, q, gsLimit)
+		b.SearchGlobal(u.backendContext(b), q, gsLimit)
 		g.pending++
 	}
 	if g.pending == 0 {

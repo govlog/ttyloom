@@ -135,7 +135,7 @@ func shotUI(th theme.Theme, out *bytes.Buffer) *UI {
 	u := &UI{ctx: context.Background(), t: tm, cfg: cfg, th: th, events: make(chan model.Event, 8), ws: NewWindows(),
 		agg: &Window{}, debug: &Window{}, focused: true, images: "kitty", side: sideChats, sideW: 26,
 		nets:  map[string]model.Backend{model.NetTelegram: tg, model.NetDiscord: dc},
-		chats: map[model.ChatKey]*model.Chat{}, pending: map[string]*Window{}, typing: map[model.ChatKey]typing{},
+		chats: map[model.ChatKey]*model.Chat{}, lookups: map[uint64]*lookup{}, typing: map[model.ChatKey]typing{},
 		lastTyping: map[model.ChatKey]time.Time{}, avatars: map[model.ChatKey]*model.Media{}, openNext: map[*model.Media]bool{},
 		presence: map[model.ChatKey]string{}, dirty: map[model.ChatKey]bool{},
 		partsCache: map[model.ChatKey]partsEntry{}, whoCache: map[whoKey]whoEntry{}, aliases: map[model.ChatKey]string{},

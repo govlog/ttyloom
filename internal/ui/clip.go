@@ -240,6 +240,12 @@ func (a *sendAsk) prompt() string {
 // clipImage : pasted image ready, the prompt opens on the current window (it
 // may have changed during the read).
 func (u *UI) clipImage(e evClipImage) {
+	if u.prompt != nil {
+		if e.Path != "" {
+			os.Remove(e.Path)
+		}
+		return
+	}
 	if e.Err != "" {
 		u.sys(e.Err)
 		return
@@ -325,9 +331,9 @@ func (u *UI) sendPath(chat *model.Chat, path, caption string, tmp bool) {
 		Media: placeholderMedia(path, photo)}
 	u.insertPending(w, m)
 	if photo {
-		b.SendPhoto(u.ctx, chat, path, caption, tmp, u.tmpID)
+		b.SendPhoto(u.backendContext(b), chat, path, caption, tmp, u.tmpID)
 	} else {
-		b.SendFile(u.ctx, chat, path, caption, tmp, u.tmpID)
+		b.SendFile(u.backendContext(b), chat, path, caption, tmp, u.tmpID)
 	}
 	if w == u.view() {
 		u.flash(i18n.T("sending"))

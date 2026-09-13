@@ -65,7 +65,7 @@ func (u *UI) avatarAt(k model.ChatKey) *model.Media {
 			return nil
 		}
 		md.State = model.MediaLoading
-		b.Download(u.ctx, md, avatarPath(config.Expand(u.cfg.DownloadDir), k))
+		b.Download(u.backendContext(b), md, avatarPath(config.Expand(u.cfg.DownloadDir), k))
 	}
 	if md.State != model.MediaReady || len(md.Frames) == 0 {
 		return nil
@@ -156,7 +156,7 @@ func (u *UI) download(m *model.Msg) {
 	path := filepath.Join(config.Expand(u.cfg.DownloadDir), media.FileName(m.Key(), title, m.ID, m.Date, md.Ext))
 	md.State = model.MediaLoading
 	u.invalidateMedia(md)
-	b.Download(u.ctx, md, path)
+	b.Download(u.backendContext(b), md, path)
 }
 
 // downloadMap : "download" of an OSM map — no Telegram Loc, a separate
@@ -167,7 +167,7 @@ func (u *UI) downloadMap(b model.Backend, md *model.Media) {
 	path := filepath.Join(config.Expand(u.cfg.DownloadDir), "maps", media.MapName(md.Lat, md.Long))
 	md.State = model.MediaLoading
 	u.invalidateMedia(md)
-	b.DownloadMap(u.ctx, md, path)
+	b.DownloadMap(u.backendContext(b), md, path)
 }
 
 func (u *UI) invalidateMedia(md *model.Media) {
@@ -344,19 +344,41 @@ func (u *UI) loadFrames(md *model.Media, maxW, maxH, frames, gen int) {
 		u.decodes = map[*model.Media]context.CancelFunc{}
 	}
 	u.decodes[md] = cancel
+	if u.decodeSlots == nil {
+		u.decodeSlots = make(chan struct{}, 2)
+	}
+	slots := u.decodeSlots
 	go func() {
+		post := func(ev evFrames) {
+			select {
+			case u.events <- ev:
+				return
+			default:
+			}
+			select {
+			case u.events <- ev:
+			case <-ctx.Done():
+			}
+		}
+		select {
+		case slots <- struct{}{}:
+			defer func() { <-slots }()
+		case <-ctx.Done():
+			post(evFrames{Media: md, Gen: gen, ctx: ctx})
+			return
+		}
 		// No cancel() here: the result is on its way to the UI loop, which reads
 		// the context to know whether anybody still wants it. framesLoaded ends
 		// the context once it has taken the frames.
 		defer func() {
 			if r := recover(); r != nil {
-				u.events <- evFrames{Media: md, Gen: gen, ctx: ctx, Err: i18n.T("panic", r)}
+				post(evFrames{Media: md, Gen: gen, ctx: ctx, Err: i18n.T("panic", r)})
 			}
 		}()
 		var progress []func(*media.Frames)
 		if kind == model.MediaVideo && frames > 1 { // play: shown from the first frames on
 			progress = append(progress, func(f *media.Frames) {
-				u.events <- evFrames{Media: md, Frames: f, Gen: gen, ctx: ctx, CellW: cw, CellH: ch, Partial: true}
+				post(evFrames{Media: md, Frames: f, Gen: gen, ctx: ctx, CellW: cw, CellH: ch, Partial: true})
 			})
 		}
 		f, err := media.Load(ctx, path, mime, maxW, maxH, frames, progress...)
@@ -364,7 +386,7 @@ func (u *UI) loadFrames(md *model.Media, maxW, maxH, frames, gen int) {
 		if err != nil {
 			ev.Err = err.Error()
 		}
-		u.events <- ev
+		post(ev)
 	}()
 }
 
@@ -597,11 +619,7 @@ func (u *UI) open(path string) {
 		u.sys(i18n.T("open_refused", render.Truncate(render.CleanLine(path), 60, "…")))
 		return
 	}
-	// .bin = extension neutralised at download time (by the backend): the type is
-	// not on the allow list, so the file stays on disk and never reaches the
-	// desktop, which would run it. Local files only: a URL ending in .bin is
-	// for the browser to judge.
-	if i := strings.IndexAny(path, ":/"); (i < 0 || path[i] != ':') && strings.HasSuffix(strings.ToLower(path), ".bin") {
+	if i := strings.IndexAny(path, ":/"); (i < 0 || path[i] != ':') && !media.OpenableFile(path) {
 		u.sys(i18n.T("open_denied_type", render.Truncate(render.CleanLine(filepath.Base(path)), 60, "…")))
 		return
 	}

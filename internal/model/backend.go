@@ -33,7 +33,7 @@ type Backend interface {
 	SearchGlobal(ctx context.Context, q string, limit int)
 	SearchContacts(ctx context.Context, q string, limit int)
 	Contacts(ctx context.Context)
-	Resolve(ctx context.Context, q string, join bool)
+	Resolve(ctx context.Context, q string, join bool, request uint64)
 	Participants(ctx context.Context, chat *Chat)
 	Whois(ctx context.Context, chat *Chat)
 	WhoisMember(ctx context.Context, token string)
@@ -98,9 +98,20 @@ func AllCaps() Caps {
 // Poster : how a backend talks to the UI — the event channel, a blocking and
 // a non-blocking send, and the panic guard of its goroutines. Embedded by
 // every backend: one copy of the three, not one per network.
-type Poster struct{ Events chan<- Event }
+type Poster struct {
+	Events chan<- Event
+	Done   <-chan struct{}
+}
 
-func (p Poster) Post(e Event) { p.Events <- e }
+// SetContext is called before the backend starts.
+func (p *Poster) SetContext(ctx context.Context) { p.Done = ctx.Done() }
+
+func (p Poster) Post(e Event) {
+	select {
+	case p.Events <- e:
+	case <-p.Done:
+	}
+}
 
 // PostNB : non-blocking send for the callbacks that must not block.
 func (p Poster) PostNB(e Event) {

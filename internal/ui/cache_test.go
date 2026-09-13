@@ -309,8 +309,8 @@ func TestSyncMergeHistory(t *testing.T) {
 			t.Fatalf("message %d: id %d, want %d", i, got[i].ID, want)
 		}
 	}
-	if got[1].Text != "connu" {
-		t.Fatalf("duplicate: %q, want the version already cached", got[1].Text)
+	if got[1].Text != "doublon" {
+		t.Fatalf("duplicate: %q, want the refreshed server version", got[1].Text)
 	}
 }
 

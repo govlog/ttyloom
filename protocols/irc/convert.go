@@ -12,10 +12,43 @@ import (
 	"github.com/govlog/ttyloom/internal/model"
 )
 
-// casefold : the comparison form of a nick or a channel name.
-// ponytail: plain ASCII lower case, not the rfc1459 mapping ({}| = []\);
-// every network in use today runs ascii casemapping.
-func casefold(s string) string { return strings.ToLower(s) }
+// casefold follows the negotiated IRC mapping. RFC1459 is the default.
+func casefold(s string, mapping ...string) string {
+	mode := "rfc1459"
+	if len(mapping) > 0 && mapping[0] != "" {
+		mode = mapping[0]
+	}
+	b := []byte(s)
+	for i, ch := range b {
+		switch {
+		case ch >= 'A' && ch <= 'Z':
+			b[i] = ch + 'a' - 'A'
+		case mode != "ascii" && ch == '[':
+			b[i] = '{'
+		case mode != "ascii" && ch == ']':
+			b[i] = '}'
+		case mode != "ascii" && ch == '\\':
+			b[i] = '|'
+		case mode == "rfc1459" && ch == '~':
+			b[i] = '^'
+		}
+	}
+	return string(b)
+}
+
+func (c *Client) mapping() string {
+	if mode := c.casemap.Load(); mode != nil {
+		return mode.(string)
+	}
+	return "rfc1459"
+}
+
+func (c *Client) casefold(s string) string    { return casefold(s, c.mapping()) }
+func (c *Client) chatID(s string) int64       { return chatID(s, c.mapping()) }
+func (c *Client) chatOf(s string) *model.Chat { return chatOf(s, c.mapping()) }
+
+// ChatID lets the UI migrate cached names after the mapping is known.
+func (c *Client) ChatID(s string) int64 { return c.chatID(s) }
 
 // isChannel : the four channel prefixes of RFC 2811.
 func isChannel(name string) bool {
@@ -25,9 +58,9 @@ func isChannel(name string) bool {
 // chatID : the id of a channel or a nick — FNV-64a of its folded name, sign
 // bit cleared, never 0. IRC has no ids: the name is the identity, and a
 // stable hash keeps the disk cache and the windows across sessions.
-func chatID(name string) int64 {
+func chatID(name string, mapping ...string) int64 {
 	h := fnv.New64a()
-	h.Write([]byte(casefold(name)))
+	h.Write([]byte(casefold(name, mapping...)))
 	id := int64(h.Sum64() &^ (1 << 63))
 	if id == 0 {
 		id = 1
@@ -36,12 +69,12 @@ func chatID(name string) int64 {
 }
 
 // chatOf builds the chat of a channel or a nick.
-func chatOf(name string) *model.Chat {
+func chatOf(name string, mapping ...string) *model.Chat {
 	kind := model.ChatUser
 	if isChannel(name) {
 		kind = model.ChatGroup
 	}
-	return &model.Chat{ID: chatID(name), Kind: kind, Title: name, Peer: peer{Name: name}}
+	return &model.Chat{ID: chatID(name, mapping...), Kind: kind, Title: name, Peer: peer{Name: name}}
 }
 
 // nameOf : the channel or nick a chat stands for; the title when the peer is

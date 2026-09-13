@@ -108,6 +108,7 @@ func (w *Window) Update(m *model.Msg) bool {
 			// real one comes with the echo and must take its place.
 			if it.Msg.Media != nil && m.Media != nil && m.Media.State == model.MediaNone && it.Msg.TmpID == 0 &&
 				identOf(it.Msg.Media) == identOf(m.Media) {
+				refreshMedia(it.Msg.Media, m.Media)
 				m.Media = it.Msg.Media // keeps the media already loaded
 			}
 			it.Msg, it.lines = m, nil
@@ -130,6 +131,31 @@ type mediaIdent struct {
 
 func identOf(md *model.Media) mediaIdent {
 	return mediaIdent{md.Kind, md.Size, md.W, md.H, md.Name, md.URL}
+}
+
+// reconcileMsg refreshes server fields while keeping shared pointers and local
+// media state. A live change after the request started has priority.
+func reconcileMsg(old, fresh *model.Msg, started ...time.Time) {
+	if old == fresh || old.Pending {
+		return
+	}
+	if len(started) > 0 && !started[0].IsZero() && old.LiveAt.After(started[0]) {
+		return
+	}
+	next := *fresh
+	next.LiveAt = old.LiveAt
+	if old.Media != nil && next.Media != nil && identOf(old.Media) == identOf(next.Media) {
+		refreshMedia(old.Media, next.Media)
+		next.Media = old.Media
+	}
+	*old = next
+}
+
+func refreshMedia(old, fresh *model.Media) {
+	old.Loc = fresh.Loc
+	if old.State == model.MediaFailed && fresh.Loc != nil {
+		old.State, old.Err = model.MediaNone, ""
+	}
 }
 
 // Upsert adds the message or replaces the one with the same ID/TmpID. true when added.
@@ -190,11 +216,11 @@ func (w *Window) Sent(tmpID int64, id int, errText string) bool {
 // the ones newer than the last message of the window at the tail. The second
 // case is the cached history filled by the network — without it, the new
 // messages would end up above the old ones.
-func (w *Window) Merge(ms []*model.Msg) {
-	have := map[int]bool{}
+func (w *Window) Merge(ms []*model.Msg, started ...time.Time) {
+	have := map[int]*Item{}
 	for _, it := range w.Items {
 		if it.Msg != nil {
-			have[it.Msg.ID] = true
+			have[it.Msg.ID] = it
 		}
 	}
 	first, last := w.OldestID(), w.LastID()
@@ -202,7 +228,9 @@ func (w *Window) Merge(ms []*model.Msg) {
 	var hole []*model.Msg
 	for _, m := range ms {
 		switch {
-		case have[m.ID]:
+		case have[m.ID] != nil:
+			reconcileMsg(have[m.ID].Msg, m, started...)
+			have[m.ID].Invalidate()
 		case m.ID > last: // ms comes from the oldest to the newest: the order holds
 			newer = append(newer, &Item{Msg: m})
 		case m.ID < first:
@@ -284,18 +312,22 @@ func (w *Window) hasBetween(loID, hiID int) bool {
 // among the ones already there, instead of going as a block to the head (such a
 // page falls in the middle of the window, not at its edges). ms is sorted from
 // the oldest to the newest; the items with no message (system lines) stay put.
-func (w *Window) MergeAround(ms []*model.Msg) {
-	have := map[int]bool{}
+func (w *Window) MergeAround(ms []*model.Msg, started ...time.Time) {
+	have := map[int]*Item{}
 	for _, it := range w.Items {
 		if it.Msg != nil {
-			have[it.Msg.ID] = true
+			have[it.Msg.ID] = it
 		}
 	}
 	var add []*Item
 	for _, m := range ms {
-		if !have[m.ID] {
-			have[m.ID] = true
-			add = append(add, &Item{Msg: m})
+		if it := have[m.ID]; it != nil {
+			reconcileMsg(it.Msg, m, started...)
+			it.Invalidate()
+		} else {
+			it = &Item{Msg: m}
+			have[m.ID] = it
+			add = append(add, it)
 		}
 	}
 	if len(add) == 0 {

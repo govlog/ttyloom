@@ -268,11 +268,7 @@ func (u *UI) dccCmd(w *Window, args []string, text string) {
 		}
 		// The private chat does not exist yet: the network makes it (Resolve),
 		// and the send goes at the answer (chatResolved).
-		if u.dccAfter == nil {
-			u.dccAfter = map[string]string{}
-		}
-		u.dccAfter[nick] = path
-		u.nets[net].Resolve(u.ctx, nick, false)
+		u.resolve(w, nick, false, []model.Backend{u.nets[net]}, false, path)
 	case "get":
 		win := w
 		if len(args) > 1 {
@@ -301,6 +297,9 @@ func (u *UI) dccCmd(w *Window, args []string, text string) {
 
 // chatByTitle : the chat of net whose title is name, case apart.
 func (u *UI) chatByTitle(net, name string) *model.Chat {
+	if b, ok := u.nets[net].(interface{ ChatID(string) int64 }); ok {
+		return u.chats[model.ChatKey{Net: net, ID: b.ChatID(name)}]
+	}
 	for _, c := range u.chatList {
 		if c.Net == net && strings.EqualFold(c.Title, name) {
 			return c
@@ -322,22 +321,4 @@ func lastOffer(w *Window) *model.Msg {
 		}
 	}
 	return nil
-}
-
-// dccResolved : the answer of the lookup /dcc send started; true when it was
-// one. The file goes out as soon as the chat exists.
-func (u *UI) dccResolved(e model.EvChat) bool {
-	path, ok := u.dccAfter[e.Query]
-	if !ok {
-		return false
-	}
-	delete(u.dccAfter, e.Query)
-	if e.Err != "" || e.Chat == nil {
-		u.sys(i18n.T("resolve_failed", e.Query, e.Err))
-		return true
-	}
-	c := u.remember(e.Chat)
-	u.listChat(c)
-	u.sendFile(c, path, "")
-	return true
 }

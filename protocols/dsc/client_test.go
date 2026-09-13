@@ -68,7 +68,7 @@ func TestUnsupported(t *testing.T) {
 		{"SearchContacts", func(c *Client) { c.SearchContacts(ctx, "q", 10) },
 			model.EvContactsFound{Query: "q", Err: no}},
 		{"Contacts", func(c *Client) { c.Contacts(ctx) }, model.EvContacts{Err: no}},
-		{"Resolve", func(c *Client) { c.Resolve(ctx, "q", false) }, model.EvChat{Query: "q", Err: no}},
+		{"Resolve", func(c *Client) { c.Resolve(ctx, "q", false, 0) }, model.EvChat{Query: "q", Err: no}},
 		{"Whois", func(c *Client) { c.Whois(ctx, chat) }, model.EvWhois{ChatID: 5, Err: no}},
 		{"WhoisMember", func(c *Client) { c.WhoisMember(ctx, "@bob") }, model.EvWhois{Err: no}},
 		{"WhoRead", func(c *Client) { c.WhoRead(ctx, chat, 3, 0) },

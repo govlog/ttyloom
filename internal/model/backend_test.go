@@ -1,6 +1,25 @@
 package model
 
-import "testing"
+import (
+	"context"
+	"testing"
+	"time"
+)
+
+func TestPosterStopsWithSession(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	p := Poster{Events: make(chan Event)}
+	p.SetContext(ctx)
+	done := make(chan struct{})
+	go func() { p.Post(EvLog{}); close(done) }()
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("event delivery blocked after session ended")
+	}
+}
 
 // Guard turns a panic into an ERROR event and hands its text to the callback;
 // PostNB drops on a full channel instead of blocking.

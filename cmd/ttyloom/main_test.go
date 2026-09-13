@@ -164,16 +164,17 @@ func TestBackendsIRC(t *testing.T) {
 	if _, err := launch(ctx, "irc:nope"); err == nil {
 		t.Fatal("an unknown IRC network must not launch")
 	}
-	if err := ircConfig(cfg, cfg.IRCByName("oftc")).SaveChannels([]string{"#debian"}); err != nil {
+	raw := make(chan model.Event, 1)
+	if err := ircConfig(context.Background(), cfg.IRCByName("oftc"), raw).SaveChannels([]string{"#debian"}); err != nil {
 		t.Fatal(err)
 	}
-	again, err := config.LoadFrom(filepath.Dir(cfg.Path()))
-	if err != nil {
-		t.Fatal(err)
+	if ev := (<-raw).(model.EvIRCChannels); !slices.Equal(ev.Channels, []string{"#debian"}) {
+		t.Fatalf("channels: %v", ev)
 	}
-	if n := again.IRCByName("oftc"); n == nil || len(n.Channels) != 1 || n.Channels[0] != "#debian" {
-		t.Fatalf("saved rooms: %+v", n)
+	if len(cfg.IRCByName("oftc").Channels) != 0 {
+		t.Fatal("backend mutated the UI configuration")
 	}
+
 }
 
 // Without api_id nothing starts: the message names the file to fill in.

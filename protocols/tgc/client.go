@@ -770,7 +770,7 @@ func (c *Client) LoadHistoryAround(ctx context.Context, chat *model.Chat, id, li
 	snapshot := *chat // The UI can update chat fields while the request runs.
 	chat = &snapshot
 	go func() {
-		ev := model.EvHistory{ChatID: chat.ID, Around: true, AroundID: id}
+		ev := model.EvHistory{Started: time.Now(), ChatID: chat.ID, Around: true, AroundID: id}
 		defer c.Guard("LoadHistoryAround", func(err string) {
 			ev.Err = err
 			c.Post(ev)
@@ -824,7 +824,7 @@ func (c *Client) LoadHistorySince(ctx context.Context, chat *model.Chat, minID, 
 
 // history : common body of the two loads. It runs in its own goroutine.
 func (c *Client) history(ctx context.Context, chat *model.Chat, beforeID, minID, limit int, since bool) {
-	ev := model.EvHistory{ChatID: chat.ID, Older: beforeID > 0, Since: since}
+	ev := model.EvHistory{Started: time.Now(), ChatID: chat.ID, Older: beforeID > 0, Since: since}
 	defer c.Guard("history", func(err string) {
 		ev.Err = err
 		c.Post(ev)
@@ -880,7 +880,7 @@ func (c *Client) Search(ctx context.Context, chat *model.Chat, q string, limit i
 	snapshot := *chat // The UI can update chat fields while the request runs.
 	chat = &snapshot
 	go func() {
-		ev := model.EvSearch{ChatID: chat.ID, Query: q}
+		ev := model.EvSearch{Started: time.Now(), ChatID: chat.ID, Query: q}
 		defer c.Guard("Search", func(err string) {
 			ev.Err = err
 			c.Post(ev)
@@ -1555,9 +1555,9 @@ func (p *upProgress) Chunk(_ context.Context, s uploader.ProgressState) error {
 // Resolve takes an @username, a t.me/username link, a phone number, or the id
 // of a peer already seen (a member with no @username clicked in the F3 box).
 // join=true joins a channel that was left.
-func (c *Client) Resolve(ctx context.Context, q string, join bool) {
+func (c *Client) Resolve(ctx context.Context, q string, join bool, request uint64) {
 	go func() {
-		defer c.Guard("Resolve", func(err string) { c.Post(model.EvChat{Query: q, Err: err}) })
+		defer c.Guard("Resolve", func(err string) { c.Post(model.EvChat{Request: request, Query: q, Err: err}) })
 		// TDLib id (= user id for a private chat): the peer and its access
 		// hash are already kept, so no network.
 		if id, err := strconv.ParseInt(q, 10, 64); err == nil {
@@ -1565,36 +1565,41 @@ func (c *Client) Resolve(ctx context.Context, q string, join bool) {
 			p, ok := c.seen[id]
 			c.mu.Unlock()
 			if ok {
-				c.Post(model.EvChat{Query: q, Chat: c.chatOf(p)})
+				c.Post(model.EvChat{Request: request, Query: q, Chat: c.chatOf(p)})
 				return
 			}
 		}
 		if !c.floodOK() {
-			c.Post(model.EvChat{Query: q, Err: errFlood().Error()})
+			c.Post(model.EvChat{Request: request, Query: q, Err: errFlood().Error()})
 			return
 		}
 		p, err := c.peers.Resolve(ctx, q)
 		if err != nil {
 			c.floodTrip(err)
-			c.Post(model.EvChat{Query: q, Err: err.Error()})
+			c.Post(model.EvChat{Request: request, Query: q, Err: err.Error()})
 			return
 		}
 		c.remember(p)
 		if ch, ok := p.(peers.Channel); ok && join && ch.Left() {
 			if _, err := c.api.ChannelsJoinChannel(ctx, ch.InputChannel()); err != nil {
-				c.Post(model.EvChat{Query: q, Err: err.Error()})
+				c.Post(model.EvChat{Request: request, Query: q, Err: err.Error()})
 				return
 			}
 		}
-		c.Post(model.EvChat{Query: q, Chat: c.chatOf(p)})
+		c.Post(model.EvChat{Request: request, Query: q, Chat: c.chatOf(p)})
 	}()
 }
 
 // Download downloads m.Loc to path (3 in parallel at most). A file already there = success at once.
 func (c *Client) Download(ctx context.Context, m *model.Media, path string) {
+	loc, ok := m.Loc.(tg.InputFileLocationClass)
 	go func() {
 		defer c.Guard("Download", func(err string) { c.Post(model.EvDownloaded{Media: m, Err: err}) })
-		c.dlSem <- struct{}{}
+		select {
+		case c.dlSem <- struct{}{}:
+		case <-ctx.Done():
+			return
+		}
 		defer func() { <-c.dlSem }()
 		if _, err := os.Stat(path); err == nil {
 			c.Post(model.EvDownloaded{Media: m, Path: path})
@@ -1616,7 +1621,6 @@ func (c *Client) Download(ctx context.Context, m *model.Media, path string) {
 			return
 		}
 		tmp := f.Name()
-		loc, ok := m.Loc.(tg.InputFileLocationClass)
 		if !ok { // handle of another backend: nothing to download here
 			f.Close()
 			os.Remove(tmp)
@@ -1644,11 +1648,16 @@ func (c *Client) Download(ctx context.Context, m *model.Media, path string) {
 // HTTP call to tile.openstreetmap.org through media.Tile, with the same
 // semaphore and the same event back as Download: the UI has nothing to tell apart.
 func (c *Client) DownloadMap(ctx context.Context, m *model.Media, path string) {
+	lat, long := m.Lat, m.Long
 	go func() {
 		defer c.Guard("DownloadMap", func(err string) { c.Post(model.EvDownloaded{Media: m, Err: err}) })
-		c.dlSem <- struct{}{}
+		select {
+		case c.dlSem <- struct{}{}:
+		case <-ctx.Done():
+			return
+		}
 		defer func() { <-c.dlSem }()
-		if err := media.Tile(ctx, m.Lat, m.Long, path); err != nil {
+		if err := media.Tile(ctx, lat, long, path); err != nil {
 			c.Post(model.EvDownloaded{Media: m, Err: err.Error()})
 			return
 		}

@@ -49,6 +49,7 @@ type UI struct {
 	netList   []string                      // configured networks, sorted: the ones /<net> login can start
 	launch    model.Launcher                // builds and runs one of them, given by Run
 	netCancel map[string]context.CancelFunc // ends the Run of a live network (/<net> logout)
+	netCtx    map[string]context.Context
 	events    chan model.Event
 	ws        *Windows
 	agg       *Window // aggregated view of window 0: never in ws.List
@@ -57,21 +58,27 @@ type UI struct {
 	showDebug bool    // window 0 shows the log (/debug), with no saving
 	// cycleHome : window left by the first Ctrl+X of a last_unread tour, taken
 	// back once nothing is unread any more (nil outside a tour).
-	cycleHome *Window
-	ed        Editor
-	chats     map[model.ChatKey]*model.Chat
-	chatList  []*model.Chat
-	aliases   map[model.ChatKey]string // local names (/rename), saved in aliases.toml
-	pending   map[string]*Window       // /query waiting for a lookup
-	queryWait map[string][]*Window     // send targets waiting for a lookup
-	prompt    *model.EvAuthPrompt
-	promptNet string // network that asked u.prompt: its stop takes the prompt away
-	qr        *qrBox // QR code login running: passive overlay
+	cycleHome   *Window
+	ed          Editor
+	chats       map[model.ChatKey]*model.Chat
+	chatList    []*model.Chat
+	aliases     map[model.ChatKey]string // local names (/rename), saved in aliases.toml
+	lookups     map[uint64]*lookup
+	lookupID    uint64
+	prompt      *model.EvAuthPrompt
+	promptNet   string // network that asked u.prompt: its stop takes the prompt away
+	authPending []authPrompt
+	authQR      map[string]model.EvQR
+	authDraft   *Editor
+	authWindow  *Window
+	authDebug   bool
+	qr          *qrBox // QR code login running: passive overlay
 	// self : identity of the account per network (EvReady). Zero value while
 	// the network has not answered yet — id 0 owns nothing, name empty, not a
 	// bot, which is what the interface showed before any connection.
-	self   map[string]selfInfo
-	images string // effective mode: kitty | halfblock | off
+	self      map[string]selfInfo
+	accountID map[string]int64
+	images    string // effective mode: kitty | halfblock | off
 	// cellWait : the mode fell back to half blocks only because the cell size
 	// is not known yet. Some terminals give it neither in the answer to
 	// CSI 16 t nor in the pixels of TIOCGWINSZ before the window is really
@@ -113,6 +120,7 @@ type UI struct {
 	// decodes : decoding running per media, to be ended when nobody waits for
 	// it any more ("s", window closed, media freed, preview closed).
 	decodes     map[*model.Media]context.CancelFunc
+	decodeSlots chan struct{}
 	clock       string
 	flashMsg    string                  // temporary message of the status bar (copy)
 	flashUntil  time.Time               // end of the display of flashMsg
@@ -145,7 +153,6 @@ type UI struct {
 	gsearch     *globalSearch           // 2nd Ctrl+F: overlay of the server results, it takes everything
 	newChat     *newChatBox             // "new chat" overlay: it takes everything
 	form        *formBox                // form overlay (/irc add): it takes everything
-	dccAfter    map[string]string       // /dcc send waiting for the private chat: nick -> path
 	gifs        *gifBox                 // GIF box (Ctrl+G): it takes everything
 	customs     map[string]*model.Media // images of the custom emojis, by URL, kept for the session (customs.go)
 	gifOrphan   map[*model.Media]bool   // previews of a closed GIF box whose download still comes
@@ -166,14 +173,16 @@ type UI struct {
 	// dialogsSeen : networks whose first chat list has come. It fires the
 	// once-per-session triggers (automatic opening, sync) per network, and not
 	// once for the whole session.
-	dialogsSeen map[string]bool
-	caches      map[string]*cache.Cache // one disk cache per network, empty: cache off (cache = false)
-	cacheSelf   map[string]int64        // per network, account that wrote the cache read at start
-	cached      map[model.ChatKey]bool
-	dirty       map[model.ChatKey]bool
+	dialogsSeen  map[string]bool
+	caches       map[string]*cache.Cache // one disk cache per network, empty: cache off (cache = false)
+	cacheSelf    map[string]int64        // per network, account that wrote the cache read at start
+	cached       map[model.ChatKey]bool
+	dirty        map[model.ChatKey]bool
+	dialogsDirty bool
 	// bgWait : the cache writes in flight (bg). Waiting on it is what lets a
 	// test read back what a write left, instead of racing it.
 	bgWait    sync.WaitGroup
+	bgTail    chan struct{}
 	flushed   time.Time     // last write of the cache
 	syncQueue []*model.Chat // chats left to sync
 	syncCur   *model.Chat   // step in flight (nil: none)
@@ -193,7 +202,7 @@ func Run(ctx context.Context, cancel context.CancelFunc, t *term.Term, cfg *conf
 	u := &UI{ctx: ctx, cancel: cancel, t: t, cfg: cfg, th: th, nets: map[string]model.Backend{}, netList: netList, launch: launch,
 		netCancel: map[string]context.CancelFunc{}, events: make(chan model.Event, 256), ws: NewWindows(),
 		agg: &Window{}, aggregate: cfg.Aggregate, debug: &Window{}, focused: true,
-		chats: map[model.ChatKey]*model.Chat{}, pending: map[string]*Window{}, typing: map[model.ChatKey]typing{}, lastTyping: map[model.ChatKey]time.Time{},
+		chats: map[model.ChatKey]*model.Chat{}, lookups: map[uint64]*lookup{}, typing: map[model.ChatKey]typing{}, lastTyping: map[model.ChatKey]time.Time{},
 		avatars: map[model.ChatKey]*model.Media{}, openNext: map[*model.Media]bool{}, presence: map[model.ChatKey]string{},
 		caches: caches, dirty: map[model.ChatKey]bool{}, partsCache: map[model.ChatKey]partsEntry{}, whoCache: map[whoKey]whoEntry{},
 		sideW:       clampSideW(cfg.SidebarWidth, t.Cols),
@@ -299,6 +308,9 @@ func Run(ctx context.Context, cancel context.CancelFunc, t *term.Term, cfg *conf
 // on everything the event carries, and stays readable in u.dispatchNet for
 // the events that only name a chat by its id.
 func (u *UI) dispatch(env model.Envelope) {
+	if env.Session != nil && env.Session != u.netCtx[env.Net] {
+		return
+	}
 	u.dispatchNet = env.Net
 	u.event(stamp(env.Net, env.Ev))
 }
@@ -472,6 +484,26 @@ func (u *UI) startNet(net string) {
 		return
 	}
 	u.nets[net], u.netCancel[net] = b, cancel
+	if u.netCtx == nil {
+		u.netCtx = map[string]context.Context{}
+	}
+	u.netCtx[net] = ctx
+}
+
+func (u *UI) netContext(net string) context.Context {
+	if ctx := u.netCtx[net]; ctx != nil {
+		return ctx
+	}
+	return u.ctx
+}
+
+func (u *UI) backendContext(b model.Backend) context.Context {
+	for net, live := range u.nets {
+		if live == b {
+			return u.netContext(net)
+		}
+	}
+	return u.ctx
 }
 
 // stopNet : /<net> logout and /<net> disconnect. With logout the account
@@ -490,9 +522,13 @@ func (u *UI) stopNet(net string, logout bool) {
 		cancel()
 		return
 	}
+	ctx := u.netContext(net)
 	go func() {
-		if err := l.Logout(u.ctx); err != nil {
-			u.events <- model.EvLog{Level: "ERROR", Msg: i18n.T("net_logout_error", net, err)}
+		if err := l.Logout(ctx); err != nil {
+			select {
+			case u.events <- model.Envelope{Net: net, Session: ctx, Ev: model.EvLog{Level: "ERROR", Msg: i18n.T("net_logout_error", net, err)}}:
+			case <-ctx.Done():
+			}
 		}
 		cancel()
 	}()
@@ -749,6 +785,7 @@ func (u *UI) views() []*Window { return append([]*Window{u.agg}, u.ws.List...) }
 // updateShared replaces m everywhere it shows: a remote edit comes with a new
 // pointer, and each view must take it.
 func (u *UI) updateShared(m *model.Msg) {
+	m.LiveAt = time.Now()
 	for _, w := range u.views() {
 		w.Update(m)
 	}
@@ -882,42 +919,54 @@ func (u *UI) event(ev model.Event) {
 		return
 	}
 	switch e := ev.(type) {
-	case model.EvAuthPrompt:
-		u.prompt, u.promptNet = &e, u.dispatchNet
-		u.status0(e.Question)
-		u.goTo(0)
-	case model.EvQR:
-		u.setQR(e)
-	case model.EvQRDone:
-		u.closeQR()
-		if u.prompt != nil { // prompt of the QR: nobody waits for the answer any more
-			u.prompt = nil
-			u.ed.Set("")
+	case model.Envelope:
+		u.dispatch(e)
+	case model.EvIRCChannels:
+		if n := u.cfg.IRCByName(model.IRCName(u.dispatchNet)); n != nil {
+			n.Channels = slices.Clone(e.Channels)
+			u.saveCfg()
 		}
+	case model.EvAuthPrompt:
+		u.authStart(u.dispatchNet, e)
+	case model.EvQR:
+		u.authShowQR(u.dispatchNet, e)
+	case model.EvQRDone:
+		u.authDone(u.dispatchNet)
 	case model.EvReady:
 		net := u.dispatchNet
+		old := u.accountID[net]
+		if old == 0 {
+			old = u.cacheSelf[net]
+		}
+		if old != 0 && old != e.SelfID {
+			u.dropCache(net)
+		}
+		if u.accountID == nil {
+			u.accountID = map[string]int64{}
+		}
+		u.accountID[net] = e.SelfID
 		u.self[net] = selfInfo{ID: e.SelfID, Name: render.CleanLine(e.SelfName), Bot: e.Bot}
+		if b, ok := u.nets[net].(interface{ ChatID(string) int64 }); ok {
+			u.rekeyIRC(net, b.ChatID)
+		}
 		u.status0(i18n.T("connected_as", e.SelfName))
 		// Only the cache of THAT network: another one keeps the account that
 		// wrote it, and its history with it.
-		if old := u.cacheSelf[net]; old != 0 && old != e.SelfID {
-			u.dropCache(net)
-		}
 		if e.Bot {
 			u.status0(i18n.T("bot_mode_notice"))
 		} else if b := u.netOf(net); b != nil {
 			// Not a broadcast although the call is account-level: EvReady is
 			// per network, and each one asks for its own dialogs when it comes
 			// up. eachNet here would ask a backend that is not connected yet.
-			b.LoadDialogs(u.ctx)
+			b.LoadDialogs(u.backendContext(b))
 		}
 	case model.EvConnected:
 		u.conn[u.dispatchNet] = true
 		// Nothing promises the gateway replays what came while it was down
 		// (Discord after a sleep of the laptop opens a fresh session): every
 		// loaded window of the network reads its recent page again, the
-		// current one now, the others at their next visit. Merge puts the page
-		// in place and drops what is already there.
+		// current one now, the others at their next visit. Merge inserts new messages
+		// and refreshes the messages already there.
 		for _, w := range u.ws.List {
 			if w.Chat == nil || w.Chat.Net != u.dispatchNet || w.Search != "" || !w.Loaded {
 				continue
@@ -944,14 +993,12 @@ func (u *UI) event(ev model.Event) {
 		}
 		delete(u.nets, net)
 		delete(u.netCancel, net)
+		delete(u.netCtx, net)
+		u.clearNetWork(net)
 		delete(u.self, net)
 		delete(u.dialogsSeen, net) // the next login auto-opens and syncs again
 		u.conn[net] = false
-		if u.prompt != nil && u.promptNet == net { // a login question nobody waits for any more
-			u.closeQR()
-			u.prompt = nil
-			u.ed.Set("")
-		}
+		u.authDone(net)
 		if e.Err != "" {
 			u.status0(i18n.T("net_stopped_error", net, e.Err, net))
 			u.goTo(0)
@@ -999,6 +1046,7 @@ func (u *UI) event(ev model.Event) {
 	case model.EvEditMessage:
 		if i := u.ws.ForChat(e.Msg.Key()); i >= 0 {
 			m := e.Msg
+			m.LiveAt = time.Now()
 			if c := u.chats[m.Key()]; c != nil {
 				m.ChatLabel = c.Title
 			}
@@ -1023,6 +1071,7 @@ func (u *UI) event(ev model.Event) {
 			for _, it := range w.Items {
 				if it.Msg != nil && slices.Contains(e.IDs, it.Msg.ID) {
 					it.Msg.Deleted, it.lines = true, nil
+					it.Msg.LiveAt = time.Now()
 					u.agg.Touch(it.Msg)
 					u.markDirty(w.Chat.Key())
 				}
@@ -1083,7 +1132,9 @@ func (u *UI) event(ev model.Event) {
 	case evClipImage:
 		u.clipImage(e)
 	case evClipText:
-		u.pasteText(u.view(), normalizePaste(e.Text))
+		if u.prompt == nil {
+			u.pasteText(u.view(), normalizePaste(e.Text))
+		}
 	case evFlash:
 		u.flash(e.Text)
 	}
@@ -1099,7 +1150,10 @@ func (u *UI) remember(c *model.Chat) *model.Chat {
 		// wiped by an older value (Unread included).
 		u.readOutbox(old, c.ReadOutboxMaxID)
 		u.readInbox(old, c.ReadInboxMaxID, c.Unread, true)
-		old.TopMessage, old.LastDate = c.TopMessage, c.LastDate
+		old.TopMessage = max(old.TopMessage, c.TopMessage)
+		if c.LastDate.After(old.LastDate) {
+			old.LastDate = c.LastDate
+		}
 		old.PhotoLoc = c.PhotoLoc // photo refreshed; the avatar already loaded does not move
 		old.Customs, old.CustomLocs = c.Customs, c.CustomLocs
 		return old
@@ -1121,6 +1175,7 @@ func (u *UI) listChat(c *model.Chat) {
 
 func (u *UI) newMessage(e model.EvNewMessage) {
 	m := e.Msg
+	m.LiveAt = time.Now()
 	chat := u.chats[m.Key()]
 	if chat == nil {
 		chat = u.remember(e.Chat)
@@ -1128,6 +1183,7 @@ func (u *UI) newMessage(e model.EvNewMessage) {
 	// Always: the chat can be known to u.chats without being in the sidebar
 	// (seen in a global search result, or in the contacts).
 	u.listChat(chat)
+	u.noteActivity(chat, &m)
 	i := u.ws.ForChat(chat.Key())
 	if i < 0 {
 		u.bindChat(u.ws.New(true), chat)
@@ -1142,7 +1198,7 @@ func (u *UI) newMessage(e model.EvNewMessage) {
 	u.agg.Upsert(&m) // same pointer: edits, deletes and reactions follow
 	// Read on the screen: current window or aggregated view, and only when
 	// the terminal has the focus — away, nobody reads.
-	seen := u.focused && (i == u.ws.Cur || u.view() == u.agg)
+	seen := u.focused && (u.view() == w || (u.view() == u.agg && u.netShown(&m)))
 	if added && !m.Out {
 		if !seen {
 			w.Act++
@@ -1324,10 +1380,11 @@ func (u *UI) history(e model.EvHistory) {
 		ptrs[k] = &e.Msgs[k]
 	}
 	if e.Around {
-		w.MergeAround(ptrs)
+		w.MergeAround(ptrs, e.Started)
 	} else {
-		w.Merge(ptrs)
+		w.Merge(ptrs, e.Started)
 	}
+	u.clear()
 	u.markDirty(key)
 	if e.Done {
 		w.Full = true
@@ -1339,10 +1396,8 @@ func (u *UI) history(e model.EvHistory) {
 	if recent {
 		w.Loaded = true
 	}
-	// On the items of the window and not on ptrs: Merge drops the messages
-	// already there (cached history), and it is their own media that shows.
-	// Starting the download on the dropped message never showed anything —
-	// the image showed only at the first zoom, which loads everything again.
+	// Merge keeps shared message and media pointers. Start downloads on those
+	// objects, which are the ones the windows display.
 	ids := make(map[int]bool, len(ptrs))
 	for _, m := range ptrs {
 		ids[m.ID] = true
@@ -1352,7 +1407,7 @@ func (u *UI) history(e model.EvHistory) {
 			u.autoMedia(it.Msg, false)
 		}
 	}
-	if recent && i == u.ws.Cur {
+	if recent && u.focused && u.view() == w {
 		u.markRead(w)
 	}
 	// Read position: at the first EvHistory (not a load upwards) of a window
@@ -1423,36 +1478,13 @@ func (u *UI) sent(e model.EvSent) {
 		}
 		if w.Sent(e.TmpID, e.ID, e.Err) {
 			if e.Err == "" && pend != nil && pend.ID != 0 {
+				u.noteActivity(w.Chat, pend)
 				u.logMsg(w, pend)
 			}
 			u.markDirty(u.evKey(e.ChatID))
 			return
 		}
 	}
-}
-
-func (u *UI) chatResolved(e model.EvChat) {
-	if u.queryResolved(e) || u.dccResolved(e) {
-		return
-	}
-	w := u.pending[e.Query]
-	delete(u.pending, e.Query)
-	if e.Err != "" {
-		msg := i18n.T("resolve_failed", e.Query, e.Err)
-		if w == nil {
-			u.status0(msg)
-		} else {
-			w.AddSys(msg)
-		}
-		return
-	}
-	c := u.remember(e.Chat)
-	u.listChat(c)
-	if w == nil { // orphan request: never bind the current window (that would be window 0)
-		u.status0(i18n.T("resolved", u.title(c)))
-		return
-	}
-	u.attach(w, c)
 }
 
 // markRefresh freezes w.MarkID (position of the redline) on the current
@@ -1486,7 +1518,7 @@ func (u *UI) markRead(w *Window) {
 	}
 	if last := w.LastID(); last > w.ReadSent {
 		w.ReadSent = last
-		b.MarkRead(u.ctx, w.Chat, last)
+		b.MarkRead(u.backendContext(b), w.Chat, last)
 		// ticks to ✓✓ and badge to 0 at once, without waiting for the server echo.
 		u.readInbox(w.Chat, last, 0, true)
 	}
@@ -1571,7 +1603,7 @@ func (u *UI) loadHistory(w *Window, beforeID int) {
 		return // no network: w.Loading stays false, the window is not stuck
 	}
 	w.Loading = true
-	b.LoadHistory(u.ctx, w.Chat, beforeID, 100)
+	b.LoadHistory(u.backendContext(b), w.Chat, beforeID, 100)
 }
 
 // loadAround : network page centred on a message (precise jump). Same lock as
@@ -1582,7 +1614,7 @@ func (u *UI) loadAround(w *Window, id int) {
 		return
 	}
 	w.Loading = true
-	b.LoadHistoryAround(u.ctx, w.Chat, id, 100)
+	b.LoadHistoryAround(u.backendContext(b), w.Chat, id, 100)
 }
 
 // jumpTo brings the window of the chat to the message id. Already loaded:
@@ -1656,7 +1688,7 @@ func (u *UI) attach(w *Window, c *model.Chat) {
 // whois : result of /whois, in the shown window.
 // ponytail: the answer goes where the user looks, not into the window that
 // ran the command (one server round trip, they have not changed window). If
-// that ever gets in the way, keep the window as u.pending does for /query.
+// that ever gets in the way, keep the source window as /query does.
 func (u *UI) whois(e model.EvWhois) {
 	if e.Err != "" {
 		title := "?"
@@ -1769,6 +1801,10 @@ func (u *UI) key(k term.Key) {
 		// mean walking the messages of the aggregate.
 		u.markRefresh(u.view())
 		u.markRead(u.view())
+		return
+	}
+	if u.prompt != nil {
+		u.authKey(k)
 		return
 	}
 	if u.viewer != nil { // the full screen preview comes before everything else
@@ -2023,7 +2059,7 @@ func (u *UI) sendTyping(w *Window) {
 	}
 	if now := time.Now(); now.Sub(u.lastTyping[c.Key()]) >= 5*time.Second {
 		u.lastTyping[c.Key()] = now
-		b.Typing(u.ctx, c, false)
+		b.Typing(u.backendContext(b), c, false)
 	}
 }
 
@@ -2040,9 +2076,14 @@ func (u *UI) openPicker(c *model.Chat, onPick func(string)) {
 func (u *UI) submit() {
 	if p := u.prompt; p != nil { // login answer, never in the history
 		line := u.ed.String()
-		u.ed.Set("")
-		u.prompt = nil
-		p.Reply <- line
+		ctx := u.netContext(u.promptNet)
+		u.authDone(u.promptNet)
+		go func() {
+			select {
+			case p.Reply <- line:
+			case <-ctx.Done():
+			}
+		}()
 		return
 	}
 	line := u.ed.Submit()
@@ -2102,7 +2143,7 @@ func (u *UI) sendWith(w *Window, text string, pre bool) {
 	if b == nil {
 		return
 	}
-	b.Typing(u.ctx, w.Chat, true)
+	b.Typing(u.backendContext(b), w.Chat, true)
 	u.tmpID++
 	me := u.selfOf(w.Chat.Net)
 	m := &model.Msg{Net: w.Chat.Net, ChatID: w.Chat.ID, ChatLabel: w.Chat.Title, Date: time.Now(), From: me.Name, FromID: me.ID,
@@ -2143,13 +2184,13 @@ func (u *UI) sendWith(w *Window, text string, pre bool) {
 	case replyTo != 0:
 		// ponytail: reply + paste as a code block: the reply wins, the text
 		// goes out raw; SendReply would otherwise take one mode more.
-		b.SendReply(u.ctx, w.Chat, text, replyTo, u.tmpID)
+		b.SendReply(u.backendContext(b), w.Chat, text, replyTo, u.tmpID)
 	case pre:
-		b.SendPre(u.ctx, w.Chat, text, u.tmpID)
+		b.SendPre(u.backendContext(b), w.Chat, text, u.tmpID)
 	case segs != nil:
-		b.SendStyled(u.ctx, w.Chat, segs, u.tmpID)
+		b.SendStyled(u.backendContext(b), w.Chat, segs, u.tmpID)
 	default:
-		b.Send(u.ctx, w.Chat, text, u.tmpID)
+		b.Send(u.backendContext(b), w.Chat, text, u.tmpID)
 	}
 }
 
@@ -2159,6 +2200,7 @@ func (u *UI) sendWith(w *Window, text string, pre bool) {
 // there as well, outside the history of the viewed chat; a search view of
 // the same chat gets nothing, the message is its own.
 func (u *UI) insertPending(w *Window, m *model.Msg) {
+	u.noteActivity(w.Chat, m)
 	w.Upsert(m)
 	u.setSel(w, nil)
 	w.Scroll = 0
@@ -2215,7 +2257,7 @@ func (u *UI) sendMe(w *Window, arg string) {
 	m := &model.Msg{Net: w.Chat.Net, ChatID: w.Chat.ID, ChatLabel: w.Chat.Title, Date: time.Now(), From: me.Name, FromID: me.ID,
 		Out: true, Text: fenceText(segs), Entities: fenceEntities(segs), Pending: true, TmpID: u.tmpID}
 	u.insertPending(w, m)
-	b.SendStyled(u.ctx, w.Chat, segs, u.tmpID)
+	b.SendStyled(u.backendContext(b), w.Chat, segs, u.tmpID)
 }
 
 // candidates for Tab: dispatch by command context (complContext).
@@ -2283,7 +2325,7 @@ func (u *UI) candidates(word string, atStart bool) []string {
 func (u *UI) tick() bool {
 	now := time.Now()
 	redraw := false
-	if len(u.dirty) > 0 && now.Sub(u.flushed) >= flushEvery {
+	if (len(u.dirty) > 0 || u.dialogsDirty) && now.Sub(u.flushed) >= flushEvery {
 		u.flushCache(false)
 	}
 	for k, t := range u.typing {

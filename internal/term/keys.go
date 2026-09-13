@@ -55,6 +55,39 @@ type Key struct {
 	Mouse MouseEvent
 }
 
+// Decoder retains split sequences and discards an oversized paste through its
+// closing marker. Bytes inside that paste must never become keyboard input.
+type Decoder struct {
+	pending      []byte
+	discardPaste bool
+}
+
+func (d *Decoder) Feed(buf []byte, final bool) []Key {
+	d.pending = append(d.pending, buf...)
+	if d.discardPaste {
+		end := bytes.Index(d.pending, []byte("\x1b[201~"))
+		if end < 0 {
+			d.keepPasteTail()
+			return nil
+		}
+		d.pending = d.pending[end+6:]
+		d.discardPaste = false
+	}
+	keys, rest := Parse(d.pending, final)
+	d.pending = rest
+	if pasteOpen(rest) && len(rest) > maxPasteCSI+6 {
+		d.discardPaste = true
+		d.keepPasteTail()
+	}
+	return keys
+}
+
+func (d *Decoder) keepPasteTail() {
+	// Keep only the possible start of a closing marker, in a small buffer.
+	n := min(len(d.pending), 5)
+	d.pending = append([]byte(nil), d.pending[len(d.pending)-n:]...)
+}
+
 // Parse decodes buf into keys. rest = bytes of a cut sequence, to keep for
 // the next call. final=true: nothing more will come, a lone ESC becomes Esc.
 func Parse(buf []byte, final bool) (keys []Key, rest []byte) {
@@ -199,13 +232,6 @@ func parseCSI(b []byte, final bool) (Key, int, bool) {
 	if params == "200" && fin == '~' { // bracketed paste
 		end := bytes.Index(b[n:], []byte("\x1b[201~"))
 		if end < 0 {
-			// No end marker in sight: the buffer of readLoop would grow
-			// without bound as long as the producer keeps writing. Dropped
-			// above the cap — a paste is capped at 64 KB in the input line
-			// anyway (ui.maxPasteBytes).
-			if len(b)-n > maxPasteCSI {
-				return Key{}, len(b), true
-			}
 			if final {
 				// Never Esc + the text as keystrokes: each \r of the paste
 				// would send a message, a line starting with "/" would run a
@@ -328,7 +354,7 @@ const kpRunes = "0123456789./*-+"
 // ignored rather than put into the input.
 func kittyKey(p1, mod string) Key {
 	code, err := strconv.Atoi(csiField(p1))
-	if err != nil {
+	if err != nil || code < 0 || code > utf8.MaxRune || !utf8.ValidRune(rune(code)) {
 		return Key{} // answer of the terminal (CSI ? 1 u…) or unknown sequence
 	}
 	m := 1
@@ -348,7 +374,7 @@ func kittyKey(p1, mod string) Key {
 		k.Code = Backspace
 	case code >= 57399 && code < 57399+len(kpRunes):
 		k.Rune = rune(kpRunes[code-57399])
-	case code >= 57344: // private area: functional key not handled
+	case code >= 57344 && code <= 63743: // reserved functional key
 		return Key{}
 	case k.Ctrl:
 		r := rune(code)

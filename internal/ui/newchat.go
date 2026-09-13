@@ -191,7 +191,7 @@ func (u *UI) openNewChat() {
 		// the local chats fill the overlay, and ncSend says it when a typed
 		// query has nowhere to go.
 		u.eachNetCap(func(c model.Caps) bool { return c.Contacts },
-			func(b model.Backend) { b.Contacts(u.ctx) })
+			func(b model.Backend) { b.Contacts(u.backendContext(b)) })
 	}
 }
 
@@ -257,7 +257,7 @@ func (u *UI) ncSend() {
 	// the slot and the query can go out again while the others are still on
 	// their way. Fine with one backend; count the answers when there are two.
 	if !u.eachNetCap(func(c model.Caps) bool { return c.Contacts },
-		func(b model.Backend) { b.SearchContacts(u.ctx, q, ncLimit) }) {
+		func(b model.Backend) { b.SearchContacts(u.backendContext(b), q, ncLimit) }) {
 		// Like the global search: the query is marked sent so that the next key
 		// does not ask again.
 		n.inflight, n.sent = "", q

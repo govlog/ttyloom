@@ -3,7 +3,6 @@ package tgc
 import (
 	"fmt"
 	"math"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -232,41 +231,11 @@ func docMedia(d *tg.Document) *model.Media {
 	return m
 }
 
-// allowExt : the extensions kept as they are on disk — inert types only. A
-// deny list ages badly (.jar, .jnlp, .deb, .rpm, .py, .php… all start
-// something under xdg-open, and the next one is not in the list yet); this
-// one refuses everything it does not know. Anything else is saved as .bin,
-// and the interface never hands a .bin to the desktop.
-var allowExt = map[string]bool{
-	// images
-	".jpg": true, ".jpeg": true, ".png": true, ".gif": true, ".webp": true,
-	".bmp": true, ".tif": true, ".tiff": true, ".heic": true, ".avif": true,
-	// video
-	".mp4": true, ".webm": true, ".mkv": true, ".mov": true, ".avi": true,
-	".m4v": true, ".mpg": true, ".mpeg": true, ".3gp": true,
-	// audio
-	".mp3": true, ".ogg": true, ".oga": true, ".opus": true, ".m4a": true,
-	".aac": true, ".flac": true, ".wav": true,
-	// office documents
-	".pdf": true, ".doc": true, ".docx": true, ".xls": true, ".xlsx": true,
-	".ppt": true, ".pptx": true, ".odt": true, ".ods": true, ".odp": true,
-	// archives
-	".zip": true, ".tar": true, ".gz": true, ".7z": true,
-	// plain text
-	".txt": true, ".md": true, ".log": true, ".csv": true, ".json": true,
-}
-
-// extOf : the mime type decides; the name comes from the sender, so its
-// extension is kept only for lack of anything better, and only when it is on
-// the allow list.
 func extOf(name, mime string) string {
-	if e := extOfMime(mime); e != ".bin" {
-		return e
+	if mime == "application/x-tgsticker" {
+		return ".tgs"
 	}
-	if e := strings.ToLower(filepath.Ext(name)); allowExt[e] {
-		return e
-	}
-	return ".bin"
+	return media.SafeExtension(name, mime)
 }
 
 func extOfMime(mime string) string {

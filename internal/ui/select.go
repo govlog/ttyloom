@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/govlog/ttyloom/internal/emoji"
 	"github.com/govlog/ttyloom/internal/i18n"
@@ -73,7 +74,7 @@ func (u *UI) selKey(w *Window, r rune) bool {
 		u.confirm(i18n.T("confirm_delete_message", m.ID), func() {
 			c := u.chatOf(m)
 			if b := u.net(c); b != nil {
-				b.Delete(u.ctx, c, m.ID)
+				b.Delete(u.backendContext(b), c, m.ID)
 			}
 		})
 	case r == 'p' && act:
@@ -83,7 +84,7 @@ func (u *UI) selKey(w *Window, r rune) bool {
 	case r == 'i' && act:
 		c := u.chatOf(m)
 		if b := u.net(c); b != nil {
-			b.Info(u.ctx, c, m.ID, c.ReadOutboxMaxID, c.ReadInboxMaxID)
+			b.Info(u.backendContext(b), c, m.ID, c.ReadOutboxMaxID, c.ReadInboxMaxID)
 		}
 	case r == 'r' && act && u.capsOf(m).Reactions:
 		u.openReactPicker(it)
@@ -426,10 +427,10 @@ func (u *UI) applyEdit(w *Window, it *Item, text string) {
 	u.editText = text
 	if segs := parseDraft(text); segs != nil { // Ctrl+B/I/U runs, or fences
 		u.editText = fenceText(segs)
-		b.EditStyled(u.ctx, c, m.ID, segs)
+		b.EditStyled(u.backendContext(b), c, m.ID, segs)
 		return
 	}
-	b.Edit(u.ctx, c, m.ID, text)
+	b.Edit(u.backendContext(b), c, m.ID, text)
 }
 
 // edited : edit receipt. Failure → "[failed: …]" under the message and the
@@ -448,6 +449,7 @@ func (u *UI) edited(e model.EvEdited) {
 				continue
 			}
 			it.Msg.Pending, it.Msg.Err, it.lines = false, e.Err, nil
+			it.Msg.LiveAt = time.Now()
 			found = true
 			if w == view {
 				cur = it
@@ -579,7 +581,7 @@ func (u *UI) react(it *Item, pick string) {
 	// After the local refusal: a reaction outside the list is told in the
 	// window whether a backend is there or not.
 	if b := u.net(c); b != nil {
-		b.React(u.ctx, c, it.Msg.ID, next)
+		b.React(u.backendContext(b), c, it.Msg.ID, next)
 	}
 }
 
@@ -622,6 +624,7 @@ func (u *UI) reactions(e model.EvReactions) {
 					continue
 				}
 				it.Msg.Reactions, it.lines = e.Reactions, nil
+				it.Msg.LiveAt = time.Now()
 				found = true
 			}
 		}

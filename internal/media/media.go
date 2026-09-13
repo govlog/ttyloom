@@ -18,6 +18,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"strconv"
@@ -476,3 +477,38 @@ func Extension(mime string) string {
 	}
 	return ".bin"
 }
+
+// allowedExtensions contains the file types accepted by the desktop opener.
+// Unknown suffixes become .bin. This policy does not inspect file contents.
+var allowedExtensions = map[string]bool{
+	// images
+	".jpg": true, ".jpeg": true, ".png": true, ".gif": true, ".webp": true,
+	".bmp": true, ".tif": true, ".tiff": true, ".heic": true, ".avif": true,
+	// video
+	".mp4": true, ".webm": true, ".mkv": true, ".mov": true, ".avi": true,
+	".m4v": true, ".mpg": true, ".mpeg": true, ".3gp": true,
+	// audio
+	".mp3": true, ".ogg": true, ".oga": true, ".opus": true, ".m4a": true,
+	".aac": true, ".flac": true, ".wav": true,
+	// office documents
+	".pdf": true, ".doc": true, ".docx": true, ".xls": true, ".xlsx": true,
+	".ppt": true, ".pptx": true, ".odt": true, ".ods": true, ".odp": true,
+	// archives
+	".zip": true, ".tar": true, ".gz": true, ".7z": true,
+	// plain text
+	".txt": true, ".md": true, ".log": true, ".csv": true, ".json": true,
+}
+
+// SafeExtension uses a known MIME type, then an allowed filename suffix.
+func SafeExtension(name, mime string) string {
+	if ext := Extension(mime); ext != ".bin" {
+		return ext
+	}
+	if ext := strings.ToLower(filepath.Ext(name)); allowedExtensions[ext] {
+		return ext
+	}
+	return ".bin"
+}
+
+// OpenableFile reports whether a local file has an allowed suffix.
+func OpenableFile(path string) bool { return allowedExtensions[strings.ToLower(filepath.Ext(path))] }

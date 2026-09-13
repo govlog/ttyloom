@@ -84,7 +84,7 @@ func (c *Client) search(ctx context.Context, guild discord.GuildID, data api.Sea
 // Search : /search in a chat, limit results at most, oldest first.
 func (c *Client) Search(ctx context.Context, chat *model.Chat, q string, limit int) {
 	go func() {
-		ev := model.EvSearch{ChatID: chat.ID, Query: q}
+		ev := model.EvSearch{Started: time.Now(), ChatID: chat.ID, Query: q}
 		defer c.Guard("Search", func(err string) {
 			ev.Err = err
 			c.Post(ev)

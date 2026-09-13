@@ -1,7 +1,6 @@
 package ui
 
 import (
-	"slices"
 	"strings"
 
 	"github.com/govlog/ttyloom/internal/i18n"
@@ -60,18 +59,9 @@ func (u *UI) query(w *Window, name string, join bool) {
 		return
 	}
 	u.cancelQuery(w)
-	if u.queryWait == nil {
-		u.queryWait = map[string][]*Window{}
-	}
-	_, waiting := u.queryWait[name]
-	u.queryWait[name] = append(u.queryWait[name], w)
 	u.cancelMode()
 	w.AddSys(i18n.T("resolving", name))
-	if !waiting {
-		for _, b := range resolvers {
-			b.Resolve(u.ctx, name, join)
-		}
-	}
+	u.resolve(w, name, join, resolvers, false, "")
 }
 
 func (u *UI) setQuery(w *Window, c *model.Chat) {
@@ -91,45 +81,20 @@ func (u *UI) setQuery(w *Window, c *model.Chat) {
 }
 
 func (u *UI) cancelQuery(w *Window) {
-	for name, windows := range u.queryWait {
-		// Keep an empty entry until the answer arrives: it belongs to a
-		// cancelled target and must never fall through to the old bind path.
-		u.queryWait[name] = slices.DeleteFunc(windows, func(x *Window) bool { return x == w })
+	for id, req := range u.lookups {
+		if req.win == w && !req.bind && req.file == "" {
+			delete(u.lookups, id)
+		}
 	}
 }
 
 func (u *UI) queryPending(w *Window) string {
-	for name, windows := range u.queryWait {
-		if slices.Contains(windows, w) {
-			return name
+	for _, req := range u.lookups {
+		if req.win == w && !req.bind && req.file == "" {
+			return req.query
 		}
 	}
 	return ""
-}
-
-func (u *UI) queryResolved(e model.EvChat) bool {
-	windows, ok := u.queryWait[e.Query]
-	if !ok {
-		return false
-	}
-	delete(u.queryWait, e.Query)
-	windows = slices.DeleteFunc(windows, func(w *Window) bool {
-		return w != u.agg && w != u.debug && !slices.Contains(u.ws.List, w)
-	})
-	if len(windows) == 0 {
-		return true
-	}
-	if e.Err != "" || e.Chat == nil {
-		for _, w := range windows {
-			w.AddSys(i18n.T("resolve_failed", e.Query, e.Err))
-		}
-		return true
-	}
-	c := u.remember(e.Chat)
-	for _, w := range windows {
-		u.setQuery(w, c)
-	}
-	return true
 }
 
 func (u *UI) dropTargets(stale func(*model.Chat) bool) {

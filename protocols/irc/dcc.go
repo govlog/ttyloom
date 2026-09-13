@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/govlog/ttyloom/internal/i18n"
+	"github.com/govlog/ttyloom/internal/media"
 	"github.com/govlog/ttyloom/internal/model"
 	"github.com/govlog/ttyloom/internal/render"
 )
@@ -100,7 +101,7 @@ func ipArg(ip string) string {
 
 // media : the file offer as the UI shows it, the download key of the message.
 func (o dccOffer) media() *model.Media {
-	return &model.Media{Kind: model.MediaFile, Name: o.Name, Size: o.Size, Ext: filepath.Ext(o.Name),
+	return &model.Media{Kind: model.MediaFile, Name: o.Name, Size: o.Size, Ext: media.SafeExtension(o.Name, ""),
 		Label: i18n.T("dcc_offer", o.Name, render.HumanSize(o.Size)), Loc: o}
 }
 
@@ -165,6 +166,8 @@ func (c *Client) DCC() []string {
 // SendFile : DCC SEND to the person of chat. The local line stays pending
 // until the peer took the whole file (EvSent), or failed (EvSent.Err).
 func (c *Client) SendFile(ctx context.Context, chat *model.Chat, path, _ string, removeAfter bool, tmpID int64) {
+	snapshot := *chat
+	chat = &snapshot
 	go func() {
 		fail := func(err string) {
 			c.Post(model.EvSent{ChatID: chat.ID, TmpID: tmpID, Err: i18n.T("upload_error", filepath.Base(path), err)})
@@ -228,6 +231,7 @@ func (c *Client) dccSend(ctx context.Context, nick, path string) error {
 		}
 		return err
 	}
+	conn = watchDCC(ctx, conn)
 	defer conn.Close()
 	go discard(conn) // the acks
 	return c.stream(ctx, f, conn, st.Size(), func(pct int) {
@@ -271,7 +275,9 @@ func (c *Client) stream(ctx context.Context, src io.Reader, dst io.Writer, size 
 // dccGet fetches an offer into path — a ".part-" file next to it first, the
 // name once whole (a killed session leaves a part file cleanParts removes).
 func (c *Client) dccGet(ctx context.Context, m *model.Media, off dccOffer, path string) {
-	fail := func(err string) { c.Post(model.EvDownloaded{Media: m, Err: err}) }
+	result := model.EvDownloaded{Media: m}
+	defer func() { c.Post(result) }() // Report completion after resource cleanup.
+	fail := func(err string) { result.Err = err }
 	defer c.Guard("dccGet", fail)
 	untrack := c.track(i18n.T("dcc_receiving", off.Name, off.Nick))
 	defer untrack()
@@ -280,22 +286,24 @@ func (c *Client) dccGet(ctx context.Context, m *model.Media, off dccOffer, path 
 		fail(err.Error())
 		return
 	}
+	conn = watchDCC(ctx, conn)
 	defer conn.Close()
 	c.mu.Lock()
-	if o, ok := c.offers[casefold(off.Nick)]; ok && o == off {
-		delete(c.offers, casefold(off.Nick))
+	if o, ok := c.offers[c.casefold(off.Nick)]; ok && o == off {
+		delete(c.offers, c.casefold(off.Nick))
 	}
 	c.mu.Unlock()
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		fail(err.Error())
 		return
 	}
-	part := filepath.Join(filepath.Dir(path), ".part-"+filepath.Base(path))
-	f, err := os.OpenFile(part, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
+	f, err := os.CreateTemp(filepath.Dir(path), ".part-*")
 	if err != nil {
 		fail(err.Error())
 		return
 	}
+	part := f.Name()
+	defer f.Close()
 	defer os.Remove(part) // no-op once renamed
 	ack := make([]byte, 4)
 	w := &ackWriter{w: f, ack: func(n int64) {
@@ -320,7 +328,31 @@ func (c *Client) dccGet(ctx context.Context, m *model.Media, off dccOffer, path 
 		fail(err.Error())
 		return
 	}
-	c.Post(model.EvDownloaded{Media: m, Path: path})
+	result.Path = path
+}
+
+type dccConn struct {
+	net.Conn
+	stop func() bool
+}
+
+func watchDCC(ctx context.Context, conn net.Conn) net.Conn {
+	return &dccConn{Conn: conn, stop: context.AfterFunc(ctx, func() { conn.Close() })}
+}
+
+func (c *dccConn) Read(p []byte) (int, error) {
+	c.SetReadDeadline(time.Now().Add(dccWait))
+	return c.Conn.Read(p)
+}
+
+func (c *dccConn) Write(p []byte) (int, error) {
+	c.SetWriteDeadline(time.Now().Add(dccWait))
+	return c.Conn.Write(p)
+}
+
+func (c *dccConn) Close() error {
+	c.stop()
+	return c.Conn.Close()
 }
 
 // dccConnect reaches the sender: its port, or ours when the offer is a

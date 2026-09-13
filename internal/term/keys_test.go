@@ -3,6 +3,7 @@ package term
 import (
 	"bytes"
 	"reflect"
+	"strconv"
 	"testing"
 )
 
@@ -176,13 +177,35 @@ func TestPasteWithoutEnd(t *testing.T) {
 		t.Fatalf("short paste: %d keys, %d bytes pending", len(keys), len(rest))
 	}
 	big := append([]byte("\x1b[200~"), bytes.Repeat([]byte("a"), maxPasteCSI+1)...)
-	if keys, rest := Parse(big, false); len(keys) != 0 || len(rest) != 0 {
-		t.Fatalf("paste without end: %d keys, %d bytes pending", len(keys), len(rest))
+	var decoder Decoder
+	if keys := decoder.Feed(big, false); len(keys) != 0 || len(decoder.pending) > 5 {
+		t.Fatalf("paste without end: %d keys, %d bytes pending", len(keys), len(decoder.pending))
+	}
+	for _, tail := range []string{"/quit\r", "\x1b[20", "1"} {
+		if keys := decoder.Feed([]byte(tail), false); len(keys) != 0 {
+			t.Fatalf("paste tail became keys: %+v", keys)
+		}
+	}
+	if keys := decoder.Feed([]byte("~x"), false); len(keys) != 1 || keys[0].Rune != 'x' {
+		t.Fatalf("input after paste: %+v", keys)
 	}
 	// A normal paste still goes through whole.
 	ok := []byte("\x1b[200~bonjour\x1b[201~")
 	if keys, rest := Parse(ok, false); len(keys) != 1 || keys[0].Code != Paste || keys[0].Text != "bonjour" || len(rest) != 0 {
 		t.Fatalf("normal paste: %+v rest %d", keys, len(rest))
+	}
+}
+
+func TestKittyUnicodeRange(t *testing.T) {
+	for _, r := range []rune{'界', '😀', '𐐀'} {
+		if got := kittyKey(strconv.Itoa(int(r)), ""); got.Rune != r {
+			t.Fatalf("key %U: %+v", r, got)
+		}
+	}
+	for _, code := range []string{"57344", "63743", "55296", "1114112", "-1"} {
+		if got := kittyKey(code, ""); got != (Key{}) {
+			t.Fatalf("invalid key %s: %+v", code, got)
+		}
 	}
 }
 

@@ -80,8 +80,8 @@ func (c *Client) Contacts(context.Context) {
 	c.refuse("Contacts", model.EvContacts{Err: unsupported()})
 }
 
-func (c *Client) Resolve(_ context.Context, q string, _ bool) {
-	c.refuse("Resolve", model.EvChat{Query: q, Err: unsupported()})
+func (c *Client) Resolve(_ context.Context, q string, _ bool, request uint64) {
+	c.refuse("Resolve", model.EvChat{Request: request, Query: q, Err: unsupported()})
 }
 
 func (c *Client) Whois(_ context.Context, chat *model.Chat) {
@@ -514,7 +514,7 @@ func page(limit int) uint { return uint(max(limit, 1)) }
 
 // LoadHistory loads limit messages before beforeID (0 = the newest ones).
 func (c *Client) LoadHistory(ctx context.Context, chat *model.Chat, beforeID, limit int) {
-	c.history(ctx, "LoadHistory", chat, model.EvHistory{ChatID: chat.ID, Older: beforeID > 0}, limit, 0,
+	c.history(ctx, "LoadHistory", chat, model.EvHistory{Started: time.Now(), ChatID: chat.ID, Older: beforeID > 0}, limit, 0,
 		func(a *api.Client, ch discord.ChannelID) ([]discord.Message, error) {
 			return a.MessagesBefore(ch, discord.MessageID(beforeID), page(limit))
 		})
@@ -524,7 +524,7 @@ func (c *Client) LoadHistory(ctx context.Context, chat *model.Chat, beforeID, li
 // on its target.
 func (c *Client) LoadHistoryAround(ctx context.Context, chat *model.Chat, id, limit int) {
 	c.history(ctx, "LoadHistoryAround", chat,
-		model.EvHistory{ChatID: chat.ID, Around: true, AroundID: id}, limit, 0,
+		model.EvHistory{Started: time.Now(), ChatID: chat.ID, Around: true, AroundID: id}, limit, 0,
 		func(a *api.Client, ch discord.ChannelID) ([]discord.Message, error) {
 			return a.MessagesAround(ch, discord.MessageID(id), page(limit))
 		})
@@ -539,7 +539,7 @@ func (c *Client) LoadHistoryAround(ctx context.Context, chat *model.Chat, id, li
 // down to minID instead, like tgc — a page too short can then only miss the
 // far end of the past, which the window loads on its own by scrolling up.
 func (c *Client) LoadHistorySince(ctx context.Context, chat *model.Chat, minID, limit int) {
-	c.history(ctx, "LoadHistorySince", chat, model.EvHistory{ChatID: chat.ID, Since: true}, limit, minID,
+	c.history(ctx, "LoadHistorySince", chat, model.EvHistory{Started: time.Now(), ChatID: chat.ID, Since: true}, limit, minID,
 		func(a *api.Client, ch discord.ChannelID) ([]discord.Message, error) {
 			return a.MessagesBefore(ch, 0, page(limit))
 		})
@@ -727,22 +727,27 @@ const (
 // Download downloads m.Loc to path (3 in parallel at most). A file already
 // there = success at once.
 func (c *Client) Download(ctx context.Context, m *model.Media, path string) {
+	u, ok := m.Loc.(fileURL)
+	size := m.Size
 	go func() {
 		defer c.Guard("Download", func(err string) { c.Post(model.EvDownloaded{Media: m, Err: err}) })
-		c.dlSem <- struct{}{}
+		select {
+		case c.dlSem <- struct{}{}:
+		case <-ctx.Done():
+			return
+		}
 		defer func() { <-c.dlSem }()
 		if _, err := os.Stat(path); err == nil {
 			c.Post(model.EvDownloaded{Media: m, Path: path})
 			return
 		}
-		u, ok := m.Loc.(fileURL)
 		if !ok { // handle of another backend: nothing to download here
 			c.Post(model.EvLog{Level: "ERROR", Msg: i18n.T("media_foreign")})
 			c.Post(model.EvDownloaded{Media: m, Err: i18n.T("media_foreign")})
 			return
 		}
 		limit := int64(maxFetch)
-		if m.Size == 0 {
+		if size == 0 {
 			limit = unknownFetch
 		}
 		if err := fetch(ctx, string(u), path, limit); err != nil {

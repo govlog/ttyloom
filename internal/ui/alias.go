@@ -34,7 +34,8 @@ func aliasKey(k model.ChatKey) string {
 }
 
 func parseAliasKey(s string) (model.ChatKey, bool) {
-	if net, id, ok := strings.Cut(s, ":"); ok {
+	if i := strings.LastIndexByte(s, ':'); i >= 0 {
+		net, id := s[:i], s[i+1:]
 		n, err := strconv.ParseInt(id, 10, 64)
 		if err != nil || net == "" { // ":42" edited by hand: never build a key with no net
 			return model.ChatKey{}, false

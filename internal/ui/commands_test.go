@@ -100,7 +100,7 @@ func lastSys(w *Window) string {
 // "resolving…" taken back on the next line, and no window left pending.
 func TestBindNoResolver(t *testing.T) {
 	u := netUI("discord") // fakeBackend, zero Caps: no Resolve
-	u.pending = map[string]*Window{}
+	u.lookups = map[uint64]*lookup{}
 	w := u.ws.New(true)
 	u.bind(w, "@nobody", false)
 
@@ -111,8 +111,8 @@ func TestBindNoResolver(t *testing.T) {
 	if len(sys) != 1 || !strings.Contains(sys[0], i18n.T("net_unsupported", "discord")) {
 		t.Fatalf("sys lines: %q", sys)
 	}
-	if len(u.pending) != 0 {
-		t.Fatalf("window left pending: %v", u.pending)
+	if len(u.lookups) != 0 {
+		t.Fatalf("window left lookups: %v", u.lookups)
 	}
 }
 

@@ -147,6 +147,7 @@ func (c *Cache) SaveHistory(chatID int64, msgs []model.Msg) error {
 	clean := make([]model.Msg, len(sorted))
 	for i, m := range sorted {
 		m.Pending = false
+		m.LiveAt = time.Time{}
 		m.TmpID = 0
 		m.Err = ""
 		if m.Media != nil {

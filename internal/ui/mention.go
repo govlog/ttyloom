@@ -145,7 +145,7 @@ func (u *UI) mentionAll(c *model.Chat) []model.Participant {
 	if b := u.net(c); b != nil && (!ok || time.Since(e.at) > partsTTL) {
 		e = partsEntry{lines: []model.Participant{{Text: i18n.T("loading")}}, at: time.Now()}
 		u.partsCache[c.Key()] = e
-		b.Participants(u.ctx, c)
+		b.Participants(u.backendContext(b), c)
 	}
 	return e.lines
 }

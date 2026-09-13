@@ -113,9 +113,10 @@ func (u *UI) bindChat(w *Window, c *model.Chat) {
 // (windows, chats, files); the other networks keep theirs, and window 0 stays.
 func (u *UI) dropCache(net string) {
 	u.bgWait.Wait() // Finish older writes before removing this account’s files.
-	u.cancelMode()  // edit, reply, confirmation, search: nothing valid left
+	u.clearAccount(net)
+	u.cancelMode() // edit, reply, confirmation, search: nothing valid left
 	u.setSel(u.view(), nil)
-	stale := func(k model.ChatKey) bool { return k.Net == net && u.cached[k] }
+	stale := func(k model.ChatKey) bool { return k.Net == net }
 	u.dropTargets(func(c *model.Chat) bool { return stale(c.Key()) })
 	for i := len(u.ws.List) - 1; i > 0; i-- {
 		if w := u.ws.List[i]; w.Chat == nil || !stale(w.Chat.Key()) {
@@ -130,7 +131,7 @@ func (u *UI) dropCache(net string) {
 		}
 	}
 	u.chatList = slices.DeleteFunc(u.chatList, func(c *model.Chat) bool { return stale(c.Key()) })
-	for k := range u.cached {
+	for k := range u.chats {
 		if k.Net == net {
 			delete(u.chats, k)
 			delete(u.cached, k)
@@ -248,6 +249,13 @@ func (u *UI) flushCache(sync bool) {
 		u.bgWait.Wait()
 	}
 	u.flushed = time.Now()
+	if u.dialogsDirty {
+		u.dialogsDirty = false
+		u.saveDialogs()
+		if sync {
+			u.bgWait.Wait()
+		}
+	}
 	for k := range u.dirty {
 		delete(u.dirty, k)
 		cc := u.cacheFor(k.Net)
@@ -267,12 +275,21 @@ func (u *UI) flushCache(sync bool) {
 			_ = cc.SaveHistory(id, msgs)
 			continue
 		}
-		// ponytail: error ignored (no access to the UI from the goroutine) and last
-		// rename wins when two writes of the same chat cross: at worst the cache
-		// loses the 5 s of the newest one, never a half written file (temporary
-		// file + rename). Serialise per chat if the write ever becomes slower than
-		// the debounce.
+		// Writes run in snapshot order. Errors leave the previous cache intact.
 		u.bg(func() { cc.SaveHistory(id, msgs) })
+	}
+}
+
+func (u *UI) noteActivity(c *model.Chat, m *model.Msg) {
+	if c == nil {
+		return
+	}
+	if m.Date.After(c.LastDate) || m.ID > c.TopMessage {
+		if m.Date.After(c.LastDate) {
+			c.LastDate = m.Date
+		}
+		c.TopMessage = max(c.TopMessage, m.ID)
+		u.dialogsDirty = true
 	}
 }
 
@@ -349,7 +366,7 @@ func (u *UI) syncNext() {
 			continue
 		}
 		u.syncCur = c
-		b.LoadHistorySince(u.ctx, c, u.syncMinID(c), syncLimit)
+		b.LoadHistorySince(u.backendContext(b), c, u.syncMinID(c), syncLimit)
 		return
 	}
 }
@@ -423,25 +440,28 @@ func (u *UI) syncToCache(c *model.Chat, msgs []model.Msg) {
 		return
 	}
 	chatID := c.ID
-	old, err := cc.LoadHistory(chatID)
-	if err != nil {
-		return
-	}
-	// msgs comes from the event and no window points at it: the writing
-	// goroutine owns it alone. SaveHistory sorts and cuts at cache_messages.
-	u.bg(func() { cc.SaveHistory(chatID, mergeHistory(old, msgs)) })
+	// Read after earlier writes finish, so this merge includes their messages.
+	u.bg(func() {
+		old, err := cc.LoadHistory(chatID)
+		if err == nil {
+			cc.SaveHistory(chatID, mergeHistory(old, msgs))
+		}
+	})
 }
 
 // mergeHistory gives the cached history filled with the new messages, with no
-// duplicate ID. Like Window.Merge, the version already cached wins.
+// duplicate ID. Server fields refresh the cached copy.
 func mergeHistory(old, fresh []model.Msg) []model.Msg {
-	have := make(map[int]bool, len(old))
-	for _, m := range old {
-		have[m.ID] = true
+	out := slices.Clone(old)
+	have := make(map[int]int, len(old))
+	for i, m := range out {
+		have[m.ID] = i
 	}
-	out := old
 	for _, m := range fresh {
-		if !have[m.ID] {
+		if i, ok := have[m.ID]; ok {
+			reconcileMsg(&out[i], &m)
+		} else {
+			have[m.ID] = len(out)
 			out = append(out, m)
 		}
 	}
@@ -454,9 +474,16 @@ func mergeHistory(old, fresh []model.Msg) []model.Msg {
 // show from there: the interface is not reachable, and a cache that fails
 // costs nothing but a slower start.
 func (u *UI) bg(f func()) {
+	previous := u.bgTail
+	done := make(chan struct{})
+	u.bgTail = done
 	u.bgWait.Add(1)
 	go func() {
 		defer u.bgWait.Done()
+		defer close(done)
+		if previous != nil {
+			<-previous
+		}
 		defer func() {
 			if r := recover(); r != nil {
 				// Visible in /debug and in window 0, like the backend guard.

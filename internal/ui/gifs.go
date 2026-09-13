@@ -157,7 +157,7 @@ func (u *UI) gifQuery() {
 		return
 	}
 	g.inflight, g.err, g.asked = q, "", true
-	b.SearchGifs(u.ctx, g.chat, q)
+	b.SearchGifs(u.backendContext(b), g.chat, q)
 }
 
 // gifsResult : answer of the network. A query given up is dropped; a query
@@ -201,7 +201,7 @@ func (u *UI) gifLoad() {
 			continue
 		}
 		md.State = model.MediaLoading
-		b.Download(u.ctx, md, filepath.Join(config.CacheDir(), "gifs", g.chat.Net, gifName(md)))
+		b.Download(u.backendContext(b), md, filepath.Join(config.CacheDir(), "gifs", g.chat.Net, gifName(md)))
 	}
 }
 
@@ -257,7 +257,7 @@ func (u *UI) gifSend() {
 		Out: true, Pending: true, TmpID: u.tmpID,
 		Media: &model.Media{Kind: model.MediaGIF, State: model.MediaLoading, Label: "[gif]"}}
 	u.insertPending(w, m)
-	b.SendGif(u.ctx, c, pick, u.tmpID)
+	b.SendGif(u.backendContext(b), c, pick, u.tmpID)
 	u.flash(i18n.T("sending"))
 }
 

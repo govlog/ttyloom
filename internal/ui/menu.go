@@ -286,24 +286,23 @@ func (u *UI) menuDo(m *ctxMenu, key string) {
 	case "leave":
 		if c.Kind == model.ChatUser { // nothing to leave: only the bound window closes
 			if i := u.ws.ForChat(c.Key()); i >= 0 {
-				u.freeImages(u.ws.List[i])
-				u.ws.CloseAt(i) // no goTo: neither read marked nor history loaded again
-				u.loadParts()   // the F3 box follows the shown window
+				u.closeWindowAt(i)
+				u.loadParts() // the F3 box follows the shown window
 			}
 			return
 		}
 		// The network is looked up before the question, not inside the answer:
 		// nothing is asked for a chat nobody can act on any more.
 		if b := u.net(c); b != nil {
-			u.confirm(i18n.T("confirm_leave", render.CleanLine(u.title(c))), func() { b.Leave(u.ctx, c) })
+			u.confirm(i18n.T("confirm_leave", render.CleanLine(u.title(c))), func() { b.Leave(u.backendContext(b), c) })
 		}
 	case "block":
 		if b := u.net(c); b != nil {
-			u.confirm(i18n.T("confirm_block", render.CleanLine(u.title(c))), func() { b.Block(u.ctx, c) })
+			u.confirm(i18n.T("confirm_block", render.CleanLine(u.title(c))), func() { b.Block(u.backendContext(b), c) })
 		}
 	case "delete":
 		if b := u.net(c); b != nil {
-			u.confirm(i18n.T("confirm_delete", render.CleanLine(u.title(c))), func() { b.DeleteChat(u.ctx, c) })
+			u.confirm(i18n.T("confirm_delete", render.CleanLine(u.title(c))), func() { b.DeleteChat(u.backendContext(b), c) })
 		}
 	case "info":
 		u.openChat(c)
@@ -346,9 +345,9 @@ func (u *UI) menuMember(m *ctxMenu, key string) {
 			u.netUnsupported(m.chat.Net)
 			return
 		}
-		b.WhoisMember(u.ctx, q)
+		b.WhoisMember(u.backendContext(b), q)
 	case "block":
-		u.confirm(i18n.T("confirm_block", render.CleanLine(q)), func() { b.BlockMember(u.ctx, q) })
+		u.confirm(i18n.T("confirm_block", render.CleanLine(q)), func() { b.BlockMember(u.backendContext(b), q) })
 	}
 }
 

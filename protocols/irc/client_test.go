@@ -22,11 +22,12 @@ var _ model.Backend = (*Client)(nil)
 // fakeServer : the other end of a net.Pipe, read line by line. The client
 // under test sees a real registration; the test drives the rest by hand.
 type fakeServer struct {
-	t     *testing.T
-	conn  net.Conn
-	lines chan string
-	mu    sync.Mutex
-	sasl  bool // advertise the sasl cap
+	t       *testing.T
+	conn    net.Conn
+	lines   chan string
+	mu      sync.Mutex
+	sasl    bool // advertise the sasl cap
+	mapping string
 }
 
 func (s *fakeServer) send(format string, args ...any) {
@@ -102,6 +103,9 @@ func (s *fakeServer) register() {
 			}
 		case strings.HasPrefix(l, "CAP END"):
 			s.send(":srv 001 me :Welcome")
+			if s.mapping != "" {
+				s.send(":srv 005 me CASEMAPPING=%s :supported", s.mapping)
+			}
 			s.send(":srv 376 me :End of MOTD")
 			return
 		}
@@ -129,10 +133,13 @@ func (s *savedLists) get() []string {
 
 // start builds a client on a pipe to a fake server, runs it, and waits for
 // the registration. SaveChannels records its calls in saved.
-func start(t *testing.T, cfg Config, sasl bool) (*Client, *fakeServer, chan model.Event, *savedLists) {
+func start(t *testing.T, cfg Config, sasl bool, mapping ...string) (*Client, *fakeServer, chan model.Event, *savedLists) {
 	t.Helper()
 	cs, ss := net.Pipe()
 	s := &fakeServer{t: t, conn: ss, lines: make(chan string, 64), sasl: sasl}
+	if len(mapping) > 0 {
+		s.mapping = mapping[0]
+	}
 	go func() {
 		sc := bufio.NewScanner(ss)
 		for sc.Scan() {
@@ -284,20 +291,20 @@ func TestSendSplitsAndAcks(t *testing.T) {
 func TestResolveJoinAndLeave(t *testing.T) {
 	c, s, events, saved := start(t, Config{Channels: []string{"#go"}}, false)
 	s.expect("JOIN #go")
-	c.Resolve(context.Background(), "#new", true)
+	c.Resolve(context.Background(), "#new", true, 1)
 	s.expect("JOIN #new")
 	s.send(":me!u@h JOIN #new")
 	ch := waitFor[model.EvChat](t, events)
 	if ch.Query != "#new" || ch.Chat == nil || ch.Chat.Title != "#new" || ch.Err != "" {
 		t.Fatalf("resolved: %+v", ch)
 	}
-	c.Resolve(context.Background(), "#bad", true)
+	c.Resolve(context.Background(), "#bad", true, 2)
 	s.expect("JOIN #bad")
 	s.send(":srv 473 me #bad :Cannot join channel (+i)")
 	if ch = waitFor[model.EvChat](t, events); ch.Query != "#bad" || !strings.Contains(ch.Err, "+i") {
 		t.Fatalf("refused: %+v", ch)
 	}
-	c.Resolve(context.Background(), "carol", false)
+	c.Resolve(context.Background(), "carol", false, 3)
 	if ch = waitFor[model.EvChat](t, events); ch.Chat == nil || ch.Chat.Kind != model.ChatUser || ch.Chat.Title != "carol" {
 		t.Fatalf("query: %+v", ch)
 	}

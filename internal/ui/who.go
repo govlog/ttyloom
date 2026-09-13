@@ -98,10 +98,10 @@ func (u *UI) whoText(key whoKey, m *model.Msg) string {
 		// too, so nothing is ever asked of a network that has none of it.
 		switch {
 		case key.react && caps.Reactions:
-			b.WhoReacted(u.ctx, c, m.ID, m.Reactions)
+			b.WhoReacted(u.backendContext(b), c, m.ID, m.Reactions)
 			asked = true
 		case !key.react && caps.ReadReceipts:
-			b.WhoRead(u.ctx, c, m.ID, c.ReadOutboxMaxID)
+			b.WhoRead(u.backendContext(b), c, m.ID, c.ReadOutboxMaxID)
 			asked = true
 		}
 	}

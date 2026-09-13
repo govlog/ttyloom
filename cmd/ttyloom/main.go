@@ -122,7 +122,7 @@ func backends(ctx context.Context, cfg *config.Config, events chan<- model.Envel
 	}
 	// build makes the backend of net on its own chan. A token command that
 	// fails is the error of the launch: the UI shows it and starts nothing.
-	build := func(net string, raw chan<- model.Event) (model.Backend, error) {
+	build := func(nctx context.Context, net string, raw chan<- model.Event) (model.Backend, error) {
 		switch net {
 		case model.NetTelegram:
 			return tgc.New(tgc.Config{AppID: tg.APIID, AppHash: tg.APIHash, BotToken: tg.BotToken,
@@ -142,7 +142,7 @@ func backends(ctx context.Context, cfg *config.Config, events chan<- model.Envel
 		// writes one while the client runs.
 		if name := model.IRCName(net); name != "" {
 			if n := cfg.IRCByName(name); n != nil {
-				return irc.New(ircConfig(cfg, n), raw), nil
+				return irc.New(ircConfig(nctx, n, raw), raw), nil
 			}
 		}
 		return nil, fmt.Errorf("%s: unknown network", net)
@@ -152,9 +152,12 @@ func backends(ctx context.Context, cfg *config.Config, events chan<- model.Envel
 	// panic comes back as an event rather than killing the terminal.
 	launch := func(nctx context.Context, net string) (model.Backend, error) {
 		raw := make(chan model.Event, 256)
-		b, err := build(net, raw)
+		b, err := build(nctx, net, raw)
 		if err != nil {
 			return nil, err
+		}
+		if p, ok := b.(interface{ SetContext(context.Context) }); ok {
+			p.SetContext(nctx)
 		}
 		go func() {
 			for {
@@ -163,7 +166,7 @@ func backends(ctx context.Context, cfg *config.Config, events chan<- model.Envel
 					return
 				case ev := <-raw:
 					select {
-					case events <- model.Envelope{Net: net, Ev: ev}:
+					case events <- model.Envelope{Net: net, Ev: ev, Session: nctx}:
 					case <-nctx.Done():
 						return
 					}
@@ -179,7 +182,7 @@ func backends(ctx context.Context, cfg *config.Config, events chan<- model.Envel
 					stopped.Err = i18n.T("panic", r)
 				}
 				select {
-				case events <- model.Envelope{Net: net, Ev: stopped}:
+				case events <- model.Envelope{Net: net, Ev: stopped, Session: nctx}:
 				case <-ctx.Done():
 				}
 			}()
@@ -192,15 +195,16 @@ func backends(ctx context.Context, cfg *config.Config, events chan<- model.Envel
 	return nets, caches, launch, nil
 }
 
-// ircConfig : the backend configuration of one [[irc]] table. SaveChannels
-// writes the room list into the table and the file: the memory of the rooms
-// across sessions, there being no bouncer.
-func ircConfig(cfg *config.Config, n *config.IRCConfig) irc.Config {
+// ircConfig sends channel changes to the UI, which owns configuration writes.
+func ircConfig(ctx context.Context, n *config.IRCConfig, events chan<- model.Event) irc.Config {
 	return irc.Config{Name: n.Name, Host: n.Host, Port: n.Port, TLS: n.TLS, Nick: n.Nick, User: n.User,
 		RealName: n.RealName, Password: n.NickServPassword, Channels: n.Channels, DCCIP: n.DCCIP, DCCPorts: n.DCCPorts,
 		SaveChannels: func(list []string) error {
-			n.Channels = list
-			return cfg.Save()
+			select {
+			case events <- model.EvIRCChannels{Channels: list}:
+			case <-ctx.Done():
+			}
+			return nil
 		}}
 }
 

@@ -170,7 +170,7 @@ func (u *UI) command(name string, args []string, text string) {
 			return
 		}
 		w.Loading = true
-		b.LoadHistory(u.ctx, w.Chat, w.OldestID(), n)
+		b.LoadHistory(u.backendContext(b), w.Chat, w.OldestID(), n)
 	case "search":
 		if u.botOnly() {
 			w.AddSys(i18n.T("bot_unavailable"))
@@ -194,7 +194,7 @@ func (u *UI) command(name string, args []string, text string) {
 		}
 		if b := u.net(w.Chat); b != nil {
 			w.AddSys(i18n.T("searching_for", text))
-			b.Search(u.ctx, w.Chat, text, searchLimit)
+			b.Search(u.backendContext(b), w.Chat, text, searchLimit)
 		}
 	case "whois":
 		c := w.Chat
@@ -220,7 +220,7 @@ func (u *UI) command(name string, args []string, text string) {
 			return
 		}
 		if b := u.net(c); b != nil {
-			b.Whois(u.ctx, c)
+			b.Whois(u.backendContext(b), c)
 		}
 	case "rename":
 		u.rename(w, text)
@@ -298,13 +298,33 @@ func (u *UI) command(name string, args []string, text string) {
 }
 
 func (u *UI) closeWindow() {
-	w := u.ws.Close()
-	if w == nil {
+	if u.ws.Cur == 0 {
 		u.sys(i18n.T("window0_no_close"))
 		return
 	}
-	u.freeImages(w)
+	if u.closeWindowAt(u.ws.Cur) == nil {
+		return
+	}
 	u.goTo(u.ws.Cur)
+}
+
+func (u *UI) closeWindowAt(i int) *Window {
+	if i <= 0 || i >= len(u.ws.List) {
+		return nil
+	}
+	w := u.ws.List[i]
+	if w.Chat != nil && w.Search == "" && u.dirty[w.Chat.Key()] {
+		u.bgWait.Wait()
+		if cc := u.cacheFor(w.Chat.Net); cc != nil {
+			if err := cc.SaveHistory(w.Chat.ID, w.Msgs()); err != nil {
+				u.status0(i18n.T("cache_error", err))
+				return nil
+			}
+		}
+		delete(u.dirty, w.Chat.Key())
+	}
+	u.freeImages(w)
+	return u.ws.CloseAt(i)
 }
 
 func (u *UI) switchTo(s string) {
@@ -342,15 +362,7 @@ func (u *UI) bind(w *Window, name string, join bool) {
 		return
 	}
 	w.AddSys(i18n.T("resolving", name))
-	u.pending[name] = w
-	// ponytail: u.pending holds one window, so the first answer binds it and
-	// the later ones find nothing waiting — and a "not found" from another
-	// network then posts resolve_failed (chatResolved, w == nil) over a lookup
-	// that worked. Fine while a single network resolves; count the answers,
-	// and a chooser, when there are two.
-	for _, b := range resolvers {
-		b.Resolve(u.ctx, name, join)
-	}
+	u.resolve(w, name, join, resolvers, true, "")
 }
 
 // netAll : the /net argument that lifts the filter, and the last stop of its cycle.

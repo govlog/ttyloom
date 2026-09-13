@@ -18,6 +18,7 @@ type queryBackend struct {
 	sends    []model.ChatKey
 	text     []string
 	resolves []string
+	requests []uint64
 	typed    []model.ChatKey
 }
 
@@ -29,8 +30,9 @@ func (b *queryBackend) Typing(_ context.Context, c *model.Chat, cancel bool) {
 		b.typed = append(b.typed, c.Key())
 	}
 }
-func (b *queryBackend) Resolve(_ context.Context, name string, _ bool) {
+func (b *queryBackend) Resolve(_ context.Context, name string, _ bool, request uint64) {
 	b.resolves = append(b.resolves, name)
+	b.requests = append(b.requests, request)
 }
 
 func (b *queryBackend) SendReply(ctx context.Context, c *model.Chat, text string, _ int, tmp int64) {
@@ -168,13 +170,13 @@ func TestQueryLateResolution(t *testing.T) {
 	u.aggregate = true
 	input(u, "/q @unknown")
 	input(u, "/q")
-	u.dispatch(model.Envelope{Net: room.Net, Ev: model.EvChat{Query: "@unknown", Chat: &model.Chat{ID: 3, Title: "Unknown"}}})
+	u.dispatch(model.Envelope{Net: room.Net, Ev: model.EvChat{Request: b.requests[0], Query: "@unknown", Chat: &model.Chat{ID: 3, Title: "Unknown"}}})
 	if u.agg.Target != nil {
 		t.Fatal("late answer reopened a closed query")
 	}
 	input(u, "/q @another")
 	input(u, "/q blop")
-	u.dispatch(model.Envelope{Net: room.Net, Ev: model.EvChat{Query: "@another", Chat: &model.Chat{ID: 4, Title: "Another"}}})
+	u.dispatch(model.Envelope{Net: room.Net, Ev: model.EvChat{Request: b.requests[1], Query: "@another", Chat: &model.Chat{ID: 4, Title: "Another"}}})
 	if u.agg.Target != peer {
 		t.Fatal("old lookup replaced the new target")
 	}
@@ -182,11 +184,13 @@ func TestQueryLateResolution(t *testing.T) {
 	input(u, "/q @shared")
 	u.goTo(1)
 	input(u, "/q @shared")
-	u.dispatch(model.Envelope{Net: room.Net, Ev: model.EvChat{Query: "@shared", Chat: &model.Chat{ID: 5, Title: "Shared"}}})
+	for _, request := range b.requests[2:] {
+		u.dispatch(model.Envelope{Net: room.Net, Ev: model.EvChat{Request: request, Query: "@shared", Chat: &model.Chat{ID: 5, Title: "Shared"}}})
+	}
 	if u.agg.Target == nil || u.agg.Target.ID != 5 || u.ws.List[1].Target != u.agg.Target {
 		t.Fatal("shared lookup lost a window")
 	}
-	if len(b.resolves) != 3 {
+	if len(b.resolves) != 4 {
 		t.Fatalf("duplicate resolution: %v", b.resolves)
 	}
 }
@@ -207,7 +211,7 @@ func TestQueryPendingKeepsDraftAndBlocksSends(t *testing.T) {
 	if len(b.sends) != 0 || len(b.typed) != 0 || u.gifs != nil {
 		t.Fatal("a send path used the old target while resolving")
 	}
-	u.dispatch(model.Envelope{Net: model.NetTelegram, Ev: model.EvChat{Query: "@unknown", Chat: &model.Chat{ID: 9, Title: "Unknown"}}})
+	u.dispatch(model.Envelope{Net: model.NetTelegram, Ev: model.EvChat{Request: b.requests[0], Query: "@unknown", Chat: &model.Chat{ID: 9, Title: "Unknown"}}})
 	input(u, "now resolved")
 	if len(b.sends) != 1 || b.sends[0].ID != 9 {
 		t.Fatalf("resolved send: %v", b.sends)

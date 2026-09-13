@@ -1,7 +1,10 @@
 // Package model holds the types shared by tgc (Telegram) and ui.
 package model
 
-import "time"
+import (
+	"context"
+	"time"
+)
 
 type ChatKind int
 
@@ -210,6 +213,7 @@ func SegBreak(segs []Seg, i int) bool {
 }
 
 type Msg struct {
+	LiveAt time.Time // Last live UI update; history requests cannot replace later updates.
 	// Net : network that owns this message; stamped by the UI dispatch, never
 	// empty afterwards.
 	Net       string
@@ -244,9 +248,12 @@ type Event any
 // Envelope tags a backend event with the network it came from. Backends
 // post bare Events; the per-backend forwarder in main wraps them.
 type Envelope struct {
-	Net string
-	Ev  Event
+	Net     string
+	Ev      Event
+	Session context.Context
 }
+
+type EvIRCChannels struct{ Channels []string }
 
 type EvAuthPrompt struct {
 	Question string
@@ -299,11 +306,12 @@ type EvTyping struct {
 	Who    string
 }
 type EvHistory struct {
-	ChatID int64
-	Msgs   []Msg // from the oldest to the newest
-	Older  bool  // loading upwards
-	Since  bool  // sync step: messages newer than a known id
-	Done   bool  // nothing left before
+	Started time.Time
+	ChatID  int64
+	Msgs    []Msg // from the oldest to the newest
+	Older   bool  // loading upwards
+	Since   bool  // sync step: messages newer than a known id
+	Done    bool  // nothing left before
 	// Around : page centred on AroundID (precise jump) — neither the top nor the
 	// bottom of the window, it slots in.
 	Around   bool
@@ -311,10 +319,11 @@ type EvHistory struct {
 	Err      string
 }
 type EvSearch struct {
-	ChatID int64
-	Query  string
-	Msgs   []Msg // from the oldest to the newest
-	Err    string
+	Started time.Time
+	ChatID  int64
+	Query   string
+	Msgs    []Msg // from the oldest to the newest
+	Err     string
 }
 
 // SearchHit : one global search result. A Chat and not an id: it carries the
@@ -364,9 +373,10 @@ type EvSent struct {
 	Err    string
 }
 type EvChat struct {
-	Query string
-	Chat  *Chat
-	Err   string
+	Request uint64
+	Query   string
+	Chat    *Chat
+	Err     string
 }
 
 // EvUpload : progress of a file upload, for the status bar.
