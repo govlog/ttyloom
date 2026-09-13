@@ -819,6 +819,27 @@ func TestSideWindowZeroPrefix(t *testing.T) {
 	}
 }
 
+// A hot window of the window list shows its counter in the mention colour,
+// bold, with the pulse as reverse video.
+func TestSidebarHotCounter(t *testing.T) {
+	th := theme.Terminal()
+	ws := []*Window{{}, {Chat: &model.Chat{ID: 1, Kind: model.ChatUser, Title: "alice"}, Act: 3, Hot: true}}
+	sidePulse = true
+	defer func() { sidePulse = false }()
+	lines := sidebarLines(sideWindows, nil, ws, nil, 0, th, testSideW, 3, 0, false, false, 0, -1, false, nil)
+	var hot *render.Span
+	for i := range lines {
+		for j := range lines[i].Spans {
+			if lines[i].Spans[j].Text == " (3)" {
+				hot = &lines[i].Spans[j]
+			}
+		}
+	}
+	if hot == nil || !hot.Style.Bold || !hot.Style.Reverse || hot.Style.FG != th.Color(theme.Mention) {
+		t.Fatalf("hot counter span: %+v (lines %+v)", hot, lines)
+	}
+}
+
 // Click mapping with the header: line 0 cycles the sort, the list starts at
 // sideHdr.
 func TestSideHeaderClick(t *testing.T) {

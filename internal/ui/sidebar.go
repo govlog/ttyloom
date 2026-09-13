@@ -660,6 +660,9 @@ var sideMenuChat *model.Chat
 // parameter if it grows.
 var sideSections map[string]bool
 
+// sidePulse : phase of the hot pulse during one drawing (see sideSections).
+var sidePulse bool
+
 // sideSecLine : spans of a section header — "── name ───────[-]" laid over the
 // same mark and unread columns as the chat lines, so the titles stay aligned;
 // folded, those two columns carry what the section hides ([·] and the unread
@@ -822,6 +825,9 @@ func sidebarLines(mode sideMode, chats []*model.Chat, ws []*Window, wins []int, 
 			}
 			textW := width - render.Width(num)
 			st, p, a := theme.Style{}, dim, red
+			if w.Hot { // private message or mention waiting: the mention colour pulses
+				a = theme.Style{FG: th.Color(theme.Mention), Bold: true, Reverse: sidePulse}
+			}
 			switch {
 			case i == cur: // one style on the whole line: the counter scrolls with the name
 				return []render.Span{{Text: num, Style: on}, {Text: marquee(pfx+s+act, textW, step), Style: on}}, 0
@@ -864,9 +870,10 @@ func (u *UI) sideBlock(sepRow int) ([]render.Line, []sideRow) {
 	hot := u.sideHot()
 	side := sideHeader(u.side, u.cfg.SidebarSort, u.cfg.SidebarSplit, u.th, u.sideW, hot)
 	sideSections = u.folded // sections of this frame only: nil again right after
+	sidePulse = u.pulse
 	side = append(side, sidebarLines(u.side, sorted, u.ws.List, u.sideWins(), u.ws.Cur, u.th, u.sideW, u.sideRows(),
 		u.sideScroll, u.avatarsOn(), u.multiNet(), u.marquee.step, sepRow, hot, u.title)...)
-	sideSections = nil
+	sideSections, sidePulse = nil, false
 	if u.side == sideChats { // last line, outside the scroll
 		side = append(side, sideNewLine(u.th, u.sideW, hot))
 	}
