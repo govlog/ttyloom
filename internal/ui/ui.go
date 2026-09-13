@@ -102,6 +102,7 @@ type UI struct {
 	conn       map[string]bool // connection state per network, keyed like u.self
 	focused    bool            // terminal in front (CSI ?1004): otherwise the read is put off
 	blurAt     time.Time       // focus lost at, while not away yet (see awayTick); zero otherwise
+	pulse      bool            // phase of the hot-window pulse (tick), one second in two
 	placed     []placed
 	hits       []rowHit            // map of the clicks of the message area, made again at each draw
 	drag       dragMode            // drag running: scrollbar or text selection
@@ -581,6 +582,35 @@ func (u *UI) netNames() []string { return slices.Sorted(maps.Keys(u.nets)) }
 // netShown : m passes the /net filter. No filter (the single network case
 // included): everything shows.
 func (u *UI) netShown(m *model.Msg) bool { return u.netFilter == "" || m.Net == u.netFilter }
+
+// winShown : w passes the network filter — an unbound window (window 0)
+// belongs to every network. The sidebar list of windows and, in tab mode, the
+// window cycle read it.
+func (u *UI) winShown(w *Window) bool {
+	return u.netFilter == "" || w.Chat == nil || w.Chat.Net == u.netFilter
+}
+
+// tabsOn : the tab bar shows and the window cycle stays in the network of the
+// tab — the option, and more than one network (one network has no tab).
+func (u *UI) tabsOn() bool { return u.cfg.Tabs && u.multiNet() }
+
+// anyHot : a window waits with a private message or a mention (the pulse only
+// repaints for them).
+func (u *UI) anyHot() bool {
+	for _, w := range u.ws.List {
+		if w.Hot {
+			return true
+		}
+	}
+	return false
+}
+
+// hotStyle : the style of a hot activity counter — the mention colour, bold,
+// and the pulse phase as reverse video.
+func (u *UI) hotStyle(base theme.Style) theme.Style {
+	base.FG, base.Bold, base.Reverse = u.th.Color(theme.Mention), true, u.pulse
+	return base
+}
 
 // setNetFilter applies /net: the sidebar and the aggregate cut to that network
 // ("" = all). The aggregate carries the predicate, so its drawing, its clicks
@@ -1200,12 +1230,16 @@ func (u *UI) newMessage(e model.EvNewMessage) {
 	// the terminal has the focus — away, nobody reads.
 	seen := u.focused && (u.view() == w || (u.view() == u.agg && u.netShown(&m)))
 	if added && !m.Out {
+		me := u.selfOf(m.Net)
+		hot := chat.Kind == model.ChatUser || mentionsMe(&m, me.ID, me.Name)
 		if !seen {
 			w.Act++
 			chat.Unread++
+			if hot {
+				w.Hot = true
+			}
 		}
-		me := u.selfOf(m.Net)
-		if (!u.focused || i != u.ws.Cur) && (chat.Kind == model.ChatUser || mentionsMe(&m, me.ID, me.Name)) {
+		if (!u.focused || i != u.ws.Cur) && hot {
 			if u.cfg.Bell {
 				u.t.WriteString("\a") // flushed at the next draw()
 			}
@@ -1348,6 +1382,9 @@ func (u *UI) autoOpen(net string) {
 		// from the network list, the only one up to date.
 		w := u.ws.List[i]
 		w.Act, w.scrolledToMark = c.Unread, false
+		if w.Act == 0 {
+			w.Hot = false // read elsewhere: nothing hot waits any more
+		}
 		u.markRefresh(w)
 	}
 }
@@ -1505,7 +1542,7 @@ func (u *UI) markRead(w *Window) {
 	if !u.focused {
 		return // away: the messages stay unread until we come back
 	}
-	w.Act = 0
+	w.Act, w.Hot = 0, false
 	if w.Chat != nil {
 		w.Chat.Unread = 0
 	}
@@ -2362,6 +2399,12 @@ func (u *UI) tick() bool {
 		g.typed = time.Time{}
 		u.gifQuery()
 		redraw = true
+	}
+	if p := now.Second()%2 == 1; p != u.pulse { // hot windows pulse once a second
+		u.pulse = p
+		if u.anyHot() {
+			redraw = true
+		}
 	}
 	if u.marqueeTick(now) { // always called (no lazy ||): its rate depends on it
 		redraw = true

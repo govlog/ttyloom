@@ -971,3 +971,26 @@ func TestReconnectReloadsWindows(t *testing.T) {
 		t.Fatal("hidden window still loaded: its next visit would not fill the hole")
 	}
 }
+
+// A private message (or a mention) that lands in a window other than the
+// current one marks it hot besides its activity count; a visit clears both.
+func TestHotWindow(t *testing.T) {
+	u := &UI{ws: NewWindows(), agg: &Window{}, debug: &Window{}, cfg: &config.Config{}, t: &term.Term{Cols: 80, Rows: 24},
+		nets: map[string]model.Backend{model.NetTelegram: &fakeBackend{}}, conn: map[string]bool{}, focused: true,
+		chats: map[model.ChatKey]*model.Chat{}, dirty: map[model.ChatKey]bool{}, self: map[string]selfInfo{}}
+	dm := &model.Chat{Net: model.NetTelegram, ID: 1, Kind: model.ChatUser, Title: "alice"}
+	room := &model.Chat{Net: model.NetTelegram, ID: 2, Kind: model.ChatGroup, Title: "room"}
+	u.dispatch(model.Envelope{Net: model.NetTelegram, Ev: model.EvNewMessage{Chat: room, Msg: model.Msg{ID: 1, ChatID: 2, Text: "hi all", From: "bob"}}})
+	u.dispatch(model.Envelope{Net: model.NetTelegram, Ev: model.EvNewMessage{Chat: dm, Msg: model.Msg{ID: 2, ChatID: 1, Text: "psst", From: "alice"}}})
+	roomWin, dmWin := u.ws.List[u.ws.ForChat(room.Key())], u.ws.List[u.ws.ForChat(dm.Key())]
+	if roomWin.Act != 1 || roomWin.Hot {
+		t.Fatalf("room: act=%d hot=%v, want 1 false", roomWin.Act, roomWin.Hot)
+	}
+	if dmWin.Act != 1 || !dmWin.Hot {
+		t.Fatalf("dm: act=%d hot=%v, want 1 true", dmWin.Act, dmWin.Hot)
+	}
+	u.goTo(u.ws.ForChat(dm.Key()))
+	if dmWin.Act != 0 || dmWin.Hot {
+		t.Fatalf("after visit: act=%d hot=%v", dmWin.Act, dmWin.Hot)
+	}
+}

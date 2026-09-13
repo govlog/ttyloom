@@ -367,7 +367,7 @@ func matchSection(secs []sideRow, name string) (string, []string) {
 func (u *UI) sideWins() []int {
 	wins := make([]int, 0, len(u.ws.List))
 	for i, w := range u.ws.List {
-		if u.netFilter == "" || w.Chat == nil || w.Chat.Net == u.netFilter {
+		if u.winShown(w) {
 			wins = append(wins, i)
 		}
 	}

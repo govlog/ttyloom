@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/govlog/ttyloom/internal/config"
 	"github.com/govlog/ttyloom/internal/media"
 	"github.com/govlog/ttyloom/internal/model"
 	"github.com/govlog/ttyloom/internal/render"
@@ -331,5 +332,25 @@ func TestImgPlace(t *testing.T) {
 	}
 	if r := cropOf(2, 3, 5, 100, 50); r != image.Rect(0, 20, 100, 50) {
 		t.Fatalf("lower 3 of 5 rows: crop %v", r)
+	}
+}
+
+// The activity list of the status bar styles a hot window apart from the
+// others: mention colour, bold, and the pulse phase as reverse video.
+func TestActSpansHot(t *testing.T) {
+	u := &UI{ws: NewWindows(), agg: &Window{}, debug: &Window{}, cfg: &config.Config{}, th: theme.Terminal()}
+	u.ws.New(true).Act = 2
+	w := u.ws.New(true)
+	w.Act, w.Hot = 1, true
+	u.pulse = true
+	sp := u.actSpans(theme.Style{}, theme.Style{FG: u.th.Color(theme.Act)})
+	if len(sp) != 3 || sp[0].Text != "1(2)" || sp[1].Text != "," || sp[2].Text != "2(1)" {
+		t.Fatalf("spans: %+v", sp)
+	}
+	if sp[0].Style.Bold || sp[0].Style.Reverse {
+		t.Fatalf("plain entry styled hot: %+v", sp[0].Style)
+	}
+	if !sp[2].Style.Bold || !sp[2].Style.Reverse || sp[2].Style.FG != u.th.Color(theme.Mention) {
+		t.Fatalf("hot entry: %+v", sp[2].Style)
 	}
 }

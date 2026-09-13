@@ -59,6 +59,9 @@ type Window struct {
 	Sel    *Item // selected message (never a sys item)
 	Scroll int   // physical lines from the bottom
 	Act    int   // messages received while the window was not the current one
+	// Hot : among the unread ones, a private message or a mention of me
+	// (the same test as the bell) — shown apart until the window is visited.
+	Hot bool
 	// MarkID : last message read, frozen at each (re)entry into the window
 	// (attach, goTo, focus back) — position of the redline (/set redline).
 	MarkID int

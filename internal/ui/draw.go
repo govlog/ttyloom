@@ -580,14 +580,25 @@ func (u *UI) writeLine(b *strings.Builder, l render.Line, cols int, rh *rowHit) 
 	b.WriteString("\x1b[0m")
 }
 
-func (u *UI) actList() string {
-	var parts []string
+// actSpans : the [Act: …] list of the status bar, one span per window (a hot
+// one in hotStyle), commas between them. Only the windows of the tab in tab
+// mode: the other networks are summed up on their tab.
+func (u *UI) actSpans(plain, act theme.Style) []render.Span {
+	var out []render.Span
 	for i, w := range u.ws.List {
-		if w.Act > 0 {
-			parts = append(parts, fmt.Sprintf("%d(%d)", i, w.Act))
+		if w.Act == 0 || (u.tabsOn() && !u.winShown(w)) {
+			continue
 		}
+		if len(out) > 0 {
+			out = append(out, render.Span{Text: ",", Style: plain})
+		}
+		st := act
+		if w.Hot {
+			st = u.hotStyle(act)
+		}
+		out = append(out, render.Span{Text: fmt.Sprintf("%d(%d)", i, w.Act), Style: st})
 	}
-	return strings.Join(parts, ",")
+	return out
 }
 
 func (u *UI) drawStatus(b *strings.Builder, row, x0, cols int) {
@@ -639,9 +650,9 @@ func (u *UI) drawStatus(b *strings.Builder, row, x0, cols int) {
 	if l := styleLabel([]rune(u.ed.String())[:u.ed.Cursor()]); l != "" { // Ctrl+B/I/U open at the cursor
 		add(" ["+l+"]", acc)
 	}
-	if l := u.actList(); l != "" {
+	if l := u.actSpans(st, act); len(l) > 0 {
 		add(" [Act: ", st)
-		add(l, act)
+		spans = append(spans, l...)
 		add("]", st)
 	}
 	if s := u.search; s != nil {
