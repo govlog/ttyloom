@@ -7,7 +7,7 @@ TTYloom publishes portable Linux binaries for x86-64 (`amd64`) and ARM64
 builds. FFmpeg, clipboard tools and dictionaries are installed separately.
 
 Each version contains two binary archives, a source archive from the same
-commit, and `SHA256SUMS`. Binary archives include the READMEs, documentation,
+commit, and `SHA256SUMS`. Binary archives include the README, documentation,
 dependency notices and license texts. `BUILD.txt` records the version, commit,
 Go toolchain and build flags; `ttyloom --version` prints the version and commit.
 
@@ -15,7 +15,7 @@ While TTYloom is in beta, versions are numbered `v0.N-beta` (`v0.5-beta`, then `
 
 ## Prepare and publish
 
-1. Update the changelog and the version in both READMEs and user manuals. Review dependency
+1. Update the changelog and the version in the README and the manual. Review dependency
    notices if `go.mod`, copied code, assets or build targets have changed.
 2. Run the checks in `.github/workflows/ci.yml`, then commit the release changes.
 3. Tag that commit and push it, replacing `v0.5-beta` below with the new version:

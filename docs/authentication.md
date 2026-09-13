@@ -2,7 +2,7 @@
 
 [Back to README](../README.md) · [Full manual](guide.md)
 
-TTYloom can connect Telegram, Discord, or both. Run it once to create
+TTYloom can connect Telegram, Discord, IRC, or any mix of them. Run it once to create
 `~/.config/ttyloom/config.toml`, then edit that file. `TTYLOOM_DIR` can select
 another configuration directory. Keep top-level settings before TOML sections.
 
@@ -167,9 +167,9 @@ to the server over TLS (port 6697 on most networks), no bouncer involved.
 
 With a password, TTYloom identifies by **SASL PLAIN** when the server offers
 it, which is the case of Libera.Chat, OFTC and every modern ircd; a server
-without SASL gets a `NickServ IDENTIFY` right after registration. A nick in
-use is suffixed by the server. Leave the password empty on a network where
-the nick is not registered.
+without SASL gets a `NickServ IDENTIFY` right after registration. A nick already
+taken is retried with a `_1`, `_2`… suffix while connecting. Leave the password
+empty on a network where the nick is not registered.
 
 To stop using a network, `/irc disconnect <name>` keeps its table; removing
 the table from `config.toml` forgets it, password and channel list included.

@@ -25,7 +25,7 @@ This manual covers installation, accounts, every configuration option, commands,
 mouse controls and keyboard shortcuts on Linux. The amd64 and arm64 binaries
 do not need Go. Building from source requires **Go 1.26.7 or newer**.
 
-**TTYloom** is a terminal client for **Telegram and Discord**, inspired by
+**TTYloom** is a terminal client for **Telegram, Discord and IRC**, inspired by
 **ircii** and **BitchX**: numbered message windows, a status bar and an input
 line. The kitty graphics protocol displays photos, stickers, GIFs and video
 frames inside Ghostty or kitty. Unicode half blocks provide a fallback in other
@@ -379,7 +379,7 @@ nick = "me"
 user = "me"                  # empty = nick
 realname = "me"              # empty = nick
 nickserv_password = ""       # SASL PLAIN when the server offers it, NickServ IDENTIFY otherwise
-channels = ["#go-nuts"]      # kept by the client: /join adds, /leave removes, joined again at start
+channels = ["#go-nuts"]      # kept by the client: /join adds, /part removes, joined again at start
 ignores = []                 # kept by the client: /ignore adds and removes; lines of those masks are dropped
 dcc_ip = ""                  # address announced by DCC SEND (behind a NAT); empty = the IRC socket's
 dcc_ports = ""               # "5000-5010" to pin the DCC ports; empty = any free port
@@ -400,7 +400,7 @@ person or a service (NickServ) lands in window 0.
 | Command | Effect |
 | --- | --- |
 | `/irc` | State of each IRC network. |
-| `/irc add` | The form: name, host, port, TLS, nick, user, real name, NickServ password. On the hostname field, ← → (or Space) cycle through the well-known networks — Libera.Chat, OFTC, EFnet, DALnet, Undernet, IRCnet, QuakeNet, Rizon, hackint, GameSurge, EsperNet, Snoonet, tilde.chat — and fill host, port, TLS and name; typing gives a host of your own. Saved and connected at once. |
+| `/irc add` | The form: name, host, port, TLS, nick, user, real name, NickServ password. On the hostname field, ← → (or Space) cycle through the well-known networks — Libera.Chat, OFTC, EFnet, DALnet, Undernet, IRCnet, QuakeNet, Rizon, hackint, GameSurge, EsperNet, Snoonet, tilde.chat — and fill host, port, TLS and name; typing gives a host of your own. Tab or ↓ moves to the next field, Shift+Tab or ↑ back, Ctrl+U clears one, Enter saves and connects at once, Escape cancels. |
 | `/irc connect <name>`, `/irc disconnect <name>` | Start or stop one network. |
 | `/dcc` | DCC offers waiting and transfers running. |
 | `/dcc send <nick> <path>` | Send a file straight to that person (DCC SEND); `/send` in a private IRC chat does the same. |
@@ -423,7 +423,7 @@ goes to the generic commands first: `/i` is `/irc` and `/wh` is `/whois`, while
 | Command | Effect |
 | --- | --- |
 | `/join #room [key]` | Join a room, with its channel key when it has one; the room is kept in `channels`. |
-| `/part [#room] [reason]` | Leave the room, the current one by default, and forget it; the same as `/leave` on IRC. |
+| `/part [#room] [reason]` | Leave the room, the current one by default, and forget it. This is the command other clients call `/leave`; TTYloom only knows `/part`. |
 | `/cycle [#room]` | Leave and rejoin the room, the window kept: the way to take ops back. |
 | `/topic [#room] [text]` | Show or set the topic. |
 | `/nick <nick>` | Change my nick on this network; the other networks keep theirs. |
@@ -495,7 +495,7 @@ Every open conversation has a numbered window.
 | `/win N`, `/win name` | Switch by number or name. |
 | `/N` | Switch to any window number, such as `/5` or `/21`. |
 | `/window close`, `/close` | Close the current window, except window 0. |
-| `/window list` | List windows and their activity. |
+| `/window list`, `/window` | List windows and their activity. |
 | F2 | Sidebar: conversations, windows, hidden; window mode also cycles networks. |
 | Shift+F2 | Cycle the network filter. |
 | F3 | Open the member box in the upper-right corner. |
@@ -548,12 +548,13 @@ global again. A single network has no tabs.
 | `/msg name text`, `/m name text` | Send without switching windows; the line is echoed here as `[msg(name)] text`. |
 | `/new`, Ctrl+N | Open the new-conversation picker. |
 | `/chats` | List conversations, highlighting unread ones. |
-| `/net [network]` | Filter the sidebar and aggregate view; `telegram`, `discord`, `all`, or no argument to cycle. |
-| `/telegram [status\|login\|logout]`, `/discord [status\|login\|logout]` | One network: its status, a new login (Discord runs `token_cmd` again) or a logout (Telegram ends the session on the server). |
+| `/net [network]` | Filter the sidebar and aggregate view; `telegram`, `discord`, `irc:libera`, `all`, or no argument to cycle. |
+| `/telegram [status\|login\|logout\|disconnect]`, `/discord [status\|login\|logout\|disconnect]` | One network: its status, a new login (Discord runs `token_cmd` again), a logout (Telegram ends the session on the server) or a `disconnect`, which cuts the connection and keeps the session. |
 | `/fold [section]` | Toggle a sidebar section by key, such as `telegram` or `discord:Gophers`, or a displayed-name prefix. No argument lists sections and their collapsed/expanded state. |
 | `/history N`, `/hist N` | Load N older messages; PgUp at the top also loads older history. |
 | `/clear`, `/c` | Clear the current window. Ctrl+L only clears the screen: the lines stay in the history. |
 | `/rename [target] name`, `/unrename [target]` | Set or remove a local chat/contact alias, saved in `aliases.toml`. It applies to the sidebar, status bar, aggregate view, completion and the DM contact’s displayed name. It is not sent to the network. |
+| `/away [message]` | Mark yourself away on every network that can, or on the one of the current tab; `/away` alone comes back. See [IRC networks](#irc-networks). |
 | `/help`, `/h` | List commands, keys and options. `/help topic` explains one, including `/help F3` or `/help hover`; Tab completes topics. |
 | Text without `/` | Send to the pinned target, or this window's usual conversation. |
 | `//text` | Send text beginning with `/`. |
@@ -860,7 +861,7 @@ toggles and goes out plain.
 | Ctrl+Up/Down | Walk my messages in edit mode: from an empty input Ctrl+Up edits the last one, each Ctrl+Up goes one message of mine up, Ctrl+Down one down; past the newest the edit is left and the input emptied. A draft is never replaced. |
 | Shift+Enter, Alt+Enter | Insert a line break. Shift+Enter needs kitty keyboard support; Alt+Enter is the fallback. With `multiline` enabled, open the expanded editor. |
 | Enter, Ctrl+Enter | Send the draft. |
-| Tab | Complete commands, chats (`/query`, `/join`, `/msg`: from the start of any word of a title, `@username` too), windows, settings, themes, help topics, `/send` paths, `/log` and `/telegram`/`/discord` arguments. Several names left and nothing more to add: a second Tab lists them in the window; Escape removes those listings. |
+| Tab | Complete commands, chats (`/query`, `/join`, `/msg`: from the start of any word of a title, `@username` too), windows, settings, themes, help topics, `/send` paths, and the arguments of `/log`, `/net`, `/fold`, `/irc`, `/telegram`, `/discord` and the IRC commands. Several names left and nothing more to add: a second Tab lists them in the window; Escape removes those listings. |
 | PgUp/PgDn | Scroll history. An image cut by the edge of the window shows its visible part, so the scroll moves line by line over it. Scrolled up, a pill `↓ last message` at the bottom right of the messages brings back to the end on a click. |
 | Ctrl+L | Clear the window like a terminal `clear`: the lines stay in the history, Page Up or the wheel brings them back. |
 | Ctrl+C, `/quit`, `/exit` | Quit. |

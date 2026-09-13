@@ -87,6 +87,7 @@ var helpTopics = []topic{
 	{"l", "help_key_l", "messages"},
 	{"s", "help_key_s", "messages"},
 	{"c", "help_key_c", "messages"},
+	{"g", "help_key_g", "messages"},
 	{"Esc", "help_esc", "messages"},
 
 	// Media
