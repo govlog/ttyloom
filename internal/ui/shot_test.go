@@ -3,6 +3,7 @@ package ui
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"image"
 	"image/color"
@@ -14,9 +15,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/clipperhouse/uax29/v2/graphemes"
+
 	"github.com/govlog/ttyloom/internal/config"
 	"github.com/govlog/ttyloom/internal/i18n"
 	"github.com/govlog/ttyloom/internal/model"
+	"github.com/govlog/ttyloom/internal/render"
 	"github.com/govlog/ttyloom/internal/term"
 	"github.com/govlog/ttyloom/internal/theme"
 )
@@ -54,7 +58,41 @@ func TestScreenshots(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(dir, name+".ansi"), frame, 0o644); err != nil {
 			t.Fatal(err)
 		}
+		if err := os.WriteFile(filepath.Join(dir, name+".widths"), clusterWidths(frame), 0o644); err != nil {
+			t.Fatal(err)
+		}
 	}
+}
+
+// clusterWidths : the grapheme clusters of a frame that are not plain ASCII,
+// each with the width render.Width gives it, as JSON. ansi2svg.py reads that
+// sidecar next to the frame so the exporter measures an emoji exactly like the
+// renderer that drew it, instead of guessing from its own Unicode tables.
+// Escape sequences are ASCII and drop out of the table on their own.
+func clusterWidths(frame []byte) []byte {
+	table := map[string]int{}
+	g := graphemes.FromString(string(frame))
+	for g.Next() {
+		cl := g.Value()
+		if isASCII(cl) {
+			continue
+		}
+		table[cl] = render.Width(cl)
+	}
+	out, err := json.Marshal(table) // sorted keys: the sidecar is stable
+	if err != nil {
+		panic(err)
+	}
+	return out
+}
+
+func isASCII(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if s[i] >= 0x80 {
+			return false
+		}
+	}
+	return true
 }
 
 // mocha : Catppuccin Mocha, in the Ghostty theme format theme.Parse reads.

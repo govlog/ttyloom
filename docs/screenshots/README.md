@@ -23,6 +23,9 @@ done
 
 Python 3 uses only its standard library. `ansi2svg.py` reads cursor moves,
 colours, text and the uncropped PNG placements emitted by the kitty renderer.
+The test also writes a `<name>.widths` sidecar next to each frame — the cell
+width the Go renderer gives to every non-ASCII grapheme cluster it holds — so
+the exporter puts an emoji on exactly the columns the client drew it on.
 The terminal chrome is added by the exporter. The fixtures fix message times
 and the status clock; date labels can depend on the day of generation.
 

@@ -1,157 +1,159 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="928" height="644" viewBox="0 0 928 644" font-family="JetBrains Mono, Fira Code, Cascadia Code, DejaVu Sans Mono, Menlo, monospace" font-size="13.2">
+<svg xmlns="http://www.w3.org/2000/svg" width="928" height="644" viewBox="0 0 928 644" font-family="JetBrains Mono, Fira Code, Cascadia Code, DejaVu Sans Mono, Menlo, Noto Color Emoji, Apple Color Emoji, Segoe UI Emoji, monospace" font-size="13.2">
 <rect width="928" height="644" rx="12" fill="#11111b"/>
 <rect x="16" y="50" width="896" height="578" fill="#1e1e2e"/>
 <circle cx="26" cy="31.0" r="6" fill="#f38ba8"/><circle cx="46" cy="31.0" r="6" fill="#f9e2af"/><circle cx="66" cy="31.0" r="6" fill="#a6e3a1"/>
 <text x="464" y="36.0" text-anchor="middle" fill="#a6adc8" font-size="12">TTYloom · main</text>
-<text x="16.0" y="62.5" fill="#89b4fa" textLength="208.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="bold">Chat List [recent]        </text>
-<text x="224.0" y="62.5" fill="#585b70" textLength="680.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│──────────────────────────────── September 5, 2026 ─────────────────────────────────</text>
-<text x="16.0" y="79.5" fill="#585b70" textLength="272.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">──────────────────────────│14:50 &lt;</text>
-<text x="288.0" y="79.5" fill="#a6e3a1" textLength="40.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">alice</text>
-<text x="328.0" y="79.5" fill="#585b70" textLength="16.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">&gt; </text>
-<text x="344.0" y="79.5" fill="#cdd6f4" textLength="240.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Morning! Has anyone tried the </text>
-<text x="584.0" y="79.5" fill="#cdd6f4" textLength="184.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="bold">kitty graphics protocol</text>
-<text x="768.0" y="79.5" fill="#cdd6f4" textLength="104.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> from Go yet?</text>
-<text x="872.0" y="79.5" fill="#585b70" textLength="24.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ✓✓</text>
-<text x="56.0" y="96.5" fill="#585b70" textLength="176.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">── discord ───────[-]│</text>
+<text x="16.0" y="62.5" fill="#89b4fa" textLength="208.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs" font-weight="bold">Chat List [recent]        </text>
+<text x="224.0" y="62.5" fill="#585b70" textLength="680.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">│──────────────────────────────── September 5, 2026 ─────────────────────────────────</text>
+<text x="16.0" y="79.5" fill="#585b70" textLength="272.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">──────────────────────────│14:50 &lt;</text>
+<text x="288.0" y="79.5" fill="#a6e3a1" textLength="40.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">alice</text>
+<text x="328.0" y="79.5" fill="#585b70" textLength="16.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">&gt; </text>
+<text x="344.0" y="79.5" fill="#cdd6f4" textLength="240.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">Morning! Has anyone tried the </text>
+<text x="584.0" y="79.5" fill="#cdd6f4" textLength="184.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs" font-weight="bold">kitty graphics protocol</text>
+<text x="768.0" y="79.5" fill="#cdd6f4" textLength="104.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs"> from Go yet?</text>
+<text x="872.0" y="79.5" fill="#585b70" textLength="24.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs"> ✓✓</text>
+<text x="56.0" y="96.5" fill="#585b70" textLength="176.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">── discord ───────[-]│</text>
 <rect x="232.0" y="84.0" width="8.0" height="17.0" fill="#45475a"/>
-<text x="232.0" y="96.5" fill="#89b4fa" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▌</text>
+<text x="232.0" y="96.5" fill="#89b4fa" textLength="8.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">▌</text>
 <rect x="240.0" y="84.0" width="56.0" height="17.0" fill="#45475a"/>
-<text x="240.0" y="96.5" fill="#585b70" textLength="56.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">14:52 &lt;</text>
+<text x="240.0" y="96.5" fill="#585b70" textLength="56.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">14:52 &lt;</text>
 <rect x="296.0" y="84.0" width="24.0" height="17.0" fill="#45475a"/>
-<text x="296.0" y="96.5" fill="#f9e2af" textLength="24.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">bob</text>
+<text x="296.0" y="96.5" fill="#f9e2af" textLength="24.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">bob</text>
 <rect x="320.0" y="84.0" width="464.0" height="17.0" fill="#45475a"/>
-<text x="320.0" y="96.5" fill="#585b70" textLength="464.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">&gt; │ alice: Has anyone tried the kitty graphics protocol ✓✓</text>
-<text x="16.0" y="113.5" fill="#585b70" textLength="24.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">[·]</text>
-<text x="40.0" y="113.5" fill="#f38ba8" textLength="16.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="bold"> 3</text>
-<text x="56.0" y="113.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">@</text>
-<text x="64.0" y="113.5" fill="#cdd6f4" textLength="160.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> dave               </text>
-<text x="224.0" y="113.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="320.0" y="96.5" fill="#585b70" textLength="464.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">&gt; │ alice: Has anyone tried the kitty graphics protocol ✓✓</text>
+<text x="16.0" y="113.5" fill="#585b70" textLength="24.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">[·]</text>
+<text x="40.0" y="113.5" fill="#f38ba8" textLength="16.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs" font-weight="bold"> 3</text>
+<text x="56.0" y="113.5" fill="#585b70" textLength="8.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">@</text>
+<text x="64.0" y="113.5" fill="#cdd6f4" textLength="160.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs"> dave               </text>
+<text x="224.0" y="113.5" fill="#585b70" textLength="8.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">│</text>
 <rect x="232.0" y="101.0" width="8.0" height="17.0" fill="#45475a"/>
-<text x="232.0" y="113.5" fill="#89b4fa" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▌</text>
+<text x="232.0" y="113.5" fill="#89b4fa" textLength="8.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">▌</text>
 <rect x="240.0" y="101.0" width="144.0" height="17.0" fill="#45475a"/>
-<text x="240.0" y="113.5" fill="#cdd6f4" textLength="144.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">            Yes — </text>
+<text x="240.0" y="113.5" fill="#cdd6f4" textLength="144.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">            Yes — </text>
 <rect x="384.0" y="101.0" width="72.0" height="17.0" fill="#45475a"/>
-<text x="384.0" y="113.5" fill="#f9e2af" textLength="72.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">rsc.io/qr</text>
+<text x="384.0" y="113.5" fill="#f9e2af" textLength="72.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">rsc.io/qr</text>
 <rect x="456.0" y="101.0" width="416.0" height="17.0" fill="#45475a"/>
-<text x="456.0" y="113.5" fill="#cdd6f4" textLength="416.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> encodes and kitty renders it, no cgo, no surprises.</text>
-<text x="56.0" y="130.5" fill="#585b70" textLength="176.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">── Gophers ───────[-]│</text>
+<text x="456.0" y="113.5" fill="#cdd6f4" textLength="416.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs"> encodes and kitty renders it, no cgo, no surprises.</text>
+<text x="56.0" y="130.5" fill="#585b70" textLength="176.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">── Gophers ───────[-]│</text>
 <rect x="232.0" y="118.0" width="8.0" height="17.0" fill="#45475a"/>
-<text x="232.0" y="130.5" fill="#89b4fa" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▌</text>
+<text x="232.0" y="130.5" fill="#89b4fa" textLength="8.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">▌</text>
 <rect x="240.0" y="118.0" width="96.0" height="17.0" fill="#45475a"/>
-<rect x="336.0" y="118.0" width="8.0" height="17.0" fill="#45475a"/>
-<text x="336.0" y="130.5" fill="#89b4fa" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">👍</text>
-<rect x="344.0" y="118.0" width="24.0" height="17.0" fill="#45475a"/>
-<text x="344.0" y="130.5" fill="#89b4fa" textLength="24.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 3</text>
-<rect x="368.0" y="118.0" width="24.0" height="17.0" fill="#45475a"/>
-<text x="368.0" y="130.5" fill="#585b70" textLength="24.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  🔥</text>
-<rect x="392.0" y="118.0" width="24.0" height="17.0" fill="#45475a"/>
-<text x="392.0" y="130.5" fill="#585b70" textLength="24.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 1</text>
-<text x="56.0" y="147.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">#</text>
-<text x="64.0" y="147.5" fill="#cdd6f4" textLength="160.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> general            </text>
-<text x="224.0" y="147.5" fill="#585b70" textLength="64.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│14:55 &lt;</text>
-<text x="288.0" y="147.5" fill="#a6adc8" textLength="40.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="bold">chris</text>
-<text x="328.0" y="147.5" fill="#585b70" textLength="16.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">&gt; </text>
-<text x="344.0" y="147.5" fill="#cdd6f4" textLength="360.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">TTYloom: many networks, one terminal. Code at</text>
-<text x="704.0" y="147.5" fill="#585b70" textLength="24.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ✓✓</text>
-<text x="40.0" y="164.5" fill="#f38ba8" textLength="16.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="bold">12</text>
-<text x="56.0" y="164.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">#</text>
-<text x="64.0" y="164.5" fill="#cdd6f4" textLength="160.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> help               </text>
-<text x="224.0" y="164.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<text x="344.0" y="164.5" fill="#89b4fa" textLength="264.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve" text-decoration="underline">https://github.com/govlog/ttyloom</text>
-<text x="56.0" y="181.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">#</text>
-<text x="64.0" y="181.5" fill="#cdd6f4" textLength="160.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> offtopic           </text>
-<text x="224.0" y="181.5" fill="#585b70" textLength="64.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│15:11 &lt;</text>
-<text x="288.0" y="181.5" fill="#a6e3a1" textLength="40.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">alice</text>
-<text x="328.0" y="181.5" fill="#585b70" textLength="144.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">&gt; [gif 480x270] ✓✓</text>
-<text x="56.0" y="198.5" fill="#585b70" textLength="176.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">── libera ────────[-]│</text>
-<text x="16.0" y="215.5" fill="#585b70" textLength="24.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">[·]</text>
-<text x="56.0" y="215.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">#</text>
-<text x="64.0" y="215.5" fill="#cdd6f4" textLength="160.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> #go                </text>
-<text x="224.0" y="215.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<text x="16.0" y="232.5" fill="#585b70" textLength="24.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">[·]</text>
-<text x="40.0" y="232.5" fill="#f38ba8" textLength="16.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="bold"> 2</text>
-<text x="56.0" y="232.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">@</text>
-<text x="64.0" y="232.5" fill="#cdd6f4" textLength="160.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> alice              </text>
-<text x="224.0" y="232.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<text x="56.0" y="249.5" fill="#585b70" textLength="176.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">── telegram ──────[-]│</text>
+<rect x="336.0" y="118.0" width="16.0" height="17.0" fill="#45475a"/>
+<text x="336.0" y="130.5" fill="#89b4fa" textLength="16.0" xml:space="preserve">👍</text>
+<rect x="352.0" y="118.0" width="16.0" height="17.0" fill="#45475a"/>
+<text x="352.0" y="130.5" fill="#89b4fa" textLength="16.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs"> 3</text>
+<rect x="368.0" y="118.0" width="16.0" height="17.0" fill="#45475a"/>
+<rect x="384.0" y="118.0" width="16.0" height="17.0" fill="#45475a"/>
+<text x="384.0" y="130.5" fill="#585b70" textLength="16.0" xml:space="preserve">🔥</text>
+<rect x="400.0" y="118.0" width="16.0" height="17.0" fill="#45475a"/>
+<text x="400.0" y="130.5" fill="#585b70" textLength="16.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs"> 1</text>
+<text x="56.0" y="147.5" fill="#585b70" textLength="8.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">#</text>
+<text x="64.0" y="147.5" fill="#cdd6f4" textLength="160.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs"> general            </text>
+<text x="224.0" y="147.5" fill="#585b70" textLength="64.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">│14:55 &lt;</text>
+<text x="288.0" y="147.5" fill="#a6adc8" textLength="40.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs" font-weight="bold">chris</text>
+<text x="328.0" y="147.5" fill="#585b70" textLength="16.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">&gt; </text>
+<text x="344.0" y="147.5" fill="#cdd6f4" textLength="360.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">TTYloom: many networks, one terminal. Code at</text>
+<text x="704.0" y="147.5" fill="#585b70" textLength="24.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs"> ✓✓</text>
+<text x="40.0" y="164.5" fill="#f38ba8" textLength="16.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs" font-weight="bold">12</text>
+<text x="56.0" y="164.5" fill="#585b70" textLength="8.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">#</text>
+<text x="64.0" y="164.5" fill="#cdd6f4" textLength="160.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs"> help               </text>
+<text x="224.0" y="164.5" fill="#585b70" textLength="8.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">│</text>
+<text x="344.0" y="164.5" fill="#89b4fa" textLength="264.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs" text-decoration="underline">https://github.com/govlog/ttyloom</text>
+<text x="56.0" y="181.5" fill="#585b70" textLength="8.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">#</text>
+<text x="64.0" y="181.5" fill="#cdd6f4" textLength="160.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs"> offtopic           </text>
+<text x="224.0" y="181.5" fill="#585b70" textLength="64.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">│15:11 &lt;</text>
+<text x="288.0" y="181.5" fill="#a6e3a1" textLength="40.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">alice</text>
+<text x="328.0" y="181.5" fill="#585b70" textLength="144.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">&gt; [gif 480x270] ✓✓</text>
+<text x="56.0" y="198.5" fill="#585b70" textLength="176.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">── libera ────────[-]│</text>
+<text x="16.0" y="215.5" fill="#585b70" textLength="24.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">[·]</text>
+<text x="56.0" y="215.5" fill="#585b70" textLength="8.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">#</text>
+<text x="64.0" y="215.5" fill="#cdd6f4" textLength="160.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs"> #go                </text>
+<text x="224.0" y="215.5" fill="#585b70" textLength="8.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">│</text>
+<text x="16.0" y="232.5" fill="#585b70" textLength="24.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">[·]</text>
+<text x="40.0" y="232.5" fill="#f38ba8" textLength="16.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs" font-weight="bold"> 2</text>
+<text x="56.0" y="232.5" fill="#585b70" textLength="8.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">@</text>
+<text x="64.0" y="232.5" fill="#cdd6f4" textLength="160.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs"> alice              </text>
+<text x="224.0" y="232.5" fill="#585b70" textLength="8.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">│</text>
+<text x="56.0" y="249.5" fill="#585b70" textLength="176.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">── telegram ──────[-]│</text>
 <rect x="16.0" y="254.0" width="24.0" height="17.0" fill="#cdd6f4"/>
-<text x="16.0" y="266.5" fill="#1e1e2e" textLength="24.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">[·]</text>
+<text x="16.0" y="266.5" fill="#1e1e2e" textLength="24.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">[·]</text>
 <rect x="40.0" y="254.0" width="16.0" height="17.0" fill="#cdd6f4"/>
-<text x="40.0" y="266.5" fill="#1e1e2e" textLength="16.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="bold"> 2</text>
+<text x="40.0" y="266.5" fill="#1e1e2e" textLength="16.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs" font-weight="bold"> 2</text>
 <rect x="56.0" y="254.0" width="168.0" height="17.0" fill="#cdd6f4"/>
-<text x="56.0" y="266.5" fill="#1e1e2e" textLength="168.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"># Gophers            </text>
-<text x="224.0" y="266.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<text x="232.0" y="266.5" fill="#a6e3a1" textLength="208.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">*** carol joined the group</text>
-<text x="16.0" y="283.5" fill="#585b70" textLength="24.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">[·]</text>
-<text x="40.0" y="283.5" fill="#f38ba8" textLength="16.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="bold"> 1</text>
-<text x="56.0" y="283.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">@</text>
-<text x="64.0" y="283.5" fill="#cdd6f4" textLength="160.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> Alice              </text>
-<text x="224.0" y="283.5" fill="#585b70" textLength="64.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│15:30 &lt;</text>
-<text x="288.0" y="283.5" fill="#89b4fa" textLength="32.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">dave</text>
-<text x="320.0" y="283.5" fill="#585b70" textLength="200.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">&gt; ↪ from Project notes ✓✓</text>
-<text x="56.0" y="300.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">@</text>
-<text x="64.0" y="300.5" fill="#cdd6f4" textLength="160.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> Bob                </text>
-<text x="224.0" y="300.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<text x="232.0" y="300.5" fill="#cdd6f4" textLength="680.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">             TTY means terminal. A loom weaves threads together. That is where       </text>
-<text x="56.0" y="317.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">&amp;</text>
-<text x="64.0" y="317.5" fill="#cdd6f4" textLength="160.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> Go Announcements   </text>
-<text x="224.0" y="317.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<text x="232.0" y="317.5" fill="#cdd6f4" textLength="680.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">             the name comes from.                                                    </text>
-<text x="224.0" y="334.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<text x="232.0" y="334.5" fill="#f38ba8" textLength="672.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">───────────────────────────────────── ↑ unread ─────────────────────────────────────</text>
-<text x="224.0" y="351.5" fill="#585b70" textLength="64.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│15:40 &lt;</text>
-<text x="288.0" y="351.5" fill="#a6e3a1" textLength="40.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">alice</text>
-<text x="328.0" y="351.5" fill="#585b70" textLength="16.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">&gt; </text>
-<text x="344.0" y="351.5" fill="#cdd6f4" textLength="312.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Also: /gif works on both networks now 🎉</text>
-<text x="664.0" y="351.5" fill="#89b4fa" textLength="16.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> •</text>
-<text x="224.0" y="368.5" fill="#585b70" textLength="64.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│15:41 &lt;</text>
-<text x="288.0" y="368.5" fill="#f9e2af" textLength="24.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">bob</text>
-<text x="312.0" y="368.5" fill="#585b70" textLength="16.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">&gt; </text>
-<text x="328.0" y="368.5" fill="#cdd6f4" textLength="312.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Nice. Ctrl+G, type, Enter — that is it?</text>
-<text x="640.0" y="368.5" fill="#89b4fa" textLength="16.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> •</text>
-<text x="224.0" y="385.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<text x="224.0" y="402.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<text x="224.0" y="419.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<text x="224.0" y="436.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<text x="224.0" y="453.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<text x="224.0" y="470.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<text x="224.0" y="487.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<text x="224.0" y="504.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<text x="224.0" y="521.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<text x="224.0" y="538.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<text x="224.0" y="555.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<text x="224.0" y="572.5" fill="#585b70" textLength="688.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">├─────────────────────────────────────────────────────────────────────────────────────</text>
-<text x="224.0" y="589.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="56.0" y="266.5" fill="#1e1e2e" textLength="168.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs"># Gophers            </text>
+<text x="224.0" y="266.5" fill="#585b70" textLength="8.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">│</text>
+<text x="232.0" y="266.5" fill="#a6e3a1" textLength="208.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">*** carol joined the group</text>
+<text x="16.0" y="283.5" fill="#585b70" textLength="24.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">[·]</text>
+<text x="40.0" y="283.5" fill="#f38ba8" textLength="16.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs" font-weight="bold"> 1</text>
+<text x="56.0" y="283.5" fill="#585b70" textLength="8.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">@</text>
+<text x="64.0" y="283.5" fill="#cdd6f4" textLength="160.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs"> Alice              </text>
+<text x="224.0" y="283.5" fill="#585b70" textLength="64.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">│15:30 &lt;</text>
+<text x="288.0" y="283.5" fill="#89b4fa" textLength="32.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">dave</text>
+<text x="320.0" y="283.5" fill="#585b70" textLength="200.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">&gt; ↪ from Project notes ✓✓</text>
+<text x="56.0" y="300.5" fill="#585b70" textLength="8.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">@</text>
+<text x="64.0" y="300.5" fill="#cdd6f4" textLength="160.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs"> Bob                </text>
+<text x="224.0" y="300.5" fill="#585b70" textLength="8.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">│</text>
+<text x="232.0" y="300.5" fill="#cdd6f4" textLength="680.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">             TTY means terminal. A loom weaves threads together. That is where       </text>
+<text x="56.0" y="317.5" fill="#585b70" textLength="8.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">&amp;</text>
+<text x="64.0" y="317.5" fill="#cdd6f4" textLength="160.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs"> Go Announcements   </text>
+<text x="224.0" y="317.5" fill="#585b70" textLength="8.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">│</text>
+<text x="232.0" y="317.5" fill="#cdd6f4" textLength="680.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">             the name comes from.                                                    </text>
+<text x="224.0" y="334.5" fill="#585b70" textLength="8.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">│</text>
+<text x="232.0" y="334.5" fill="#f38ba8" textLength="672.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">───────────────────────────────────── ↑ unread ─────────────────────────────────────</text>
+<text x="224.0" y="351.5" fill="#585b70" textLength="64.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">│15:40 &lt;</text>
+<text x="288.0" y="351.5" fill="#a6e3a1" textLength="40.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">alice</text>
+<text x="328.0" y="351.5" fill="#585b70" textLength="16.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">&gt; </text>
+<text x="344.0" y="351.5" fill="#cdd6f4" textLength="304.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">Also: /gif works on both networks now </text>
+<text x="648.0" y="351.5" fill="#cdd6f4" textLength="16.0" xml:space="preserve">🎉</text>
+<text x="664.0" y="351.5" fill="#89b4fa" textLength="16.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs"> •</text>
+<text x="224.0" y="368.5" fill="#585b70" textLength="64.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">│15:41 &lt;</text>
+<text x="288.0" y="368.5" fill="#f9e2af" textLength="24.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">bob</text>
+<text x="312.0" y="368.5" fill="#585b70" textLength="16.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">&gt; </text>
+<text x="328.0" y="368.5" fill="#cdd6f4" textLength="312.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">Nice. Ctrl+G, type, Enter — that is it?</text>
+<text x="640.0" y="368.5" fill="#89b4fa" textLength="16.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs"> •</text>
+<text x="224.0" y="385.5" fill="#585b70" textLength="8.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">│</text>
+<text x="224.0" y="402.5" fill="#585b70" textLength="8.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">│</text>
+<text x="224.0" y="419.5" fill="#585b70" textLength="8.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">│</text>
+<text x="224.0" y="436.5" fill="#585b70" textLength="8.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">│</text>
+<text x="224.0" y="453.5" fill="#585b70" textLength="8.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">│</text>
+<text x="224.0" y="470.5" fill="#585b70" textLength="8.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">│</text>
+<text x="224.0" y="487.5" fill="#585b70" textLength="8.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">│</text>
+<text x="224.0" y="504.5" fill="#585b70" textLength="8.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">│</text>
+<text x="224.0" y="521.5" fill="#585b70" textLength="8.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">│</text>
+<text x="224.0" y="538.5" fill="#585b70" textLength="8.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">│</text>
+<text x="224.0" y="555.5" fill="#585b70" textLength="8.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">│</text>
+<text x="224.0" y="572.5" fill="#585b70" textLength="688.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">├─────────────────────────────────────────────────────────────────────────────────────</text>
+<text x="224.0" y="589.5" fill="#585b70" textLength="8.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">│</text>
 <rect x="232.0" y="577.0" width="40.0" height="17.0" fill="#45475a"/>
-<text x="232.0" y="589.5" fill="#89b4fa" textLength="40.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="bold">[all]</text>
+<text x="232.0" y="589.5" fill="#89b4fa" textLength="40.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs" font-weight="bold">[all]</text>
 <rect x="272.0" y="577.0" width="72.0" height="17.0" fill="#45475a"/>
-<text x="272.0" y="589.5" fill="#cdd6f4" textLength="72.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> [discord</text>
+<text x="272.0" y="589.5" fill="#cdd6f4" textLength="72.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs"> [discord</text>
 <rect x="344.0" y="577.0" width="32.0" height="17.0" fill="#45475a"/>
-<text x="344.0" y="589.5" fill="#f9e2af" textLength="32.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">(15)</text>
+<text x="344.0" y="589.5" fill="#f9e2af" textLength="32.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">(15)</text>
 <rect x="376.0" y="577.0" width="192.0" height="17.0" fill="#45475a"/>
-<text x="376.0" y="589.5" fill="#cdd6f4" textLength="192.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">] [irc:libera] [telegram</text>
+<text x="376.0" y="589.5" fill="#cdd6f4" textLength="192.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">] [irc:libera] [telegram</text>
 <rect x="568.0" y="577.0" width="24.0" height="17.0" fill="#45475a"/>
-<text x="568.0" y="589.5" fill="#f9e2af" textLength="24.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">(3)</text>
+<text x="568.0" y="589.5" fill="#f9e2af" textLength="24.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">(3)</text>
 <rect x="592.0" y="577.0" width="320.0" height="17.0" fill="#45475a"/>
-<text x="592.0" y="589.5" fill="#cdd6f4" textLength="320.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">]                                       </text>
-<text x="224.0" y="606.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="592.0" y="589.5" fill="#cdd6f4" textLength="320.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">]                                       </text>
+<text x="224.0" y="606.5" fill="#585b70" textLength="8.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">│</text>
 <rect x="232.0" y="594.0" width="160.0" height="17.0" fill="#45475a"/>
-<text x="232.0" y="606.5" fill="#cdd6f4" textLength="160.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">[15:42] [@chris] [1:</text>
+<text x="232.0" y="606.5" fill="#cdd6f4" textLength="160.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">[15:42] [@chris] [1:</text>
 <rect x="392.0" y="594.0" width="56.0" height="17.0" fill="#45475a"/>
-<text x="392.0" y="606.5" fill="#89b4fa" textLength="56.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="bold">Gophers</text>
+<text x="392.0" y="606.5" fill="#89b4fa" textLength="56.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs" font-weight="bold">Gophers</text>
 <rect x="448.0" y="594.0" width="248.0" height="17.0" fill="#45475a"/>
-<text x="448.0" y="606.5" fill="#cdd6f4" textLength="248.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">] [telegram] [img:kitty] [Act: </text>
+<text x="448.0" y="606.5" fill="#cdd6f4" textLength="248.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">] [telegram] [img:kitty] [Act: </text>
 <rect x="696.0" y="594.0" width="40.0" height="17.0" fill="#45475a"/>
-<text x="696.0" y="606.5" fill="#f9e2af" textLength="40.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">4(15)</text>
+<text x="696.0" y="606.5" fill="#f9e2af" textLength="40.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">4(15)</text>
 <rect x="736.0" y="594.0" width="8.0" height="17.0" fill="#45475a"/>
-<text x="736.0" y="606.5" fill="#cdd6f4" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">,</text>
+<text x="736.0" y="606.5" fill="#cdd6f4" textLength="8.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">,</text>
 <rect x="744.0" y="594.0" width="32.0" height="17.0" fill="#45475a"/>
-<text x="744.0" y="606.5" fill="#f9e2af" textLength="32.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">5(3)</text>
+<text x="744.0" y="606.5" fill="#f9e2af" textLength="32.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">5(3)</text>
 <rect x="776.0" y="594.0" width="136.0" height="17.0" fill="#45475a"/>
-<text x="776.0" y="606.5" fill="#cdd6f4" textLength="136.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">] [alice typing… </text>
-<text x="16.0" y="623.5" fill="#89b4fa" textLength="208.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="bold"> + new message            </text>
-<text x="224.0" y="623.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<text x="232.0" y="623.5" fill="#89b4fa" textLength="80.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="bold">[Gophers] </text>
-<text x="312.0" y="623.5" fill="#cdd6f4" textLength="600.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Exactly. Enter sends the one under the cursor                              </text>
+<text x="776.0" y="606.5" fill="#cdd6f4" textLength="136.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">] [alice typing… </text>
+<text x="16.0" y="623.5" fill="#89b4fa" textLength="208.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs" font-weight="bold"> + new message            </text>
+<text x="224.0" y="623.5" fill="#585b70" textLength="8.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">│</text>
+<text x="232.0" y="623.5" fill="#89b4fa" textLength="80.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs" font-weight="bold">[Gophers] </text>
+<text x="312.0" y="623.5" fill="#cdd6f4" textLength="600.0" xml:space="preserve" lengthAdjust="spacingAndGlyphs">Exactly. Enter sends the one under the cursor                              </text>
 <image x="344.0" y="186.0" width="96.0" height="68.0" preserveAspectRatio="none" href="data:image/png;base64,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"/>
 </svg>

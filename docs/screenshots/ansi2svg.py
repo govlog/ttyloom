@@ -8,6 +8,7 @@ with 24-bit colours, OSC 8 links and kitty PNG images) into an SVG terminal wind
 A small virtual terminal: a grid of cells with a style each, filled by the
 sequences the client emits. Anything unknown is skipped, never drawn.
 """
+import json
 import re
 import sys
 import unicodedata
@@ -38,6 +39,19 @@ def width(ch):
     if unicodedata.combining(ch) or ch in "‍️​":
         return 0
     return 2 if unicodedata.east_asian_width(ch) in ("W", "F") else 1
+
+
+def widths(src):
+    """The <frame>.widths sidecar TestScreenshots writes: every non-ASCII
+    grapheme cluster of the frame with the width the Go renderer gave it. That
+    renderer is the source of truth, its own measure decided where the cells
+    after it went. Without the file, the exporter measures with unicodedata.
+    """
+    try:
+        with open(re.sub(r"[.]ansi$", "", src) + ".widths", encoding="utf-8") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return {}
 
 
 def sgr(style, params):
@@ -96,7 +110,10 @@ def sgr(style, params):
     return style
 
 
-def render(data):
+def render(data, table=None):
+    table = table or {}
+    starts = {k[0] for k in table}
+    longest = max((len(k) for k in table), default=0)
     grid = [[(" ", Style()) for _ in range(COLS)] for _ in range(ROWS)]
     row = col = 0
     pictures, placements = {}, {}
@@ -166,15 +183,24 @@ def render(data):
         elif ch == "\a":
             pass
         else:
-            w = width(ch)
+            cl, w = ch, width(ch)
+            if ch in starts:  # longest cluster of the table at this position
+                for k in range(min(longest, n - i), 0, -1):
+                    if data[i:i + k] in table:
+                        cl = data[i:i + k]
+                        w = table[cl]
+                        break
             if w == 0 and col > 0 and row < ROWS:
                 c, st = grid[row][col - 1]
-                grid[row][col - 1] = (c + ch, st)
+                grid[row][col - 1] = (c + cl, st)
             elif row < ROWS and col < COLS:
-                grid[row][col] = (ch, style)
-                if w == 2 and col + 1 < COLS:
-                    grid[row][col + 1] = ("", style)
+                grid[row][col] = (cl, style)  # the whole cluster in one cell
+                for k in range(1, w):
+                    if col + k < COLS:
+                        grid[row][col + k] = ("", style)
                 col += w
+            i += len(cl)
+            continue
         i += 1
     images = [(pictures[ident], *rect) for (ident, _), rect in placements.items()]
     return grid, images
@@ -184,7 +210,7 @@ def svg(frame, title):
     grid, images = frame
     pad, bar = 16, 34
     w, h = COLS * CW + 2 * pad, ROWS * CH + 2 * pad + bar
-    out = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{w:.0f}" height="{h:.0f}" viewBox="0 0 {w:.0f} {h:.0f}" font-family="JetBrains Mono, Fira Code, Cascadia Code, DejaVu Sans Mono, Menlo, monospace" font-size="{FS}">',
+    out = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{w:.0f}" height="{h:.0f}" viewBox="0 0 {w:.0f} {h:.0f}" font-family="JetBrains Mono, Fira Code, Cascadia Code, DejaVu Sans Mono, Menlo, Noto Color Emoji, Apple Color Emoji, Segoe UI Emoji, monospace" font-size="{FS}">',
            f'<rect width="{w:.0f}" height="{h:.0f}" rx="12" fill="{CHROME}"/>',
            f'<rect x="{pad}" y="{pad + bar}" width="{COLS * CW:.0f}" height="{ROWS * CH:.0f}" fill="{BG}"/>',
            f'<circle cx="{pad + 10}" cy="{pad + bar / 2 - 2}" r="6" fill="#f38ba8"/><circle cx="{pad + 30}" cy="{pad + bar / 2 - 2}" r="6" fill="#f9e2af"/><circle cx="{pad + 50}" cy="{pad + bar / 2 - 2}" r="6" fill="#a6e3a1"/>',
@@ -196,9 +222,15 @@ def svg(frame, title):
             ch, st = cells[c]
             start = c
             c += 1
-            while c < COLS and cells[c][1] == st and cells[c][0] != "":
-                c += 1
-            # a wide char takes the next cell as ""
+            # a wide cluster takes the next cell as "" and gets a run of its
+            # own: squeezed to one cell it would lose the shape of its glyph.
+            wide = c < COLS and cells[c][0] == ""
+            if wide:
+                while c < COLS and cells[c][0] == "":
+                    c += 1
+            else:
+                while c < COLS and cells[c][1] == st and cells[c][0] != "" and not (c + 1 < COLS and cells[c + 1][0] == ""):
+                    c += 1
             text = "".join(cells[k][0] for k in range(start, c))
             fg, bg = st.fg or FG, st.bg or BG
             if st.reverse:
@@ -209,7 +241,9 @@ def svg(frame, title):
             if bg != BG:
                 out.append(f'<rect x="{pad + start * CW:.1f}" y="{y:.1f}" width="{width_px:.1f}" height="{CH}" fill="{bg}"/>')
             if text.strip():
-                attrs = f'x="{pad + start * CW:.1f}" y="{y + CH - 4.5:.1f}" fill="{fg}" textLength="{width_px:.1f}" lengthAdjust="spacingAndGlyphs" xml:space="preserve"'
+                attrs = f'x="{pad + start * CW:.1f}" y="{y + CH - 4.5:.1f}" fill="{fg}" textLength="{width_px:.1f}" xml:space="preserve"'
+                if not wide:
+                    attrs += ' lengthAdjust="spacingAndGlyphs"'
                 if st.bold:
                     attrs += ' font-weight="bold"'
                 if st.italic:
@@ -227,6 +261,6 @@ def svg(frame, title):
 if __name__ == "__main__":
     src, dst, title = sys.argv[1], sys.argv[2], sys.argv[3] if len(sys.argv) > 3 else "ttyloom"
     with open(src, encoding="utf-8") as f:
-        grid = render(f.read())
+        grid = render(f.read(), widths(src))
     with open(dst, "w", encoding="utf-8") as f:
         f.write(svg(grid, title))
