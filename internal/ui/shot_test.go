@@ -3,6 +3,7 @@ package ui
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"image"
 	"image/color"
 	"image/png"
@@ -29,28 +30,25 @@ func TestScreenshots(t *testing.T) {
 	if dir == "" {
 		t.Skip("TTYLOOM_SHOTS unset")
 	}
-	lang := os.Getenv("TTYLOOM_SHOTS_LANG")
-	if lang == "" {
-		lang = "en"
-	}
-	i18n.Set(lang)
+	i18n.Set("en")       // the documentation is in English
 	defer i18n.Set("fr") // TestMain fixed the language of the other tests
 	th, err := theme.Parse(strings.NewReader(mocha), "Catppuccin Mocha")
 	if err != nil {
 		t.Fatal(err)
 	}
-	for name, scene := range map[string]func(*UI){
-		"main":    func(*UI) {},
+	for name, scene := range map[string]func(*testing.T, *UI){
+		"main":    shotMain,
 		"discord": shotDiscord,
 		"search":  shotSearch,
 		"gifs":    shotGifs,
 		"members": shotMembers,
 		"newchat": shotNewChat,
 		"picker":  shotPicker,
+		"tabs":    shotTabs,
 	} {
 		var buf bytes.Buffer
-		u := shotUI(th, &buf)
-		scene(u)
+		u := shotUI(t, th, &buf)
+		scene(t, u)
 		u.draw()
 		frame := bytes.ReplaceAll(buf.Bytes(), []byte(time.Now().Format("[15:04]")), []byte("[15:42]"))
 		if err := os.WriteFile(filepath.Join(dir, name+".ansi"), frame, 0o644); err != nil {
@@ -123,24 +121,51 @@ func photo(label string, tint color.RGBA) *model.Media {
 		Frames: [][]byte{samplePNG(320, 180, tint)}, FrameW: 320, FrameH: 180, W: 1280, H: 720, Loc: 1, Ext: ".jpg", Mime: "image/jpeg"}
 }
 
-// shotUI builds a UI the way Run does, on an offscreen terminal, with two
+// fixturePNG reads a GIF frame of docs/screenshots/fixtures and its size.
+func fixturePNG(t *testing.T, name string) (data []byte, w, h int) {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join("..", "..", "docs", "screenshots", "fixtures", name))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := png.DecodeConfig(bytes.NewReader(data))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return data, cfg.Width, cfg.Height
+}
+
+// gif : a GIF whose preview is a fixture frame, fitted like the pickers do;
+// the GIF itself is five times that, as the label says.
+func gif(t *testing.T, name string) *model.Media {
+	data, w, h := fixturePNG(t, name)
+	return &model.Media{Kind: model.MediaGIF, Label: fmt.Sprintf("[gif %dx%d]", 5*w, 5*h), State: model.MediaReady, Path: "x",
+		Frames: [][]byte{data}, FrameW: w, FrameH: h, W: 5 * w, H: 5 * h, Loc: 1, Ext: ".gif", Mime: "image/gif"}
+}
+
+// shotUI builds a UI the way Run does, on an offscreen terminal, with three
 // networks, a sidebar of sections and a group window of styled messages.
-func shotUI(th theme.Theme, out *bytes.Buffer) *UI {
+// Windows: 0 unbound, 1 Gophers (telegram), 2 #go and 3 alice (irc), then the
+// hidden windows the tab bar counts.
+func shotUI(t *testing.T, th theme.Theme, out *bytes.Buffer) *UI {
 	tm := term.NewOffscreen(out, shotCols, shotRows)
 	tm.Kitty, tm.CellW, tm.CellH = true, 8, 17
 	cfg := &config.Config{SidebarSort: "recent", Hover: config.HoverMenu, Timestamps: true, LinkPreviews: true,
 		Separator: true, Redline: true, SidebarWidth: 26, Images: "kitty", Video: "show", Notify: "off", KittyImages: 48}
 	tg := &fakeBackend{caps: model.AllCaps()}
 	dc := &fakeBackend{caps: model.Caps{Reactions: true, Edit: true, Gifs: true, Search: true, GlobalSearch: true}}
+	irc := &fakeBackend{caps: model.Caps{Whois: true, Resolve: true, Leave: true}}
+	libera := model.IRCNet("libera")
 	u := &UI{ctx: context.Background(), t: tm, cfg: cfg, th: th, events: make(chan model.Event, 8), ws: NewWindows(),
 		agg: &Window{}, debug: &Window{}, focused: true, images: "kitty", side: sideChats, sideW: 26,
-		nets:  map[string]model.Backend{model.NetTelegram: tg, model.NetDiscord: dc},
+		nets:  map[string]model.Backend{model.NetTelegram: tg, model.NetDiscord: dc, libera: irc},
 		chats: map[model.ChatKey]*model.Chat{}, lookups: map[uint64]*lookup{}, typing: map[model.ChatKey]typing{},
 		lastTyping: map[model.ChatKey]time.Time{}, avatars: map[model.ChatKey]*model.Media{}, openNext: map[*model.Media]bool{},
 		presence: map[model.ChatKey]string{}, dirty: map[model.ChatKey]bool{},
 		partsCache: map[model.ChatKey]partsEntry{}, whoCache: map[whoKey]whoEntry{}, aliases: map[model.ChatKey]string{},
-		folded: map[string]bool{}, self: map[string]selfInfo{model.NetTelegram: {ID: 1, Name: "chris"}, model.NetDiscord: {ID: 2, Name: "chris"}},
-		conn: map[string]bool{model.NetTelegram: true, model.NetDiscord: true}, dialogsSeen: map[string]bool{},
+		folded: map[string]bool{}, tabLast: map[string]*Window{},
+		self: map[string]selfInfo{model.NetTelegram: {ID: 1, Name: "chris"}, model.NetDiscord: {ID: 2, Name: "chris"}, libera: {ID: 3, Name: "chris"}},
+		conn: map[string]bool{model.NetTelegram: true, model.NetDiscord: true, libera: true}, dialogsSeen: map[string]bool{},
 		reactList: map[string][]string{}}
 	u.setMaxItems(2000)
 	now := shotTime
@@ -157,6 +182,8 @@ func shotUI(th theme.Theme, out *bytes.Buffer) *UI {
 	add(&model.Chat{Net: model.NetDiscord, ID: 201, Kind: model.ChatGroup, Title: "Gophers / #general", LastDate: now.Add(-20 * time.Minute)})
 	add(&model.Chat{Net: model.NetDiscord, ID: 202, Kind: model.ChatGroup, Title: "Gophers / #help", LastDate: now.Add(-2 * time.Hour), Unread: 12})
 	add(&model.Chat{Net: model.NetDiscord, ID: 203, Kind: model.ChatGroup, Title: "Gophers / #offtopic", LastDate: now.Add(-5 * time.Hour)})
+	goChan := add(&model.Chat{Net: libera, ID: 900, Kind: model.ChatGroup, Title: "#go", LastDate: now.Add(-3 * time.Minute)})
+	aliceIRC := add(&model.Chat{Net: libera, ID: 901, Kind: model.ChatUser, Title: "alice", LastDate: now.Add(-7 * time.Minute), Unread: 2})
 	u.presence[model.ChatKey{Net: model.NetTelegram, ID: 7}] = "online"
 
 	w := u.ws.New(false)
@@ -174,7 +201,7 @@ func shotUI(th theme.Theme, out *bytes.Buffer) *UI {
 	m3.Out = true
 	m3.Entities = []model.Span{span(m3.Text, "https://github.com/govlog/ttyloom", model.SpanURL, "https://github.com/govlog/ttyloom")}
 	m4 := msg(4, "alice", 7, -31*time.Minute, "")
-	m4.Media = photo("[photo 1280x720 · 212 KB]", color.RGBA{120, 90, 220, 255})
+	m4.Media = gif(t, "gif-telegram-4.png")
 	m5 := msg(5, "carol", 11, -30*time.Minute, "")
 	m5.Service = "carol joined the group"
 	m6 := msg(6, "dave", 9, -12*time.Minute, "TTY means terminal. A loom weaves threads together. That is where the name comes from.")
@@ -186,6 +213,15 @@ func shotUI(th theme.Theme, out *bytes.Buffer) *UI {
 		w.Upsert(m)
 		u.agg.Upsert(m)
 	}
+	bind := func(c *model.Chat, act int) *Window {
+		h := u.ws.New(true)
+		h.Chat, h.Loaded, h.Act = c, true, act
+		return h
+	}
+	bind(goChan, 0)
+	bind(aliceIRC, 0)
+	bind(u.chatList[4], 15) // dave: the discord count of the tab bar
+	bind(u.chatList[1], 3)  // Alice: the telegram one
 	u.setSel(w, w.Items[1]) // bob's answer: palette line and marker
 	u.typing[gophers.Key()] = typing{who: "alice", until: now.Add(time.Hour)}
 	u.ws.List[0].Act = 0
@@ -193,7 +229,7 @@ func shotUI(th theme.Theme, out *bytes.Buffer) *UI {
 	return u
 }
 
-func shotSearch(u *UI) {
+func shotSearch(_ *testing.T, u *UI) {
 	u.search = &searchState{q: []rune("kitty"), cur: 0}
 	tg, dc := u.chatList[0], u.chatList[5]
 	now := shotTime
@@ -205,19 +241,21 @@ func shotSearch(u *UI) {
 	}}
 }
 
-func shotGifs(u *UI) {
+func shotGifs(t *testing.T, u *UI) {
 	u.gifs = &gifBox{chat: u.chatList[0], query: []rune("landscape"), sent: "landscape", asked: true}
-	tints := []color.RGBA{{230, 120, 90, 255}, {90, 200, 160, 255}, {120, 120, 240, 255}, {240, 200, 80, 255}, {200, 90, 200, 255}, {80, 180, 230, 255}}
-	for i, tint := range tints {
-		md := &model.Media{Kind: model.MediaGIF, Label: "[gif]", State: model.MediaReady, Path: "x", Loc: i, Ext: ".gif", Mime: "image/gif",
-			Frames: [][]byte{samplePNG(96, 54, tint)}, FrameW: 96, FrameH: 54, W: 498, H: 280}
+	// The frames answered by the two GIF searches for that query, as
+	// docs/screenshots/fixtures/SOURCES.md lists them.
+	for i, name := range []string{"gif-discord-2.png", "gif-discord-4.png", "gif-discord-6.png",
+		"gif-telegram-4.png", "gif-telegram-7.png", "gif-telegram-3.png"} {
+		md := gif(t, name)
+		md.Label, md.Loc = "[gif]", i
 		u.gifs.gifs = append(u.gifs.gifs, model.Gif{Preview: md, Send: i})
 	}
 	u.gifLayout()
 	u.gifs.cur = 1
 }
 
-func shotMembers(u *UI) {
+func shotMembers(_ *testing.T, u *UI) {
 	u.partsOn = true
 	u.parts = &partsBox{chat: u.chatList[0].Key(), title: "Gophers", mark: 2, lines: []model.Participant{
 		{Text: "★ chris (you)", Query: "@chris", Online: true},
@@ -231,27 +269,27 @@ func shotMembers(u *UI) {
 	u.menu = &ctxMenu{chat: u.chatList[0], member: "@bob", entries: menuEntries(model.ChatUser, true, model.AllCaps()), x: r.col + 4, y: r.row + 3}
 }
 
-func shotNewChat(u *UI) {
+func shotNewChat(_ *testing.T, u *UI) {
 	u.newChat = &newChatBox{query: []rune("go")}
 	u.ncFilter()
 	u.newChat.found = []*model.Chat{{Net: model.NetTelegram, ID: 300, Kind: model.ChatChannel, Title: "Go Weekly", Username: "goweekly"}}
 	u.ncFilter()
 }
 
-func shotPicker(u *UI) {
+func shotPicker(_ *testing.T, u *UI) {
 	u.picker = newPicker(min(60, u.t.Cols-4), min(14, u.t.Rows-4), func(string) {})
 	u.picker.filter()
 	u.picker.cur = 7
 }
 
-func shotDiscord(u *UI) {
+func shotDiscord(t *testing.T, u *UI) {
 	chat := u.chatList[5]
 	w := u.ws.List[1]
 	w.Chat, w.Items, w.MarkID, w.Sel = chat, nil, 0, nil
 	messages := []struct{ from, text string }{
 		{"dave", "Welcome to #general. Telegram is still one window away."},
 		{"erin", "Same shortcuts here: reply, edit, react, search."},
-		{"chris", "And the same photos, right inside the terminal."},
+		{"chris", "And the same images, right inside the terminal."},
 		{"dave", ""},
 		{"erin", "Press Ctrl+F twice to search across both networks."},
 	}
@@ -265,9 +303,54 @@ func shotDiscord(u *UI) {
 			m.Out = true
 		}
 		if i == 3 {
-			m.Media = photo("[photo 1280x720 · 184 KB]", color.RGBA{230, 145, 140, 255})
+			m.Media = gif(t, "gif-discord-6.png")
 		}
 		w.Upsert(m)
 	}
 	u.ed.Set("One terminal. All the conversations.")
+}
+
+// shotMain : the opening view, tab bar on, with the all tab current.
+func shotMain(_ *testing.T, u *UI) { u.cfg.Tabs = true }
+
+// shotTabs : the irc:libera tab — the #go window with its service lines, a
+// WHOIS answer and a CTCP reply, a private window waiting with a hot counter,
+// and the away message in the status bar.
+func shotTabs(_ *testing.T, u *UI) {
+	u.cfg.Tabs = true
+	libera := model.IRCNet("libera")
+	u.setNetFilter(libera)
+	u.ws.Cur = 2 // #go
+	w := u.ws.Current()
+	now := shotTime
+	line := func(id int, from string, fromID int64, at time.Duration, text string) *model.Msg {
+		return &model.Msg{Net: libera, ChatID: 900, ChatLabel: "#go", ID: id, Date: now.Add(at), From: from, FromID: fromID, Text: text}
+	}
+	join := line(1, "chris", 3, -18*time.Minute, "")
+	join.Service = "You have joined #go"
+	topic := line(2, "chris", 3, -18*time.Minute, "")
+	topic.Service = "Topic: Go on IRC · https://go.dev"
+	m3 := line(3, "alice", 11, -6*time.Minute, "The WHOIS of this server answers with the channel list too.")
+	m4 := line(4, "bob", 12, -4*time.Minute, "And /ctcp alice VERSION comes back as a line of the window.")
+	m5 := line(5, "chris", 3, -2*time.Minute, "Both, yes. F9 keeps every network on its own tab.")
+	m5.Out = true
+	for _, m := range []*model.Msg{join, topic, m3, m4, m5} {
+		w.Upsert(m)
+	}
+	for _, s := range []string{
+		"┌ alice (~alice@user/alice)",
+		"│ ircname  : Alice",
+		"│ server   : platinum.libera.chat (Stockholm, SE)",
+		"│ channels : @#go #dev",
+		"│ idle     : 2m0s, signon 2026-09-13 12:04",
+		"└ End of WHOIS",
+		"[ctcp(bob)] VERSION ttyloom v0.5-beta",
+	} {
+		w.AddSys(s)
+	}
+	priv := u.ws.List[3] // alice in private: waiting, and hot
+	priv.Act, priv.Hot = 2, true
+	u.pulse = true
+	u.setAway(libera, "lunch")
+	u.ed.Set("/mode #go +ntk ")
 }

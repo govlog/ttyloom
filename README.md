@@ -10,7 +10,7 @@
 <a href="README.fr.md">Français</a> · <a href="docs/guide.md">Full manual</a> · <a href="docs/authentication.md">Account setup</a>
 </p>
 
-![TTYloom: Telegram messages, Discord channels, replies, reactions and an inline photo](docs/screenshots/main.svg)
+![TTYloom: Telegram messages, Discord channels, replies, reactions, an inline GIF and one tab per network](docs/screenshots/main.svg)
 
 ## Why “TTYloom”?
 
@@ -47,9 +47,11 @@ Discord user-token access is unsupported by Discord and can lead to account susp
 <tr><td align="center">Discord, with the same windows and shortcuts</td><td align="center">Search across networks with Ctrl+F twice</td></tr>
 <tr><td><img src="docs/screenshots/gifs.svg" alt="GIF picker with landscape previews"></td><td><img src="docs/screenshots/members.svg" alt="Group members and contextual actions"></td></tr>
 <tr><td align="center">Ctrl+G opens the GIF picker</td><td align="center">F3 opens the member list</td></tr>
+<tr><td colspan="2"><img src="docs/screenshots/tabs.svg" alt="Tab bar per network, an IRC channel and a WHOIS answer"></td></tr>
+<tr><td colspan="2" align="center">Tab per network with F9, IRC channel and WHOIS</td></tr>
 </table>
 
-These frames use **the actual UI renderer with fictional data** and the Catppuccin Mocha palette. PNG previews come from its kitty output; GIF screenshots are still frames. [Regenerate the screenshots](docs/screenshots/README.md).
+These frames use **the actual UI renderer with fictional data** and the Catppuccin Mocha palette. PNG previews come from its kitty output; GIF screenshots are still frames. GIF tiles are frames of real results of the Discord and Telegram GIF searches. [Regenerate the screenshots](docs/screenshots/README.md).
 
 ## Documentation
 

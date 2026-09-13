@@ -21,6 +21,7 @@
 <text x="296.0" y="96.5" fill="#f9e2af" textLength="24.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">bob</text>
 <rect x="320.0" y="84.0" width="464.0" height="17.0" fill="#45475a"/>
 <text x="320.0" y="96.5" fill="#585b70" textLength="464.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">&gt; │ alice: Has anyone tried the kitty graphics protocol ✓✓</text>
+<text x="16.0" y="113.5" fill="#585b70" textLength="24.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">[·]</text>
 <text x="40.0" y="113.5" fill="#f38ba8" textLength="16.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="bold"> 3</text>
 <text x="56.0" y="113.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">@</text>
 <text x="64.0" y="113.5" fill="#cdd6f4" textLength="160.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> dave               </text>
@@ -47,45 +48,34 @@
 <text x="392.0" y="130.5" fill="#585b70" textLength="24.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 1</text>
 <text x="56.0" y="147.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">#</text>
 <text x="64.0" y="147.5" fill="#cdd6f4" textLength="160.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> general            </text>
-<text x="224.0" y="147.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<rect x="232.0" y="135.0" width="8.0" height="17.0" fill="#45475a"/>
-<text x="232.0" y="147.5" fill="#89b4fa" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▌</text>
-<rect x="240.0" y="135.0" width="96.0" height="17.0" fill="#45475a"/>
-<rect x="336.0" y="135.0" width="8.0" height="17.0" fill="#45475a"/>
-<text x="336.0" y="147.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">👍</text>
-<rect x="344.0" y="135.0" width="448.0" height="17.0" fill="#45475a"/>
-<text x="344.0" y="147.5" fill="#585b70" textLength="448.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> · g quoted · p reply · r react · c copy · i info · Esc</text>
+<text x="224.0" y="147.5" fill="#585b70" textLength="64.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│14:55 &lt;</text>
+<text x="288.0" y="147.5" fill="#a6adc8" textLength="40.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="bold">chris</text>
+<text x="328.0" y="147.5" fill="#585b70" textLength="16.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">&gt; </text>
+<text x="344.0" y="147.5" fill="#cdd6f4" textLength="360.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">TTYloom: many networks, one terminal. Code at</text>
+<text x="704.0" y="147.5" fill="#585b70" textLength="24.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ✓✓</text>
 <text x="40.0" y="164.5" fill="#f38ba8" textLength="16.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="bold">12</text>
 <text x="56.0" y="164.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">#</text>
 <text x="64.0" y="164.5" fill="#cdd6f4" textLength="160.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> help               </text>
-<text x="224.0" y="164.5" fill="#585b70" textLength="64.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│14:55 &lt;</text>
-<text x="288.0" y="164.5" fill="#a6adc8" textLength="40.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="bold">chris</text>
-<text x="328.0" y="164.5" fill="#585b70" textLength="16.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">&gt; </text>
-<text x="344.0" y="164.5" fill="#cdd6f4" textLength="360.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">TTYloom: many networks, one terminal. Code at</text>
-<text x="704.0" y="164.5" fill="#585b70" textLength="24.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ✓✓</text>
+<text x="224.0" y="164.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="344.0" y="164.5" fill="#89b4fa" textLength="264.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve" text-decoration="underline">https://github.com/govlog/ttyloom</text>
 <text x="56.0" y="181.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">#</text>
 <text x="64.0" y="181.5" fill="#cdd6f4" textLength="160.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> offtopic           </text>
-<text x="224.0" y="181.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<text x="344.0" y="181.5" fill="#89b4fa" textLength="264.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve" text-decoration="underline">https://github.com/govlog/ttyloom</text>
-<text x="56.0" y="198.5" fill="#585b70" textLength="232.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">── telegram ──────[-]│15:11 &lt;</text>
-<text x="288.0" y="198.5" fill="#a6e3a1" textLength="40.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">alice</text>
-<text x="328.0" y="198.5" fill="#585b70" textLength="240.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">&gt; [photo 1280x720 · 212 KB] ✓✓</text>
-<rect x="16.0" y="203.0" width="24.0" height="17.0" fill="#cdd6f4"/>
-<text x="16.0" y="215.5" fill="#1e1e2e" textLength="24.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">[·]</text>
-<rect x="40.0" y="203.0" width="16.0" height="17.0" fill="#cdd6f4"/>
-<text x="40.0" y="215.5" fill="#1e1e2e" textLength="16.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="bold"> 2</text>
-<rect x="56.0" y="203.0" width="168.0" height="17.0" fill="#cdd6f4"/>
-<text x="56.0" y="215.5" fill="#1e1e2e" textLength="168.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"># Gophers            </text>
+<text x="224.0" y="181.5" fill="#585b70" textLength="64.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│15:11 &lt;</text>
+<text x="288.0" y="181.5" fill="#a6e3a1" textLength="40.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">alice</text>
+<text x="328.0" y="181.5" fill="#585b70" textLength="144.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">&gt; [gif 470x270] ✓✓</text>
+<text x="56.0" y="198.5" fill="#585b70" textLength="176.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">── libera ────────[-]│</text>
+<text x="16.0" y="215.5" fill="#585b70" textLength="24.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">[·]</text>
+<text x="56.0" y="215.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">#</text>
+<text x="64.0" y="215.5" fill="#cdd6f4" textLength="160.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> #go                </text>
 <text x="224.0" y="215.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<text x="40.0" y="232.5" fill="#f38ba8" textLength="16.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="bold"> 1</text>
+<text x="16.0" y="232.5" fill="#585b70" textLength="24.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">[·]</text>
+<text x="40.0" y="232.5" fill="#f38ba8" textLength="16.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="bold"> 2</text>
 <text x="56.0" y="232.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">@</text>
-<text x="64.0" y="232.5" fill="#cdd6f4" textLength="160.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> Alice              </text>
+<text x="64.0" y="232.5" fill="#cdd6f4" textLength="160.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> alice              </text>
 <text x="224.0" y="232.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <rect x="232.0" y="220.0" width="464.0" height="17.0" fill="#45475a"/>
 <text x="232.0" y="232.5" fill="#585b70" textLength="464.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">┌────────────────────────────────────────────────────────┐</text>
-<text x="56.0" y="249.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">@</text>
-<text x="64.0" y="249.5" fill="#cdd6f4" textLength="160.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> Bob                </text>
-<text x="224.0" y="249.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="56.0" y="249.5" fill="#585b70" textLength="176.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">── telegram ──────[-]│</text>
 <rect x="232.0" y="237.0" width="8.0" height="17.0" fill="#45475a"/>
 <text x="232.0" y="249.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <rect x="240.0" y="237.0" width="8.0" height="17.0" fill="#45475a"/>
@@ -93,8 +83,12 @@
 <rect x="248.0" y="237.0" width="440.0" height="17.0" fill="#45475a"/>
 <rect x="688.0" y="237.0" width="8.0" height="17.0" fill="#45475a"/>
 <text x="688.0" y="249.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<text x="56.0" y="266.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">&amp;</text>
-<text x="64.0" y="266.5" fill="#cdd6f4" textLength="160.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> Go Announcements   </text>
+<rect x="16.0" y="254.0" width="24.0" height="17.0" fill="#cdd6f4"/>
+<text x="16.0" y="266.5" fill="#1e1e2e" textLength="24.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">[·]</text>
+<rect x="40.0" y="254.0" width="16.0" height="17.0" fill="#cdd6f4"/>
+<text x="40.0" y="266.5" fill="#1e1e2e" textLength="16.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="bold"> 2</text>
+<rect x="56.0" y="254.0" width="168.0" height="17.0" fill="#cdd6f4"/>
+<text x="56.0" y="266.5" fill="#1e1e2e" textLength="168.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"># Gophers            </text>
 <text x="224.0" y="266.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <rect x="232.0" y="254.0" width="8.0" height="17.0" fill="#45475a"/>
 <text x="232.0" y="266.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
@@ -141,6 +135,10 @@
 <rect x="680.0" y="254.0" width="8.0" height="17.0" fill="#45475a"/>
 <rect x="688.0" y="254.0" width="8.0" height="17.0" fill="#45475a"/>
 <text x="688.0" y="266.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="16.0" y="283.5" fill="#585b70" textLength="24.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">[·]</text>
+<text x="40.0" y="283.5" fill="#f38ba8" textLength="16.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="bold"> 1</text>
+<text x="56.0" y="283.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">@</text>
+<text x="64.0" y="283.5" fill="#cdd6f4" textLength="160.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> Alice              </text>
 <text x="224.0" y="283.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <rect x="232.0" y="271.0" width="8.0" height="17.0" fill="#45475a"/>
 <text x="232.0" y="283.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
@@ -183,6 +181,8 @@
 <rect x="672.0" y="271.0" width="8.0" height="17.0" fill="#45475a"/>
 <rect x="680.0" y="271.0" width="8.0" height="17.0" fill="#45475a"/>
 <text x="680.0" y="283.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="56.0" y="300.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">@</text>
+<text x="64.0" y="300.5" fill="#cdd6f4" textLength="160.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> Bob                </text>
 <text x="224.0" y="300.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <rect x="232.0" y="288.0" width="8.0" height="17.0" fill="#45475a"/>
 <text x="232.0" y="300.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
@@ -221,6 +221,9 @@
 <rect x="720.0" y="288.0" width="8.0" height="17.0" fill="#45475a"/>
 <rect x="728.0" y="288.0" width="8.0" height="17.0" fill="#45475a"/>
 <text x="728.0" y="300.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="736.0" y="300.5" fill="#cdd6f4" textLength="176.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">. That is where       </text>
+<text x="56.0" y="317.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">&amp;</text>
+<text x="64.0" y="317.5" fill="#cdd6f4" textLength="160.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> Go Announcements   </text>
 <text x="224.0" y="317.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <rect x="232.0" y="305.0" width="8.0" height="17.0" fill="#45475a"/>
 <text x="232.0" y="317.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
@@ -305,6 +308,7 @@
 <rect x="664.0" y="322.0" width="8.0" height="17.0" fill="#45475a"/>
 <rect x="672.0" y="322.0" width="8.0" height="17.0" fill="#45475a"/>
 <text x="672.0" y="334.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="680.0" y="334.5" fill="#f38ba8" textLength="224.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">────────────────────────────</text>
 <text x="224.0" y="351.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <rect x="232.0" y="339.0" width="8.0" height="17.0" fill="#45475a"/>
 <text x="232.0" y="351.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
@@ -512,22 +516,12 @@
 <text x="240.0" y="436.5" fill="#cdd6f4" textLength="448.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">face with tears of joy                                  </text>
 <rect x="688.0" y="424.0" width="8.0" height="17.0" fill="#45475a"/>
 <text x="688.0" y="436.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<text x="696.0" y="436.5" fill="#cdd6f4" textLength="216.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">ether. That is where       </text>
 <text x="224.0" y="453.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <rect x="232.0" y="441.0" width="464.0" height="17.0" fill="#45475a"/>
 <text x="232.0" y="453.5" fill="#585b70" textLength="464.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">└────────────────────────────────────────────────────────┘</text>
 <text x="224.0" y="470.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<text x="232.0" y="470.5" fill="#f38ba8" textLength="672.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">───────────────────────────────────── ↑ unread ─────────────────────────────────────</text>
-<text x="224.0" y="487.5" fill="#585b70" textLength="64.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│15:40 &lt;</text>
-<text x="288.0" y="487.5" fill="#a6e3a1" textLength="40.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">alice</text>
-<text x="328.0" y="487.5" fill="#585b70" textLength="16.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">&gt; </text>
-<text x="344.0" y="487.5" fill="#cdd6f4" textLength="312.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Also: /gif works on both networks now 🎉</text>
-<text x="664.0" y="487.5" fill="#89b4fa" textLength="16.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> •</text>
-<text x="224.0" y="504.5" fill="#585b70" textLength="64.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│15:41 &lt;</text>
-<text x="288.0" y="504.5" fill="#f9e2af" textLength="24.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">bob</text>
-<text x="312.0" y="504.5" fill="#585b70" textLength="16.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">&gt; </text>
-<text x="328.0" y="504.5" fill="#cdd6f4" textLength="312.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Nice. Ctrl+G, type, Enter — that is it?</text>
-<text x="640.0" y="504.5" fill="#89b4fa" textLength="16.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> •</text>
+<text x="224.0" y="487.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="224.0" y="504.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="224.0" y="521.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="224.0" y="538.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="224.0" y="555.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
@@ -538,8 +532,16 @@
 <text x="232.0" y="606.5" fill="#cdd6f4" textLength="160.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">[15:42] [@chris] [1:</text>
 <rect x="392.0" y="594.0" width="56.0" height="17.0" fill="#45475a"/>
 <text x="392.0" y="606.5" fill="#89b4fa" textLength="56.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="bold">Gophers</text>
-<rect x="448.0" y="594.0" width="464.0" height="17.0" fill="#45475a"/>
-<text x="448.0" y="606.5" fill="#cdd6f4" textLength="464.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">] [telegram] [img:kitty] [alice typing…]                  </text>
+<rect x="448.0" y="594.0" width="248.0" height="17.0" fill="#45475a"/>
+<text x="448.0" y="606.5" fill="#cdd6f4" textLength="248.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">] [telegram] [img:kitty] [Act: </text>
+<rect x="696.0" y="594.0" width="40.0" height="17.0" fill="#45475a"/>
+<text x="696.0" y="606.5" fill="#f9e2af" textLength="40.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">4(15)</text>
+<rect x="736.0" y="594.0" width="8.0" height="17.0" fill="#45475a"/>
+<text x="736.0" y="606.5" fill="#cdd6f4" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">,</text>
+<rect x="744.0" y="594.0" width="32.0" height="17.0" fill="#45475a"/>
+<text x="744.0" y="606.5" fill="#f9e2af" textLength="32.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">5(3)</text>
+<rect x="776.0" y="594.0" width="136.0" height="17.0" fill="#45475a"/>
+<text x="776.0" y="606.5" fill="#cdd6f4" textLength="136.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">] [alice typing… </text>
 <text x="16.0" y="623.5" fill="#89b4fa" textLength="208.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="bold"> + new message            </text>
 <text x="224.0" y="623.5" fill="#585b70" textLength="8.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="232.0" y="623.5" fill="#89b4fa" textLength="80.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve" font-weight="bold">[Gophers] </text>
