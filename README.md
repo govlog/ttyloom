@@ -51,7 +51,7 @@ Discord user-token access is unsupported by Discord and can lead to account susp
 <tr><td colspan="2" align="center">Tab per network with F9, IRC channel and WHOIS</td></tr>
 </table>
 
-These frames use **the actual UI renderer with fictional data** and the Catppuccin Mocha palette. PNG previews come from its kitty output; GIF screenshots are still frames. GIF tiles are frames of real results of the Discord and Telegram GIF searches. [Regenerate the screenshots](docs/screenshots/README.md).
+These frames use **the actual UI renderer with fictional data** and the Catppuccin Mocha palette. PNG previews come from its kitty output; GIF screenshots are still frames. GIF tiles are frames of real results of the Discord and Telegram GIF searches.
 
 ## Documentation
 
