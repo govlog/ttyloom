@@ -341,6 +341,23 @@ func TestLoadIRCTables(t *testing.T) {
 	}
 }
 
+// TestTabsAndIgnores : the tab bar key and the ignore list of a network are
+// read back from the file.
+func TestTabsAndIgnores(t *testing.T) {
+	dir := t.TempDir()
+	body := "tabs = true\n[[irc]]\nname = \"libera\"\nhost = \"irc.libera.chat\"\nnick = \"me\"\nignores = [\"spammer!*@*\"]\n"
+	if err := os.WriteFile(filepath.Join(dir, "config.toml"), []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	c, err := LoadFrom(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !c.Tabs || len(c.IRC) != 1 || len(c.IRC[0].Ignores) != 1 || c.IRC[0].Ignores[0] != "spammer!*@*" {
+		t.Fatalf("tabs=%v irc=%+v", c.Tabs, c.IRC)
+	}
+}
+
 func TestValidIRCName(t *testing.T) {
 	for name, ok := range map[string]bool{"libera": true, "my-net_2": true, "": false, "Libera": false, "a b": false, strings.Repeat("a", 33): false} {
 		if ValidIRCName(name) != ok {

@@ -255,6 +255,18 @@ type Envelope struct {
 
 type EvIRCChannels struct{ Channels []string }
 
+// EvLines : lines of text to show — the answer of an IRC command (WHO,
+// MOTD…). ChatID names the chat of the window the command came from; 0 =
+// the status window.
+type EvLines struct {
+	ChatID int64
+	Lines  []string
+}
+
+// EvIRCIgnores : the ignore list of an IRC network changed (/ignore); the UI
+// writes it back to the configuration, like EvIRCChannels.
+type EvIRCIgnores struct{ Ignores []string }
+
 type EvAuthPrompt struct {
 	Question string
 	Secret   bool

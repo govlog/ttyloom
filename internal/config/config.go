@@ -73,6 +73,7 @@ type IRCConfig struct {
 	RealName         string   `toml:"realname"`
 	NickServPassword string   `toml:"nickserv_password"`
 	Channels         []string `toml:"channels"`
+	Ignores          []string `toml:"ignores"`   // nick!user@host masks whose lines are dropped (/ignore)
 	DCCIP            string   `toml:"dcc_ip"`    // address announced by DCC SEND; empty = the one of the IRC socket
 	DCCPorts         string   `toml:"dcc_ports"` // "5000-5010"; empty = any free port
 }
@@ -152,6 +153,7 @@ type Config struct {
 	Notify            string    `toml:"notify"`
 	AutoOpenDays      int       `toml:"auto_open_days"`
 	Aggregate         bool      `toml:"aggregate"`
+	Tabs              bool      `toml:"tabs"` // tab bar per network above the status bar (F9)
 	Cache             bool      `toml:"cache"`
 	CacheMessages     int       `toml:"cache_messages"`
 	LogDir            string    `toml:"log_dir"`
@@ -209,6 +211,7 @@ const defaultFile = `# ttyloom
 #   nick = "me"
 #   nickserv_password = ""       # SASL PLAIN, or NickServ IDENTIFY without SASL
 #   channels = ["#go-nuts"]      # kept up to date by /join and /leave, joined again at start
+#   ignores = ["spammer!*@*"]    # kept up to date by /ignore: lines of those masks are dropped
 # Sections go at the END of the file: a plain key written after [discord]
 # would be read as one of its keys.
 api_id = 0            # https://my.telegram.org
@@ -233,6 +236,7 @@ bell = true            # bell (\a) on a private message or a mention
 notify = "terminal"    # notification on a private message or a mention: terminal (OSC 777) | desktop (notify-send) | off
 auto_open_days = 7     # opens at start the chats active for N days (0 = off)
 aggregate = false      # window 0: stream of every message received (Alt+A)
+tabs = false           # tab bar per network above the status bar, F9 switches (several networks only)
 cache = true           # local cache (dialogs, history) for a fast start
 cache_messages = 2000  # messages kept per chat in the disk cache; scrolling up loads the rest from the network
 log_dir = "~/.local/share/ttyloom/logs"
