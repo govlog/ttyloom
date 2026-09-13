@@ -556,3 +556,89 @@ func TestFindChatContains(t *testing.T) {
 		t.Fatalf("inside, unique: %+v", c)
 	}
 }
+
+// tabsUI : two networks, one bound window each (1 = discord, 2 = telegram).
+func tabsUI() *UI {
+	u := netUI(model.NetDiscord, model.NetTelegram)
+	u.chats = map[model.ChatKey]*model.Chat{}
+	u.dirty = map[model.ChatKey]bool{}
+	u.self = map[string]selfInfo{}
+	for _, c := range u.chatList {
+		u.chats[c.Key()] = c
+		u.bindChat(u.ws.New(true), c)
+	}
+	return u
+}
+
+// F9 turns the tab mode on and walks all → discord → telegram → all; each
+// network tab lands on a window of that network, "all" stays put.
+func TestF9CyclesTabs(t *testing.T) {
+	u := tabsUI()
+	u.key(term.Key{Code: term.F9})
+	if !u.cfg.Tabs || u.netFilter != model.NetDiscord || u.ws.Cur != 1 {
+		t.Fatalf("first F9: tabs=%v filter=%q cur=%d", u.cfg.Tabs, u.netFilter, u.ws.Cur)
+	}
+	u.key(term.Key{Code: term.F9})
+	if u.netFilter != model.NetTelegram || u.ws.Cur != 2 {
+		t.Fatalf("second F9: filter=%q cur=%d", u.netFilter, u.ws.Cur)
+	}
+	u.key(term.Key{Code: term.F9})
+	if u.netFilter != "" || u.ws.Cur != 2 {
+		t.Fatalf("third F9 (all): filter=%q cur=%d", u.netFilter, u.ws.Cur)
+	}
+	u.key(term.Key{Code: term.F9}) // back on discord: its last window again
+	if u.netFilter != model.NetDiscord || u.ws.Cur != 1 {
+		t.Fatalf("fourth F9: filter=%q cur=%d", u.netFilter, u.ws.Cur)
+	}
+}
+
+// F9 with a single network changes nothing, silently.
+func TestF9SingleNet(t *testing.T) {
+	u := netUI(model.NetTelegram)
+	u.key(term.Key{Code: term.F9})
+	if u.cfg.Tabs || u.netFilter != "" || len(u.ws.List[0].Items) != 0 {
+		t.Fatalf("single network: tabs=%v filter=%q items=%d", u.cfg.Tabs, u.netFilter, len(u.ws.List[0].Items))
+	}
+}
+
+// In tab mode Ctrl+X and Alt+←/→ skip the windows of the other networks;
+// Alt+N still reaches any window, and the tab follows it.
+func TestTabsRestrictCycle(t *testing.T) {
+	u := tabsUI()
+	u.bindChat(u.ws.New(true), &model.Chat{Net: model.NetDiscord, ID: 9, Title: "discord-2"}) // window 3
+	u.cfg.Tabs = true
+	u.tabTo(model.NetDiscord) // window 1
+	u.key(term.Key{Code: term.Ctrl, Rune: 'x'})
+	if u.ws.Cur != 3 {
+		t.Fatalf("Ctrl+X: cur=%d, want 3 (telegram window 2 skipped)", u.ws.Cur)
+	}
+	u.key(term.Key{Code: term.Ctrl, Rune: 'x'})
+	if u.ws.Cur != 0 {
+		t.Fatalf("Ctrl+X wrap: cur=%d, want 0", u.ws.Cur)
+	}
+	u.key(term.Key{Code: term.Left, Alt: true})
+	if u.ws.Cur != 3 {
+		t.Fatalf("Alt+Left: cur=%d, want 3", u.ws.Cur)
+	}
+	u.key(term.Key{Rune: '2', Alt: true})
+	if u.ws.Cur != 2 || u.netFilter != model.NetTelegram {
+		t.Fatalf("Alt+2: cur=%d filter=%q, want 2 telegram", u.ws.Cur, u.netFilter)
+	}
+}
+
+// /set tabs on|off is the switch; /net <name> in tab mode moves to the tab.
+func TestSetTabsAndNet(t *testing.T) {
+	u := tabsUI()
+	u.command("set", []string{"tabs", "on"}, "tabs on")
+	if !u.cfg.Tabs || !u.tabsOn() {
+		t.Fatal("/set tabs on: not on")
+	}
+	u.command("net", []string{model.NetTelegram}, model.NetTelegram)
+	if u.netFilter != model.NetTelegram || u.ws.Cur != 2 {
+		t.Fatalf("/net in tab mode: filter=%q cur=%d", u.netFilter, u.ws.Cur)
+	}
+	u.command("set", []string{"tabs", "off"}, "tabs off")
+	if u.cfg.Tabs || u.tabsOn() {
+		t.Fatal("/set tabs off: still on")
+	}
+}

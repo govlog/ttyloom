@@ -381,11 +381,11 @@ func (u *UI) netCmd(w *Window, name string) {
 	name = strings.ToLower(name)
 	switch {
 	case name == "":
-		u.setNetFilter(nextNet(names, u.netFilter))
+		u.applyNet(nextNet(names, u.netFilter))
 	case name == netAll:
-		u.setNetFilter("")
+		u.applyNet("")
 	case slices.Contains(names, name):
-		u.setNetFilter(name)
+		u.applyNet(name)
 	default:
 		w.AddSys(i18n.T("net_unknown", name, strings.Join(append(names, netAll), ", ")))
 		return
@@ -538,6 +538,8 @@ func (u *UI) setCmd(args []string) {
 			w.AddSys(fmt.Sprintf("auto_open_days = %d", u.cfg.AutoOpenDays))
 		case "aggregate":
 			w.AddSys(fmt.Sprintf("aggregate = %v", u.aggregate))
+		case "tabs":
+			w.AddSys(fmt.Sprintf("tabs = %v", u.cfg.Tabs))
 		case "log":
 			w.AddSys(fmt.Sprintf("log = %v", u.cfg.Log))
 		case "log_dir":
@@ -665,6 +667,9 @@ func (u *UI) setCmd(args []string) {
 	case "aggregate":
 		u.setAggregate(onOff(v))
 		w = u.view() // the view may have changed: show() writes where the user looks
+	case "tabs":
+		u.cfg.Tabs = onOff(v)
+		u.clear() // the bar shows or goes: the view changes height
 	case "log":
 		u.cfg.Log = onOff(v)
 		u.ws.Log = u.cfg.Log

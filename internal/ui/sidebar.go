@@ -449,10 +449,10 @@ func (u *UI) toggleSplit() {
 func (u *UI) nextSide() {
 	if u.side == sideWindows && u.multiNet() {
 		if net := nextNet(u.netNames(), u.netFilter); net != "" {
-			u.setNetFilter(net)
+			u.applyNet(net)
 			return
 		}
-		u.setNetFilter("")
+		u.applyNet("")
 	}
 	u.side, u.sideScroll = (u.side+1)%3, 0
 }

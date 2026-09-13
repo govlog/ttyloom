@@ -165,7 +165,9 @@ type UI struct {
 	}
 	// netFilter : network the sidebar and the aggregate are cut to (/net),
 	// "" = all. Always empty with a single backend.
-	netFilter  string
+	netFilter string
+	// tabLast : last window shown per network — where a tab comes back to.
+	tabLast    map[string]*Window
 	side       sideMode        // sidebar (F2)
 	sideW      int             // width of its content (sidebar_width, drag of the bar)
 	sideScroll int             // first entry shown in the sidebar
@@ -212,6 +214,7 @@ func Run(ctx context.Context, cancel context.CancelFunc, t *term.Term, cfg *conf
 		self:        map[string]selfInfo{},
 		conn:        map[string]bool{},
 		dialogsSeen: map[string]bool{},
+		tabLast:     map[string]*Window{},
 		reactList:   map[string][]string{}}
 	u.ws.Log = cfg.Log
 	u.setMaxItems(cfg.CacheMessages)
@@ -593,6 +596,70 @@ func (u *UI) winShown(w *Window) bool {
 // tabsOn : the tab bar shows and the window cycle stays in the network of the
 // tab — the option, and more than one network (one network has no tab).
 func (u *UI) tabsOn() bool { return u.cfg.Tabs && u.multiNet() }
+
+// applyNet : /net, Shift+F2, the F2 cycle of the window list. In tab mode a
+// network is a tab, so the view moves to it; otherwise only the filter moves.
+func (u *UI) applyNet(net string) {
+	if u.tabsOn() {
+		u.tabTo(net)
+		return
+	}
+	u.setNetFilter(net)
+}
+
+// tabTo shows the tab of net ("" = all): the filter moves, and a network tab
+// goes back to the window it was left on, else the first window of the
+// network, else window 0. The "all" tab stays on the current window.
+func (u *UI) tabTo(net string) {
+	u.setNetFilter(net)
+	if net == "" {
+		return
+	}
+	target := -1
+	if w := u.tabLast[net]; w != nil {
+		target = slices.Index(u.ws.List, w)
+	}
+	if target < 0 {
+		target = 0
+		for i, w := range u.ws.List {
+			if w.Chat != nil && w.Chat.Net == net {
+				target = i
+				break
+			}
+		}
+	}
+	if target != u.ws.Cur {
+		u.goTo(target)
+	}
+}
+
+// tabNext : F9 — turns the tab mode on when it is off (saved), then the next
+// tab of the cycle all → networks in name order → all. Silent and inert with a
+// single network, like Shift+F2.
+func (u *UI) tabNext() {
+	if !u.multiNet() {
+		return
+	}
+	if !u.cfg.Tabs {
+		u.cfg.Tabs = true
+		u.saveCfg()
+		u.clear() // the bar takes a line: the view changes height
+	}
+	u.tabTo(nextNet(u.netNames(), u.netFilter))
+}
+
+// stepWin : Alt+← / Alt+→ — the window before or after; in tab mode the ones
+// of other networks are skipped (window 0 is in every tab).
+func (u *UI) stepWin(dir int) {
+	n := len(u.ws.List)
+	for i := 1; i < n; i++ {
+		j := (u.ws.Cur + dir*i + n) % n
+		if !u.tabsOn() || u.winShown(u.ws.List[j]) {
+			u.goTo(j)
+			return
+		}
+	}
+}
 
 // anyHot : a window waits with a private message or a mention (the pulse only
 // repaints for them).
@@ -1570,12 +1637,19 @@ func (u *UI) markRead(w *Window) {
 // home closed, or already shown), the classic cycle.
 func (u *UI) cycleTarget() int {
 	n := len(u.ws.List)
-	next := (u.ws.Cur + 1) % n
+	shown := func(j int) bool { return !u.tabsOn() || u.winShown(u.ws.List[j]) }
+	next := u.ws.Cur
+	for i := 1; i < n; i++ {
+		if j := (u.ws.Cur + i) % n; shown(j) {
+			next = j
+			break
+		}
+	}
 	if u.cfg.CycleMode != "last_unread" {
 		return next
 	}
 	for i := 1; i < n; i++ {
-		if j := (u.ws.Cur + i) % n; u.ws.List[j].Act > 0 {
+		if j := (u.ws.Cur + i) % n; shown(j) && u.ws.List[j].Act > 0 {
 			if u.cycleHome == nil {
 				u.cycleHome = u.ws.Current()
 			}
@@ -1584,7 +1658,7 @@ func (u *UI) cycleTarget() int {
 	}
 	home := u.cycleHome
 	u.cycleHome = nil
-	if j := slices.Index(u.ws.List, home); j >= 0 && j != u.ws.Cur {
+	if j := slices.Index(u.ws.List, home); j >= 0 && j != u.ws.Cur && shown(j) {
 		return j
 	}
 	return next
@@ -1601,6 +1675,17 @@ func (u *UI) goTo(n int) {
 	}
 	u.showDebug = false // every window change closes the log again (/debug)
 	w := u.ws.Current()
+	if w.Chat != nil {
+		if u.tabLast == nil {
+			u.tabLast = map[string]*Window{}
+		}
+		u.tabLast[w.Chat.Net] = w
+		// The tab follows the window: reached by Alt+N, /win, a click, the
+		// window of another network moves the filter onto that network.
+		if u.tabsOn() && u.netFilter != "" && w.Chat.Net != u.netFilter {
+			u.setNetFilter(w.Chat.Net)
+		}
+	}
 	// A mode running (edit, reply, login prompt, paste decision) drops the
 	// draft rather than saving it: cancelMode() stays unconditional (Esc,
 	// search, delete confirmation); only the draft swap is gated, and it comes
@@ -1919,6 +2004,8 @@ func (u *UI) key(k term.Key) {
 	case k.Code == term.F6, k.Alt && k.Rune == 'a': // aggregated view (Alt+A kept, taken by some window managers)
 		u.setAggregate(!u.aggregate)
 		u.saveCfg()
+	case k.Code == term.F9: // tab mode, like /set tabs
+		u.tabNext()
 	case k.Code == term.F4: // cycle of the image display mode, like /set images
 		u.applyImages(nextImages(u.images, u.t.Kitty))
 		u.saveCfg()
@@ -1967,11 +2054,9 @@ func (u *UI) key(k term.Key) {
 	case k.Alt && k.Rune >= '0' && k.Rune <= '9':
 		u.goTo(int(k.Rune - '0'))
 	case k.Alt && k.Code == term.Left:
-		u.ws.Prev()
-		u.goTo(u.ws.Cur)
+		u.stepWin(-1)
 	case k.Alt && k.Code == term.Right:
-		u.ws.Next()
-		u.goTo(u.ws.Cur)
+		u.stepWin(1)
 	case k.Alt && k.Code == term.Up:
 		u.selMove(w, -1)
 	case k.Alt && k.Code == term.Down:

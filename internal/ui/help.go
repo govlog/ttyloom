@@ -28,6 +28,7 @@ var helpTopics = []topic{
 	{"Alt+←/→", "help_alt_arrows", "windows"},
 	{"Alt+1..9", "help_alt_digits", "windows"},
 	{"F6", "help_f6", "windows"},
+	{"F9", "help_f9", "windows"},
 	{"/log", "help_log", "windows"},
 
 	// Chats
@@ -118,6 +119,7 @@ var helpTopics = []topic{
 	{"notify", "help_notify", "options"},
 	{"auto_open_days", "help_auto_open_days", "options"},
 	{"aggregate", "help_aggregate", "options"},
+	{"tabs", "help_tabs", "options"},
 	{"log", "help_log_opt", "options"},
 	{"log_dir", "help_log_dir", "options"},
 	{"separator", "help_separator", "options"},
