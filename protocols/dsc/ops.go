@@ -16,6 +16,7 @@ import (
 
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
+	"github.com/diamondburned/arikawa/v3/gateway"
 	"github.com/diamondburned/arikawa/v3/utils/json/option"
 	"github.com/diamondburned/arikawa/v3/utils/sendpart"
 
@@ -676,6 +677,31 @@ func (c *Client) MarkRead(_ context.Context, chat *model.Chat, maxID int) {
 		defer c.Guard("MarkRead", nil)
 		chID, _ := ids(chat)
 		c.state().ReadState.MarkRead(chID, discord.MessageID(maxID))
+	}()
+}
+
+// --- away ---
+
+// Away : idle with the message as custom status; "" back online with none.
+// Experimental: the presence goes through this session's gateway, the way the
+// official client does it, and Discord shows the most active session.
+func (c *Client) Away(ctx context.Context, msg string) {
+	go func() {
+		defer c.Guard("Away", nil)
+		st := c.state()
+		if st == nil || !st.GatewayIsAlive() {
+			c.Post(model.EvLog{Level: "ERROR", Msg: "discord: away: not connected"})
+			return
+		}
+		cmd := &gateway.UpdatePresenceCommand{Status: discord.OnlineStatus, Activities: []discord.Activity{}}
+		if msg != "" {
+			cmd.Status, cmd.AFK = discord.IdleStatus, true
+			cmd.Since = discord.UnixMsTimestamp(time.Now().UnixMilli())
+			cmd.Activities = []discord.Activity{{Name: "Custom Status", Type: discord.CustomActivity, State: msg}}
+		}
+		if err := st.Gateway().Send(ctx, cmd); err != nil {
+			c.Post(model.EvLog{Level: "ERROR", Msg: "discord: away: " + err.Error()})
+		}
 	}()
 }
 

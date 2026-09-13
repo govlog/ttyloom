@@ -19,7 +19,7 @@ var aliases = map[string]string{
 	"hist": "history", "t": "theme", "o": "open", "c": "clear", "h": "help", "exit": "quit",
 }
 
-var commandNames = []string{"/window", "/close", "/query", "/join", "/new", "/msg", "/me", "/chats", "/net", "/fold", "/history",
+var commandNames = []string{"/window", "/close", "/query", "/join", "/new", "/msg", "/me", "/away", "/chats", "/net", "/fold", "/history",
 	"/search", "/whois", "/rename", "/unrename", "/open", "/view", "/send", "/theme", "/set", "/clear", "/log", "/debug", "/emoji", "/gif", "/help", "/quit",
 	"/telegram", "/discord", "/irc", "/dcc"}
 
@@ -148,6 +148,32 @@ func (u *UI) command(name string, args []string, text string) {
 			return
 		}
 		u.sendMe(u.sendWin(), text)
+	case "away":
+		nets := u.netNames()
+		if u.netFilter != "" {
+			nets = []string{u.netFilter}
+		}
+		var done []string
+		for _, n := range nets {
+			a, ok := u.nets[n].(awayer)
+			if !ok {
+				if u.netFilter != "" {
+					u.netUnsupported(n)
+				}
+				continue
+			}
+			a.Away(u.netContext(n), text)
+			u.setAway(n, text)
+			done = append(done, n)
+		}
+		switch {
+		case len(done) == 0 && u.netFilter == "":
+			w.AddSys(i18n.T("net_unsupported", strings.Join(nets, ", ")))
+		case len(done) > 0 && text == "":
+			w.AddSys(i18n.T("away_back", strings.Join(done, ", ")))
+		case len(done) > 0:
+			w.AddSys(i18n.T("away_set", text, strings.Join(done, ", ")))
+		}
 	case "chats":
 		if u.botOnly() {
 			w.AddSys(i18n.T("bot_unavailable"))

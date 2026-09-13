@@ -78,7 +78,8 @@ type UI struct {
 	// bot, which is what the interface showed before any connection.
 	self      map[string]selfInfo
 	accountID map[string]int64
-	images    string // effective mode: kitty | halfblock | off
+	away      map[string]string // away message set by /away, per network
+	images    string            // effective mode: kitty | halfblock | off
 	// cellWait : the mode fell back to half blocks only because the cell size
 	// is not known yet. Some terminals give it neither in the answer to
 	// CSI 16 t nor in the pixels of TIOCGWINSZ before the window is really
@@ -388,6 +389,36 @@ func (u *UI) selfName(c *model.Chat) string {
 		for _, s := range u.self {
 			return s.Name
 		}
+	}
+	return ""
+}
+
+// awayer : a backend that can mark the account away with a message (IRC
+// AWAY, Discord idle + custom status). Optional: Telegram has none.
+type awayer interface {
+	Away(ctx context.Context, msg string)
+}
+
+// setAway keeps the away message of net ("" = back).
+func (u *UI) setAway(net, msg string) {
+	if u.away == nil {
+		u.away = map[string]string{}
+	}
+	if msg == "" {
+		delete(u.away, net)
+		return
+	}
+	u.away[net] = msg
+}
+
+// awayOf : the away message of the network of c; with no chat, the one of any
+// network away (name order), "" when none.
+func (u *UI) awayOf(c *model.Chat) string {
+	if c != nil {
+		return u.away[c.Net]
+	}
+	for _, n := range slices.Sorted(maps.Keys(u.away)) {
+		return u.away[n]
 	}
 	return ""
 }
@@ -1102,6 +1133,7 @@ func (u *UI) event(ev model.Event) {
 		delete(u.netCtx, net)
 		u.clearNetWork(net)
 		delete(u.self, net)
+		delete(u.away, net)
 		delete(u.dialogsSeen, net) // the next login auto-opens and syncs again
 		u.conn[net] = false
 		u.authDone(net)

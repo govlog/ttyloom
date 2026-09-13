@@ -38,6 +38,7 @@ var helpTopics = []topic{
 	{"Ctrl+N", "help_ctrl_n", "chats"},
 	{"/msg", "help_msg", "chats"},
 	{"/me", "help_me", "chats"},
+	{"/away", "help_away", "chats"},
 	{"/chats", "help_chats", "chats"},
 	{"/net", "help_net", "chats"},
 	{"/telegram", "help_telegram", "chats"},

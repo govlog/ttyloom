@@ -778,3 +778,39 @@ func TestIRCWhoisNick(t *testing.T) {
 		t.Fatalf("WhoisMember from the Telegram window: %v", irc.members)
 	}
 }
+
+type fakeAway struct {
+	fakeBackend
+	msgs []string
+}
+
+func (f *fakeAway) Away(_ context.Context, msg string) { f.msgs = append(f.msgs, msg) }
+
+// /away reaches every network that can when no network is filtered, the
+// filtered one only otherwise; a network that cannot says so; /away alone
+// comes back.
+func TestAwayScope(t *testing.T) {
+	u := netUI(model.NetTelegram)
+	d, i := &fakeAway{}, &fakeAway{}
+	u.nets[model.NetDiscord], u.nets[model.IRCNet("libera")] = d, i
+	u.command("away", []string{"not", "here"}, "not here")
+	if !slices.Equal(d.msgs, []string{"not here"}) || !slices.Equal(i.msgs, []string{"not here"}) {
+		t.Fatalf("all networks: discord=%v irc=%v", d.msgs, i.msgs)
+	}
+	if u.awayOf(nil) != "not here" || u.awayOf(&model.Chat{Net: model.NetTelegram}) != "" {
+		t.Fatalf("awayOf: any=%q telegram=%q", u.awayOf(nil), u.awayOf(&model.Chat{Net: model.NetTelegram}))
+	}
+	u.netFilter = model.NetDiscord
+	u.command("away", nil, "")
+	if !slices.Equal(d.msgs, []string{"not here", ""}) || len(i.msgs) != 1 {
+		t.Fatalf("filtered: discord=%v irc=%v", d.msgs, i.msgs)
+	}
+	if u.awayOf(&model.Chat{Net: model.NetDiscord}) != "" || u.awayOf(&model.Chat{Net: model.IRCNet("libera")}) != "not here" {
+		t.Fatal("away state after coming back on discord only")
+	}
+	u.netFilter = model.NetTelegram
+	u.command("away", []string{"x"}, "x")
+	if got := lastSys(u.view()); got != i18n.T("net_unsupported", model.NetTelegram) {
+		t.Fatalf("telegram: %q", got)
+	}
+}

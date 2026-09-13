@@ -752,6 +752,11 @@ func (u *UI) drawStatus(b *strings.Builder, row, x0, cols int) {
 		dim.FG = u.th.Color(theme.Dim)
 		add(i18n.T("status_away"), dim)
 	}
+	if msg := u.awayOf(w.Chat); msg != "" {
+		dim := st
+		dim.FG = u.th.Color(theme.Dim)
+		add(i18n.T("status_away_set", render.Truncate(msg, 20, "…")), dim)
+	}
 	if s := u.connStatus(); s != "" {
 		add(s, errS)
 	}
