@@ -156,6 +156,8 @@ nickserv_password = ""
 channels = ["#go-nuts"]
 ```
 
+Les commandes IRC habituelles répondent dans la fenêtre où elles sont tapées : `/join #salon [clé]`, `/part`, `/cycle`, `/topic`, `/nick`, `/notice`, `/invite`, `/names`, `/mode`, `/kick`, `/ban`, `/kickban`, `/who`, `/whowas`, `/whois`, `/motd`, `/ctcp`, `/quote` et `/ignore`, dont les masques sont gardés dans la clé `ignores` de la table.
+
 [Réseaux IRC, DCC et réglages NAT →](docs/guide.fr.md#réseaux-irc)
 
 ### Installation existante
@@ -176,6 +178,7 @@ Vérifiez `download_dir` et `log_dir` dans cette configuration. Les caches écri
 | Ouvrir une conversation | Ctrl+N ou le panneau |
 | Parler en privé depuis cette fenêtre | `/q nom` ; `/q` seul revient à la cible habituelle |
 | Panneau / filtre réseau | F2 / Shift+F2 ou `/net discord`, `/net irc:libera` |
+| Onglet par réseau / onglet suivant | F9 (ou un clic sur un onglet) |
 | Conversations agrégées dans la fenêtre 0 | F6 |
 | Recherche locale / sur les réseaux | Ctrl+F / Ctrl+F encore |
 | GIF / emoji | Ctrl+G / Ctrl+T |
@@ -186,6 +189,7 @@ Vérifiez `download_dir` et `log_dir` dans cette configuration. Les caches écri
 | Gras / italique / souligné dans le brouillon | Ctrl+B / Ctrl+I / Ctrl+U |
 | Effacer l’écran, garder l’historique | Ctrl+L |
 | Liste des membres / mode des images | F3 / F4 |
+| Message d’absence | `/away pas là`, `/away` fait revenir |
 | Aide | `/help` ou `/help topic` |
 
 ## Personnaliser

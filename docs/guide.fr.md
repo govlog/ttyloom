@@ -147,6 +147,7 @@ multiline = false                   # Maj+Entrée ouvre une zone de saisie éten
 bell = true                         # cloche sur message privé ou mention
 auto_open_days = 7                  # fenetres ouvertes au demarrage pour les chats actifs (0 = jamais)
 aggregate = false                   # fenetre 0 agregee (F6)
+tabs = false                        # barre d'onglets par réseau au-dessus de la barre de statut (F9)
 cache = true                        # historique et conversations sur disque
 cache_messages = 2000               # messages gardes par conversation sur disque
 notify = "terminal"                 # terminal (OSC 777 Ghostty/kitty) | desktop (notify-send) | off
@@ -187,6 +188,7 @@ Détail des options :
 | *bell* | cloche du terminal (*\a*) sur message privé ou mention dans une fenêtre non affichée |
 | *auto_open_days* | au démarrage, une fenêtre cachée par conversation active depuis N jours ; *0* désactive |
 | *aggregate* | la fenêtre 0 affiche tous les messages de toutes les fenêtres (*F6* bascule) |
+| *tabs* | un onglet par réseau au-dessus de la barre de statut, cliquable ; *F9* l'active et parcourt les onglets ; sans effet avec un seul réseau |
 | *cache* | conserve les conversations et l'historique de chaque chat sur disque ; *false* désactive tout cache |
 | *cache_messages* | messages gardés par conversation sur disque (les plus récents) ; la mémoire d'une fenêtre suit la même limite |
 | *notify* | notification sur message privé ou mention quand le terminal n'a pas le focus : *terminal* (natif Ghostty/kitty), *desktop* (*notify-send*) ou *off* |
@@ -364,6 +366,7 @@ user = "moi"                 # vide = nick
 realname = "moi"             # vide = nick
 nickserv_password = ""       # SASL PLAIN si le serveur l'offre, NickServ IDENTIFY sinon
 channels = ["#go-nuts"]      # tenu par le client : /join ajoute, /leave retire, rejoints au démarrage
+ignores = []                 # tenu par le client : /ignore ajoute et retire ; les lignes de ces masques sont jetées
 dcc_ip = ""                  # adresse annoncée par DCC SEND (derrière un NAT) ; vide = celle de la socket IRC
 dcc_ports = ""               # "5000-5010" pour fixer les ports DCC ; vide = n'importe quel port libre
 ```
@@ -380,6 +383,37 @@ Le nom est la clé du réseau (*irc:libera*) : */net irc:libera*, une section à
 | */dcc get [pseudo]* | accepte la dernière offre de la fenêtre, ou de la conversation de ce pseudo ; la touche de téléchargement sur la ligne du fichier aussi |
 
 Le DCC va de client à client en TCP : l'expéditeur écoute et annonce son adresse et son port, le destinataire se connecte. Derrière un NAT, mettre l'adresse publique dans *dcc_ip* et une plage redirigée dans *dcc_ports*. Une offre reçue apparaît comme une ligne fichier dans la conversation privée ; le fichier arrive dans *download_dir*. Les offres inversées (expéditeur derrière un NAT) sont acceptées. Pas de reprise, pas de DCC CHAT.
+
+Les commandes IRC habituelles demandent un contexte IRC : une fenêtre sur une conversation IRC, l'onglet IRC, ou un seul réseau IRC configuré. Avec plusieurs réseaux IRC et rien de tout cela, la réponse invite à taper la commande depuis une fenêtre du réseau ou sur son onglet ; sans aucun réseau IRC, elles restent des commandes inconnues. Les réponses arrivent dans la fenêtre où la commande a été tapée, les erreurs du serveur en fenêtre 0. Un préfixe court va d'abord aux commandes générales : */i* vaut */irc* et */wh* vaut */whois*, tandis que */who* doit être tapé en entier.
+
+| Commande | Effet |
+|---|---|
+| */join #salon [clé]* | rejoint un salon, avec sa clé s'il en a une ; le salon est gardé dans *channels* |
+| */part [#salon] [raison]* | quitte le salon, le courant par défaut, et l'oublie ; équivalent de */leave* sur IRC |
+| */cycle [#salon]* | quitte puis rejoint le salon, la fenêtre conservée : de quoi reprendre l'op |
+| */topic [#salon] [texte]* | affiche ou change le sujet |
+| */nick pseudo* | change mon pseudo sur ce réseau ; les autres réseaux gardent le leur |
+| */notice cible texte* | envoie un NOTICE à un pseudo ou à un salon |
+| */invite pseudo [#salon]* | invite un pseudo dans le salon |
+| */names [#salon]* | liste les pseudos du salon dans la fenêtre, ops *@* et voices *+* marqués ; *F3* ouvre la même liste en cadre |
+| */mode [cible] [modes…]* | affiche ou change les modes d'un salon ou d'un pseudo, envoyé tel quel : */mode #salon +ntk clé*, */mode #salon +b* liste les bans |
+| */kick [#salon] pseudo [raison]* | éjecte un pseudo du salon ; réservé aux ops |
+| */ban [#salon] pseudo \| masque* | bannit un masque (mode *+b*) ; un pseudo seul devient *\*!\*@hôte* par USERHOST, un pseudo inconnu reçoit une réponse « pseudo inconnu », un masque complet part tel quel |
+| */kickban [#salon] pseudo [raison]* | bannit puis éjecte, pour que le pseudo ne revienne pas avant la pose du mode |
+| */who [masque]* | WHO : les utilisateurs du salon, ou ceux qui correspondent à un masque comme *\*!\*@\*.fr* |
+| */whowas pseudo* | dernière identité connue d'un pseudo parti, pour bâtir un masque de ban après un quit |
+| */whois pseudo* | fiche d'un pseudo dans un cadre à la irssi : pseudo, user@hôte, ircname, serveur, secure, actually, loggedin, channels, idle, away. Aucune conversation ouverte n'est nécessaire |
+| */motd* | message du jour du serveur ; chaque connexion affiche aussi son MOTD en fenêtre 0 |
+| */ctcp pseudo VERSION \| PING \| TIME \| …* | envoie une requête CTCP ; la réponse revient en *[ctcp(pseudo)] …* |
+| */quote ligne brute* | envoie une ligne IRC brute telle quelle, pour ce dont le client n'a pas de commande |
+| */ignore [pseudo \| masque]* | liste, ajoute ou retire un masque ignoré, gardé dans *ignores* |
+| */away [message]* | me marque absent sur les réseaux qui le savent faire ; */away* seul fait revenir |
+
+*/ignore* seul liste les masques. Un pseudo devient *pseudo!\*@\**, un *user@hôte* devient *\*!user@hôte*, et *\** et *?* sont des jokers ; retaper un masque existant le retire. La liste vit dans la clé *ignores* de la table **[[irc]]**, et une entrée écrite à la main est normalisée de la même façon. Messages, notices, actions et CTCP d'une source correspondante sont jetés par le réseau.
+
+Depuis la fenêtre 0, avec un seul réseau IRC, */whois nom* cherche d'abord le nom parmi les contacts et n'interroge IRC que si rien ne correspond.
+
+*/away message* me marque absent là où le réseau sait le faire : IRC envoie *AWAY*, Discord passe en inactif avec le message en statut personnalisé (expérimental, par la présence de la passerelle), Telegram n'a pas d'équivalent. Sur l'onglet *all*, ou sans onglets, tous les réseaux qui le gèrent ; sur un onglet de réseau, ou après */net*, ce réseau seul. */away* seul fait revenir. La barre de statut porte un segment *[away: message]* le temps de l'absence, et rien n'est dit dans les salons.
 
 ### Thème
 
@@ -423,6 +457,7 @@ Par défaut, la fenêtre 0 est la fenêtre de statut : connexion, journaux, rés
 | *F5* | image au survol seulement |
 | *F6* | fenêtre 0 agrégée |
 | *F7* | ordre du panneau, dans les deux modes : récents, a→z, non-lus |
+| *F9* | mode onglets : un onglet par réseau, *all* → chaque réseau → *all* |
 | *Ctrl+R* | parcourt les fautes de la saisie (*/set spell*) : *Entrée* corrige, *i* ignore, *a* ajoute au dico, *Échap* quitte |
 
 - Parler en privé en gardant le flux courant visible
@@ -434,6 +469,18 @@ salut antonio
 ```
 
 Un message entrant pour une conversation sans fenêtre crée une fenêtre cachée, signalée dans *[Act: …]* de la barre de statut.
+
+#### Mode onglets (F9)
+
+*F9* active la barre d'onglets (*tabs = true*) et enchaîne *all* → chaque réseau, dans l'ordre des noms → *all*. La barre se place juste au-dessus de la barre de statut, et ses onglets se cliquent :
+
+```
+[all] [telegram(6)] [discord(5)] [irc:libera]
+```
+
+L'onglet courant est mis en valeur ; les autres portent le compteur de non-lus de leurs fenêtres. Un onglet de réseau ne montre que les fenêtres de ce réseau, la fenêtre 0 comprise : *Ctrl+X* et *Alt+←/→* y restent, le panneau et la vue agrégée sont coupés à lui, et *[Act: …]* ne liste que ses fenêtres. C'est le même filtre que */net* et *Shift+F2*.
+
+*Alt+N*, */win N*, */N* et un clic atteignent toujours n'importe quelle fenêtre, et l'onglet suit la fenêtre affichée. Revenir sur un onglet de réseau ramène à la dernière fenêtre vue sur ce réseau. */set tabs off* retire la barre et rend le cycle des fenêtres global. Avec un seul réseau, il n'y a pas d'onglets.
 
 ### Conversations
 
@@ -558,6 +605,8 @@ Un clic sur une ligne du panneau ouvre ou rejoint la conversation ; un clic sur 
 - Afficher les participants avec *F3* : une boîte en haut à droite liste le pair et sa présence en privé, les membres (admins *★* en tête, en ligne en couleur) en groupe, le nombre d'abonnés en canal ; un clic sur un membre ouvre sa conversation dans une fenêtre dédiée, la croix *[x]* de la bordure ferme la boîte
 
 À droite de la zone des messages, une barre de défilement indique la position dans l'historique : un clic saute, un glisser suit la souris ; la piste s'éclaire en couleur d'accent dès que le pointeur est sur les messages ou sur la colonne, et le curseur s'épaissit en bloc plein (*█*) quand le pointeur est sur la colonne elle-même. La barre de statut résume l'activité des fenêtres non affichées sous la forme *[Act: 2(3),5(1)]* (numéro de fenêtre et nombre de messages). Une cloche retentit sur un message privé ou une mention de mon nom ailleurs que dans la fenêtre courante (*/set bell off* la coupe). Au démarrage, les conversations actives depuis *auto_open_days* jours reçoivent une fenêtre cachée, signalée dans *[Act]*.
+
+Une fenêtre qui garde un message privé ou une mention de mon nom non lus est chaude : son compteur *(N)* passe dans la couleur des mentions, en gras, et pulse une seconde sur deux, dans *[Act: …]*, sur l'onglet de son réseau et dans la liste des fenêtres du panneau. La visite de la fenêtre l'éteint.
 
 ### Fenêtre 0 agrégée et recherche
 

@@ -155,6 +155,7 @@ multiline = false
 bell = true
 auto_open_days = 7
 aggregate = false
+tabs = false
 cache = true
 cache_messages = 2000
 notify = "terminal"
@@ -193,6 +194,7 @@ log_dir = "~/.local/share/ttyloom/logs"
 | `bell` | Terminal bell for a private message or mention outside the active window. |
 | `auto_open_days` | Create hidden windows for conversations active within N days on startup; 0 disables this. |
 | `aggregate` | Combine open conversations in window 0; `F6` toggles it. |
+| `tabs` | One tab per network above the status bar, clickable; `F9` turns it on and walks the tabs. Nothing with a single network. |
 | `cache` | Save dialogs and recent message history on disk. False disables the history cache. |
 | `cache_messages` | Recent messages kept per conversation on disk; window memory follows the same message-count setting. |
 | `notify` | `terminal` for native terminal notifications, `desktop` for `notify-send`, or `off`. Notification delivery also depends on focus. |
@@ -378,6 +380,7 @@ user = "me"                  # empty = nick
 realname = "me"              # empty = nick
 nickserv_password = ""       # SASL PLAIN when the server offers it, NickServ IDENTIFY otherwise
 channels = ["#go-nuts"]      # kept by the client: /join adds, /leave removes, joined again at start
+ignores = []                 # kept by the client: /ignore adds and removes; lines of those masks are dropped
 dcc_ip = ""                  # address announced by DCC SEND (behind a NAT); empty = the IRC socket's
 dcc_ports = ""               # "5000-5010" to pin the DCC ports; empty = any free port
 ```
@@ -408,6 +411,53 @@ address and port, the receiver connects. Behind a NAT, set `dcc_ip` to the
 public address and `dcc_ports` to a forwarded range. A received offer shows
 as a file line in the private chat; the file lands in `download_dir`. Reverse
 offers (a sender behind a NAT) are accepted. No resume, no DCC CHAT.
+
+The usual IRC commands need an IRC context: a window on an IRC chat, the IRC
+tab, or a single IRC network configured. With several IRC networks and none of
+those, the answer says to type the command from a window of the network or on
+its tab; with no IRC network at all they stay unknown commands. Answers land in
+the window the command was typed in, server errors in window 0. A short prefix
+goes to the generic commands first: `/i` is `/irc` and `/wh` is `/whois`, while
+`/who` has to be typed in full.
+
+| Command | Effect |
+| --- | --- |
+| `/join #room [key]` | Join a room, with its channel key when it has one; the room is kept in `channels`. |
+| `/part [#room] [reason]` | Leave the room, the current one by default, and forget it; the same as `/leave` on IRC. |
+| `/cycle [#room]` | Leave and rejoin the room, the window kept: the way to take ops back. |
+| `/topic [#room] [text]` | Show or set the topic. |
+| `/nick <nick>` | Change my nick on this network; the other networks keep theirs. |
+| `/notice <target> <text>` | Send a NOTICE to a nick or a room. |
+| `/invite <nick> [#room]` | Invite a nick into the room. |
+| `/names [#room]` | List the nicks of the room in the window, ops `@` and voices `+` marked; F3 opens the same list as a box. |
+| `/mode [target] [modes…]` | Show or set channel or user modes, sent as typed: `/mode #room +ntk key`, `/mode #room +b` lists the bans. |
+| `/kick [#room] <nick> [reason]` | Kick a nick out of the room; ops only. |
+| `/ban [#room] <nick \| mask>` | Ban a mask (mode `+b`); a bare nick becomes `*!*@host` through USERHOST, an unknown nick answers that no such nick exists, a full mask goes out as typed. |
+| `/kickban [#room] <nick> [reason]` | Ban, then kick, so that the nick cannot come back before the mode is set. |
+| `/who [mask]` | WHO: the users of the room, or those matching a mask such as `*!*@*.fr`. |
+| `/whowas <nick>` | The last known identity of a nick that left, to build a ban mask after a quit. |
+| `/whois <nick>` | Profile of a nick in an irssi-style box: nick, user@host, ircname, server, secure, actually, loggedin, channels, idle, away. No open chat needed. |
+| `/motd` | Message of the day of the server; every connection also shows its MOTD in window 0. |
+| `/ctcp <nick> <VERSION \| PING \| TIME \| …>` | Send a CTCP request; the answer comes back as `[ctcp(nick)] …`. |
+| `/quote <raw line>` | Send a raw IRC line as typed, for what the client has no command for. |
+| `/ignore [nick \| mask]` | List, add or remove an ignored mask, saved in `ignores`. |
+| `/away [message]` | Mark me away on the networks that can; `/away` alone comes back. |
+
+`/ignore` alone lists the masks. A nick becomes `nick!*@*`, a `user@host`
+becomes `*!user@host`, and `*` and `?` are wildcards; typing an existing mask
+removes it. The list lives in the `ignores` key of the `[[irc]]` table, and a
+hand-written entry is normalized the same way. Messages, notices, actions and
+CTCP of a matching source are dropped by the network.
+
+From window 0, with a single IRC network, `/whois name` looks the name up among
+the contacts first and asks IRC only when nothing matches.
+
+`/away message` marks you away where the network knows how: IRC sends `AWAY`,
+Discord goes idle with the message as a custom status (experimental, through the
+gateway presence), Telegram has no equivalent. On the `all` tab, or with tabs
+off, every network that can; on a network tab, or after `/net`, that network
+only. `/away` alone comes back. The status bar carries an `[away: message]`
+segment while it lasts, and nothing is announced in the rooms.
 
 ### Themes
 
@@ -449,6 +499,7 @@ Every open conversation has a numbered window.
 | F5 | Toggle images on hover only. |
 | F6 | Toggle aggregate window 0. |
 | F7 | Sidebar order: recent, alphabetical, unread. |
+| F9 | Tab mode: one tab per network, cycling all → each network → all. |
 | Ctrl+R | Spell correction: Enter applies, `i` ignores, `a` adds, Escape closes. |
 
 For example, talk to a contact while keeping the current feed visible:
@@ -461,6 +512,27 @@ hello alice
 
 An incoming message for a conversation without a window creates a hidden
 window and adds its activity to `[Act: …]` in the status bar.
+
+#### Tab mode (F9)
+
+F9 turns the tab bar on (`tabs = true`) and cycles `all` → each network, in
+name order → `all`. The bar sits just above the status bar, and its tabs are
+clickable:
+
+```text
+[all] [telegram(6)] [discord(5)] [irc:libera]
+```
+
+The current tab is highlighted; the others carry the unread count of their
+windows. A network tab shows only the windows of that network, window 0
+included: Ctrl+X and Alt+Left/Right stay inside it, the sidebar and the
+aggregate view are cut to it, and `[Act: …]` lists its windows only. It is the
+same filter as `/net` and Shift+F2.
+
+Alt+1…9, `/win N`, `/N` and a click still reach any window, and the tab follows
+the window shown. Coming back to a network tab returns to the last window shown
+on that network. `/set tabs off` removes the bar and makes the window cycle
+global again. A single network has no tabs.
 
 ### Conversations
 
@@ -650,6 +722,11 @@ mouse interaction. The status bar lists background activity as
 `[Act: 2(3),5(1)]`: window number and unread count. Private messages and mentions
 can trigger the bell; `/set bell off` disables it. Desktop or terminal
 notifications are controlled by `notify` and focus.
+
+A window holding an unread private message or a mention of you is hot: its
+`(N)` counter takes the mention color, in bold, and pulses once a second, in
+`[Act: …]`, on the tab of its network and in the sidebar list of windows.
+Visiting the window clears it.
 
 ### Aggregate window 0 and search
 

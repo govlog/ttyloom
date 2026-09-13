@@ -156,6 +156,8 @@ nickserv_password = ""
 channels = ["#go-nuts"]
 ```
 
+The usual IRC commands answer in the window they were typed in: `/join #room [key]`, `/part`, `/cycle`, `/topic`, `/nick`, `/notice`, `/invite`, `/names`, `/mode`, `/kick`, `/ban`, `/kickban`, `/who`, `/whowas`, `/whois`, `/motd`, `/ctcp`, `/quote` and `/ignore`, whose masks are kept in the `ignores` key of the table.
+
 [IRC networks, DCC and the NAT settings →](docs/guide.md#irc-networks)
 
 ### Existing installation
@@ -176,6 +178,7 @@ Review `download_dir` and `log_dir` in that configuration. Caches written with e
 | Open a conversation | Ctrl+N or the sidebar |
 | Keep chatting privately from this window | `/q name`; `/q` alone returns to the usual target |
 | Sidebar / network filter | F2 / Shift+F2 or `/net discord`, `/net irc:libera` |
+| Tab per network / next tab | F9 (or click a tab) |
 | Aggregate conversations in window 0 | F6 |
 | Search here / search across networks | Ctrl+F / Ctrl+F again |
 | GIFs / emoji | Ctrl+G / Ctrl+T |
@@ -186,6 +189,7 @@ Review `download_dir` and `log_dir` in that configuration. Caches written with e
 | Bold / italic / underline in the draft | Ctrl+B / Ctrl+I / Ctrl+U |
 | Clear the screen, keep the history | Ctrl+L |
 | Member list / image mode | F3 / F4 |
+| Away message | `/away not here`, `/away` back |
 | Help | `/help` or `/help topic` |
 
 ## Make it yours
