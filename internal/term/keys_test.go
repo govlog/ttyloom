@@ -123,6 +123,17 @@ func TestParseF7(t *testing.T) {
 	}
 }
 
+func TestParseF9(t *testing.T) {
+	got, rest := Parse([]byte("\x1b[20~"), false)
+	if len(got) != 1 || got[0].Code != F9 || rest != nil {
+		t.Fatalf("F9: %+v rest=%q", got, rest)
+	}
+	got, _ = Parse([]byte("\x1b[20;2~"), false) // kitty: Shift+F9
+	if len(got) != 1 || got[0].Code != F9 || !got[0].Shift {
+		t.Fatalf("Shift+F9: %+v", got)
+	}
+}
+
 func TestParseKittyKeys(t *testing.T) {
 	cases := []struct {
 		in   string

@@ -34,6 +34,7 @@ const (
 	F5
 	F6
 	F7
+	F9       // tabs (network)
 	FocusIn  // the terminal takes the focus back (CSI ?1004h)
 	FocusOut // the terminal loses the focus
 )
@@ -308,6 +309,8 @@ func parseCSI(b []byte, final bool) (Key, int, bool) {
 			k.Code = F6
 		case "18":
 			k.Code = F7
+		case "20": // 19 is not given out (xterm F8)
+			k.Code = F9
 		default:
 			return Key{}, n, true
 		}
