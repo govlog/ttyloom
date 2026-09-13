@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -16,7 +17,7 @@ func TestHelpTopics(t *testing.T) {
 		names[tp.name] = true
 	}
 
-	for _, cmd := range commandNames {
+	for _, cmd := range slices.Concat(commandNames, ircCommandNames) {
 		found := false
 		for _, tp := range helpTopics {
 			if tp.name == cmd {

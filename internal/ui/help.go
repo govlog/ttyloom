@@ -18,8 +18,8 @@ type topic struct{ name, key, section string }
 // (help_section_<name>).
 var helpSections = []string{"windows", "chats", "irc", "messages", "media", "sidebar", "input", "options"}
 
-// helpTopics : one entry per command of commandNames, per notable key and per
-// key of setKeys. Descriptions condensed from README.md.
+// helpTopics : one entry per command of commandNames and ircCommandNames, per
+// notable key and per key of setKeys. Descriptions condensed from README.md.
 var helpTopics = []topic{
 	// Windows
 	{"/window", "help_window", "windows"},

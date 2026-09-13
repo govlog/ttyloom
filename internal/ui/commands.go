@@ -42,6 +42,10 @@ func ParseCommand(line string, names []string) (name string, args []string, text
 // resolveCommand keeps aliases exact, then accepts a command prefix when it
 // names one command only. /qu is an explicit alias: query and quit would
 // otherwise both match it. Ambiguous prefixes stay available for Tab cycling.
+//
+// The prefix is read in layers: the generic commands first, the IRC names an
+// IRC context adds to them second. Without that, entering a room would take
+// /i (irc) away to invite and ignore, and /wh (whois) to who and whowas.
 func resolveCommand(name string, names []string) string {
 	if a, ok := aliases[name]; ok {
 		return a
@@ -49,23 +53,28 @@ func resolveCommand(name string, names []string) string {
 	if slices.Contains(names, "/"+name) {
 		return name
 	}
-	var match string
+	if m := uniquePrefix(name, commandNames); m != "" {
+		return m
+	}
+	irc := slices.DeleteFunc(slices.Clone(names), func(n string) bool { return slices.Contains(commandNames, n) })
+	return cmp.Or(uniquePrefix(name, irc), name) // ambiguous: the original, for the error message
+}
+
+// uniquePrefix : the only command of names that name starts, "" when none or
+// several do.
+func uniquePrefix(name string, names []string) string {
+	match := ""
 	for _, command := range names {
 		candidate := strings.TrimPrefix(command, "/")
-		if candidate == name {
-			return candidate
+		if !strings.HasPrefix(candidate, name) {
+			continue
 		}
-		if strings.HasPrefix(candidate, name) {
-			if match != "" {
-				return name // ambiguous: keep the original for the error message
-			}
-			match = candidate
+		if match != "" {
+			return ""
 		}
+		match = candidate
 	}
-	if match != "" {
-		return match
-	}
-	return name
+	return match
 }
 
 // onOff reads a boolean of /set. Anything else is false; the echo that
@@ -208,24 +217,34 @@ func (u *UI) command(name string, args []string, text string) {
 			b.Search(u.backendContext(b), w.Chat, text, searchLimit)
 		}
 	case "whois":
-		// On IRC a nick needs no chat: the network answers on the token. Not
-		// from a window on another network, where /whois still names a contact
-		// (a single IRC network configured makes every window an IRC context).
-		if net := u.ircNetFor(w); net != "" && arg(0) != "" && winOn(w, net) {
-			if b := u.nets[net]; b != nil {
-				b.WhoisMember(u.netContext(net), strings.TrimPrefix(arg(0), "@"))
-			}
-			return
+		// On IRC a nick needs no chat: the network answers on the token. The
+		// context has to be anchored though — the window itself or its tab
+		// names the network. Inferred from a single IRC network configured
+		// (window 0, no IRC tab), the name is looked up as a chat first: it is
+		// a contact of another network more often than an IRC nick.
+		irc := u.ircNetFor(w)
+		if arg(0) == "" || !winOn(w, irc) { // a window on another network: a chat
+			irc = ""
 		}
+		toIRC := irc != "" && (w.Chat != nil || w.Target != nil || model.IRCName(u.netFilter) != "")
 		c := w.Chat
-		if arg(0) != "" {
+		if !toIRC && arg(0) != "" {
 			var ambiguous bool
 			if c, ambiguous = u.findChat(arg(0)); c == nil {
-				if !ambiguous {
-					w.AddSys(i18n.T("unknown_name", arg(0)))
+				toIRC = irc != "" && !ambiguous // no chat of that name: a nick
+				if !toIRC {
+					if !ambiguous {
+						w.AddSys(i18n.T("unknown_name", arg(0)))
+					}
+					return
 				}
-				return
 			}
+		}
+		if toIRC {
+			if b := u.nets[irc]; b != nil {
+				b.WhoisMember(u.netContext(irc), strings.TrimPrefix(arg(0), "@"))
+			}
+			return
 		}
 		if c == nil {
 			w.AddSys(i18n.T("usage_whois"))

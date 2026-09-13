@@ -689,6 +689,13 @@ func TestIRCCommandRouting(t *testing.T) {
 	if !slices.Contains(u.commandNames(), "/kick") {
 		t.Fatal("completion: /kick missing in IRC context")
 	}
+	// The IRC names do not take the prefixes of the generic commands.
+	if n, _, _, _ := ParseCommand("/i", u.commandNames()); n != "irc" {
+		t.Fatalf("/i in IRC context: %q", n)
+	}
+	if n, _, _, _ := ParseCommand("/wh x", u.commandNames()); n != "whois" {
+		t.Fatalf("/wh in IRC context: %q", n)
+	}
 	u.goTo(2) // Telegram window: no IRC context (two networks, none IRC in front)
 	u.netFilter = ""
 	if slices.Contains(u.commandNames(), "/kick") {
@@ -705,6 +712,14 @@ func TestIRCCommandRouting(t *testing.T) {
 	u.command("motd", nil, "")
 	if len(irc.cmds) != 2 || irc.cmds[1] != "motd||0|" {
 		t.Fatalf("from window 0 on the IRC tab: %v", irc.cmds)
+	}
+	// With no IRC network configured at all, an IRC name is simply unknown.
+	u.netList, u.netFilter = []string{model.NetTelegram}, ""
+	delete(u.nets, model.IRCNet("libera"))
+	delete(u.nets, model.IRCNet("oftc"))
+	u.command("kick", []string{"bob"}, "bob")
+	if got := lastSys(u.view()); got != i18n.T("unknown_command", "kick") {
+		t.Fatalf("no IRC network: %q", got)
 	}
 }
 
@@ -723,8 +738,30 @@ func TestEvLines(t *testing.T) {
 	}
 }
 
-// /whois <nick> in an IRC context asks the network straight away, with no
-// chat to find first.
+// A single IRC network makes window 0 an inferred IRC context: /whois looks
+// the name up as a chat first, and only asks IRC for one no chat carries.
+func TestIRCWhoisInferred(t *testing.T) {
+	u, irc := ircUI()
+	delete(u.nets, model.IRCNet("oftc"))
+	u.netList = []string{model.NetTelegram, model.IRCNet("libera")}
+	tg := u.nets[model.NetTelegram].(*fakeBackend)
+	tg.caps = model.Caps{Whois: true}
+	alice := &model.Chat{Net: model.NetTelegram, ID: 9, Kind: model.ChatUser, Title: "alice"}
+	u.chatList = append(u.chatList, alice)
+	u.chats[alice.Key()] = alice
+	u.goTo(0)
+	u.command("whois", []string{"alice"}, "alice")
+	if tg.whois != 1 || len(irc.members) != 0 {
+		t.Fatalf("the contact first: telegram=%d irc=%v", tg.whois, irc.members)
+	}
+	u.command("whois", []string{"ghost"}, "ghost")
+	if !slices.Equal(irc.members, []string{"ghost"}) || tg.whois != 1 {
+		t.Fatalf("a name no chat carries goes to IRC: %v telegram=%d", irc.members, tg.whois)
+	}
+}
+
+// /whois <nick> in an anchored IRC context asks the network straight away,
+// with no chat to find first.
 func TestIRCWhoisNick(t *testing.T) {
 	u, irc := ircUI()
 	u.goTo(1)
