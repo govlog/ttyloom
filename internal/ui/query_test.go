@@ -97,6 +97,10 @@ func TestQueryWaitingHidesKey(t *testing.T) {
 	if got := prompt.String(); !strings.Contains(got, "#priv") || strings.Contains(got, "secret") {
 		t.Fatalf("pending prompt: %s", got)
 	}
+	input(u, "/query") // the lookup dropped: the closing line names the room only
+	if got := lastSys(u.view()); !strings.Contains(got, "#priv") || strings.Contains(got, "secret") {
+		t.Fatalf("query_closed line: %q", got)
+	}
 }
 
 func TestQueryPersistentAcrossViews(t *testing.T) {

@@ -2463,7 +2463,7 @@ func (u *UI) candidates(word string, atStart bool) []string {
 		nicks := slices.Clone(u.ircNicks())
 		if atStart { // irssi style: a nick opening a message addresses it
 			for i, n := range nicks {
-				nicks[i] = n + ": "
+				nicks[i] = n + ":" // the editor adds the space of a finished word
 			}
 		}
 		for _, n := range multiWord(word, tail, nicks) {
@@ -2525,7 +2525,7 @@ func (u *UI) candidates(word string, atStart bool) []string {
 	case complIrcChan:
 		return multiWord(word, tail, u.ircChans())
 	case complIrcTarget:
-		if strings.HasPrefix(tail, "#") {
+		if isIRCRoom(tail) {
 			return multiWord(word, tail, u.ircChans())
 		}
 		return multiWord(word, tail, u.ircNicks())

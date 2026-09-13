@@ -34,7 +34,7 @@ func (u *UI) inputChat(w *Window) *model.Chat {
 func (u *UI) query(w *Window, name string, join bool) {
 	name = unquote(strings.TrimSpace(name))
 	if name == "" {
-		closing := u.queryPending(w)
+		closing := displayQuery(u.queryPending(w))
 		if w.Target != nil {
 			closing = u.title(w.Target)
 		}

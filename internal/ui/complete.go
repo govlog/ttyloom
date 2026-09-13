@@ -44,8 +44,11 @@ const (
 // after the command) — its index, a trailing space starting the next one,
 // and its text.
 func ircArg(rest string) (int, string) {
-	args := strings.Split(rest, " ")
-	return len(args) - 1, args[len(args)-1]
+	done := strings.Fields(rest)
+	if n := len(done); n > 0 && !strings.HasSuffix(rest, " ") {
+		return n - 1, done[n-1] // the last word is the one being typed
+	}
+	return len(done), ""
 }
 
 // complContext gives the completion source and the line "tail" to complete
@@ -112,7 +115,7 @@ func complContext(line string, cursor int, names []string) (src complSource, tai
 		switch i, arg := ircArg(rest); {
 		case i == 0:
 			return complIrcTarget, arg, ""
-		case i == 1 && strings.HasPrefix(rest, "#"):
+		case i == 1 && isIRCRoom(strings.Fields(rest)[0]):
 			return complIrcNick, arg, ""
 		}
 		return complNone, "", ""

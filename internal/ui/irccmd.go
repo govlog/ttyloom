@@ -3,6 +3,7 @@ package ui
 import (
 	"context"
 	"slices"
+	"strings"
 
 	"github.com/govlog/ttyloom/internal/model"
 )
@@ -66,12 +67,15 @@ func (u *UI) ircNicks() []string {
 		return nil
 	}
 	for _, c := range []*model.Chat{w.Target, w.Chat} {
-		if c != nil && c.Net == net && c.Kind != model.ChatUser {
+		if c != nil && c.Net == net { // a private chat has its peer
 			return l.Members(c)
 		}
 	}
 	return nil
 }
+
+// isIRCRoom : the four channel prefixes of RFC 2811.
+func isIRCRoom(s string) bool { return s != "" && strings.ContainsRune("#&!+", rune(s[0])) }
 
 // ircChans : the rooms joined on the IRC network of the shown window.
 func (u *UI) ircChans() []string {
@@ -105,7 +109,7 @@ func (u *UI) ircCommand(w *Window, net, name string, args []string, text string)
 	}
 	room := ""
 	for _, c := range []*model.Chat{w.Target, w.Chat} {
-		if c != nil && c.Net == net && c.Kind != model.ChatUser {
+		if c != nil && c.Net == net { // a private chat has its peer
 			room = c.Title
 			break
 		}

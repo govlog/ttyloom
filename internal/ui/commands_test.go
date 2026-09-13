@@ -654,7 +654,12 @@ func (f *fakeIRC) Command(_ context.Context, reply int64, room, name string, _ [
 	f.cmds = append(f.cmds, fmt.Sprintf("%s|%s|%d|%s", name, room, reply, text))
 }
 
-func (f *fakeIRC) Members(*model.Chat) []string { return []string{"alice", "bob"} }
+func (f *fakeIRC) Members(c *model.Chat) []string {
+	if c.Kind == model.ChatUser {
+		return []string{c.Title}
+	}
+	return []string{"alice", "bob"}
+}
 
 // ircUI : one Telegram network and two IRC networks (so no single IRC network
 // can be inferred), window 1 on the #go room of libera, window 2 on the
@@ -740,12 +745,27 @@ func TestIRCArgCompletion(t *testing.T) {
 		{"/kick b", "b", false, "bob"},
 		{"/ctcp alice V", "V", false, "VERSION"},
 		{"/part #", "#", false, "#go"},
-		{"al", "al", true, "alice: "},
+		{"al", "al", true, "alice:"}, // the editor adds the space
 	} {
 		u.ed.Set(c.line)
 		if got := u.candidates(c.word, c.atStart); !slices.Contains(got, c.want) {
 			t.Fatalf("%q: %v, want %q", c.line, got, c.want)
 		}
+	}
+	// Typing it whole: one candidate, one space.
+	u.ed.Set("al")
+	u.ed.Complete(u.candidates)
+	if got := u.ed.String(); got != "alice: " {
+		t.Fatalf("address: %q", got)
+	}
+	// A private chat completes its peer, the room of the window being one.
+	carol := &model.Chat{Net: model.IRCNet("libera"), ID: 88, Kind: model.ChatUser, Title: "carol"}
+	u.chats[carol.Key()] = carol
+	u.bindChat(u.ws.New(true), carol)
+	u.goTo(3)
+	u.ed.Set("/ctcp c")
+	if got := u.candidates("c", false); !slices.Contains(got, "carol") {
+		t.Fatalf("private chat: %v", got)
 	}
 }
 

@@ -57,6 +57,8 @@ func TestComplContext(t *testing.T) {
 		{"/kick bo", complIrcTarget, "bo"},
 		{"/kick #go b", complIrcNick, "b"},
 		{"/kick #go bob re", complNone, ""}, // the reason is free text
+		{"/kick  #go b", complIrcNick, "b"}, // a double space is one separator
+		{"/kick &go b", complIrcNick, "b"},  // the four channel prefixes, not "#" alone
 		{"/invite bob #", complIrcChan, "#"},
 		{"/ctcp bob VE", complCtcp, "VE"},
 		{"/part #g", complIrcChan, "#g"},
