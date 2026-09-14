@@ -177,7 +177,7 @@ log_dir = "~/.local/share/ttyloom/logs"
 | `kitty_images` | Maximum number of images retained in the terminal, including GIFs and avatars. The least recently displayed image is released and sent again when needed. |
 | `video_inline_frames` | Frames decoded for video playback, at 10 frames per second. Default 300; decoding also has a 200 MiB budget. Change this in the file and restart. |
 | `video` | `show`: first frame until `l` starts playback. `hidden`: label only, with `v` and `o` still available. `autoplay`: loop a downloaded video when visible; `s` stops and `l` controls playback. Frame limits still apply. |
-| `gifplay` | `always`: every animated GIF on the screen plays. `hover`: only the GIF of the message under the mouse moves, the others hold their frame. `off`: the first frame alone, nothing else is decoded. |
+| `gifplay` | `always`: every animated GIF on the screen plays. `hover`: only the GIF of the message under the mouse moves, the others hold their frame. `off`: the first frame alone. |
 | `link_previews` | Display a recognized Telegram link’s site, title, description and thumbnail. `o` or a click on the label opens its page. |
 | `maps` | Fetch OpenStreetMap tiles for a visible Telegram location or an explicit viewer request. Attribution remains visible; tiles are cached by coordinates under `download_dir/maps`. Disabled by default because it contacts `tile.openstreetmap.org`. |
 | `avatars` | Small profile photos beside names and in the sidebar; kitty graphics only. |

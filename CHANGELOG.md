@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- **GIF playback**: `gifplay = "always" | "hover" | "off"` in the configuration, `/set gifplay` live. `hover` moves only the GIF of the message under the mouse, the others hold their frame; `off` decodes and shows the first frame alone. The GIF box and the preview play whatever the setting.
+- **GIF playback**: `gifplay = "always" | "hover" | "off"` in the configuration, `/set gifplay` live. `hover` moves only the GIF of the message under the mouse, the others hold their frame; `off` shows the first frame alone. Changing it reloads nothing. The GIF box and the preview play whatever the setting.
 
 - **`/irc delete <name>`**: removes the `[[irc]]` table from `config.toml`, stops the network, closes its windows and drops its chats from the sidebar; Tab completes it. The cache directory of the network stays on disk.
 

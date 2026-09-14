@@ -334,6 +334,11 @@ func TestGifPlay(t *testing.T) {
 	if md.Frame != 1 {
 		t.Fatal("off: moved")
 	}
+	u.ws.List[0].Items = []*Item{u.hover}
+	u.gifRewind()
+	if md.Frame != 0 || len(md.Frames) != 2 {
+		t.Fatalf("off: frame %d, %d frames kept", md.Frame, len(md.Frames))
+	}
 }
 
 // TestAnimateHidesCursor : the bytes of a kitty frame go out with the cursor

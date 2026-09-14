@@ -222,9 +222,6 @@ func (u *UI) downloaded(e model.EvDownloaded) {
 func (u *UI) frameCount(md *model.Media) int {
 	switch {
 	case md.Kind == model.MediaGIF:
-		if u.cfg.GifPlay == "off" { // the first frame is all that shows
-			return 1
-		}
 		return 100
 	case render.Playing(md):
 		return u.videoFrames()
@@ -576,6 +573,23 @@ func (u *UI) gifStill(md *model.Media) bool {
 		return u.hover == nil || u.hover.Msg == nil || u.hover.Msg.Media != md
 	}
 	return false
+}
+
+// gifRewind : /set gifplay off — the GIFs on the screen go back to their
+// first frame. The frames stay decoded: always and hover start again at
+// once, nothing is downloaded nor decoded again.
+// ponytail: off still decodes every frame of a new GIF (framesBudget bounds
+// the memory); decode one the day that matters.
+func (u *UI) gifRewind() {
+	for _, w := range u.ws.List {
+		for _, it := range w.Items {
+			if md := mediaOfItem(it); md != nil && md.Kind == model.MediaGIF && md.Frame != 0 {
+				md.Frame = 0
+				u.retireKitty(md) // the terminal holds the frame last sent
+				u.invalidateMedia(md)
+			}
+		}
+	}
 }
 
 func mediaOfItem(it *Item) *model.Media {

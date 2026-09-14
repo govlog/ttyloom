@@ -710,7 +710,9 @@ func (u *UI) setCmd(args []string) {
 			return
 		}
 		u.cfg.GifPlay = v
-		u.reloadMedia() // off decodes the first frame alone: the GIFs on the screen decode again
+		if v == "off" {
+			u.gifRewind() // the frames stay: no reload for a display setting
+		}
 	case "avatars":
 		u.cfg.Avatars = onOff(v)
 		u.clear() // the gutter shows or goes: lines to draw again
