@@ -142,6 +142,7 @@ type Config struct {
 	KittyImages       int       `toml:"kitty_images"`
 	VideoFrames       int       `toml:"video_inline_frames"`
 	Video             string    `toml:"video"`
+	GifPlay           string    `toml:"gifplay"` // animated GIFs: always | hover | off
 	Timestamps        bool      `toml:"timestamps"`
 	TimestampsSeconds bool      `toml:"timestamps_seconds"` // 15:04:05 instead of 15:04 before each message
 	CycleMode         string    `toml:"cycle_mode"`         // Ctrl+X: next | last_unread
@@ -226,6 +227,7 @@ avatars = true        # profile photos before the names and in the member box (k
 kitty_images = 48     # images kept by the terminal (kitty); above that, the oldest ones are freed
 video_inline_frames = 300 # frames decoded by "l" on a video (300 = 30 s at 10 fps)
 video = "show"        # inline video: show (first frame, "l" plays) | hidden (label only) | autoplay
+gifplay = "always"    # animated GIFs: always | hover (the one under the mouse only) | off (first frame alone)
 timestamps = true
 timestamps_seconds = false # 15:04:05 instead of 15:04 before each message
 cycle_mode = "next"   # Ctrl+X: next (window after the current one) | last_unread (unread windows in turn, then back)
@@ -299,7 +301,7 @@ func LoadFrom(dir string) (*Config, error) {
 			return nil, err
 		}
 	}
-	c := &Config{dir: dir, DownloadDir: "~/Downloads/ttyloom", AutoMediaMaxKB: 5120, Images: "auto", Avatars: true, KittyImages: 48, VideoFrames: 300, Video: "show", Timestamps: true, LinkPreviews: true, Hover: HoverMenu,
+	c := &Config{dir: dir, DownloadDir: "~/Downloads/ttyloom", AutoMediaMaxKB: 5120, Images: "auto", Avatars: true, KittyImages: 48, VideoFrames: 300, Video: "show", GifPlay: "always", Timestamps: true, LinkPreviews: true, Hover: HoverMenu,
 		Bell: true, Notify: "terminal", AutoOpenDays: 7, Cache: true, CacheMessages: 2000, LogDir: "~/.local/share/ttyloom/logs", Separator: true, Redline: true, SidebarSort: "recent", SidebarWidth: 26, Spell: "off", CycleMode: "next"}
 	md, err := toml.DecodeFile(path, c)
 	if err != nil {

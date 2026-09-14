@@ -313,9 +313,32 @@ func TestMapIsNotPrefetchedOffscreen(t *testing.T) {
 	}
 }
 
-// TestAnimateHidesCursor : a kitty frame moves the cursor onto the image and
-// back; hidden meanwhile, the terminal cannot draw it there between two chunks
-// of the frame (an erratic blink), and it comes back once the frame is out.
+// TestGifPlay : gifplay = hover moves a GIF only under the pointer, off never.
+func TestGifPlay(t *testing.T) {
+	var out bytes.Buffer
+	u := &UI{ws: NewWindows(), agg: &Window{}, cfg: &config.Config{GifPlay: "hover"}, images: "kitty",
+		t: term.NewOffscreen(&out, 80, 24)}
+	md := &model.Media{Kind: model.MediaGIF, State: model.MediaReady, Frames: [][]byte{{1}, {2}}, Delay: time.Millisecond}
+	u.placed = []placed{{row: 2, pid: 3, img: &render.Img{Media: md, Cols: 4, Rows: 2}}}
+	u.animate(time.Now().Add(time.Second))
+	if md.Frame != 0 {
+		t.Fatal("hover: moved with the pointer elsewhere")
+	}
+	u.hover = &Item{Msg: &model.Msg{Media: md}}
+	u.animate(time.Now().Add(time.Second))
+	if md.Frame != 1 {
+		t.Fatal("hover: still under the pointer")
+	}
+	u.cfg.GifPlay = "off"
+	u.animate(time.Now().Add(2 * time.Second))
+	if md.Frame != 1 {
+		t.Fatal("off: moved")
+	}
+}
+
+// TestAnimateHidesCursor : the bytes of a kitty frame go out with the cursor
+// untouched; the placement moves it onto the image and back, hidden meanwhile
+// (the terminal cannot draw it there), and it comes back once the frame is out.
 func TestAnimateHidesCursor(t *testing.T) {
 	var out bytes.Buffer
 	u := &UI{ws: NewWindows(), agg: &Window{}, cfg: &config.Config{}, images: "kitty",
@@ -325,7 +348,7 @@ func TestAnimateHidesCursor(t *testing.T) {
 	u.animate(time.Now().Add(time.Second))
 	s := out.String()
 	hide, show := strings.Index(s, "\x1b[?25l"), strings.LastIndex(s, "\x1b[?25h")
-	if hide < 0 || show < 0 || hide > strings.Index(s, "\x1b_G") || show < strings.LastIndex(s, "\x1b[u") {
-		t.Fatalf("cursor not hidden around the frame: %q", s)
+	if hide < 0 || show < 0 || hide < strings.Index(s, "a=t") || hide > strings.Index(s, "a=p") || show < strings.LastIndex(s, "\x1b[u") {
+		t.Fatalf("cursor not hidden around the placement alone: %q", s)
 	}
 }

@@ -134,6 +134,36 @@ func TestIRCConnectDisconnect(t *testing.T) {
 	}
 }
 
+// /irc delete <name> drops the table from config.toml, cancels the live
+// network, closes its windows and takes it off the list.
+func TestIRCDelete(t *testing.T) {
+	u, _ := launchUI(nil)
+	cfg, err := config.LoadFrom(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	u.cfg = cfg
+	if e := u.ircAddSubmit([]string{"libera", "irc.libera.chat", "", "yes", "me", "", "", ""}); e != "" {
+		t.Fatalf("add: %q", e)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	u.netCancel["irc:libera"] = cancel
+	c := &model.Chat{Net: "irc:libera", ID: 1, Title: "#go"}
+	u.chats, u.chatList = map[model.ChatKey]*model.Chat{c.Key(): c}, []*model.Chat{c}
+	u.winFor(c)
+	u.command("irc", []string{"delete", "libera"}, "delete libera")
+	if ctx.Err() == nil {
+		t.Fatal("delete must cancel the network")
+	}
+	again, _ := config.LoadFrom(filepath.Dir(cfg.Path()))
+	if cfg.IRCByName("libera") != nil || again.IRCByName("libera") != nil {
+		t.Fatal("table kept")
+	}
+	if len(u.ircNets()) != 0 || u.chats[c.Key()] != nil || u.ws.ForChat(c.Key()) >= 0 {
+		t.Fatalf("list %v, chat %v, win %d", u.ircNets(), u.chats[c.Key()], u.ws.ForChat(c.Key()))
+	}
+}
+
 // logoutBackend records whether Logout was asked (from a goroutine of
 // stopNet, hence the atomic).
 type logoutBackend struct {

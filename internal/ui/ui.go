@@ -2503,7 +2503,7 @@ func (u *UI) candidates(word string, atStart bool) []string {
 			}
 			return names
 		}
-		return []string{"add", "connect", "disconnect"}
+		return []string{"add", "connect", "disconnect", "delete"}
 	case complLog:
 		return []string{"on", "off"}
 	case complPath:

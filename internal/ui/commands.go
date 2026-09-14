@@ -589,6 +589,8 @@ func (u *UI) setCmd(args []string) {
 			w.AddSys(fmt.Sprintf("images_hover = %v", u.cfg.ImagesHover))
 		case "video":
 			w.AddSys("video = " + u.cfg.Video)
+		case "gifplay":
+			w.AddSys("gifplay = " + u.cfg.GifPlay)
 		case "avatars":
 			w.AddSys(i18n.T("set_avatars_effective", u.cfg.Avatars, u.avatarsOn()))
 		case "auto_media_max_kb":
@@ -702,6 +704,13 @@ func (u *UI) setCmd(args []string) {
 		}
 		u.cfg.Video = v
 		u.reloadMedia() // the lines kept free and the frames decoded both change
+	case "gifplay":
+		if v != "always" && v != "hover" && v != "off" {
+			w.AddSys(i18n.T("set_gifplay_values"))
+			return
+		}
+		u.cfg.GifPlay = v
+		u.reloadMedia() // off decodes the first frame alone: the GIFs on the screen decode again
 	case "avatars":
 		u.cfg.Avatars = onOff(v)
 		u.clear() // the gutter shows or goes: lines to draw again

@@ -222,6 +222,9 @@ func (u *UI) downloaded(e model.EvDownloaded) {
 func (u *UI) frameCount(md *model.Media) int {
 	switch {
 	case md.Kind == model.MediaGIF:
+		if u.cfg.GifPlay == "off" { // the first frame is all that shows
+			return 1
+		}
 		return 100
 	case render.Playing(md):
 		return u.videoFrames()
@@ -479,7 +482,7 @@ func (u *UI) animate(now time.Time) bool {
 	x0, _ := u.layout()
 	for _, p := range u.placed {
 		md := p.img.Media
-		if len(md.Frames) < 2 || md.Paused || now.Before(md.Next) {
+		if len(md.Frames) < 2 || md.Paused || now.Before(md.Next) || u.gifStill(md) {
 			continue
 		}
 		md.Frame = (md.Frame + 1) % len(md.Frames)
@@ -495,12 +498,17 @@ func (u *UI) animate(now time.Time) bool {
 				md.KittyAlt = u.kittyID
 			}
 			pid := p.pid // same pid as draw(): replacement in place
-			// Hidden for the frame: the terminal would draw the cursor on the
-			// image between two chunks of it — an erratic blink on the input line.
+			// The bytes of the frame go first, with the cursor where it is: the
+			// placement that follows moves it onto the image, hidden meanwhile —
+			// the terminal would draw it there between two writes, an erratic
+			// blink on the input line. A placement is a few bytes, the frame
+			// tens of kilobytes: hidden around the whole of it, the cursor went
+			// out for a good part of every frame.
+			u.t.WriteString(media.KittyTransmit(md.KittyAlt, md.Frames[md.Frame]))
 			u.t.WriteString("\x1b[?25l\x1b[s")
 			u.t.WriteString("\x1b[" + itoa(p.row+1) + ";" + itoa(x0+p.img.Col+1) + "H")
 			// p.crop : the zoomed preview keeps its sub-rectangle from one frame to the next.
-			u.t.WriteString(media.KittyDisplay(md.KittyAlt, pid, md.Frames[md.Frame], p.img.Cols, p.img.Rows, p.crop))
+			u.t.WriteString(media.KittyPlace(md.KittyAlt, pid, p.img.Cols, p.img.Rows, p.crop))
 			if old != 0 {
 				u.t.WriteString(media.KittyDeletePlacement(old, 0))
 			}
@@ -536,7 +544,7 @@ func (u *UI) animate(now time.Time) bool {
 			}
 		} else {
 			for _, it := range u.view().Items {
-				if md := mediaOfItem(it); md != nil && len(md.Frames) > 1 && !md.Paused && !now.Before(md.Next) {
+				if md := mediaOfItem(it); md != nil && len(md.Frames) > 1 && !md.Paused && !now.Before(md.Next) && !u.gifStill(md) {
 					md.Frame = (md.Frame + 1) % len(md.Frames)
 					md.Next = now.Add(md.Delay)
 					it.lines = nil
@@ -552,6 +560,22 @@ func (u *UI) animate(now time.Time) bool {
 		u.t.Flush()
 	}
 	return redraw
+}
+
+// gifStill : /set gifplay — a GIF of the messages holds its frame: off, or
+// hover with the pointer on another message. The GIF box and the preview
+// play whatever the setting; videos have /set video.
+func (u *UI) gifStill(md *model.Media) bool {
+	if u.cfg == nil || md.Kind != model.MediaGIF || (u.viewer != nil && u.viewer.md == md) || (u.gifs != nil && u.gifs.owns(md)) {
+		return false
+	}
+	switch u.cfg.GifPlay {
+	case "off":
+		return true
+	case "hover":
+		return u.hover == nil || u.hover.Msg == nil || u.hover.Msg.Media != md
+	}
+	return false
 }
 
 func mediaOfItem(it *Item) *model.Media {

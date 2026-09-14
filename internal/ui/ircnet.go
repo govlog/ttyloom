@@ -28,7 +28,7 @@ func (u *UI) ircNets() []string {
 }
 
 // ircCmd : /irc (status of each network), /irc add (the form), /irc connect
-// <name>, /irc disconnect <name>.
+// <name>, /irc disconnect <name>, /irc delete <name>.
 func (u *UI) ircCmd(w *Window, args []string) {
 	sub, name := "", ""
 	if len(args) > 0 {
@@ -49,16 +49,19 @@ func (u *UI) ircCmd(w *Window, args []string) {
 		}
 	case "add":
 		u.openIRCForm()
-	case "connect", "disconnect":
+	case "connect", "disconnect", "delete":
 		net := model.IRCNet(name)
 		if name == "" || !slices.Contains(u.netList, net) {
 			w.AddSys(i18n.T("irc_unknown", name, strings.Join(u.ircNets(), ", ")))
 			return
 		}
-		if sub == "connect" {
+		switch sub {
+		case "connect":
 			u.startNet(net)
-		} else {
+		case "disconnect":
 			u.stopNet(net, false)
+		default:
+			u.ircDelete(net)
 		}
 	default:
 		w.AddSys(i18n.T("usage_irc"))
@@ -178,6 +181,37 @@ func (u *UI) ircAddSubmit(v []string) string {
 	u.sys(i18n.T("irc_added", net))
 	u.startNet(net)
 	return ""
+}
+
+// ircDelete : /irc delete <name>. The [[irc]] table leaves config.toml first
+// (nothing changes when the write fails), then the network stops, its chats
+// and windows go, and /irc forgets it. Its live maps empty at the EvStopped
+// of its Run, like a disconnect.
+// ponytail: the cache directory of the network stays on disk; remove it the
+// day a stale chat list at a re-add under the same name bothers someone.
+func (u *UI) ircDelete(net string) {
+	name := model.IRCName(net)
+	was := u.cfg.IRC
+	u.cfg.IRC = slices.DeleteFunc(slices.Clone(was), func(n *config.IRCConfig) bool { return n.Name == name })
+	if !u.saveCfg() {
+		u.cfg.IRC = was
+		return
+	}
+	if u.nets[net] != nil {
+		u.stopNet(net, false)
+	}
+	u.netList = slices.DeleteFunc(u.netList, func(n string) bool { return n == net })
+	if u.netFilter == net {
+		u.setNetFilter("")
+	}
+	delete(u.caches, net)
+	for _, c := range slices.Clone(u.chatList) { // dropChat edits u.chatList
+		if c.Net == net {
+			u.dropChat(c.Key())
+		}
+	}
+	u.goTo(u.ws.Cur) // windows closed: the current one has moved
+	u.sys(i18n.T("irc_deleted", net))
 }
 
 // ircNetFor : the IRC network a command from w means — the one of its chat

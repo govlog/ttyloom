@@ -137,6 +137,7 @@ images_hover = false
 kitty_images = 48
 video_inline_frames = 300
 video = "show"
+gifplay = "always"
 link_previews = true
 maps = false
 avatars = true
@@ -176,6 +177,7 @@ log_dir = "~/.local/share/ttyloom/logs"
 | `kitty_images` | Maximum number of images retained in the terminal, including GIFs and avatars. The least recently displayed image is released and sent again when needed. |
 | `video_inline_frames` | Frames decoded for video playback, at 10 frames per second. Default 300; decoding also has a 200 MiB budget. Change this in the file and restart. |
 | `video` | `show`: first frame until `l` starts playback. `hidden`: label only, with `v` and `o` still available. `autoplay`: loop a downloaded video when visible; `s` stops and `l` controls playback. Frame limits still apply. |
+| `gifplay` | `always`: every animated GIF on the screen plays. `hover`: only the GIF of the message under the mouse moves, the others hold their frame. `off`: the first frame alone, nothing else is decoded. |
 | `link_previews` | Display a recognized Telegram link’s site, title, description and thumbnail. `o` or a click on the label opens its page. |
 | `maps` | Fetch OpenStreetMap tiles for a visible Telegram location or an explicit viewer request. Attribution remains visible; tiles are cached by coordinates under `download_dir/maps`. Disabled by default because it contacts `tile.openstreetmap.org`. |
 | `avatars` | Small profile photos beside names and in the sidebar; kitty graphics only. |
@@ -320,7 +322,7 @@ is saved in `sidebar.toml`. One network without a server needs no section header
 | `/telegram login` | Start Telegram again after a logout or a fatal error: QR, or phone and code. |
 | `/telegram logout` | End the session on the server (it leaves **Telegram → Settings → Devices**) and disconnect. |
 | `/discord disconnect`, `/telegram disconnect` | Disconnect and keep the session: `login` connects again without a QR. |
-| `/irc`, `/irc add`, `/irc connect <name>`, `/irc disconnect <name>` | The IRC networks, see [IRC networks](#irc-networks). |
+| `/irc`, `/irc add`, `/irc connect <name>`, `/irc disconnect <name>`, `/irc delete <name>` | The IRC networks, see [IRC networks](#irc-networks). |
 
 A network whose connection ends with an error (a revoked token, a closed
 session) says so in window 0 and is stopped, not the client: `/discord login`
@@ -402,6 +404,7 @@ person or a service (NickServ) lands in window 0.
 | `/irc` | State of each IRC network. |
 | `/irc add` | The form: name, host, port, TLS, nick, user, real name, NickServ password. On the hostname field, ← → (or Space) cycle through the well-known networks — Libera.Chat, OFTC, EFnet, DALnet, Undernet, IRCnet, QuakeNet, Rizon, hackint, GameSurge, EsperNet, Snoonet, tilde.chat — and fill host, port, TLS and name; typing gives a host of your own. Tab or ↓ moves to the next field, Shift+Tab or ↑ back, Ctrl+U clears one, Enter saves and connects at once, Escape cancels. |
 | `/irc connect <name>`, `/irc disconnect <name>` | Start or stop one network. |
+| `/irc delete <name>` | Stop one network, remove its `[[irc]]` table from `config.toml`, close its windows and drop its chats from the sidebar. Its cache directory stays on disk. |
 | `/dcc` | DCC offers waiting and transfers running. |
 | `/dcc send <nick> <path>` | Send a file straight to that person (DCC SEND); `/send` in a private IRC chat does the same. |
 | `/dcc get [nick]` | Fetch the last offer of the window, or of that nick's chat; the download key on the file line too. |

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **GIF playback**: `gifplay = "always" | "hover" | "off"` in the configuration, `/set gifplay` live. `hover` moves only the GIF of the message under the mouse, the others hold their frame; `off` decodes and shows the first frame alone. The GIF box and the preview play whatever the setting.
+
+- **`/irc delete <name>`**: removes the `[[irc]]` table from `config.toml`, stops the network, closes its windows and drops its chats from the sidebar; Tab completes it. The cache directory of the network stays on disk.
+
+- **Cursor under a GIF**: an animated frame in kitty went out with the cursor hidden for the whole of its bytes, so the input cursor went out and back at every frame. The bytes now go first (`a=t`), the cursor hides for the placement alone.
+
 - **Tab bar**: the tabs leave their own line and sit at the right of the status line, right-aligned on its last column; `all` becomes `[*]`. The current tab, in its own colour, now names the network of the window shown, so the `[net]` segment of the status line goes while the tabs are on (it comes back with the tabs off, or with a single network). A narrow line gives the room by dropping whole segments of its left part, from the end — the flash message first, then `[away: …]`, `[Act: …]`, `[img: …]` — so it never ends in the middle of one; the clock, the account and the window stay, and the tabs go only when they no longer fit alone. The message area gains the line the old bar took.
 
 - **Screenshots and documentation**: the screenshots are regenerated with real frames of the Discord and Telegram GIF searches (`scripts/gifshots.go`), a new tab mode scene shows an IRC channel, a WHOIS answer, a hot counter and the away segment, and the SVG exporter now takes the cell widths from the renderer and a colour emoji font, so emoji keep their size and colours and the overlays stay aligned. The documentation is in English only: the French README, manuals and screenshots are gone, a Languages table in the README lists the interface languages, and the changelog is in English. The manual, the README and the built-in help were checked line by line against the code: `/join #room [key]`, the IRC `/whois` rule, `/away`, the tab scoping of *Ctrl+X* and *Alt+←/→*, the Tab completion sources, `/part` instead of the non-existent `/leave`, the `g` key, `disconnect` on `/telegram` and `/discord`, `irc:<name>` on `/net`, IRC in the account setup guide.

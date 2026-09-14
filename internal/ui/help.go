@@ -133,6 +133,7 @@ var helpTopics = []topic{
 	{"images", "help_images", "options"},
 	{"images_hover", "help_images_hover", "options"},
 	{"video", "help_video", "options"},
+	{"gifplay", "help_gifplay", "options"},
 	{"avatars", "help_avatars", "options"},
 	{"auto_media_max_kb", "help_auto_media_max_kb", "options"},
 	{"download_dir", "help_download_dir", "options"},

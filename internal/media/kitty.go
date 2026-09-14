@@ -21,6 +21,12 @@ func KittyDisplay(id, pid uint32, png []byte, cols, rows int, crop ...image.Rect
 }
 
 // KittyPlace places an image already sent at the cursor, under the id pid.
+// KittyTransmit sends the bytes of the image under id and shows nothing: the
+// cursor is not involved, KittyPlace puts it on the screen afterwards.
+func KittyTransmit(id uint32, png []byte) string {
+	return kittyChunks(fmt.Sprintf("a=t,f=100,i=%d,q=2", id), png)
+}
+
 func KittyPlace(id, pid uint32, cols, rows int, crop ...image.Rectangle) string {
 	return fmt.Sprintf("\x1b_Ga=p,i=%d,p=%d,c=%d,r=%d%s,q=2\x1b\\",
 		id, pid, cols, rows, cropKeys(crop))

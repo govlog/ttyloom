@@ -164,7 +164,7 @@ func complContext(line string, cursor int, names []string) (src complSource, tai
 }
 
 // setKeys : keys that /set knows.
-var setKeys = []string{"timestamps", "timestamps_seconds", "cycle_mode", "multiline", "link_previews", "maps", "hover", "images", "images_hover", "video", "avatars", "auto_media_max_kb", "download_dir", "bell", "notify", "auto_open_days", "aggregate", "tabs", "log", "log_dir", "separator", "redline", "sidebar_sort", "sidebar_split", "sidebar_width", "spell", "spell_quotes", "kitty_images", "cache_messages", "lang"}
+var setKeys = []string{"timestamps", "timestamps_seconds", "cycle_mode", "multiline", "link_previews", "maps", "hover", "images", "images_hover", "video", "gifplay", "avatars", "auto_media_max_kb", "download_dir", "bell", "notify", "auto_open_days", "aggregate", "tabs", "log", "log_dir", "separator", "redline", "sidebar_sort", "sidebar_split", "sidebar_width", "spell", "spell_quotes", "kitty_images", "cache_messages", "lang"}
 
 // setValues gives the valid values of a /set key with a closed choice, nil otherwise.
 func setValues(key string) []string {
@@ -175,6 +175,8 @@ func setValues(key string) []string {
 		return []string{"menu", "highlight", "off"}
 	case "video":
 		return []string{"show", "hidden", "autoplay"}
+	case "gifplay":
+		return []string{"always", "hover", "off"}
 	case "notify":
 		return []string{"terminal", "desktop", "off"}
 	case "sidebar_sort":

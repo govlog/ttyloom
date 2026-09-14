@@ -143,7 +143,7 @@ token_cmd = "pass show discord/token"
 
 ### IRC
 
-Type `/irc add` in TTYloom: a form asks for the name, host (← → pick Libera.Chat, OFTC, EFnet, DALnet, Undernet, IRCnet, QuakeNet, Rizon, hackint and more, ports filled in), port, TLS, nick, user, real name and NickServ password, then writes an `[[irc]]` table at the end of `config.toml` and connects. No bouncer, no helper program; as many networks as you like, each one a section of the sidebar. Rooms joined with `/join` are remembered and joined again at the next start. `/dcc send <nick> <path>` and `/dcc get` transfer files straight between clients.
+Type `/irc add` in TTYloom: a form asks for the name, host (← → pick Libera.Chat, OFTC, EFnet, DALnet, Undernet, IRCnet, QuakeNet, Rizon, hackint and more, ports filled in), port, TLS, nick, user, real name and NickServ password, then writes an `[[irc]]` table at the end of `config.toml` and connects. No bouncer, no helper program; as many networks as you like, each one a section of the sidebar; `/irc delete <name>` removes one. Rooms joined with `/join` are remembered and joined again at the next start. `/dcc send <nick> <path>` and `/dcc get` transfer files straight between clients.
 
 ```toml
 [[irc]]
@@ -209,6 +209,7 @@ Use `/set key value` to change supported settings live. The generated configurat
 lang = "en"                  # en, fr, or a fallback chain such as fr+en
 images = "auto"              # auto, kitty, halfblock, off
 video = "show"               # first frame; l plays the selected video
+gifplay = "always"           # always, hover (the GIF under the mouse only), off
 sidebar_sort = "recent"      # recent, alpha, unread
 sidebar_split = false        # channels, then direct messages
 spell = "off"                # fr+en_US enables installed dictionaries
