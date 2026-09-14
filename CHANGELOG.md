@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.6-beta — 2026-09-14
 
 - **GIF playback**: `gifplay = "always" | "hover" | "off"` in the configuration, `/set gifplay` live. `hover` moves only the GIF of the message under the mouse, the others hold their frame; `off` shows the first frame alone. Changing it reloads nothing. The GIF box and the preview play whatever the setting.
 

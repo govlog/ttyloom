@@ -11,19 +11,19 @@ commit, and `SHA256SUMS`. Binary archives include the README, documentation,
 dependency notices and license texts. `BUILD.txt` records the version, commit,
 Go toolchain and build flags; `ttyloom --version` prints the version and commit.
 
-While TTYloom is in beta, versions are numbered `v0.N-beta` (`v0.5-beta`, then `v0.6-beta`) and every GitHub release is marked as a pre-release.
+While TTYloom is in beta, versions are numbered `v0.N-beta` (`v0.6-beta`, then `v0.7-beta`) and every GitHub release is marked as a pre-release.
 
 ## Prepare and publish
 
 1. Update the changelog and the version in the README and the manual. Review dependency
    notices if `go.mod`, copied code, assets or build targets have changed.
 2. Run the checks in `.github/workflows/ci.yml`, then commit the release changes.
-3. Tag that commit and push it, replacing `v0.5-beta` below with the new version:
+3. Tag that commit and push it, replacing `v0.6-beta` below with the new version:
 
    ```bash
-   git tag -a v0.5-beta -m 'TTYloom v0.5-beta'
+   git tag -a v0.6-beta -m 'TTYloom v0.6-beta'
    git push origin main
-   git push origin v0.5-beta
+   git push origin v0.6-beta
    ```
 
 4. Wait for CI and the Release workflow. The release job tests the portable
@@ -32,7 +32,7 @@ While TTYloom is in beta, versions are numbered `v0.N-beta` (`v0.5-beta`, then `
 5. Review its files and release notes, then publish the draft from GitHub or:
 
    ```bash
-   gh release edit v0.5-beta --draft=false --prerelease --latest
+   gh release edit v0.6-beta --draft=false --prerelease --latest
    ```
 
 The CLI checks do not replace testing live accounts or testing on native ARM64
@@ -44,8 +44,8 @@ a new version for corrections.
 On Linux, with the Go version from `go.mod`, Git, Bash, GNU tar and gzip:
 
 ```bash
-bash scripts/release.sh v0.5-beta
-cd dist/v0.5-beta
+bash scripts/release.sh v0.6-beta
+cd dist/v0.6-beta
 sha256sum --check SHA256SUMS
 ```
 
