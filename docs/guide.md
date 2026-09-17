@@ -770,7 +770,8 @@ italic action in IRC style.
 When the terminal loses focus for more than 1.5 s, the status bar shows an away
 marker, read acknowledgments pause and unread counts increase even in the
 current window; a quicker switch and back changes nothing.
-Returning to the window marks visible messages read. Bell and notifications
+Returning to the window marks visible messages read, and on Telegram the
+reactions to your messages too (the phone drops its badge). Bell and notifications
 depend on absence or activity in other windows.
 
 `/log` toggles conversation logging; `/log on` and `/log off` set it explicitly.

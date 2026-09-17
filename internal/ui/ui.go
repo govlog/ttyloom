@@ -400,6 +400,12 @@ type awayer interface {
 	Away(ctx context.Context, msg string)
 }
 
+// reactionReader : a backend whose server counts the reactions to my messages
+// as unread until told otherwise (Telegram). Optional: the others have no such badge.
+type reactionReader interface {
+	ReadReactions(ctx context.Context, chat *model.Chat)
+}
+
 // setAway keeps the away message of net ("" = back).
 func (u *UI) setAway(net, msg string) {
 	if u.away == nil {
@@ -1299,6 +1305,7 @@ func (u *UI) remember(c *model.Chat) *model.Chat {
 		u.readOutbox(old, c.ReadOutboxMaxID)
 		u.readInbox(old, c.ReadInboxMaxID, c.Unread, true)
 		old.TopMessage = max(old.TopMessage, c.TopMessage)
+		old.UnreadReactions = old.UnreadReactions || c.UnreadReactions // a live reaction before the list is not wiped
 		if c.LastDate.After(old.LastDate) {
 			old.LastDate = c.LastDate
 		}
@@ -1670,6 +1677,12 @@ func (u *UI) markRead(w *Window) {
 	b := u.net(w.Chat)
 	if b == nil {
 		return
+	}
+	if w.Chat.UnreadReactions {
+		w.Chat.UnreadReactions = false
+		if rr, ok := b.(reactionReader); ok {
+			rr.ReadReactions(u.backendContext(b), w.Chat)
+		}
 	}
 	if last := w.LastID(); last > w.ReadSent {
 		w.ReadSent = last

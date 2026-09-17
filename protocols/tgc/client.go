@@ -746,6 +746,7 @@ func (c *Client) LoadDialogs(ctx context.Context) {
 			ch := c.chatOf(p)
 			ch.Unread, ch.ReadInboxMaxID, ch.TopMessage = d.UnreadCount, d.ReadInboxMaxID, d.TopMessage
 			ch.ReadOutboxMaxID = d.ReadOutboxMaxID
+			ch.UnreadReactions = d.UnreadReactionsCount > 0
 			ch.Pinned = d.Pinned
 			if e.Last != nil {
 				ch.LastDate = unixTime(e.Last.GetDate())
@@ -1674,6 +1675,15 @@ func (c *Client) MarkRead(ctx context.Context, chat *model.Chat, maxID int) {
 			return
 		}
 		c.api.MessagesReadHistory(ctx, &tg.MessagesReadHistoryRequest{Peer: c.peer(chat), MaxID: maxID})
+	}()
+}
+
+// ReadReactions marks the reactions to my messages in chat as read on the
+// server — the badge of the official clients goes. Fire and forget like MarkRead.
+func (c *Client) ReadReactions(ctx context.Context, chat *model.Chat) {
+	go func() {
+		defer c.Guard("ReadReactions", nil)
+		c.api.MessagesReadReactions(ctx, &tg.MessagesReadReactionsRequest{Peer: c.peer(chat)})
 	}()
 }
 

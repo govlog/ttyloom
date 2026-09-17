@@ -56,8 +56,12 @@ type Chat struct {
 	// Channel : peer backed by a Telegram channel — broadcast AND megagroup
 	// (a megagroup keeps Kind ChatGroup). Its message ids never show up in a
 	// global delete update.
-	Channel         bool
-	Unread          int
+	Channel bool
+	Unread  int
+	// UnreadReactions : reactions to my messages not read yet — the badge of
+	// the official Telegram clients. Set by the dialog list and by a live
+	// reaction, cleared on the server when the window is looked at (markRead).
+	UnreadReactions bool
 	ReadInboxMaxID  int
 	ReadOutboxMaxID int // last of my messages read by the chat (✓✓ tick)
 	Pinned          bool

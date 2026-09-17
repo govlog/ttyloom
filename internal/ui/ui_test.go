@@ -620,21 +620,22 @@ func TestOpenRefusesBin(t *testing.T) {
 // the methods a test really calls need a body.
 type fakeBackend struct {
 	model.Backend
-	caps     model.Caps // what the fake network can do; zero = nothing
-	members  []string   // tokens received by WhoisMember
-	whois    int        // Whois calls
-	reacts   int        // React calls
-	reacted  string     // emoji of the last React call
-	whoRead  int        // WhoRead calls
-	dialogs  int        // LoadDialogs calls
-	search   int        // Search calls
-	since    int        // LoadHistorySince calls
-	history  int        // LoadHistory calls
-	markRead int        // MarkRead calls
-	photo    int        // SendPhoto calls
-	photoTmp int64      // tmpID of the last SendPhoto
-	file     int        // SendFile calls
-	fileTmp  int64      // tmpID of the last SendFile
+	caps       model.Caps // what the fake network can do; zero = nothing
+	members    []string   // tokens received by WhoisMember
+	whois      int        // Whois calls
+	reacts     int        // React calls
+	reacted    string     // emoji of the last React call
+	whoRead    int        // WhoRead calls
+	dialogs    int        // LoadDialogs calls
+	search     int        // Search calls
+	since      int        // LoadHistorySince calls
+	history    int        // LoadHistory calls
+	markRead   int        // MarkRead calls
+	readReacts int        // ReadReactions calls
+	photo      int        // SendPhoto calls
+	photoTmp   int64      // tmpID of the last SendPhoto
+	file       int        // SendFile calls
+	fileTmp    int64      // tmpID of the last SendFile
 	// GIF box (gifs_test.go): queries sent, results posted, downloads asked.
 	gsearch    []string // SearchGlobal queries
 	gifQueries []string
@@ -664,6 +665,7 @@ func (f *fakeBackend) LoadHistorySince(context.Context, *model.Chat, int, int) {
 func (f *fakeBackend) LoadHistory(context.Context, *model.Chat, int, int) { f.history++ }
 
 func (f *fakeBackend) MarkRead(context.Context, *model.Chat, int) { f.markRead++ }
+func (f *fakeBackend) ReadReactions(context.Context, *model.Chat) { f.readReacts++ }
 
 // net routes by the Net of the chat; nil for a nil chat, one not stamped, or
 // one whose network is gone. Every call site skips the call on nil.

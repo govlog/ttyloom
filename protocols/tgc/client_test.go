@@ -512,7 +512,7 @@ func TestLoadDialogs(t *testing.T) {
 		}
 		return &tg.MessagesDialogs{
 			Dialogs: []tg.DialogClass{&tg.Dialog{Peer: &tg.PeerUser{UserID: 7}, TopMessage: 12,
-				UnreadCount: 3, ReadInboxMaxID: 9, ReadOutboxMaxID: 11}},
+				UnreadCount: 3, ReadInboxMaxID: 9, ReadOutboxMaxID: 11, UnreadReactionsCount: 2}},
 			Messages: []tg.MessageClass{&tg.Message{ID: 12, PeerID: &tg.PeerUser{UserID: 7}, Date: 1700000000}},
 			Users:    []tg.UserClass{withName(7, "alice")},
 		}, nil
@@ -523,7 +523,7 @@ func TestLoadDialogs(t *testing.T) {
 		t.Fatalf("dialogs (main list, then the archive): %+v", e)
 	}
 	c := e.Chats[0]
-	if c.ID != 7 || c.Username != "alice" || c.Unread != 3 || c.ReadInboxMaxID != 9 || c.ReadOutboxMaxID != 11 {
+	if c.ID != 7 || c.Username != "alice" || c.Unread != 3 || c.ReadInboxMaxID != 9 || c.ReadOutboxMaxID != 11 || !c.UnreadReactions {
 		t.Fatalf("chat: %+v", c)
 	}
 	if c.TopMessage != 12 || c.LastDate.Unix() != 1700000000 {

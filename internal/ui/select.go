@@ -613,7 +613,7 @@ func nextReaction(rs []model.Reaction, pick string) string {
 // reactions : EvReactions replaces the reactions of the message and invalidates its drawing.
 func (u *UI) reactions(e model.EvReactions) {
 	key := u.evKey(e.ChatID)
-	found := false
+	found, mine := false, true    // a message not loaded may be mine: read to be safe
 	for _, w := range u.views() { // same as edited: each copy of the message
 		for _, it := range w.Items {
 			if it.Msg != nil && it.Msg.ID == e.ID && it.Msg.Key() == key {
@@ -625,12 +625,29 @@ func (u *UI) reactions(e model.EvReactions) {
 				}
 				it.Msg.Reactions, it.lines = e.Reactions, nil
 				it.Msg.LiveAt = time.Now()
-				found = true
+				found, mine = true, it.Msg.Out
 			}
 		}
 	}
 	if found {
 		u.markDirty(key)
+	}
+	if mine && !e.Refetch && len(e.Reactions) > 0 {
+		u.reactedTo(key)
+	}
+}
+
+// reactedTo : a reaction to one of my messages stays unread on the server (the
+// badge of the phone) until read — now when its window is the one shown and
+// the terminal has the focus, at the next visit otherwise, both through markRead.
+func (u *UI) reactedTo(key model.ChatKey) {
+	c := u.chats[key]
+	if c == nil {
+		return
+	}
+	c.UnreadReactions = true
+	if i := u.ws.ForChat(key); i >= 0 && u.ws.List[i] == u.view() {
+		u.markRead(u.ws.List[i])
 	}
 }
 
