@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **Full-size Telegram photos**: the conversation keeps the 800 px size, but the full-screen preview (a click on the image, `v`, `/view`) and `o` / `/open` now take the largest size Telegram has (1280 or 2560 px), downloaded once into `download_dir` next to the inline file, with a `_full` suffix. Photos with nothing above 800 px change nothing. The local history cache moves to format 3 and is rebuilt from the network at the first start: the older scrollback comes back as you scroll up, the downloaded files are reused as they are.
+
 ## v0.6-beta — 2026-09-14
 
 - **GIF playback**: `gifplay = "always" | "hover" | "off"` in the configuration, `/set gifplay` live. `hover` moves only the GIF of the message under the mouse, the others hold their frame; `off` shows the first frame alone. Changing it reloads nothing. The GIF box and the preview play whatever the setting.

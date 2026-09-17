@@ -100,9 +100,10 @@ func mediaOf(mm tg.MessageMediaClass) *model.Media {
 
 // photoMedia gives the largest size under maxPx px (800 for a message photo,
 // 400 for the thumbnail of a link preview); failing that, the smallest one.
+// A size above that goes to Full (the largest one), for the preview and "o".
 func photoMedia(p *tg.Photo, maxPx int) *model.Media {
-	var bt, st string
-	var bw, bh, bs int
+	var bt, st, lt string
+	var bw, bh, bs, lw, lh, ls int
 	sw, sh, ss := 1<<30, 0, 0
 	for _, s := range p.Sizes {
 		var t string
@@ -124,6 +125,9 @@ func photoMedia(p *tg.Photo, maxPx int) *model.Media {
 		if w < sw {
 			st, sw, sh, ss = t, w, h, size
 		}
+		if w > lw {
+			lt, lw, lh, ls = t, w, h, size
+		}
 	}
 	if bt == "" {
 		bt, bw, bh, bs = st, sw, sh, ss
@@ -131,8 +135,17 @@ func photoMedia(p *tg.Photo, maxPx int) *model.Media {
 	if bt == "" {
 		return &model.Media{Kind: model.MediaOther, Label: "[photo]"}
 	}
-	return &model.Media{Kind: model.MediaPhoto, W: bw, H: bh, Size: int64(bs), Ext: ".jpg", Mime: "image/jpeg",
-		Loc: p.AsInputPhotoFileLocation(bt), Label: fmt.Sprintf("[photo %dx%d · %s]", bw, bh, render.HumanSize(int64(bs)))}
+	m := photoAt(p, bt, bw, bh, bs)
+	if lt != bt {
+		m.Full = photoAt(p, lt, lw, lh, ls)
+	}
+	return m
+}
+
+// photoAt : the media of one size (type t) of the photo p.
+func photoAt(p *tg.Photo, t string, w, h, size int) *model.Media {
+	return &model.Media{Kind: model.MediaPhoto, W: w, H: h, Size: int64(size), Ext: ".jpg", Mime: "image/jpeg",
+		Loc: p.AsInputPhotoFileLocation(t), Label: fmt.Sprintf("[photo %dx%d · %s]", w, h, render.HumanSize(int64(size)))}
 }
 
 // webPageMedia : link preview. The URL wins over the thumbnail: "o" opens the

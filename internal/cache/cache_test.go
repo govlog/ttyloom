@@ -193,3 +193,29 @@ func TestWipe(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// The larger variant of a photo (Media.Full) is saved like the media of the
+// line: handle and path kept, runtime state reset, the caller's copy untouched.
+func TestSaveHistoryResetsFullVariant(t *testing.T) {
+	c := New(t.TempDir(), 10)
+	full := &model.Media{Kind: model.MediaPhoto, Loc: &tg.InputPhotoFileLocation{ID: 42, ThumbSize: "y"},
+		Path: "/dl/full.jpg", State: model.MediaLoading, Frames: [][]byte{{1}}, KittyID: 3}
+	msg := model.Msg{ID: 1, ChatID: 100, Media: &model.Media{Kind: model.MediaPhoto, Loc: &tg.InputPhotoFileLocation{ID: 42, ThumbSize: "x"}, Full: full}}
+	if err := c.SaveHistory(100, []model.Msg{msg}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := c.LoadHistory(100)
+	if err != nil || len(got) != 1 {
+		t.Fatalf("%v, %d messages", err, len(got))
+	}
+	gf := got[0].Media.Full
+	if gf == nil || gf.Path != "/dl/full.jpg" || gf.State != model.MediaNone || gf.Frames != nil || gf.KittyID != 0 {
+		t.Fatalf("full read back: %+v", gf)
+	}
+	if loc, ok := gf.Loc.(*tg.InputPhotoFileLocation); !ok || loc.ThumbSize != "y" {
+		t.Fatalf("full loc read back: %#v", gf.Loc)
+	}
+	if full.State != model.MediaLoading || full.Frames == nil || full.KittyID != 3 {
+		t.Fatalf("caller's Full mutated: %+v", full)
+	}
+}

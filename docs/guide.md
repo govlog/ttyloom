@@ -615,7 +615,9 @@ because `/quit` shares that prefix. Exact aliases take precedence when executing
 
 Click an inline image, select a message and press `v`, or use `/view [N]`.
 Images must be enabled with F4. The viewer works with kitty pixels and Unicode
-half blocks.
+half blocks. A Telegram photo is shown at 800 px in the conversation; the
+viewer, `o` and `/open` take its largest size (1280 or 2560 px), downloaded
+once to a `_full` file next to the inline one.
 
 | Key or gesture | Effect |
 | --- | --- |

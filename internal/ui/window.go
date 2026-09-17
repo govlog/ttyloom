@@ -156,6 +156,11 @@ func reconcileMsg(old, fresh *model.Msg, started ...time.Time) {
 
 func refreshMedia(old, fresh *model.Media) {
 	old.Loc = fresh.Loc
+	if old.Full != nil && fresh.Full != nil {
+		old.Full.Loc = fresh.Full.Loc // the variant keeps its path and state too
+	} else {
+		old.Full = fresh.Full
+	}
 	if old.State == model.MediaFailed && fresh.Loc != nil {
 		old.State, old.Err = model.MediaNone, ""
 	}

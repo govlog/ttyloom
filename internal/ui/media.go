@@ -144,16 +144,44 @@ func (u *UI) download(m *model.Msg) {
 	if b == nil {
 		return
 	}
-	md := m.Media
-	if md.Kind == model.MediaMap {
-		u.downloadMap(b, md)
+	if m.Media.Kind == model.MediaMap {
+		u.downloadMap(b, m.Media)
 		return
 	}
+	u.fetch(b, m, m.Media, "")
+}
+
+// downloadFull : the larger variant of the photo of m (Media.Full), to a file
+// of its own — the media of the line itself when the backend gave no variant.
+func (u *UI) downloadFull(m *model.Msg) {
+	md := full(m)
+	if md == m.Media {
+		u.download(m)
+		return
+	}
+	if b := u.netOf(m.Net); b != nil {
+		u.fulls[md] = true
+		u.fetch(b, m, md, "_full")
+	}
+}
+
+// full : the media the preview and "o" show — the larger variant when the
+// backend gave one (a Telegram photo above 800 px), the media of the line otherwise.
+func full(m *model.Msg) *model.Media {
+	if f := m.Media.Full; f != nil {
+		return f
+	}
+	return m.Media
+}
+
+// fetch downloads md, the media of m or its larger variant, into download_dir;
+// suffix tells the file of the variant from the file of the line.
+func (u *UI) fetch(b model.Backend, m *model.Msg, md *model.Media, suffix string) {
 	title := ""
 	if c := u.chats[m.Key()]; c != nil {
 		title = c.Title
 	}
-	path := filepath.Join(config.Expand(u.cfg.DownloadDir), media.FileName(m.Key(), title, m.ID, m.Date, md.Ext))
+	path := filepath.Join(config.Expand(u.cfg.DownloadDir), media.FileName(m.Key(), title, m.ID, m.Date, suffix+md.Ext))
 	md.State = model.MediaLoading
 	u.invalidateMedia(md)
 	b.Download(u.backendContext(b), md, path)
@@ -183,6 +211,8 @@ func (u *UI) downloaded(e model.EvDownloaded) {
 		delete(u.gifOrphan, md)
 		return
 	}
+	isFull := u.fulls[md]
+	delete(u.fulls, md)
 	if e.Err != "" {
 		md.State, md.Err = model.MediaFailed, e.Err
 		if v := u.viewer; v != nil && v.src == md {
@@ -198,6 +228,10 @@ func (u *UI) downloaded(e model.EvDownloaded) {
 	}
 	if v := u.viewer; v != nil && v.src == md {
 		u.viewLoad() // preview open, waiting for the file
+	}
+	if isFull { // larger variant: no line shows it, nothing to decode inline
+		md.State = model.MediaReady
+		return
 	}
 	if g := u.gifs; g != nil && g.owns(md) { // preview of the GIF box: its cell, a few frames
 		u.gifDecode(md)
@@ -629,6 +663,7 @@ func (u *UI) openItemMedia(w *Window, it *Item) {
 		u.open(md.URL)
 		return
 	}
+	md = full(it.Msg)
 	if md.Path != "" {
 		u.open(md.Path)
 		return
@@ -639,7 +674,7 @@ func (u *UI) openItemMedia(w *Window, it *Item) {
 	}
 	u.openNext[md] = true
 	w.AddSys(i18n.T("downloading", md.Label))
-	u.download(it.Msg)
+	u.downloadFull(it.Msg)
 }
 
 // openable : last net before xdg-open. The URLs from the network are already

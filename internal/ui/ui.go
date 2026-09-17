@@ -119,6 +119,7 @@ type UI struct {
 		at   time.Time
 	}
 	openNext map[*model.Media]bool
+	fulls    map[*model.Media]bool // larger variants (Media.Full) being downloaded: no line shows them
 	// decodes : decoding running per media, to be ended when nobody waits for
 	// it any more ("s", window closed, media freed, preview closed).
 	decodes     map[*model.Media]context.CancelFunc
@@ -209,7 +210,7 @@ func Run(ctx context.Context, cancel context.CancelFunc, t *term.Term, cfg *conf
 		netCancel: map[string]context.CancelFunc{}, events: make(chan model.Event, 256), ws: NewWindows(),
 		agg: &Window{}, aggregate: cfg.Aggregate, debug: &Window{}, focused: true,
 		chats: map[model.ChatKey]*model.Chat{}, lookups: map[uint64]*lookup{}, typing: map[model.ChatKey]typing{}, lastTyping: map[model.ChatKey]time.Time{},
-		avatars: map[model.ChatKey]*model.Media{}, openNext: map[*model.Media]bool{}, presence: map[model.ChatKey]string{},
+		avatars: map[model.ChatKey]*model.Media{}, openNext: map[*model.Media]bool{}, fulls: map[*model.Media]bool{}, presence: map[model.ChatKey]string{},
 		caches: caches, dirty: map[model.ChatKey]bool{}, partsCache: map[model.ChatKey]partsEntry{}, whoCache: map[whoKey]whoEntry{},
 		sideW:       clampSideW(cfg.SidebarWidth, t.Cols),
 		aliases:     map[model.ChatKey]string{},

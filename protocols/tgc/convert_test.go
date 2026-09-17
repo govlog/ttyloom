@@ -254,3 +254,33 @@ func TestExtAllowList(t *testing.T) {
 		t.Errorf("mime priority: %q", got)
 	}
 }
+
+// The line keeps the size under 800 px; the largest size of the photo goes to
+// Full, for the preview and "o". A photo with nothing above 800 px has no Full.
+func TestMediaOfPhotoKeepsLargestAsFull(t *testing.T) {
+	p := &tg.Photo{ID: 1, Sizes: []tg.PhotoSizeClass{
+		&tg.PhotoSize{Type: "m", W: 320, H: 240, Size: 20000},
+		&tg.PhotoSize{Type: "x", W: 800, H: 600, Size: 80000},
+		&tg.PhotoSize{Type: "y", W: 1280, H: 960, Size: 200000},
+		&tg.PhotoSizeProgressive{Type: "w", W: 2560, H: 1920, Sizes: []int{100000, 500000}},
+	}}
+	m := mediaOf(&tg.MessageMediaPhoto{Photo: p})
+	f := m.Full
+	if f == nil || f.Kind != model.MediaPhoto || f.W != 2560 || f.H != 1920 || f.Size != 500000 || f.Ext != ".jpg" {
+		t.Fatalf("full: %+v", f)
+	}
+	if loc, ok := f.Loc.(*tg.InputPhotoFileLocation); !ok || loc.ThumbSize != "w" {
+		t.Fatalf("full loc: %+v", f.Loc)
+	}
+	if loc := m.Loc.(*tg.InputPhotoFileLocation); loc.ThumbSize != "x" {
+		t.Fatalf("line loc: %+v", m.Loc)
+	}
+
+	small := &tg.Photo{ID: 2, Sizes: []tg.PhotoSizeClass{
+		&tg.PhotoSize{Type: "m", W: 320, H: 240, Size: 20000},
+		&tg.PhotoSize{Type: "x", W: 800, H: 600, Size: 80000},
+	}}
+	if m := mediaOf(&tg.MessageMediaPhoto{Photo: small}); m.Full != nil {
+		t.Fatalf("no larger size, yet Full = %+v", m.Full)
+	}
+}

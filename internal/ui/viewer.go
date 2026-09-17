@@ -148,13 +148,13 @@ func (u *UI) viewNth(w *Window, n int) {
 // openViewer opens the preview: full screen decoding in a goroutine, or a
 // download first (downloaded() carries on).
 func (u *UI) openViewer(m *model.Msg) {
-	md := m.Media
+	md := full(m)
 	u.closeViewer()
 	u.picker, u.pager, u.pasteAsk = nil, nil, "" // the preview is exclusive
 	u.viewer = &viewer{src: md, md: viewCopy(md), zoom: 1, cx: 0.5, cy: 0.5}
 	if md.Path == "" {
 		if md.State != model.MediaLoading {
-			u.download(m)
+			u.downloadFull(m)
 		}
 		return
 	}

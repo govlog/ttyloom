@@ -21,7 +21,10 @@ import (
 // owns them — see protocols/tgc/gob.go. The cache knows no protocol.
 
 // 2: model.Span entities + opaque any handles — a v1 file no longer decodes.
-const cacheVersion = 2
+// 3 : Media.Full — a history written before it has no larger variant for its
+// photos, and the start-up sync (messages newer than the cache only) would
+// never bring one back: the old files are read as no cache at all.
+const cacheVersion = 3
 
 // defaultMaxHistory : messages kept per chat when New gets max <= 0 (older
 // tests, callers that do not come from the config).
@@ -151,20 +154,29 @@ func (c *Cache) SaveHistory(chatID int64, msgs []model.Msg) error {
 		m.TmpID = 0
 		m.Err = ""
 		if m.Media != nil {
-			mc := *m.Media
-			mc.State = model.MediaNone
-			mc.Err = ""
-			mc.Frames = nil
-			mc.FrameW = 0
-			mc.FrameH = 0
-			mc.Delay = 0
-			mc.Frame = 0
-			mc.Next = time.Time{}
-			mc.KittyID = 0
-			mc.KittyAlt = 0
-			m.Media = &mc
+			m.Media = stripped(m.Media)
 		}
 		clean[i] = m
 	}
 	return writeCache(c.historyPath(chatID), clean)
+}
+
+// stripped : a copy of md (and of its Full variant) without the runtime state
+// of the UI — download state, frames, kitty ids. Handle and path stay.
+func stripped(md *model.Media) *model.Media {
+	mc := *md
+	mc.State = model.MediaNone
+	mc.Err = ""
+	mc.Frames = nil
+	mc.FrameW = 0
+	mc.FrameH = 0
+	mc.Delay = 0
+	mc.Frame = 0
+	mc.Next = time.Time{}
+	mc.KittyID = 0
+	mc.KittyAlt = 0
+	if mc.Full != nil {
+		mc.Full = stripped(mc.Full)
+	}
+	return &mc
 }

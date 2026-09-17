@@ -104,15 +104,19 @@ const (
 )
 
 type Media struct {
-	Kind      MediaKind
-	Label     string // "[photo 640x480 · 42 KB]"
-	W, H      int
-	Size      int64
-	Duration  float64
-	Name      string // link preview: the description
-	Mime      string
-	Ext       string
-	Loc       any     // nil for MediaOther
+	Kind     MediaKind
+	Label    string // "[photo 640x480 · 42 KB]"
+	W, H     int
+	Size     int64
+	Duration float64
+	Name     string // link preview: the description
+	Mime     string
+	Ext      string
+	Loc      any // nil for MediaOther
+	// Full : larger variant of a photo (Telegram size above 800 px), nil when
+	// the line already has the largest. The preview and "o" take it, to a
+	// file of its own; the line keeps Loc.
+	Full      *Media
 	Emoji     string  // sticker
 	URL       string  // link preview: the page ("o" opens it, not the file)
 	Animated  bool    // .tgs / webm sticker: text only
