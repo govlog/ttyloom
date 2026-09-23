@@ -11,6 +11,8 @@
 - **Networks are modules**: Telegram, Discord and IRC each bring their configuration, launch, commands and texts from their own package under `protocols/`; adding a network is a package and one line in `cmd/ttyloom/main.go` ([docs/modules.md](docs/modules.md)). Nothing changes in `config.toml`, except that a file the client rewrites (`/set`, F4 to F7) lists its sections in alphabetical order.
 - **Texts that named Telegram on every network**: the `/whois` line of a renamed chat names its network ("title on discord: …"), and the separator of the new-message box says "from the network".
 - **IRC commands with several IRC networks**: typed outside an IRC window, they answer "several irc networks: …".
+- **`/help`**: `/telegram`, `/discord`, `/irc` and `/dcc` now come at the end of the "chats" section, after the commands of the client.
+- **Start with no network**: the message asks to fill in the block of one network of `config.toml`, instead of naming Telegram and Discord.
 - **Discord guild sections** come from the group the Discord module gives each channel; at the first start after the update they appear once the channel list arrives from the server.
 
 ## v0.7-beta — 2026-09-23

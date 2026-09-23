@@ -59,18 +59,29 @@ func modules() []module.Module {
 	return []module.Module{tgc.NewModule(), dsc.NewModule(), irc.NewModule()}
 }
 
-func run() error {
-	mods := modules()
+// load reads config.toml with the modules and sets the language of the
+// texts — before it gives back the error of a module, which is translated
+// when printed.
+func load(mods []module.Module) (*config.Config, error) {
 	cfg, err := config.Load(mods...)
-	if err != nil {
-		return err
+	if cfg == nil {
+		return nil, err
 	}
-	cleanParts(config.Expand(cfg.DownloadDir))
 	lang := cfg.Lang
 	if lang == "" {
 		lang = i18n.Detect(cmp.Or(os.Getenv("LC_ALL"), os.Getenv("LANG")))
 	}
 	i18n.Set(lang)
+	return cfg, err
+}
+
+func run() error {
+	mods := modules()
+	cfg, err := load(mods)
+	if err != nil {
+		return err
+	}
+	cleanParts(config.Expand(cfg.DownloadDir))
 	n := 0
 	for _, m := range mods {
 		n += len(m.Networks())

@@ -19,7 +19,7 @@ import (
 
 // Every catalogue — the core's and each module's — has the same keys in en
 // and fr, no key is in two catalogues, and every literal key given to i18n.T
-// in the code (tests apart) is in one of them.
+// or i18n.Error in the code (tests apart) is in one of them.
 func TestCatalogs(t *testing.T) {
 	cats := map[string]fs.FS{"core": i18n.Core, "tgc": tgc.Catalog, "dsc": dsc.Catalog, "irc": irc.Catalog}
 	owner := map[string]string{}
@@ -43,7 +43,7 @@ func TestCatalogs(t *testing.T) {
 			}
 		}
 	}
-	call := regexp.MustCompile(`i18n\.T\("([a-z0-9_]+)"[,)]`)
+	call := regexp.MustCompile(`i18n\.(?:T|Error)\("([a-z0-9_]+)"[,)]`)
 	n := 0
 	for _, p := range goFiles(t, "../..") {
 		b, err := os.ReadFile(p)

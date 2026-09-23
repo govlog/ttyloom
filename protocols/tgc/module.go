@@ -75,7 +75,7 @@ func (m *Module) Load(src module.ConfigSource) error {
 		m.eff.BotToken = v
 	}
 	if m.configured() && (m.eff.APIID <= 0 || m.eff.APIHash == "") {
-		return fmt.Errorf(i18n.T("main_no_api_id"), filepath.Join(config.Dir(), "config.toml"))
+		return i18n.Error("main_no_api_id", filepath.Join(config.Dir(), "config.toml"))
 	}
 	return nil
 }

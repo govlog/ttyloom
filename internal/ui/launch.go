@@ -2,6 +2,7 @@ package ui
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 
 	"github.com/govlog/ttyloom/internal/cache"
@@ -39,8 +40,12 @@ func (u *UI) addCache(m module.Module, net string) {
 // goroutine of its Run — an error or a panic comes back as an event rather
 // than killing the terminal. At start for each network, then at /<net> login.
 func (u *UI) launchModule(nctx context.Context, net string) (model.Backend, error) {
+	m := u.modOf(net)
+	if m == nil { // a module that added a network of another name
+		return nil, fmt.Errorf("%s: no module for this network", net)
+	}
 	raw := make(chan model.Event, 256)
-	b, err := u.modOf(net).Launch(nctx, host{u}, net, raw)
+	b, err := m.Launch(nctx, host{u}, net, raw)
 	if err != nil {
 		return nil, err
 	}

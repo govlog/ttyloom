@@ -126,6 +126,18 @@ func T(key string, args ...any) string {
 	return fmt.Sprintf(s, args...)
 }
 
+// Error : an error whose text is the key, translated when it is printed —
+// a module can fail while the configuration is read, before the language of
+// the client is chosen.
+func Error(key string, args ...any) error { return textError{key, args} }
+
+type textError struct {
+	key  string
+	args []any
+}
+
+func (e textError) Error() string { return T(e.key, e.args...) }
+
 // Detect reads a locale value ($LC_ALL, else $LANG) and gives the language.
 func Detect(env string) string {
 	if strings.HasPrefix(env, "fr") {

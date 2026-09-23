@@ -227,6 +227,9 @@ const MaxAutoMediaKB = 512 << 10
 
 func Load(mods ...module.Module) (*Config, error) { return LoadFrom(Dir(), mods...) }
 
+// LoadFrom reads config.toml of dir, and the keys of each module through its
+// Load. A module that fails gives its error with the Config of the client
+// still read — its language is the one the error is to be shown in.
 func LoadFrom(dir string, mods ...module.Module) (*Config, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, err
@@ -255,7 +258,7 @@ func LoadFrom(dir string, mods ...module.Module) (*Config, error) {
 	src := &source{md: md2, raw: raw, claimed: map[string]bool{}}
 	for _, m := range mods {
 		if err := m.Load(src); err != nil {
-			return nil, err
+			return c, err // the keys of the client are read: the language of the error
 		}
 	}
 	c.claimed = src.claimed

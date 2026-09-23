@@ -107,3 +107,12 @@ func TestResolversClaimed(t *testing.T) {
 		t.Fatalf("free name: %v", got)
 	}
 }
+
+// A network of no module (a module that added a wrong name) fails its launch
+// with an error; it does not take the client down.
+func TestLaunchWithoutModule(t *testing.T) {
+	u, _ := modUI()
+	if b, err := u.launchModule(context.Background(), "nomod:x"); b != nil || err == nil {
+		t.Fatalf("launch: %v %v", b, err)
+	}
+}
