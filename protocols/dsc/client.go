@@ -66,7 +66,7 @@ func (c *Client) state() *ningen.State { return c.st.Load() }
 // and no name resolution: a pseudo that no dialog carries cannot become a chat
 // (/query, /join).
 func (c *Client) Caps() model.Caps {
-	return model.Caps{Reactions: true, AnyReaction: true, Edit: true, Gifs: true, Search: true, GlobalSearch: true}
+	return model.Caps{Reactions: true, AnyReaction: true, Edit: true, Gifs: true, Search: true, GlobalSearch: true, History: true}
 }
 
 // Run blocks: QR login when there is no token yet, gateway connection, then

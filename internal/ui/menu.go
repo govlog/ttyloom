@@ -361,8 +361,8 @@ func (u *UI) openChat(c *model.Chat) {
 }
 
 // chatGone : chat left, blocked or gone from the account. Bound windows
-// closed, entry dropped from the sidebar, cached history erased, and one line
-// to say so.
+// closed, entry dropped from the sidebar, cached history erased where the
+// server keeps one (see dropChat), and one line to say so.
 func (u *UI) chatGone(k model.ChatKey) {
 	c := u.chats[k]
 	if !u.dropChat(k) {
@@ -379,18 +379,29 @@ func (u *UI) chatGone(k model.ChatKey) {
 }
 
 // dropChat wipes every trace of the chat, without a word: windows closed,
-// entry dropped from the sidebar, cached history erased. false when the key is
-// unknown — nothing was dropped. The list is NOT written to the disk here: a
-// caller dropping several chats writes it once.
+// entry dropped from the sidebar, cached history erased — the file only on a
+// network with server history (Caps.History): on IRC it is the only copy, so
+// it stays, with the last lines of the window written first, and plays again
+// when the chat opens again. false when the key is unknown — nothing was
+// dropped. The list is NOT written to the disk here: a caller dropping
+// several chats writes it once.
 func (u *UI) dropChat(k model.ChatKey) bool {
-	if u.chats[k] == nil {
+	c := u.chats[k]
+	if c == nil {
 		return false
 	}
+	keep := !u.caps(c).History
 	u.dropTargets(func(c *model.Chat) bool { return c.Key() == k })
 	for i := len(u.ws.List) - 1; i > 0; i-- {
 		w := u.ws.List[i]
 		if w.Chat == nil || w.Chat.Key() != k {
 			continue
+		}
+		if keep && w.Search == "" && u.dirty[k] {
+			if cc := u.cacheFor(k.Net); cc != nil {
+				u.bgWait.Wait()
+				_ = saveMerged(cc, k.ID, w.Msgs()) // nothing to show: the window is going
+			}
 		}
 		u.freeImages(w)
 		u.ws.List = slices.Delete(u.ws.List, i, i+1)
@@ -414,7 +425,9 @@ func (u *UI) dropChat(k model.ChatKey) bool {
 	delete(u.presence, k)
 	delete(u.avatars, k)
 	delete(u.cached, k)
-	u.dropHistory(k)
+	if !keep {
+		u.dropHistory(k)
+	}
 	return true
 }
 

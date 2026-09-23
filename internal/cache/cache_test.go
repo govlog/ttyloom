@@ -1,6 +1,8 @@
 package cache
 
 import (
+	"bytes"
+	"encoding/gob"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -217,5 +219,83 @@ func TestSaveHistoryResetsFullVariant(t *testing.T) {
 	}
 	if full.State != model.MediaLoading || full.Frames == nil || full.KittyID != 3 {
 		t.Fatalf("caller's Full mutated: %+v", full)
+	}
+}
+
+// A file of an older format that still decodes: read as a cache when the
+// files are the only copy (KeepOld), read as no cache at all otherwise.
+func TestLoadHistoryOlderVersion(t *testing.T) {
+	dir := t.TempDir()
+	c := New(dir, 2000)
+	var buf bytes.Buffer
+	enc := gob.NewEncoder(&buf)
+	if err := enc.Encode(cacheHeader{Version: cacheVersion - 1}); err != nil {
+		t.Fatal(err)
+	}
+	if err := enc.Encode([]model.Msg{{ID: 1, ChatID: 42, Text: "older format"}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "history", "42.gob"), buf.Bytes(), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := c.LoadHistory(42); got != nil {
+		t.Fatalf("older format read as a cache with KeepOld off: %+v", got)
+	}
+	c.KeepOld = true
+	got, err := c.LoadHistory(42)
+	if err != nil || len(got) != 1 || got[0].Text != "older format" {
+		t.Fatalf("older format dropped with KeepOld: %+v, %v", got, err)
+	}
+}
+
+// A file that does not decode is kept as a .bak copy when a write replaces it.
+func TestSaveHistoryKeepsUnreadableCopy(t *testing.T) {
+	dir := t.TempDir()
+	c := New(dir, 2000)
+	p := filepath.Join(dir, "history", "42.gob")
+	junk := []byte{0xde, 0xad, 0xbe, 0xef, 0x00, 0x01, 0x02}
+	if err := os.WriteFile(p, junk, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.SaveHistory(42, []model.Msg{{ID: 1, ChatID: 42}}); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := os.ReadFile(p + ".bak-0"); err != nil || !bytes.Equal(got, junk) {
+		t.Fatalf("unreadable file not kept as .bak-0: %v %v", got, err)
+	}
+	if got, _ := c.LoadHistory(42); len(got) != 1 {
+		t.Fatalf("new file not written: %+v", got)
+	}
+}
+
+// Archive sets the directory aside with its files and makes an empty one;
+// with no history file nothing moves.
+func TestArchive(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "net")
+	c := New(dir, 2000)
+	if err := c.Archive(); err != nil {
+		t.Fatal(err)
+	}
+	if aside, _ := filepath.Glob(dir + ".old-*"); len(aside) != 0 {
+		t.Fatalf("empty cache set aside: %v", aside)
+	}
+	if err := c.SaveHistory(1, []model.Msg{{ID: 2}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Archive(); err != nil {
+		t.Fatal(err)
+	}
+	aside, _ := filepath.Glob(dir + ".old-*")
+	if len(aside) != 1 {
+		t.Fatalf("cache not set aside: %v", aside)
+	}
+	if _, err := os.Stat(filepath.Join(aside[0], "history", "1.gob")); err != nil {
+		t.Fatalf("history file not in the archive: %v", err)
+	}
+	if msgs, _ := c.LoadHistory(1); msgs != nil {
+		t.Fatalf("after Archive: %v", msgs)
+	}
+	if err := c.SaveHistory(1, []model.Msg{{ID: 3}}); err != nil { // the directory is made again
+		t.Fatal(err)
 	}
 }

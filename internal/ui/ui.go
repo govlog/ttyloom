@@ -1091,7 +1091,9 @@ func (u *UI) event(ev model.Event) {
 		if old == 0 {
 			old = u.cacheSelf[net]
 		}
-		if old != 0 && old != e.SelfID {
+		// Not on a network without server history (IRC): its id is the nick
+		// of the moment, not an account, and its cache is the only copy.
+		if old != 0 && old != e.SelfID && backendCaps(u.netOf(net)).History {
 			u.dropCache(net)
 		}
 		if u.accountID == nil {

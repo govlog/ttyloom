@@ -234,6 +234,7 @@ func TestLoadCacheAutreCompte(t *testing.T) {
 	}
 
 	u := newCacheUI(t, c)
+	u.nets = map[string]model.Backend{model.NetTelegram: &fakeBackend{caps: model.Caps{History: true}}}
 	u.loadCache()
 	if u.ws.ForChat(tgk(1)) < 0 {
 		t.Fatal("cache window missing before EvReady")

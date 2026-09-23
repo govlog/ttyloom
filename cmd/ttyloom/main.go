@@ -98,6 +98,7 @@ func backends(ctx context.Context, cfg *config.Config, events chan<- model.Envel
 		nets = append(nets, net)
 		if cfg.Cache {
 			caches[net] = cache.New(filepath.Join(root, net), cfg.CacheMessages)
+			caches[net].KeepOld = true // IRC keeps no history on the server: the files are the only copy
 		}
 	}
 	if len(nets) == 0 {

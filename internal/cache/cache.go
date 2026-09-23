@@ -6,6 +6,8 @@ import (
 	"bytes"
 	"cmp"
 	"encoding/gob"
+	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
@@ -23,7 +25,8 @@ import (
 // 2: model.Span entities + opaque any handles — a v1 file no longer decodes.
 // 3 : Media.Full — a history written before it has no larger variant for its
 // photos, and the start-up sync (messages newer than the cache only) would
-// never bring one back: the old files are read as no cache at all.
+// never bring one back: the old files are read as no cache at all, unless
+// KeepOld says the files are the only copy there is.
 const cacheVersion = 3
 
 // defaultMaxHistory : messages kept per chat when New gets max <= 0 (older
@@ -38,6 +41,11 @@ type Cache struct {
 	dir        string
 	historyDir string
 	max        int // messages kept per chat (config cache_messages)
+	// KeepOld : the files are the only copy of the history (IRC, no server
+	// history): a history of an older format that still decodes is read as a
+	// cache, never as no cache at all. Off, a network with server history
+	// fetches again what the new format holds.
+	KeepOld bool
 }
 
 // New makes dir and dir/history (0700) and gives the cache. The creation
@@ -60,21 +68,23 @@ func (c *Cache) historyPath(chatID int64) string {
 	return filepath.Join(c.historyDir, strconv.FormatInt(chatID, 10)+".gob")
 }
 
-// readCache decodes the header then v from path. Missing file, bad header,
-// other version or broken decoding: false, and the caller reads that as no
-// cache at all (the file is written again at the next Save).
-func readCache(path string, v any) bool {
+// readCache decodes the header then v from path. version is the format of
+// the file (0 without a readable header); err is fs.ErrNotExist with no file,
+// else the decoding error. A file of another format that still decodes (gob
+// leaves a missing field at zero) comes back with no error: the caller reads
+// version and decides whether it is a cache.
+func readCache(path string, v any) (version int, err error) {
 	f, err := os.Open(path)
 	if err != nil {
-		return false
+		return 0, err
 	}
 	defer f.Close()
 	dec := gob.NewDecoder(f)
 	var hdr cacheHeader
-	if err := dec.Decode(&hdr); err != nil || hdr.Version != cacheVersion {
-		return false
+	if err := dec.Decode(&hdr); err != nil {
+		return 0, err
 	}
-	return dec.Decode(v) == nil
+	return hdr.Version, dec.Decode(v)
 }
 
 // writeCache encodes the header then v, and writes it atomically
@@ -98,11 +108,13 @@ type dialogsFile struct {
 	Chats  []model.Chat
 }
 
-// LoadDialogs gives the chats and the account that wrote them (0 = unknown,
-// old format — the decoding fails and the file is written again).
+// LoadDialogs gives the chats and the account that wrote them (0 = unknown:
+// no file, or one that does not decode — it is written again at the next
+// Save). A file of an older format that still decodes is read: the list is
+// refreshed by the network anyway.
 func (c *Cache) LoadDialogs() ([]model.Chat, int64, error) {
 	var f dialogsFile
-	if !readCache(c.dialogsPath(), &f) {
+	if _, err := readCache(c.dialogsPath(), &f); err != nil {
 		return nil, 0, nil
 	}
 	return f.Chats, f.SelfID, nil
@@ -121,6 +133,20 @@ func (c *Cache) Wipe() error {
 	return os.MkdirAll(c.historyDir, 0o700)
 }
 
+// Archive sets the whole cache aside — the directory renamed to
+// <dir>.old-<time>, then made again empty — so that a history dropped for a
+// wrong reason (account change, list of the chats unreadable) can still be
+// recovered by hand. With no history file there is nothing to keep: no move.
+func (c *Cache) Archive() error {
+	if entries, _ := os.ReadDir(c.historyDir); len(entries) == 0 {
+		return nil
+	}
+	if err := os.Rename(c.dir, c.dir+".old-"+time.Now().Format("20060102-150405")); err != nil {
+		return err
+	}
+	return os.MkdirAll(c.historyDir, 0o700)
+}
+
 // RemoveHistory erases the history of a chat (left, blocked, emptied).
 func (c *Cache) RemoveHistory(chatID int64) error {
 	if err := os.Remove(c.historyPath(chatID)); err != nil && !os.IsNotExist(err) {
@@ -129,12 +155,29 @@ func (c *Cache) RemoveHistory(chatID int64) error {
 	return nil
 }
 
+// LoadHistory gives the cached messages of the chat: nil with no file, with
+// a file that does not decode, or — unless KeepOld — with one of another
+// format.
 func (c *Cache) LoadHistory(chatID int64) ([]model.Msg, error) {
 	var msgs []model.Msg
-	if !readCache(c.historyPath(chatID), &msgs) {
+	ver, err := readCache(c.historyPath(chatID), &msgs)
+	if err != nil || (ver != cacheVersion && !c.KeepOld) {
 		return nil, nil
 	}
 	return msgs, nil
+}
+
+// keepUnreadable sets a history file that does not decode aside, as
+// <name>.bak-<version> (one copy per format, 0: no readable header), before
+// a write replaces it: a truncated file, or one in a format the current types
+// cannot read, may be the only copy of that history.
+func keepUnreadable(path string) {
+	var probe []model.Msg
+	ver, err := readCache(path, &probe)
+	if err == nil || errors.Is(err, fs.ErrNotExist) {
+		return
+	}
+	_ = os.Rename(path, path+".bak-"+strconv.Itoa(ver))
 }
 
 // SaveHistory keeps the last c.max messages by rising ID and writes a clean
@@ -158,7 +201,9 @@ func (c *Cache) SaveHistory(chatID int64, msgs []model.Msg) error {
 		}
 		clean[i] = m
 	}
-	return writeCache(c.historyPath(chatID), clean)
+	path := c.historyPath(chatID)
+	keepUnreadable(path)
+	return writeCache(path, clean)
 }
 
 // stripped : a copy of md (and of its Full variant) without the runtime state

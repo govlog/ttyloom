@@ -381,7 +381,7 @@ func (u *UI) closeWindowAt(i int) *Window {
 	if w.Chat != nil && w.Search == "" && u.dirty[w.Chat.Key()] {
 		u.bgWait.Wait()
 		if cc := u.cacheFor(w.Chat.Net); cc != nil {
-			if err := cc.SaveHistory(w.Chat.ID, w.Msgs()); err != nil {
+			if err := saveMerged(cc, w.Chat.ID, w.Msgs()); err != nil {
 				u.status0(i18n.T("cache_error", err))
 				return nil
 			}

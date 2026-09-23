@@ -504,7 +504,9 @@ type EvGifs struct {
 }
 
 // EvChatGone : chat left or blocked — the UI drops the entry from the
-// sidebar, closes the bound windows and wipes its cached history.
+// sidebar and closes the bound windows. The cached history goes with them
+// only on a network with server history (Caps.History); on IRC the file is
+// the only copy, it stays and plays again when the chat opens again.
 type EvChatGone struct{ ChatID int64 }
 
 // DefaultReactions : fallback when the backend cannot give the list of the

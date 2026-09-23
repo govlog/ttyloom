@@ -177,6 +177,7 @@ func (u *UI) ircAddSubmit(v []string) string {
 	slices.Sort(u.netList)
 	if u.cfg.Cache && u.caches != nil && u.caches[net] == nil {
 		u.caches[net] = cache.New(filepath.Join(config.CacheDir(), net), u.cfg.CacheMessages)
+		u.caches[net].KeepOld = true // same as main: the files are the only copy of an IRC history
 	}
 	u.sys(i18n.T("irc_added", net))
 	u.startNet(net)

@@ -186,13 +186,14 @@ func TestRegressionReconnectRefresh(t *testing.T) {
 }
 
 func TestRegressionAccountChange(t *testing.T) {
-	u, _, room, _ := queryUI()
+	u, b, room, _ := queryUI()
 	u.self = map[string]selfInfo{}
 	u.cacheSelf = map[string]int64{}
 	u.conn = map[string]bool{}
 	u.dispatch(model.Envelope{Net: room.Net, Ev: model.EvReady{SelfID: 111, SelfName: "first account"}})
 	u.winFor(room).Upsert(&model.Msg{Net: room.Net, ChatID: room.ID, ID: 10, Text: "first account private message"})
 	u.dispatch(model.Envelope{Net: room.Net, Ev: model.EvStopped{}})
+	u.nets[room.Net] = b // /telegram login: the backend is back before its EvReady
 	u.dispatch(model.Envelope{Net: room.Net, Ev: model.EvReady{SelfID: 222, SelfName: "second account"}})
 	if u.chats[room.Key()] != nil || u.ws.ForChat(room.Key()) >= 0 {
 		t.Fatal("first account chat and history remain after second account login with no startup cache")
@@ -334,5 +335,141 @@ func TestClosingSearchKeepsFullHistory(t *testing.T) {
 	msgs, err := cc.LoadHistory(room.ID)
 	if err != nil || len(msgs) != 2 {
 		t.Fatalf("closing search replaced chat history: %v, %v", msgs, err)
+	}
+}
+
+// ircCacheUI : a UI with one IRC network (no server history) and its disk
+// cache — the audit of 2026-09-22 (A01, A02, A04): on IRC the cache is the
+// only copy of the history.
+func ircCacheUI(net string, c *cache.Cache) *UI {
+	u := listUI()
+	u.ctx = context.Background()
+	u.nets = map[string]model.Backend{net: &fakeBackend{caps: model.Caps{Resolve: true}}}
+	u.caches = map[string]*cache.Cache{net: c}
+	u.chats = map[model.ChatKey]*model.Chat{}
+	u.dirty = map[model.ChatKey]bool{}
+	u.self = map[string]selfInfo{net: {ID: 1001, Name: "me"}}
+	u.conn = map[string]bool{}
+	u.dialogsSeen = map[string]bool{}
+	u.reactList = map[string][]string{}
+	u.lastTyping = map[model.ChatKey]time.Time{}
+	u.partsCache = map[model.ChatKey]partsEntry{}
+	u.typing = map[model.ChatKey]typing{}
+	u.presence = map[model.ChatKey]string{}
+	u.avatars = map[model.ChatKey]*model.Media{}
+	return u
+}
+
+// The nick was taken at login: ircevent registered "me_0" and EvReady carries
+// another SelfID. An IRC network has no account — its cache stays.
+func TestRegressionIRCNickCollisionKeepsHistory(t *testing.T) {
+	const net = "irc:libera"
+	c := cache.New(t.TempDir(), 2000)
+	room := model.Chat{ID: 42, Title: "#go", Kind: model.ChatGroup}
+	if err := c.SaveDialogs([]model.Chat{room}, 1001); err != nil { // previous session: nick "me"
+		t.Fatal(err)
+	}
+	if err := c.SaveHistory(42, []model.Msg{{ID: 7, ChatID: 42, Text: "only copy of this IRC line", Date: time.Now()}}); err != nil {
+		t.Fatal(err)
+	}
+	u := ircCacheUI(net, c)
+	u.loadCache()
+	u.dispatch(model.Envelope{Net: net, Ev: model.EvReady{SelfID: 2002, SelfName: "me_0"}})
+	msgs, _ := c.LoadHistory(42)
+	if len(msgs) == 0 || u.chats[model.ChatKey{Net: net, ID: 42}] == nil {
+		t.Fatalf("IRC history dropped after a nick change at login: %d cached messages left, chat known: %v",
+			len(msgs), u.chats[model.ChatKey{Net: net, ID: 42}] != nil)
+	}
+}
+
+// The query partner changes nick, or /part: EvChatGone closes the window and
+// drops the entry; the history file stays, with the last unsaved line in it.
+func TestRegressionIRCChatGoneKeepsHistory(t *testing.T) {
+	const net = "irc:libera"
+	c := cache.New(t.TempDir(), 2000)
+	if err := c.SaveHistory(77, []model.Msg{{ID: 1, ChatID: 77, Text: "private IRC line", Date: time.Now()}}); err != nil {
+		t.Fatal(err)
+	}
+	u := ircCacheUI(net, c)
+	alice := &model.Chat{Net: net, ID: 77, Title: "alice", Kind: model.ChatUser}
+	u.remember(alice)
+	u.listChat(alice)
+	u.winFor(alice)
+	u.dispatch(model.Envelope{Net: net, Ev: model.EvNewMessage{Chat: alice, Msg: model.Msg{ID: 2, ChatID: 77, Text: "not flushed yet", Date: time.Now()}}})
+	u.dispatch(model.Envelope{Net: net, Ev: model.EvChatGone{ChatID: 77}})
+	u.bgWait.Wait() // the list is written in the background: let it land before the temp dir goes
+	if u.chats[alice.Key()] != nil || u.ws.ForChat(alice.Key()) >= 0 {
+		t.Fatal("chat gone: its entry or its window is still there")
+	}
+	if msgs, _ := c.LoadHistory(77); len(msgs) != 2 {
+		t.Fatalf("private IRC history on disk after the chat went: %d messages, want 2", len(msgs))
+	}
+}
+
+// /clear then one line: the flush merges the window into the file instead of
+// replacing it — 50 cached lines + 1.
+func TestRegressionClearKeepsIRCHistory(t *testing.T) {
+	const net = "irc:libera"
+	c := cache.New(t.TempDir(), 2000)
+	var old []model.Msg
+	for i := 1; i <= 50; i++ {
+		old = append(old, model.Msg{ID: i, ChatID: 5, Text: "old", Date: time.Now()})
+	}
+	if err := c.SaveHistory(5, old); err != nil {
+		t.Fatal(err)
+	}
+	u := ircCacheUI(net, c)
+	room := &model.Chat{Net: net, ID: 5, Title: "#go", Kind: model.ChatGroup}
+	u.remember(room)
+	u.listChat(room)
+	u.winFor(room)
+	u.ws.Cur = u.ws.ForChat(room.Key())
+	input(u, "/clear")
+	u.dispatch(model.Envelope{Net: net, Ev: model.EvNewMessage{Chat: room, Msg: model.Msg{ID: 51, ChatID: 5, Text: "new", Date: time.Now()}}})
+	u.flushCache(true)
+	if msgs, _ := c.LoadHistory(5); len(msgs) != 51 {
+		t.Fatalf("/clear + one message left %d messages in the IRC history file (was 50)", len(msgs))
+	}
+}
+
+// The merge of the flush: on a message both hold, the window copy (an edit, a
+// deletion) wins over the file copy.
+func TestRegressionFlushMergeWindowWins(t *testing.T) {
+	c := cache.New(t.TempDir(), 2000)
+	if err := c.SaveHistory(1, []model.Msg{{ID: 5, ChatID: 1, Text: "before the edit"}, {ID: 6, ChatID: 1, Text: "kept"}}); err != nil {
+		t.Fatal(err)
+	}
+	u := newCacheUI(t, c)
+	w := u.ws.New(true)
+	w.Chat = &model.Chat{Net: model.NetTelegram, ID: 1}
+	w.Upsert(&model.Msg{ID: 5, ChatID: 1, Text: "edited"})
+	u.dirty[w.Chat.Key()] = true
+	u.flushCache(true)
+	msgs, _ := c.LoadHistory(1)
+	if len(msgs) != 2 || msgs[0].Text != "edited" || msgs[1].Text != "kept" {
+		t.Fatalf("merged file: %+v", msgs)
+	}
+}
+
+// No readable list of the chats at start: the history files stay where they
+// are the only copy (KeepOld, IRC), and are set aside — not erased — elsewhere.
+func TestRegressionLoadCacheWithoutDialogs(t *testing.T) {
+	for _, keepOld := range []bool{true, false} {
+		dir := filepath.Join(t.TempDir(), "net")
+		c := cache.New(dir, 2000)
+		c.KeepOld = keepOld
+		if err := c.SaveHistory(42, []model.Msg{{ID: 7, ChatID: 42, Text: "line"}}); err != nil {
+			t.Fatal(err)
+		}
+		u := newCacheUI(t, c)
+		u.loadCache()
+		msgs, _ := c.LoadHistory(42)
+		aside, _ := filepath.Glob(dir + ".old-*")
+		if keepOld && len(msgs) != 1 {
+			t.Fatalf("KeepOld: history dropped with no dialogs file: %+v", msgs)
+		}
+		if !keepOld && (len(msgs) != 0 || len(aside) != 1) {
+			t.Fatalf("history not set aside with no dialogs file: %+v, %v", msgs, aside)
+		}
 	}
 }

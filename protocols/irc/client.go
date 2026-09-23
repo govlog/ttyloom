@@ -551,14 +551,18 @@ func (c *Client) onNick(e ircmsg.Message) {
 	if c.casefold(old) == c.casefold(now) {
 		return
 	}
-	// A private chat follows the person: the old window is gone, the new
-	// one opens at the next line. ponytail: no move of the history.
+	// A private chat follows the person: the new nick opens its own window at
+	// its next line. The old one stays, with its history (on IRC the disk
+	// cache is the only copy) and one line that says where the person went.
 	c.mu.Lock()
 	_, open := c.queries[c.casefold(old)]
 	delete(c.queries, c.casefold(old))
+	if open {
+		c.queries[c.casefold(now)] = now
+	}
 	c.mu.Unlock()
 	if open {
-		c.Post(model.EvChatGone{ChatID: c.chatID(old)})
+		c.service(old, i18n.T("irc_renamed", old, now), e)
 	}
 }
 

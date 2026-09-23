@@ -43,9 +43,12 @@ func (u *UI) loadCache() {
 		}
 		if len(chats) == 0 {
 			// With no readable dialogs the identity of the cache cannot be checked: a
-			// history left by another account (or in an earlier format) must not come
-			// back through bindChat.
-			_ = cc.Wipe()
+			// history left by another account must not come back through bindChat.
+			// Set aside, never erased — and left in place when the files are the
+			// only copy of the history (IRC): there is no account to check.
+			if !cc.KeepOld {
+				_ = cc.Archive()
+			}
 			continue
 		}
 		u.cacheSelf[net] = selfID
@@ -111,6 +114,7 @@ func (u *UI) bindChat(w *Window, c *model.Chat) {
 // dropCache : the account connected on net is not the one that wrote its
 // cache. Everything that came from the disk for THAT network is dropped
 // (windows, chats, files); the other networks keep theirs, and window 0 stays.
+// The files are set aside, not erased: a wrong account change is recoverable.
 func (u *UI) dropCache(net string) {
 	u.bgWait.Wait() // Finish older writes before removing this account’s files.
 	u.clearAccount(net)
@@ -144,7 +148,7 @@ func (u *UI) dropCache(net string) {
 	}
 	delete(u.cacheSelf, net)
 	if cc := u.cacheFor(net); cc != nil {
-		_ = cc.Wipe()
+		_ = cc.Archive()
 	}
 	u.status0(i18n.T("cache_other_account"))
 }
@@ -272,12 +276,24 @@ func (u *UI) flushCache(sync bool) {
 		}
 		id := k.ID // the cache of the network is keyed by the bare id
 		if sync {
-			_ = cc.SaveHistory(id, msgs)
+			_ = saveMerged(cc, id, msgs)
 			continue
 		}
 		// Writes run in snapshot order. Errors leave the previous cache intact.
-		u.bg(func() { cc.SaveHistory(id, msgs) })
+		u.bg(func() { saveMerged(cc, id, msgs) })
 	}
+}
+
+// saveMerged writes msgs into the history file of chatID merged with what the
+// file holds: a window shows a part of the history (/clear, its own cap) and
+// must never shrink the file — on IRC it is the only copy. On a message both
+// have, the window copy wins (edits, deletions).
+func saveMerged(cc *cache.Cache, chatID int64, msgs []model.Msg) error {
+	old, err := cc.LoadHistory(chatID)
+	if err != nil {
+		return err
+	}
+	return cc.SaveHistory(chatID, mergeHistory(old, msgs))
 }
 
 func (u *UI) noteActivity(c *model.Chat, m *model.Msg) {
@@ -441,12 +457,7 @@ func (u *UI) syncToCache(c *model.Chat, msgs []model.Msg) {
 	}
 	chatID := c.ID
 	// Read after earlier writes finish, so this merge includes their messages.
-	u.bg(func() {
-		old, err := cc.LoadHistory(chatID)
-		if err == nil {
-			cc.SaveHistory(chatID, mergeHistory(old, msgs))
-		}
-	})
+	u.bg(func() { saveMerged(cc, chatID, msgs) })
 }
 
 // mergeHistory gives the cached history filled with the new messages, with no

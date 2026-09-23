@@ -86,13 +86,17 @@ type Caps struct {
 	Leave        bool // leaving a room (a private chat only closes its window)
 	Block        bool // blocking or reporting a chat or a member of a room
 	Gifs         bool // GIF search and send (Ctrl+G)
+	// History : the server keeps the history, the disk cache is a copy of it.
+	// Off (IRC), the cache is the only copy: the UI never drops or replaces
+	// it as a side effect — account change, chat gone, older cache format.
+	History bool
 }
 
 // AllCaps : every capability on — Telegram, and the tests that draw a message
 // with nothing gated off.
 func AllCaps() Caps {
 	return Caps{ReadReceipts: true, Reactions: true, Edit: true, Whois: true, Search: true,
-		GlobalSearch: true, Contacts: true, Resolve: true, Sync: true, Leave: true, Block: true, Gifs: true}
+		GlobalSearch: true, Contacts: true, Resolve: true, Sync: true, Leave: true, Block: true, Gifs: true, History: true}
 }
 
 // Poster : how a backend talks to the UI — the event channel, a blocking and

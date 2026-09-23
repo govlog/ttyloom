@@ -819,7 +819,7 @@ func TestSelfPerNet(t *testing.T) {
 	}
 	u := &UI{ws: NewWindows(), agg: &Window{}, cfg: &config.Config{AutoOpenDays: 7},
 		caches: map[string]*cache.Cache{model.NetTelegram: tgCache, "discord": dcCache},
-		nets:   map[string]model.Backend{model.NetTelegram: &fakeBackend{}, "discord": &fakeBackend{}},
+		nets:   map[string]model.Backend{model.NetTelegram: &fakeBackend{}, "discord": &fakeBackend{caps: model.Caps{History: true}}},
 		chats:  map[model.ChatKey]*model.Chat{}, dirty: map[model.ChatKey]bool{},
 		self: map[string]selfInfo{}, dialogsSeen: map[string]bool{}, reactList: map[string][]string{}}
 	u.loadCache()

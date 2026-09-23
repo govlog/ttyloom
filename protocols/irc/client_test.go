@@ -570,3 +570,36 @@ func TestChatID(t *testing.T) {
 		t.Fatal("chatID must be case-insensitive, distinct and positive")
 	}
 }
+
+// The query partner changes nick: no EvChatGone (the UI would drop the only
+// copy of the history), one service line in the old private chat, and the
+// new nick takes its place among the open queries.
+func TestRegressionNickChangeKeepsQuery(t *testing.T) {
+	c, s, events, _ := start(t, Config{}, false)
+	s.send(":alice!a@h PRIVMSG me :hi")
+	waitFor[model.EvNewMessage](t, events)
+	s.send(":alice!a@h NICK alice_away")
+	m := waitMsg(t, events, func(m model.EvNewMessage) bool { return m.Msg.Service != "" })
+	if m.Chat.ID != chatID("alice") || !strings.Contains(m.Msg.Service, "alice_away") {
+		t.Fatalf("rename line: %+v %+v", m.Chat, m.Msg)
+	}
+	deadline := time.After(200 * time.Millisecond)
+	for gone := false; !gone; {
+		select {
+		case ev := <-events:
+			if _, ok := ev.(model.EvChatGone); ok {
+				t.Fatal("EvChatGone on a nick change of the query partner")
+			}
+		case <-deadline:
+			gone = true
+		}
+	}
+	c.LoadDialogs(context.Background())
+	var titles []string
+	for _, ch := range waitFor[model.EvDialogs](t, events).Chats {
+		titles = append(titles, ch.Title)
+	}
+	if !slices.Equal(titles, []string{"alice_away"}) {
+		t.Fatalf("open queries after the rename: %v, want [alice_away]", titles)
+	}
+}
