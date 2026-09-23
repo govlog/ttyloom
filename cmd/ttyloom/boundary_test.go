@@ -117,3 +117,32 @@ func goFiles(t *testing.T, dir string) []string {
 	}
 	return out
 }
+
+// The help of every module command is in the catalogue of its module, in
+// each language: <Key>_name, _short, _long, and the title of a section of
+// its own. /help builds those keys, so TestCatalogs cannot see them.
+func TestModuleHelpTexts(t *testing.T) {
+	cats := map[string]fs.FS{tgc.Net: tgc.Catalog, dsc.Net: dsc.Catalog, irc.Prefix: irc.Catalog}
+	for _, m := range modules() {
+		cat, ok := cats[m.Name()]
+		if !ok {
+			t.Fatalf("module %s: no catalogue in this test", m.Name())
+		}
+		for _, lang := range []string{"en", "fr"} {
+			mod, core := i18n.Table(cat, lang), i18n.Table(i18n.Core, lang)
+			for _, c := range m.Commands() {
+				for _, suffix := range []string{"_name", "_short", "_long"} {
+					if _, ok := mod[c.Help.Key+suffix]; !ok {
+						t.Errorf("%s /%s (%s): no %q", m.Name(), c.Name, lang, c.Help.Key+suffix)
+					}
+				}
+				sec := "help_section_" + c.Help.Section
+				_, inMod := mod[sec]
+				_, inCore := core[sec]
+				if !inMod && !inCore {
+					t.Errorf("%s /%s (%s): no %q", m.Name(), c.Name, lang, sec)
+				}
+			}
+		}
+	}
+}
