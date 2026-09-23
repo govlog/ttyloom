@@ -103,6 +103,12 @@ func (m *Module) Claims(string) bool              { return false }
 
 func (m *Module) Label() string { return "Discord" }
 
+// AutoReplyWarning : to Discord, a reply a program sends from a user account
+// is a self-bot, against its terms.
+func (m *Module) AutoReplyWarning() string { return i18n.T("dsc_autoreply_warn") }
+
+var _ module.AutoReplyWarner = (*Module)(nil)
+
 // CanAdd : no [discord] yet.
 func (m *Module) CanAdd() bool { return m.set == nil }
 

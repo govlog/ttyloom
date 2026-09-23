@@ -1766,6 +1766,7 @@ func whoisLines(u *tg.User, f tg.UserFull, now time.Time) []string {
 			name += " (@" + u.Username + ")"
 		}
 		lines = append(lines, name)
+		lines = append(lines, i18n.T("info_id", u.ID)) // the value of from in hooks.toml
 		if u.Phone != "" {
 			lines = append(lines, i18n.T("whois_phone", strings.TrimPrefix(u.Phone, "+")))
 		}

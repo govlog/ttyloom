@@ -110,10 +110,11 @@ func New(cfg Config, events chan<- model.Event) *Client {
 // bare text says nothing about which one speaks.
 func (c *Client) net() string { return Net(c.cfg.Name) }
 
-// Caps : whois (WHOIS), name resolution (/join, /query) and leaving a room.
-// No history, no edit, no reaction, no read receipt, no search: IRC has none.
+// Caps : whois (WHOIS), name resolution (/join, /query) and leaving a room;
+// the nick is the identity of a person (NameIsID). No history, no edit, no
+// reaction, no read receipt, no search: IRC has none.
 func (c *Client) Caps() model.Caps {
-	return model.Caps{Whois: true, Resolve: true, Leave: true, NickWhois: true}
+	return model.Caps{Whois: true, Resolve: true, Leave: true, NickWhois: true, NameIsID: true}
 }
 
 // logWriter : the ircevent log goes to /debug, never to the terminal.
@@ -426,6 +427,7 @@ func (c *Client) onNotice(e ircmsg.Message) {
 		chat := c.chatOf(e.Params[0])
 		m := c.msgOf(e, chat, e.Params[1])
 		m.Text = "-" + e.Nick() + "- " + m.Text
+		m.Notice = true // no hook answers a notice (IRC convention)
 		c.Post(model.EvNewMessage{Msg: m, Chat: chat})
 		return
 	}

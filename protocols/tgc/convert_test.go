@@ -103,7 +103,7 @@ func TestWhoisLines(t *testing.T) {
 	u := &tg.User{ID: 42, FirstName: "Alice", LastName: "Martin", Username: "alice", Phone: "33612345678",
 		Status: &tg.UserStatusRecently{}, Premium: true}
 	got := whoisLines(u, tg.UserFull{ID: 42, About: "hacker\ndu dimanche", CommonChatsCount: 2}, now)
-	want := []string{"Alice Martin (@alice)", "téléphone : +33612345678", "bio : hacker du dimanche",
+	want := []string{"Alice Martin (@alice)", "id : 42", "téléphone : +33612345678", "bio : hacker du dimanche",
 		"vu récemment", "2 discussions en commun", "premium"}
 	if !slices.Equal(got, want) {
 		t.Fatalf("%q", got)

@@ -93,6 +93,10 @@ type Caps struct {
 	// NickWhois : /whois takes a bare nick with no chat (IRC): the network
 	// answers on the name alone.
 	NickWhois bool
+	// NameIsID : the name of a person is its identity (IRC: the nick; the id
+	// is only a hash of it). A hook compares from with the name there, and a
+	// bare name in a message counts as a mention.
+	NameIsID bool
 }
 
 // ChatIDer : a backend whose chat ids come from their titles (IRC): the UI

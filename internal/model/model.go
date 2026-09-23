@@ -233,8 +233,10 @@ type Msg struct {
 	Deleted   bool
 	Reactions []Reaction
 	Service   string // service message ("alice joined"); Text is ignored
-	Pending   bool
-	Err       string
+	// Notice : a message no program answers (IRC NOTICE): it fires no hook.
+	Notice  bool
+	Pending bool
+	Err     string
 }
 
 // Key : the chat the message belongs to, not the message itself.

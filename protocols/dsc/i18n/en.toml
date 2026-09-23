@@ -22,3 +22,4 @@ dsc_setup_warn = "⚠ A third-party client on a user account is against the Disc
 dsc_setup_qr = "Leave the field empty for the QR code: Discord (mobile) → Settings → Scan QR Code."
 dsc_f_token_cmd = "token_cmd (optional)"
 dsc_not_saved = "config.toml could not be written: see the line in window 0"
+dsc_autoreply_warn = "Discord treats automatic replies from a user account as a self-bot, against its terms: the account can be closed. draft or display leave the sending to you."

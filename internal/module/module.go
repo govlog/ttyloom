@@ -53,6 +53,14 @@ type Remover interface {
 	Remove(h Host, w Win, net string)
 }
 
+// AutoReplyWarner : a module whose network frowns on automatic replies from a
+// user account (Discord: a self-bot). Optional. The client prints the text,
+// from the catalogue of the module, for each hook that sends to one of its
+// networks.
+type AutoReplyWarner interface {
+	AutoReplyWarning() string
+}
+
 // Win : the window a command comes from. Ref is the UI's own handle, opaque
 // to a module; a nil Ref means the window of Chat when it has one, else the
 // window shown.

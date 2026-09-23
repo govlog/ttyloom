@@ -214,7 +214,7 @@ func waitMsg(t *testing.T, events chan model.Event, f func(model.EvNewMessage) b
 
 func TestCaps(t *testing.T) {
 	got := New(Config{}, nil).Caps()
-	if got != (model.Caps{Whois: true, Resolve: true, Leave: true, NickWhois: true}) {
+	if got != (model.Caps{Whois: true, Resolve: true, Leave: true, NickWhois: true, NameIsID: true}) {
 		t.Fatalf("caps: %+v", got)
 	}
 }
@@ -244,12 +244,13 @@ func TestNickServWithoutSASL(t *testing.T) {
 }
 
 // A room message keeps its mIRC styles as spans; a private one opens the chat
-// of the sender; an ACTION reads "* nick does" in italics.
+// of the sender; an ACTION reads "* nick does" in italics; a notice to a room
+// is marked as one.
 func TestIncomingMessages(t *testing.T) {
 	_, s, events, _ := start(t, Config{}, false)
 	s.send("@time=2026-09-11T10:00:00.000Z :alice!a@h PRIVMSG #go :\x02hi\x02 there")
 	m := waitFor[model.EvNewMessage](t, events)
-	if m.Msg.Text != "hi there" || m.Msg.From != "alice" || m.Msg.Out || m.Chat.Title != "#go" ||
+	if m.Msg.Text != "hi there" || m.Msg.From != "alice" || m.Msg.Out || m.Chat.Title != "#go" || m.Msg.Notice ||
 		m.Msg.Date.Year() != 2026 || len(m.Msg.Entities) != 1 || m.Msg.Entities[0] != (model.Span{Start: 0, End: 2, Kind: model.SpanBold}) {
 		t.Fatalf("room message: %+v", m.Msg)
 	}
@@ -262,6 +263,11 @@ func TestIncomingMessages(t *testing.T) {
 	m = waitFor[model.EvNewMessage](t, events)
 	if m.Msg.Text != "* alice waves" || len(m.Msg.Entities) != 1 || m.Msg.Entities[0].Kind != model.SpanItalic {
 		t.Fatalf("action: %+v", m.Msg)
+	}
+	s.send(":bob!b@h NOTICE #go :maintenance at noon")
+	m = waitFor[model.EvNewMessage](t, events)
+	if !m.Msg.Notice || m.Msg.Text != "-bob- maintenance at noon" || m.Chat.Title != "#go" {
+		t.Fatalf("room notice: %+v", m.Msg)
 	}
 	s.send(":NickServ!s@h NOTICE me :You are now identified")
 	if l := waitFor[model.EvLog](t, events); !strings.Contains(l.Msg, "-NickServ- You are now identified") {
