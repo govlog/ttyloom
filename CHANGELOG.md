@@ -2,9 +2,49 @@
 
 ## Unreleased
 
+### Added
+
 - **Full-size Telegram photos**: the conversation keeps the 800 px size, but the full-screen preview (a click on the image, `v`, `/view`) and `o` / `/open` now take the largest size Telegram has (1280 or 2560 px), downloaded once into `download_dir` next to the inline file, with a `_full` suffix. Photos with nothing above 800 px change nothing. The local history cache moves to format 3 and is rebuilt from the network at the first start: the older scrollback comes back as you scroll up, the downloaded files are reused as they are.
 
+### Security
+
+- **IRC password no longer sent in clear**: on a connection without TLS, neither SASL PLAIN nor `NickServ IDENTIFY` sends the password any more, unless the new `[[irc]] password_without_tls = true` key is set; a warning line says so at connection. The NickServ fallback itself is now sent only when the server offers no SASL at all, and never again after a SASL failure (no more IDENTIFY on top of a rejected SASL attempt). The `/irc add` form refuses `TLS = no` together with a NickServ password.
+- **New `[[irc]]` key `nickserv_password_cmd`**: runs a command (no shell, 30 s timeout) that prints the NickServ password, like the Discord `token_cmd`. It wins over `nickserv_password`, which still works; a failing command is a launch error of the network.
+- **CTCP hygiene**: VERSION, PING, TIME and CLIENTINFO requests are answered only when sent directly to me, never from an ignored nick, and at most 3 in a burst then one every 2 seconds; USERINFO is no longer answered.
+- **DCC SEND hardening**: the listener now binds only the announced address (`dcc_ip`, else the IRC socket's), not every interface. An incoming offer pointing to `0.0.0.0`, loopback (unless my own `dcc_ip` is loopback), multicast or link-local is refused with a warning line; the offer label shows the `ip:port` it points to (`passive` for a reverse offer).
+- **Desktop notifications**: the body now escapes `&`, `<` and `>`, so markup from a remote sender shows as plain text instead of being interpreted.
+- **Remote text sanitized once at ingestion**: chat titles, usernames, sender names, message bodies, media labels and link descriptions, member lists, WHO/WHOIS/MOTD lines, login prompts, typing notices, search hits and error texts are neutralised when they arrive and when the cache is read, so a terminal escape sequence never reaches the stored data, the cache file, the window log or the clipboard.
+- **Masked links ask before opening**: a click on a link whose text is not its target (a masked link, or the label of a link preview) now asks "Open `<url>`?" first; a plain link still opens at once. `mailto:` links with a query or a fragment (`?subject=`, `?attach=`, `#...`) are no longer clickable and are no longer sent as OSC 8 links.
+
+### Fixed
+
 - **Reactions read on Telegram**: a reaction to one of my messages no longer stays "new" on the phone. It is marked read on the server when it arrives in the window shown while the terminal has the focus, or at the next visit of the window; the unread reactions the dialog list reports at start-up are read the same way.
+- **IRC history survives a reconnect**: a nick already in use at login (ghost, quick restart, changed nick in `config.toml`) no longer wipes the network cache — history, sidebar entries and `/rename` aliases survive.
+- **`/part` and leaving a chat keep the history file on disk**: `/part`, the sidebar menu "leave the room" and "delete the chat" close the window and drop the sidebar entry, but the history file stays; it plays again when the room or query is opened again. When a query partner changes nick, the private window stays open with its history and shows "X is now known as Y"; the new nick opens its own window at its next message.
+- **`/clear` no longer shrinks the disk history**: on any network, the next write merges the window into the file instead of replacing it.
+- **Account switch archives the old cache instead of deleting it**: on Telegram and Discord, logging in with another account moves the old cache directory aside as `<dir>.old-<timestamp>`.
+- **Cache format bumps no longer discard history**: IRC histories survive a cache format change (Telegram and Discord still refetch, since the server keeps their history); a history file that cannot be read is kept as `<id>.gob.bak-<version>` next to the new one. At start, when a cache's chat list cannot be read, its history files are no longer deleted — kept on IRC, moved aside elsewhere.
+- **DCC SEND completion**: a send is reported as sent only after the peer acknowledged the whole file; a peer that closes early or stays silent 2 minutes now gives an error on the line instead of a false success.
+- **`/nick` sticks**: the underlying IRC library no longer reverts it to the configured nick at the next keepalive.
+- **`/ignore` also hides service lines**: JOIN, PART, QUIT, NICK, TOPIC and MODE lines of an ignored mask are dropped too (the member list still follows them).
+- **Outbound IRC pacing**: lines I type or paste (messages, commands, DCC offers) now go out at most 4 at once, then one per second, avoiding an "Excess Flood" disconnect on a burst.
+- **`/msg` targeting**: it now sends only to an exact chat name or a unique name prefix; a word found only inside a chat name is refused with "unknown" instead of being guessed.
+- **Late terminal answers stay out of the input line**: a slow-link reply such as the kitty graphics probe no longer appears as typed text.
+- **Confirmation debounce**: a `y` typed less than 300 ms after a confirmation question cancels it instead of confirming it (for example `dy` typed over one of my selected messages).
+- **`@` mention box**: it now inserts and sends a member's plain name, without the `★` admin mark or the `(me)` suffix, and also offers IRC operators and voiced users. Nick completion now lists room members in sorted order.
+- **Control characters removed from login prompts**: the question of a login prompt (for example the Discord QR scanner name) is stripped before the input line is drawn.
+- **`cleanParts` no longer races a second instance**: at start, TTYloom now removes only the `.part-*` download temp files untouched for more than an hour, so a second running instance keeps its downloads.
+- **`Config.Save` keeps unknown keys**: saving the configuration (`/set`, `/theme`, F4 to F7) keeps the top-level keys of `config.toml` this version does not know (comments are still lost; a file with such keys is written back with its keys sorted). When `config.toml` no longer parses (for example after a hand edit while TTYloom runs), a save no longer overwrites it — the error line names the file.
+- **Disconnected upload no longer waits forever**: an upload waiting for a free upload slot now ends with an error if its network disconnects, instead of waiting indefinitely.
+- **Sidebar highlight**: a chat line no longer stays highlighted after its context menu is closed by a login prompt or an account change.
+- **Tab completion for `/set multiline `**: it now offers `on`/`off` like every other on/off key (the completion list used to forget that key).
+- **NAMES, WHOIS and MOTD answers capped**: at 10000 lines each.
+
+### Changed
+
+- **IRC `/part` semantics**: leaving a room or a query closes the window and the sidebar entry but is no longer a destructive "forget the history" action (see Fixed, above).
+- **Performance**: with many windows open, read receipts, edits and reactions now update only the views of their own chat, using much less CPU; history pages (including the start-up sync) no longer force a redraw of every window; day separators are no longer rebuilt at every frame.
+- **Dependencies**: gotd/td v0.162.0, go-runewidth v0.0.30, x/image v0.46.0, x/sys v0.48.0, x/term v0.46.0 and x/text v0.42.0 (the indirect modules moved along, x/crypto v0.56.0 among them); the license bundle under `licenses/` is regenerated to match.
 
 ## v0.6-beta — 2026-09-14
 

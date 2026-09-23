@@ -152,6 +152,7 @@ host = "irc.libera.chat"
 port = 6697
 tls = true
 nick = "me"
+nickserv_password_cmd = "pass show irc/libera"  # prints the password; wins over the next key
 nickserv_password = ""
 channels = ["#go-nuts"]
 ```

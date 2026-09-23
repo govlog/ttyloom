@@ -166,10 +166,25 @@ password stays in that file and goes nowhere else. TTYloom connects straight
 to the server over TLS (port 6697 on most networks), no bouncer involved.
 
 With a password, TTYloom identifies by **SASL PLAIN** when the server offers
-it, which is the case of Libera.Chat, OFTC and every modern ircd; a server
-without SASL gets a `NickServ IDENTIFY` right after registration. A nick already
-taken is retried with a `_1`, `_2`… suffix while connecting. Leave the password
+it, which is the case of Libera.Chat, OFTC and every modern ircd; a server that
+offers no SASL at all gets a `NickServ IDENTIFY` right after registration
+instead. A SASL failure is not followed by a NickServ IDENTIFY: the password is
+not sent a second time. A nick already
+taken is retried with a `_1`, `_2`… suffix while connecting, and the network's
+local cache and sidebar entries survive that retry. Leave the password
 empty on a network where the nick is not registered.
+
+On a connection without TLS, the password is not sent at all (neither SASL
+PLAIN nor NickServ IDENTIFY), since it would go out in clear; a warning line
+says so at connection. Set `password_without_tls = true` in the `[[irc]]`
+table to send it anyway. `/irc add` refuses a form with `TLS = no` and a
+NickServ password.
+
+Set `nickserv_password_cmd` instead of `nickserv_password` to read the
+password from a command (a password manager) rather than storing it in
+`config.toml`, exactly like Discord's `token_cmd`: no shell, split on
+whitespace, 30-second timeout. It takes priority over `nickserv_password`,
+which still works; a failing command is a launch error of that network.
 
 To stop using a network, `/irc disconnect <name>` keeps its table; removing
 the table from `config.toml` forgets it, password and channel list included.

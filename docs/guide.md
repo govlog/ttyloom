@@ -199,7 +199,7 @@ log_dir = "~/.local/share/ttyloom/logs"
 | `tabs` | One tab per network at the right of the status line, clickable; `F9` turns them on and walks the tabs. Nothing with a single network. |
 | `cache` | Save dialogs and recent message history on disk. False disables the history cache. |
 | `cache_messages` | Recent messages kept per conversation on disk; window memory follows the same message-count setting. |
-| `notify` | `terminal` for native terminal notifications, `desktop` for `notify-send`, or `off`. Notification delivery also depends on focus. |
+| `notify` | `terminal` for native terminal notifications, `desktop` for `notify-send`, or `off`. Notification delivery also depends on focus. A `desktop` notification escapes `&`, `<` and `>` in its body, so markup from a remote sender shows as plain text. |
 | `log`, `log_dir` | Plain-text conversation logs. `/log` toggles one window; `log = true` enables logging for new windows. |
 | `[discord] token_cmd` | Command printing the Discord user token. Omit the section to disable Discord; a section without the command logs in by QR code and keeps the token in `discord.token`. |
 
@@ -210,7 +210,11 @@ lists settings that can change live. Credentials, `cache` and
 
 The `TG_API_ID`, `TG_API_HASH` and `TG_BOT_TOKEN` environment variables override
 file values. `/set` and `/theme` save the configuration, but do not copy these
-environment-supplied secrets into it.
+environment-supplied secrets into it. Saving keeps top-level keys of
+`config.toml` this version does not know (comments are still lost, and the
+file comes out with its keys sorted); if `config.toml` no longer parses, for
+example after a hand edit while TTYloom runs, a save no longer overwrites it
+and the error line names the file.
 
 ```bash
 chmod 0600 ~/.config/ttyloom/config.toml
@@ -380,10 +384,12 @@ tls = true
 nick = "me"
 user = "me"                  # empty = nick
 realname = "me"              # empty = nick
-nickserv_password = ""       # SASL PLAIN when the server offers it, NickServ IDENTIFY otherwise
+nickserv_password_cmd = ""   # command printing the password (no shell, like token_cmd); wins over the next key
+nickserv_password = ""       # SASL PLAIN when the server offers it, NickServ IDENTIFY when it offers none at all
+password_without_tls = false # true sends the password in clear on a connection without TLS; withheld otherwise
 channels = ["#go-nuts"]      # kept by the client: /join adds, /part removes, joined again at start
 ignores = []                 # kept by the client: /ignore adds and removes; lines of those masks are dropped
-dcc_ip = ""                  # address announced by DCC SEND (behind a NAT); empty = the IRC socket's
+dcc_ip = ""                  # address DCC SEND announces and its listener binds to (behind a NAT); empty = the IRC socket's
 dcc_ports = ""               # "5000-5010" to pin the DCC ports; empty = any free port
 ```
 
@@ -393,11 +399,17 @@ front of its chats. A private chat is a nick, a room a channel; `/join #room`
 and `/query nick` open them (from a window of the network when several are
 configured, `#room` goes to the IRC networks only). The channel list of the
 table is the memory of the client across sessions; the disk cache is the
-scrollback, the server keeps no history. Incoming bold, italic and underline
+scrollback, the server keeps no history. Because that cache is the only copy,
+TTYloom keeps it on disk across `/part`, a leave-the-room or delete-the-chat
+action, `/clear`, a peer's nick change or a cache format change: the history
+plays back the next time the room or query is opened, and a nick already
+taken at login (a ghost session, a quick restart) no longer wipes the
+network's cache. Incoming bold, italic and underline
 codes are kept, colours dropped; the draft styles (Ctrl+B/I/U) go out as
 mIRC codes. `/whois`, F3 (NAMES) and `/me` work; edits, reactions, read
 receipts and search do not exist on IRC and are hidden. A notice from a
-person or a service (NickServ) lands in window 0.
+person or a service (NickServ) lands in window 0. NAMES, WHOIS and MOTD
+answers are capped at 10000 lines each.
 
 | Command | Effect |
 | --- | --- |
@@ -409,11 +421,18 @@ person or a service (NickServ) lands in window 0.
 | `/dcc send <nick> <path>` | Send a file straight to that person (DCC SEND); `/send` in a private IRC chat does the same. |
 | `/dcc get [nick]` | Fetch the last offer of the window, or of that nick's chat; the download key on the file line too. |
 
-DCC goes from client to client over TCP: the sender listens and announces its
-address and port, the receiver connects. Behind a NAT, set `dcc_ip` to the
-public address and `dcc_ports` to a forwarded range. A received offer shows
-as a file line in the private chat; the file lands in `download_dir`. Reverse
-offers (a sender behind a NAT) are accepted. No resume, no DCC CHAT.
+DCC goes from client to client over TCP: the sender listens on the announced
+address only (`dcc_ip`, else the IRC socket's address, never every interface)
+and announces its address and port, the receiver connects. A send is reported
+as sent only once the peer has acknowledged the whole file; a peer that closes
+early or stays silent for 2 minutes gives an error on the line instead. Behind
+a NAT, set `dcc_ip` to the public address and `dcc_ports` to a forwarded
+range. A received offer shows as a file line in the private chat, labelled
+with the `ip:port` it points to (`passive` for a reverse offer); the file
+lands in `download_dir`. An offer pointing to `0.0.0.0`, to loopback (unless
+`dcc_ip` is itself loopback), or to a multicast or link-local address is
+refused with a warning line. Reverse offers (a sender behind a NAT) are
+accepted. No resume, no DCC CHAT.
 
 The usual IRC commands need an IRC context: a window on an IRC chat, the IRC
 tab, or a single IRC network configured. With several IRC networks and none of
@@ -426,7 +445,7 @@ goes to the generic commands first: `/i` is `/irc` and `/wh` is `/whois`, while
 | Command | Effect |
 | --- | --- |
 | `/join #room [key]` | Join a room, with its channel key when it has one; the room is kept in `channels`. |
-| `/part [#room] [reason]` | Leave the room, the current one by default, and forget it. This is the command other clients call `/leave`; TTYloom only knows `/part`. |
+| `/part [#room] [reason]` | Leave the room, the current one by default: closes the window and drops the sidebar entry, but keeps the history file on disk, replayed when the room is joined again. This is the command other clients call `/leave`; TTYloom only knows `/part`. |
 | `/cycle [#room]` | Leave and rejoin the room, the window kept: the way to take ops back. |
 | `/topic [#room] [text]` | Show or set the topic. |
 | `/nick <nick>` | Change my nick on this network; the other networks keep theirs. |
@@ -441,7 +460,7 @@ goes to the generic commands first: `/i` is `/irc` and `/wh` is `/whois`, while
 | `/whowas <nick>` | The last known identity of a nick that left, to build a ban mask after a quit. |
 | `/whois <nick>` | Profile of a nick in an irssi-style box: nick, user@host, ircname, server, secure, actually, loggedin, channels, idle, away. No open chat needed. |
 | `/motd` | Message of the day of the server; every connection also shows its MOTD in window 0. |
-| `/ctcp <nick> <VERSION \| PING \| TIME \| …>` | Send a CTCP request; the answer comes back as `[ctcp(nick)] …`. |
+| `/ctcp <nick> <VERSION \| PING \| TIME \| …>` | Send a CTCP request; the answer comes back as `[ctcp(nick)] …`. TTYloom itself answers VERSION, PING, TIME and CLIENTINFO the same way, but only when sent directly to it, never from an ignored nick, and at most 3 in a burst then one every 2 seconds; it no longer answers USERINFO. |
 | `/quote <raw line>` | Send a raw IRC line as typed, for what the client has no command for. |
 | `/ignore [nick \| mask]` | List, add or remove an ignored mask, saved in `ignores`. |
 | `/away [message]` | Mark me away on the networks that can; `/away` alone comes back. |
@@ -454,7 +473,8 @@ typed at the start of a message becomes `nick: `.
 becomes `*!user@host`, and `*` and `?` are wildcards; typing an existing mask
 removes it. The list lives in the `ignores` key of the `[[irc]]` table, and a
 hand-written entry is normalized the same way. Messages, notices, actions and
-CTCP of a matching source are dropped by the network.
+CTCP of a matching source are dropped by the network, and so are its JOIN,
+PART, QUIT, NICK, TOPIC and MODE lines; the member list still follows them.
 
 From window 0, with a single IRC network, `/whois name` looks the name up among
 the contacts first and asks IRC only when nothing matches.
@@ -552,14 +572,14 @@ global again. A single network has no tabs.
 | `/query name`, `/q name`, `/qu name` | Pin this window's send target to a contact or channel, using an exact name or prefix. |
 | `/join channel`, `/j channel` | Join or resolve a channel/group and pin it as the send target. |
 | `/q`, `/j` without a name | Clear the target and return input to this window's usual conversation. |
-| `/msg name text`, `/m name text` | Send without switching windows; the line is echoed here as `[msg(name)] text`. |
+| `/msg name text`, `/m name text` | Send without switching windows; the line is echoed here as `[msg(name)] text`. `name` must be an exact chat name or a name unique to one prefix; a word found only inside a chat's name is refused with "unknown". |
 | `/new`, Ctrl+N | Open the new-conversation picker. |
 | `/chats` | List conversations, highlighting unread ones. |
 | `/net [network]` | Filter the sidebar and aggregate view; `telegram`, `discord`, `irc:libera`, `all`, or no argument to cycle. |
 | `/telegram [status\|login\|logout\|disconnect]`, `/discord [status\|login\|logout\|disconnect]` | One network: its status, a new login (Discord runs `token_cmd` again), a logout (Telegram ends the session on the server) or a `disconnect`, which cuts the connection and keeps the session. |
 | `/fold [section]` | Toggle a sidebar section by key, such as `telegram` or `discord:Gophers`, or a displayed-name prefix. No argument lists sections and their collapsed/expanded state. |
 | `/history N`, `/hist N` | Load N older messages; PgUp at the top also loads older history. |
-| `/clear`, `/c` | Clear the current window. Ctrl+L only clears the screen: the lines stay in the history. |
+| `/clear`, `/c` | Clear the current window. Ctrl+L only clears the screen: the lines stay in the history. `/clear` keeps the disk history too: the next write merges the window into the file instead of replacing it. |
 | `/rename [target] name`, `/unrename [target]` | Set or remove a local chat/contact alias, saved in `aliases.toml`. It applies to the sidebar, status bar, aggregate view, completion and the DM contact’s displayed name. It is not sent to the network. |
 | `/away [message]` | Mark yourself away on every network that can, or on the one of the current tab; `/away` alone comes back. See [IRC networks](#irc-networks). |
 | `/help`, `/h` | List commands, keys and options. `/help topic` explains one, including `/help F3` or `/help hover`; Tab completes topics. |
@@ -640,6 +660,7 @@ bounded by frame and memory limits. This is silent terminal playback, with
 Photos, stickers and GIFs below the download threshold are fetched into
 `download_dir`; GIFs animate. Recognized Telegram links can show a clickable
 site/title label, description and thumbnail. Only HTTP, HTTPS and mailto links
+(without a `?query` or a `#fragment`, which are never made clickable)
 are passed to `xdg-open`. Larger media stay as labels until requested. Files
 outside the allowed extension list are saved as `.bin` and cannot be opened
 through `o`. The list covers common images, video, audio, office files, archives,
@@ -723,12 +744,17 @@ characters or `@` adds Telegram network search. Enter or a click opens a window.
 
 Right-click a sidebar row for available actions such as close/leave, report or
 block, delete, information and search. Availability depends on the network.
-Destructive actions ask for confirmation with `y`; another key cancels. Members
+"Leave the room" and "delete the chat" close the window and drop the sidebar
+entry, keeping the history file on disk on IRC. Destructive actions ask for
+confirmation with `y`; another key cancels, and a `y` typed less than 300 ms
+after the question is also read as a cancel (it does not confirm a `d`+`y`
+typed in quick succession on a selected message). Members
 have a similar context menu.
 
 F3 opens the member box: contact and presence for DMs, members with admins
 marked `★` and online members highlighted in groups, subscriber count for
-channels. Click a member to open a DM; click `[x]` to close the box.
+channels, IRC operators and voiced users included. Click a member to open a
+DM; click `[x]` to close the box.
 
 The message scrollbar supports clicking to jump and dragging to scroll. Its
 track highlights under the pointer, and its thumb becomes a solid block during
@@ -876,7 +902,7 @@ toggles and goes out plain.
 | Ctrl+L | Clear the window like a terminal `clear`: the lines stay in the history, Page Up or the wheel brings them back. |
 | Ctrl+C, `/quit`, `/exit` | Quit. |
 | Wheel | Scroll three message lines; at the top, load history. Over the sidebar with hover tracking, switch existing windows. |
-| Click a link | Open it with `xdg-open`. |
+| Click a link | Open it with `xdg-open`; a masked link, or the label of a link preview, asks "Open `<url>`?" first when its visible text is not its target. A plain link still opens at once. |
 | Click an inline image | Open the viewer. Shift+click keeps the terminal’s own selection behavior where supported. |
 | Ctrl+V | Paste an image with a confirmation prompt, or text into the editor. |
 
@@ -889,8 +915,10 @@ text, send as a code block, or cancel, using the keys shown in your interface
 language. In the expanded editor it can instead insert text or a code block
 into the draft.
 
-Typing `@` opens member suggestions. Arrows choose, Tab or Enter inserts, and
-Escape closes. A member with no username is inserted as `@Name` and sent as a
+Typing `@` opens member suggestions, IRC operators and voiced users included.
+Arrows choose, Tab or Enter inserts, and Escape closes. The plain name is
+inserted and sent, without the `★` admin mark or the `(me)` suffix the box
+shows; a member with no username is inserted as `@Name` and sent as a
 mention by id, so the person is notified all the same. Spell correction and mention completion
 work without leaving the conversation.
 
