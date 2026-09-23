@@ -5,6 +5,7 @@ import (
 	"slices"
 
 	"github.com/govlog/ttyloom/internal/model"
+	"github.com/govlog/ttyloom/protocols/irc"
 )
 
 // The IRC commands (ircii names). They exist only from an IRC context — a
@@ -113,8 +114,10 @@ func (u *UI) ircChans() []string {
 
 // ircIgnores : the masks /ignore already holds on that network.
 func (u *UI) ircIgnores() []string {
-	if n := u.cfg.IRCByName(model.IRCName(u.ircNetFor(u.view()))); n != nil {
-		return n.Ignores
+	if m := u.ircMod(); m != nil {
+		if n := m.ByName(irc.Name(u.ircNetFor(u.view()))); n != nil {
+			return n.Ignores
+		}
 	}
 	return nil
 }

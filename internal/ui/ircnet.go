@@ -2,15 +2,14 @@ package ui
 
 import (
 	"os"
-	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
 
-	"github.com/govlog/ttyloom/internal/cache"
 	"github.com/govlog/ttyloom/internal/config"
 	"github.com/govlog/ttyloom/internal/i18n"
 	"github.com/govlog/ttyloom/internal/model"
+	"github.com/govlog/ttyloom/protocols/irc"
 )
 
 // /irc and /dcc — the IRC networks (as many as configured, added live by
@@ -147,11 +146,12 @@ func yes(v string) bool {
 // ircAddSubmit checks the form, writes the [[irc]] table, and starts the
 // network. The error text keeps the form open.
 func (u *UI) ircAddSubmit(v []string) string {
+	m := u.ircMod()
 	name := strings.ToLower(v[0])
 	switch {
-	case !config.ValidIRCName(name):
+	case !irc.ValidName(name):
 		return i18n.T("irc_bad_name")
-	case u.cfg.IRCByName(name) != nil:
+	case m.ByName(name) != nil:
 		return i18n.T("irc_name_taken", name)
 	case v[1] == "" || strings.ContainsAny(v[1], " /"):
 		return i18n.T("irc_bad_host")
@@ -168,21 +168,14 @@ func (u *UI) ircAddSubmit(v []string) string {
 		}
 		port = p
 	}
-	n := &config.IRCConfig{Name: name, Host: v[1], Port: port, TLS: yes(v[3]), Nick: v[4], User: v[5], RealName: v[6], NickServPassword: v[7]}
-	u.cfg.IRC = append(u.cfg.IRC, n)
+	m.Add(&irc.NetConfig{Name: name, Host: v[1], Port: port, TLS: yes(v[3]), Nick: v[4], User: v[5], RealName: v[6], NickServPassword: v[7]})
 	if !u.saveCfg() {
-		u.cfg.IRC = u.cfg.IRC[:len(u.cfg.IRC)-1]
+		m.Remove(name)
 		return i18n.T("irc_not_saved")
 	}
-	net := model.IRCNet(name)
-	u.netList = append(u.netList, net)
-	slices.Sort(u.netList)
-	if u.cfg.Cache && u.caches != nil && u.caches[net] == nil {
-		u.caches[net] = cache.New(filepath.Join(config.CacheDir(), net), u.cfg.CacheMessages)
-		u.caches[net].KeepOld = true // same as main: the files are the only copy of an IRC history
-	}
+	net := irc.Net(name)
 	u.sys(i18n.T("irc_added", net))
-	u.startNet(net)
+	host{u}.AddNetwork(net)
 	return ""
 }
 
@@ -190,31 +183,25 @@ func (u *UI) ircAddSubmit(v []string) string {
 // (nothing changes when the write fails), then the network stops, its chats
 // and windows go, and /irc forgets it. Its live maps empty at the EvStopped
 // of its Run, like a disconnect.
-// ponytail: the cache directory of the network stays on disk; remove it the
-// day a stale chat list at a re-add under the same name bothers someone.
 func (u *UI) ircDelete(net string) {
-	name := model.IRCName(net)
-	was := u.cfg.IRC
-	u.cfg.IRC = slices.DeleteFunc(slices.Clone(was), func(n *config.IRCConfig) bool { return n.Name == name })
+	restore := u.ircMod().Remove(irc.Name(net))
 	if !u.saveCfg() {
-		u.cfg.IRC = was
+		restore()
 		return
 	}
-	if u.nets[net] != nil {
-		u.stopNet(net, false)
-	}
-	u.netList = slices.DeleteFunc(u.netList, func(n string) bool { return n == net })
-	if u.netFilter == net {
-		u.setNetFilter("")
-	}
-	delete(u.caches, net)
-	for _, c := range slices.Clone(u.chatList) { // dropChat edits u.chatList
-		if c.Net == net {
-			u.dropChat(c.Key())
+	host{u}.RemoveNetwork(net)
+	u.sys(i18n.T("irc_deleted", net))
+}
+
+// ircMod : the IRC module among u.mods.
+// ponytail: transitional, the IRC commands move into the module (task 6).
+func (u *UI) ircMod() *irc.Module {
+	for _, m := range u.mods {
+		if im, ok := m.(*irc.Module); ok {
+			return im
 		}
 	}
-	u.goTo(u.ws.Cur) // windows closed: the current one has moved
-	u.sys(i18n.T("irc_deleted", net))
+	return nil
 }
 
 // ircNetFor : the IRC network a command from w means — the one of its chat

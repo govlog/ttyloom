@@ -228,9 +228,19 @@ func TestNamesOutsideRoom(t *testing.T) {
 
 // /ignore drops the lines of a matching source and saves the list.
 func TestIgnore(t *testing.T) {
-	c, s, events, _ := start(t, Config{}, false)
+	saved := make(chan []string, 2)
+	c, s, events, _ := start(t, Config{SaveIgnores: func(l []string) error { saved <- l; return nil }}, false)
+	next := func() []string {
+		select {
+		case l := <-saved:
+			return l
+		case <-time.After(5 * time.Second):
+			t.Fatal("ignore list not saved")
+			return nil
+		}
+	}
 	cmd(c, 0, "", "ignore", "bob")
-	if ig := waitFor[model.EvIRCIgnores](t, events); len(ig.Ignores) != 1 || ig.Ignores[0] != "bob!*@*" {
+	if ig := next(); len(ig) != 1 || ig[0] != "bob!*@*" {
 		t.Fatalf("ignores: %+v", ig)
 	}
 	s.send(":bob!b@h PRIVMSG #go :spam")
@@ -240,7 +250,7 @@ func TestIgnore(t *testing.T) {
 		t.Fatalf("ignored line came through: %+v", m.Msg)
 	}
 	cmd(c, 0, "", "ignore", "bob") // again: removed
-	if ig := waitFor[model.EvIRCIgnores](t, events); len(ig.Ignores) != 0 {
+	if ig := next(); len(ig) != 0 {
 		t.Fatalf("toggle off: %+v", ig)
 	}
 }

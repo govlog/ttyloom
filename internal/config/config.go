@@ -62,52 +62,6 @@ type DiscordConfig struct {
 	TokenCmd string `toml:"token_cmd"`
 }
 
-// IRCConfig : one IRC network ([[irc]] table). Name is the key of the
-// network (irc:<name>); Channels is kept up to date by the backend (JOIN and
-// PART) and joined again at the next connection — the client's own memory,
-// there being no bouncer.
-type IRCConfig struct {
-	Name             string `toml:"name"`
-	Host             string `toml:"host"`
-	Port             int    `toml:"port"`
-	TLS              bool   `toml:"tls"`
-	Nick             string `toml:"nick"`
-	User             string `toml:"user"`
-	RealName         string `toml:"realname"`
-	NickServPassword string `toml:"nickserv_password"`
-	// NickServPasswordCmd : command printing the password, like the Discord
-	// token_cmd — the secret then never lands in config.toml. It wins over
-	// nickserv_password.
-	NickServPasswordCmd string `toml:"nickserv_password_cmd"`
-	// PasswordWithoutTLS sends the password on a connection without TLS,
-	// in clear; off (the default), it is withheld and a warning says so.
-	PasswordWithoutTLS bool     `toml:"password_without_tls"`
-	Channels           []string `toml:"channels"`
-	Ignores            []string `toml:"ignores"`   // nick!user@host masks whose lines are dropped (/ignore)
-	DCCIP              string   `toml:"dcc_ip"`    // address announced by DCC SEND; empty = the one of the IRC socket
-	DCCPorts           string   `toml:"dcc_ports"` // "5000-5010"; empty = any free port
-}
-
-// Password gives the NickServ password: the output of nickserv_password_cmd
-// when there is one, the plain nickserv_password otherwise. Read at each
-// launch of the network, never kept.
-func (n *IRCConfig) Password() (string, error) {
-	if strings.TrimSpace(n.NickServPasswordCmd) == "" {
-		return n.NickServPassword, nil
-	}
-	return SecretCmd("irc:"+n.Name+": nickserv_password_cmd", n.NickServPasswordCmd)
-}
-
-// IRCByName gives the [[irc]] table of name, nil when there is none.
-func (c *Config) IRCByName(name string) *IRCConfig {
-	for _, n := range c.IRC {
-		if n.Name == name {
-			return n
-		}
-	}
-	return nil
-}
-
 // Token gives the Discord token: the trimmed stdout of token_cmd when there
 // is one, the token file otherwise — "" with no error when that file does not
 // exist yet, and the backend then logs in by QR and writes it. The token
@@ -198,7 +152,6 @@ type Config struct {
 	// Sections, after every scalar: the TOML encoder writes the tables last.
 	Telegram *TelegramConfig `toml:"telegram"`
 	Discord  *DiscordConfig  `toml:"discord"`
-	IRC      []*IRCConfig    `toml:"irc"`
 
 	// Unknown : keys of the file no field takes (a typo, imagess = "off"). The
 	// UI says so at start, otherwise the user believes the option active.
@@ -262,18 +215,6 @@ const defaultFile = `# ttyloom
 # service: a secondary account is the safe way to try it.
 #   [discord]
 #   token_cmd = "pass show discord/token"   # or nothing: /discord login shows a QR code
-# IRC networks, as many as wanted, one [[irc]] table each — /irc add writes one:
-#   [[irc]]
-#   name = "libera"              # network key: irc:libera
-#   host = "irc.libera.chat"
-#   port = 6697
-#   tls = true
-#   nick = "me"
-#   nickserv_password_cmd = "pass show irc/libera"  # prints the password (no shell, like token_cmd); wins over the next key
-#   nickserv_password = ""       # SASL PLAIN, or NickServ IDENTIFY when the server has no SASL
-#   password_without_tls = false # true sends the password in clear on a connection without TLS; withheld otherwise
-#   channels = ["#go-nuts"]      # kept up to date by /join and /part, joined again at start
-#   ignores = ["spammer!*@*"]    # kept up to date by /ignore: lines of those masks are dropped
 # Sections go at the END of the file: a plain key written after [discord]
 # would be read as one of its keys.
 api_id = 0            # https://my.telegram.org
@@ -402,19 +343,6 @@ func LoadFrom(dir string, mods ...module.Module) (*Config, error) {
 		}
 	}
 	c.Unknown = append(c.Unknown, src.unknown...)
-	// An [[irc]] table with no valid name, or the same name twice, is left
-	// out: the network would have no key, or two networks would share one.
-	seen := map[string]bool{}
-	var nets []*IRCConfig
-	for _, n := range c.IRC {
-		if !ValidIRCName(n.Name) || seen[n.Name] {
-			c.Unknown = append(c.Unknown, "irc."+n.Name)
-			continue
-		}
-		seen[n.Name] = true
-		nets = append(nets, n)
-	}
-	c.IRC = nets
 	// Shape of the file, kept as it is for Save.
 	c.fileID, c.fileHash, c.fileToken, c.fileTelegram = c.APIID, c.APIHash, c.BotToken, c.Telegram
 	if c.Telegram != nil { // the section wins over the flat keys
@@ -500,20 +428,6 @@ func (c *Config) Save() error {
 		return err
 	}
 	return WriteAtomic(c.Path(), buf.Bytes(), 0o600)
-}
-
-// ValidIRCName : the key of an IRC network — 1 to 32 characters of
-// [a-z0-9_-]. Lower case only: it is a section key and a command argument.
-func ValidIRCName(name string) bool {
-	if name == "" || len(name) > 32 {
-		return false
-	}
-	for _, r := range name {
-		if !(r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '_' || r == '-') {
-			return false
-		}
-	}
-	return true
 }
 
 // WriteAtomic writes data to path through a temporary file of the same

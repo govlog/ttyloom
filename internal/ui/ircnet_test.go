@@ -13,6 +13,7 @@ import (
 	"github.com/govlog/ttyloom/internal/i18n"
 	"github.com/govlog/ttyloom/internal/model"
 	"github.com/govlog/ttyloom/internal/term"
+	"github.com/govlog/ttyloom/protocols/irc"
 )
 
 // typeKeys feeds a string to the form as plain keys.
@@ -75,11 +76,7 @@ func TestFormOverlay(t *testing.T) {
 // the network and launches it; a taken name or a bad port is refused.
 func TestIRCAdd(t *testing.T) {
 	u, n := launchUI(nil)
-	cfg, err := config.LoadFrom(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	u.cfg = cfg
+	cfg, m := withIRC(t, u)
 	u.command("irc", []string{"add"}, "add")
 	if u.form == nil || len(u.form.fields) != 8 || string(u.form.fields[2].val) != "6697" {
 		t.Fatalf("form: %+v", u.form)
@@ -92,11 +89,12 @@ func TestIRCAdd(t *testing.T) {
 	if e := u.ircAddSubmit(vals); e != "" {
 		t.Fatalf("submit: %q", e)
 	}
-	if got := cfg.IRCByName("libera"); got == nil || got.Port != 6697 || !got.TLS || got.NickServPassword != "pw" || got.Nick != "me" {
+	if got := m.ByName("libera"); got == nil || got.Port != 6697 || !got.TLS || got.NickServPassword != "pw" || got.Nick != "me" {
 		t.Fatalf("table: %+v", got)
 	}
-	again, _ := config.LoadFrom(filepath.Dir(cfg.Path()))
-	if again.IRCByName("libera") == nil {
+	again := irc.NewModule()
+	config.LoadFrom(filepath.Dir(cfg.Path()), again)
+	if again.ByName("libera") == nil {
 		t.Fatal("table not written")
 	}
 	if *n != 1 || u.nets["irc:libera"] == nil || u.netList[0] != model.NetDiscord || u.netList[1] != "irc:libera" {
@@ -138,11 +136,7 @@ func TestIRCConnectDisconnect(t *testing.T) {
 // network, closes its windows and takes it off the list.
 func TestIRCDelete(t *testing.T) {
 	u, _ := launchUI(nil)
-	cfg, err := config.LoadFrom(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	u.cfg = cfg
+	cfg, m := withIRC(t, u)
 	if e := u.ircAddSubmit([]string{"libera", "irc.libera.chat", "", "yes", "me", "", "", ""}); e != "" {
 		t.Fatalf("add: %q", e)
 	}
@@ -155,8 +149,9 @@ func TestIRCDelete(t *testing.T) {
 	if ctx.Err() == nil {
 		t.Fatal("delete must cancel the network")
 	}
-	again, _ := config.LoadFrom(filepath.Dir(cfg.Path()))
-	if cfg.IRCByName("libera") != nil || again.IRCByName("libera") != nil {
+	again := irc.NewModule()
+	config.LoadFrom(filepath.Dir(cfg.Path()), again)
+	if m.ByName("libera") != nil || again.ByName("libera") != nil {
 		t.Fatal("table kept")
 	}
 	if len(u.ircNets()) != 0 || u.chats[c.Key()] != nil || u.ws.ForChat(c.Key()) >= 0 {
@@ -292,15 +287,23 @@ func TestIRCAddPresets(t *testing.T) {
 // /irc add refuses TLS no together with a password: it would go in clear.
 func TestRegressionIRCAddPlainPassword(t *testing.T) {
 	u, n := launchUI(nil)
-	cfg, err := config.LoadFrom(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	u.cfg = cfg
+	_, m := withIRC(t, u)
 	if e := u.ircAddSubmit([]string{"efnet", "irc.efnet.org", "6667", "no", "me", "", "", "pw"}); e != i18n.T("irc_tls_password") {
 		t.Fatalf("plain password: %q", e)
 	}
-	if cfg.IRCByName("efnet") != nil || *n != 0 {
+	if m.ByName("efnet") != nil || *n != 0 {
 		t.Fatal("network written or launched")
 	}
+}
+
+// withIRC gives u the IRC module and a config.toml of its own.
+func withIRC(t *testing.T, u *UI) (*config.Config, *irc.Module) {
+	t.Helper()
+	m := irc.NewModule()
+	cfg, err := config.LoadFrom(t.TempDir(), m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	u.cfg, u.mods = cfg, append(u.mods, m)
+	return cfg, m
 }

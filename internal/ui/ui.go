@@ -1096,16 +1096,6 @@ func (u *UI) event(ev model.Event) {
 		e.f()
 	case model.Envelope:
 		u.dispatch(e)
-	case model.EvIRCChannels:
-		if n := u.cfg.IRCByName(model.IRCName(u.dispatchNet)); n != nil {
-			n.Channels = slices.Clone(e.Channels)
-			u.saveCfg()
-		}
-	case model.EvIRCIgnores:
-		if n := u.cfg.IRCByName(model.IRCName(u.dispatchNet)); n != nil {
-			n.Ignores = slices.Clone(e.Ignores)
-			u.saveCfg()
-		}
 	case model.EvLines:
 		u.lines(e)
 	case model.EvAuthPrompt:

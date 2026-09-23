@@ -46,6 +46,9 @@ type Config struct {
 	// SaveChannels writes the channel list back to the configuration — after
 	// a join or a part, so that the next start finds the same rooms.
 	SaveChannels func([]string) error
+	// SaveIgnores writes the ignore masks back to the configuration after a
+	// /ignore, so that the next start drops the same lines.
+	SaveIgnores func([]string) error
 	// Dial : the tests plug a pipe here; nil = net.Dialer.
 	Dial func(ctx context.Context, network, addr string) (net.Conn, error)
 }

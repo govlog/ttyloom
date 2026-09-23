@@ -216,10 +216,10 @@ func TestSaveKeepsSectionShape(t *testing.T) {
 
 // TestSaveKeepsUnknownKeys : the keys of config.toml no field takes (a newer
 // version's, a table of its own) stay through a Save. The known ones are the
-// struct's — a network deleted stays deleted — and the TG_* secrets stay out.
+// struct's, and the TG_* secrets stay out.
 func TestSaveKeepsUnknownKeys(t *testing.T) {
 	dir := t.TempDir()
-	body := "api_hash = \"DU_FICHIER\"\nfuture = \"kept\"\n[future_table]\nx = 1\n[[irc]]\nname = \"libera\"\nhost = \"irc.libera.chat\"\n"
+	body := "api_hash = \"DU_FICHIER\"\nfuture = \"kept\"\n[future_table]\nx = 1\n"
 	if err := os.WriteFile(filepath.Join(dir, "config.toml"), []byte(body), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -228,7 +228,7 @@ func TestSaveKeepsUnknownKeys(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	c.Images, c.IRC = "kitty", nil
+	c.Images = "kitty"
 	if err := c.Save(); err != nil {
 		t.Fatal(err)
 	}
@@ -244,8 +244,8 @@ func TestSaveKeepsUnknownKeys(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if again.Images != "kitty" || again.APIHash != "DU_FICHIER" || len(again.IRC) != 0 {
-		t.Fatalf("known keys: images %q, api_hash %q, irc %+v\n%s", again.Images, again.APIHash, again.IRC, b)
+	if again.Images != "kitty" || again.APIHash != "DU_FICHIER" {
+		t.Fatalf("known keys: images %q, api_hash %q\n%s", again.Images, again.APIHash, b)
 	}
 	if got := strings.Join(again.Unknown, ","); got != "future,future_table,future_table.x" {
 		t.Fatalf("unknown keys after Save: %q\n%s", got, b)
@@ -330,28 +330,6 @@ func TestDiscordToken(t *testing.T) {
 	}
 }
 
-// nickserv_password_cmd is read like the Discord token_cmd: the words are
-// the argv (no shell), stdout trimmed, the first stderr line in the error;
-// the plain key stays when there is no command.
-func TestIRCPasswordCmd(t *testing.T) {
-	n := &IRCConfig{Name: "libera", NickServPassword: "plain"}
-	if pw, err := n.Password(); err != nil || pw != "plain" {
-		t.Fatalf("plain key: %q, %v", pw, err)
-	}
-	n.NickServPasswordCmd = "echo  s3cret "
-	if pw, err := n.Password(); err != nil || pw != "s3cret" {
-		t.Fatalf("command: %q, %v", pw, err)
-	}
-	n.NickServPasswordCmd = "cat /ttyloom-no-such-file"
-	if _, err := n.Password(); err == nil || !strings.Contains(err.Error(), "No such file") || !strings.Contains(err.Error(), "nickserv_password_cmd") {
-		t.Fatalf("stderr of the command missing: %v", err)
-	}
-	n.NickServPasswordCmd = "true"
-	if pw, err := n.Password(); err == nil {
-		t.Fatalf("empty output taken as a password: %q", pw)
-	}
-}
-
 // WriteAtomic : the file appears whole or not at all, private, and leaves no
 // temporary file behind.
 func TestWriteAtomic(t *testing.T) {
@@ -385,12 +363,10 @@ func TestLoadFromUnknownKeys(t *testing.T) {
 	}
 }
 
-// Two [[irc]] tables read back, one with a bad name dropped and reported;
-// Save keeps the valid ones and their channel list.
-func TestLoadIRCTables(t *testing.T) {
+// TestTabs : the tab bar key is read back from the file.
+func TestTabs(t *testing.T) {
 	dir := t.TempDir()
-	body := "api_id = 1\n[[irc]]\nname = \"libera\"\nhost = \"irc.libera.chat\"\nport = 6697\ntls = true\nnick = \"me\"\nchannels = [\"#go-nuts\"]\n" +
-		"[[irc]]\nname = \"Bad Name\"\nhost = \"x\"\n[[irc]]\nname = \"oftc\"\nhost = \"irc.oftc.net\"\nport = 6667\n"
+	body := "tabs = true\n"
 	if err := os.WriteFile(filepath.Join(dir, "config.toml"), []byte(body), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -398,49 +374,7 @@ func TestLoadIRCTables(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(c.IRC) != 2 || c.IRC[0].Name != "libera" || c.IRC[1].Name != "oftc" {
-		t.Fatalf("irc tables: %+v", c.IRC)
-	}
-	if n := c.IRCByName("libera"); n == nil || n.Port != 6697 || !n.TLS || len(n.Channels) != 1 || n.Channels[0] != "#go-nuts" {
-		t.Fatalf("libera: %+v", n)
-	}
-	if c.IRCByName("nope") != nil || !strings.Contains(strings.Join(c.Unknown, ","), "irc.Bad Name") {
-		t.Fatalf("unknown: %v", c.Unknown)
-	}
-	c.IRC[1].Channels = []string{"#debian"}
-	if err := c.Save(); err != nil {
-		t.Fatal(err)
-	}
-	again, err := LoadFrom(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if n := again.IRCByName("oftc"); n == nil || len(n.Channels) != 1 || n.Channels[0] != "#debian" || len(again.IRC) != 2 {
-		t.Fatalf("saved irc tables: %+v", again.IRC)
-	}
-}
-
-// TestTabsAndIgnores : the tab bar key and the ignore list of a network are
-// read back from the file.
-func TestTabsAndIgnores(t *testing.T) {
-	dir := t.TempDir()
-	body := "tabs = true\n[[irc]]\nname = \"libera\"\nhost = \"irc.libera.chat\"\nnick = \"me\"\nignores = [\"spammer!*@*\"]\n"
-	if err := os.WriteFile(filepath.Join(dir, "config.toml"), []byte(body), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	c, err := LoadFrom(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !c.Tabs || len(c.IRC) != 1 || len(c.IRC[0].Ignores) != 1 || c.IRC[0].Ignores[0] != "spammer!*@*" {
-		t.Fatalf("tabs=%v irc=%+v", c.Tabs, c.IRC)
-	}
-}
-
-func TestValidIRCName(t *testing.T) {
-	for name, ok := range map[string]bool{"libera": true, "my-net_2": true, "": false, "Libera": false, "a b": false, strings.Repeat("a", 33): false} {
-		if ValidIRCName(name) != ok {
-			t.Errorf("ValidIRCName(%q) = %v, want %v", name, !ok, ok)
-		}
+	if !c.Tabs {
+		t.Fatal("tabs not read")
 	}
 }

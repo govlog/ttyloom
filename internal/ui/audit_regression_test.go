@@ -130,46 +130,6 @@ func TestIRCRekeyPreservesHistory(t *testing.T) {
 	}
 }
 
-func TestIRCChannelsPersistInOrder(t *testing.T) {
-	u, _, _, _ := queryUI()
-	var err error
-	u.cfg, err = config.LoadFrom(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	u.cfg.IRC = []*config.IRCConfig{{Name: "test", Host: "irc.example", Nick: "me"}}
-	for _, channels := range [][]string{{"#first"}, {"#second"}} {
-		u.dispatch(model.Envelope{Net: model.IRCNet("test"), Ev: model.EvIRCChannels{Channels: channels}})
-	}
-	saved, err := config.LoadFrom(filepath.Dir(u.cfg.Path()))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := saved.IRCByName("test").Channels; len(got) != 1 || got[0] != "#second" {
-		t.Fatalf("saved channels: %v", got)
-	}
-}
-
-// The ignore list of a network goes back to its [[irc]] table, like the
-// channels: the masks of /ignore survive a restart.
-func TestIRCIgnoresPersist(t *testing.T) {
-	u, _, _, _ := queryUI()
-	var err error
-	u.cfg, err = config.LoadFrom(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	u.cfg.IRC = []*config.IRCConfig{{Name: "test", Host: "irc.example", Nick: "me"}}
-	u.dispatch(model.Envelope{Net: model.IRCNet("test"), Ev: model.EvIRCIgnores{Ignores: []string{"spammer!*@*"}}})
-	saved, err := config.LoadFrom(filepath.Dir(u.cfg.Path()))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := saved.IRCByName("test").Ignores; len(got) != 1 || got[0] != "spammer!*@*" {
-		t.Fatalf("saved ignores: %v", got)
-	}
-}
-
 func TestRegressionFilteredAggregateRead(t *testing.T) {
 	u, b, room, _ := queryUI()
 	u.focused, u.aggregate = true, true

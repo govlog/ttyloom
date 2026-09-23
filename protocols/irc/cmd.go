@@ -572,7 +572,7 @@ func (c *Client) ignored(e ircmsg.Message) bool {
 }
 
 // ignore : /ignore — lists, or toggles a mask; the list is saved through
-// EvIRCIgnores.
+// Config.SaveIgnores.
 func (c *Client) ignore(reply int64, arg string) error {
 	if arg == "" {
 		c.mu.Lock()
@@ -597,7 +597,11 @@ func (c *Client) ignore(reply int64, arg string) error {
 	list := slices.Clone(c.ignores)
 	c.mu.Unlock()
 	c.Post(model.EvLines{ChatID: reply, Lines: []string{text}})
-	c.Post(model.EvIRCIgnores{Ignores: list})
+	if c.cfg.SaveIgnores != nil {
+		if err := c.cfg.SaveIgnores(list); err != nil {
+			c.PostNB(model.EvLog{Level: "ERROR", Msg: err.Error()})
+		}
+	}
 	return nil
 }
 

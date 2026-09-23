@@ -14,6 +14,7 @@ import (
 	"github.com/govlog/ttyloom/internal/config"
 	"github.com/govlog/ttyloom/internal/i18n"
 	"github.com/govlog/ttyloom/internal/model"
+	"github.com/govlog/ttyloom/internal/module"
 	"github.com/govlog/ttyloom/internal/term"
 	"github.com/govlog/ttyloom/internal/theme"
 	"github.com/govlog/ttyloom/internal/ui"
@@ -60,7 +61,7 @@ func main() {
 // is read here once, then at every launch, and goes nowhere else: not in the
 // log, not in an event, not in config.toml. ctx is the one of the whole client: the last
 // event of a network is delivered as long as the UI runs.
-func backends(ctx context.Context, cfg *config.Config, events chan<- model.Envelope) ([]string, map[string]*cache.Cache, model.Launcher, error) {
+func backends(ctx context.Context, cfg *config.Config, events chan<- model.Envelope, mods []module.Module) ([]string, map[string]*cache.Cache, model.Launcher, error) {
 	// [telegram], or the historic flat keys synthesized into it by config.
 	tg := cfg.Telegram
 	useTelegram := tg != nil && (tg.APIID != 0 || tg.APIHash != "" || tg.BotToken != "")
@@ -98,15 +99,11 @@ func backends(ctx context.Context, cfg *config.Config, events chan<- model.Envel
 			caches[model.NetDiscord] = cache.New(filepath.Join(root, model.NetDiscord), cfg.CacheMessages)
 		}
 	}
-	for _, n := range cfg.IRC {
-		net := model.IRCNet(n.Name)
-		nets = append(nets, net)
-		if cfg.Cache {
-			caches[net] = cache.New(filepath.Join(root, net), cfg.CacheMessages)
-			caches[net].KeepOld = true // IRC keeps no history on the server: the files are the only copy
-		}
+	modNets := 0 // the networks of the modules: the UI lists and launches them
+	for _, m := range mods {
+		modNets += len(m.Networks())
 	}
-	if len(nets) == 0 {
+	if len(nets) == 0 && modNets == 0 {
 		return nil, nil, nil, fmt.Errorf(i18n.T("main_no_networks"), cfg.Path())
 	}
 
@@ -143,18 +140,6 @@ func backends(ctx context.Context, cfg *config.Config, events chan<- model.Envel
 				return nil, err
 			}
 			return dsc.New(dsc.Config{Token: tok, TokenFile: tokenFile}, raw), nil
-		}
-		// An IRC network: its table is read now, not at start — /irc add
-		// writes one while the client runs. Its password command runs at
-		// each launch, and a failing one is the error of the launch.
-		if name := model.IRCName(net); name != "" {
-			if n := cfg.IRCByName(name); n != nil {
-				pw, err := n.Password()
-				if err != nil {
-					return nil, err
-				}
-				return irc.New(ircConfig(nctx, n, pw, raw), raw), nil
-			}
 		}
 		return nil, fmt.Errorf("%s: unknown network", net)
 	}
@@ -206,23 +191,10 @@ func backends(ctx context.Context, cfg *config.Config, events chan<- model.Envel
 	return nets, caches, launch, nil
 }
 
-// ircConfig sends channel changes to the UI, which owns configuration writes.
-// password is the resolved one (IRCConfig.Password).
-func ircConfig(ctx context.Context, n *config.IRCConfig, password string, events chan<- model.Event) irc.Config {
-	return irc.Config{Name: n.Name, Host: n.Host, Port: n.Port, TLS: n.TLS, Nick: n.Nick, User: n.User,
-		RealName: n.RealName, Password: password, PasswordWithoutTLS: n.PasswordWithoutTLS,
-		Channels: n.Channels, DCCIP: n.DCCIP, DCCPorts: n.DCCPorts, Ignores: n.Ignores,
-		SaveChannels: func(list []string) error {
-			select {
-			case events <- model.EvIRCChannels{Channels: list}:
-			case <-ctx.Done():
-			}
-			return nil
-		}}
-}
-
 func run() error {
-	cfg, err := config.Load()
+	ircMod := irc.NewModule()
+	mods := []module.Module{ircMod}
+	cfg, err := config.Load(mods...)
 	if err != nil {
 		return err
 	}
@@ -237,7 +209,7 @@ func run() error {
 	events := make(chan model.Envelope, 256)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	nets, caches, launch, err := backends(ctx, cfg, events)
+	nets, caches, launch, err := backends(ctx, cfg, events, mods)
 	if err != nil {
 		return err
 	}
@@ -268,5 +240,5 @@ func run() error {
 	}()
 	defer t.Close()
 
-	return ui.Run(ctx, cancel, t, cfg, th, nets, launch, events, caches, nil)
+	return ui.Run(ctx, cancel, t, cfg, th, nets, launch, events, caches, mods)
 }
