@@ -86,6 +86,16 @@ type Window struct {
 	// everything. The items stay in memory: the filter moves with no reload.
 	Filter func(*model.Msg) bool
 	nLines int // lines of the last drawing: capacity hint of the next one
+	// seps : day separators already drawn — LongDate and its i18n lookups ran
+	// for each separator at each frame. Invalidate drops them (theme change).
+	seps map[sepKey]render.Line
+}
+
+// sepKey : what a day separator depends on, the theme aside.
+type sepKey struct {
+	day   [3]int // year, month, day
+	width int
+	lang  string
 }
 
 func (w *Window) Name() string {
@@ -432,6 +442,7 @@ func (it *Item) Invalidate() {
 }
 
 func (w *Window) Invalidate() {
+	w.seps = nil
 	for _, it := range w.Items {
 		it.lines = nil
 	}
@@ -561,6 +572,7 @@ func (w *Window) LineItems(o render.Opts) ([]render.Line, []*Item, int) {
 	var lastDay [3]int // year, month, day: no time.Format per message per frame
 	marked := false
 	markIdx := -1
+	lang := i18n.Lang()
 	sep := func(l render.Line) { out, items = append(out, l), append(items, nil) }
 	for _, it := range w.Items {
 		if !w.shown(it) {
@@ -569,7 +581,16 @@ func (w *Window) LineItems(o render.Opts) ([]render.Line, []*Item, int) {
 		if it.Msg != nil {
 			y, m, d := it.Msg.Date.Date()
 			if day := [3]int{y, int(m), d}; day != lastDay {
-				sep(render.Separator(render.LongDate(it.Msg.Date), o))
+				k := sepKey{day, o.Width, lang}
+				l, ok := w.seps[k]
+				if !ok {
+					l = render.Separator(render.LongDate(it.Msg.Date), o)
+					if w.seps == nil {
+						w.seps = map[sepKey]render.Line{}
+					}
+					w.seps[k] = l
+				}
+				sep(l)
 				lastDay = day
 			}
 			if o.Redline && w.MarkID > 0 && !marked && it.Msg.ID > w.MarkID && !it.Msg.Out {

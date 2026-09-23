@@ -73,9 +73,8 @@ func (c *Client) Send(ctx context.Context, chat *model.Chat, text string, tmpID 
 	c.sendText(ctx, "Send", chat, text, tmpID)
 }
 
-// SendReply : no reply on IRC — the nick of the author is put in front, the
-// usual way to answer someone in a room. The UI gives the id only; the text
-// of the message is not at hand here, so the prefix is what it can be.
+// SendReply : no reply on IRC — the text goes out as a plain message, with
+// no quote and no nick in front; the id of the message is dropped.
 func (c *Client) SendReply(ctx context.Context, chat *model.Chat, text string, _ int, tmpID int64) {
 	c.sendText(ctx, "SendReply", chat, text, tmpID)
 }
@@ -131,7 +130,7 @@ func (c *Client) Contacts(context.Context) {
 // error numeric); anything else is a nick, a private chat opens at once.
 func (c *Client) Resolve(_ context.Context, q string, _ bool, request uint64) {
 	q = strings.TrimSpace(q)
-	if !isChannel(q) {
+	if !model.IsIRCChannel(q) {
 		nick := strings.TrimPrefix(q, "@")
 		if nick == "" || strings.ContainsAny(nick, " ,") {
 			c.Refuse("Resolve", model.EvChat{Request: request, Query: q, Err: i18n.T("irc_bad_nick")})
@@ -178,7 +177,7 @@ func (c *Client) Resolve(_ context.Context, q string, _ bool, request uint64) {
 // or the peer alone for a private chat.
 func (c *Client) Members(chat *model.Chat) []string {
 	name := nameOf(chat)
-	if !isChannel(name) {
+	if !model.IsIRCChannel(name) {
 		return []string{name}
 	}
 	c.mu.Lock()
@@ -195,7 +194,7 @@ func (c *Client) Members(chat *model.Chat) []string {
 // has the two of us.
 func (c *Client) Participants(_ context.Context, chat *model.Chat) {
 	name := nameOf(chat)
-	if !isChannel(name) {
+	if !model.IsIRCChannel(name) {
 		c.Refuse("Participants", model.EvParticipants{ChatID: chat.ID, Lines: []model.Participant{
 			{Text: c.me(), Query: c.me()}, {Text: name, Query: name}}})
 		return
@@ -267,7 +266,7 @@ func (c *Client) BlockMember(context.Context, string) { c.Warn(c.net(), "BlockMe
 // Leave : PART, the room leaves the list (and the file), the UI drops it.
 func (c *Client) Leave(_ context.Context, chat *model.Chat) {
 	name := nameOf(chat)
-	if !isChannel(name) {
+	if !model.IsIRCChannel(name) {
 		c.DeleteChat(context.Background(), chat)
 		return
 	}
@@ -297,7 +296,7 @@ func (c *Client) part(name, reason string) {
 // through Leave.
 func (c *Client) DeleteChat(ctx context.Context, chat *model.Chat) {
 	name := nameOf(chat)
-	if isChannel(name) {
+	if model.IsIRCChannel(name) {
 		c.Leave(ctx, chat)
 		return
 	}

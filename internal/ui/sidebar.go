@@ -593,7 +593,7 @@ func sideHeader(mode sideMode, sort string, split bool, th theme.Theme, width in
 		sep.Style = acc
 	}
 	title := sideTitleText(mode, sort)
-	head := []render.Span{{Text: fit(title, width), Style: acc}}
+	head := []render.Span{{Text: padTo(title, width), Style: acc}}
 	if col := sideIconCol(mode, sort); mode == sideWindows && col+render.Width(sideIcon) <= width {
 		// The ⊟ answers the click (toggleSplit): dim while the list is in one
 		// piece, inverted once it is split.
@@ -601,7 +601,7 @@ func sideHeader(mode sideMode, sort string, split bool, th theme.Theme, width in
 		if split {
 			st = theme.Style{FG: th.Color(theme.Accent), Reverse: true}
 		}
-		head = []render.Span{{Text: fit(title, col), Style: acc}, {Text: sideIcon, Style: st},
+		head = []render.Span{{Text: padTo(title, col), Style: acc}, {Text: sideIcon, Style: st},
 			{Text: strings.Repeat(" ", width-col-render.Width(sideIcon)), Style: acc}}
 	}
 	rule := render.Span{Text: strings.Repeat("─", max(0, width)), Style: th.Style(theme.Sep)}
@@ -630,7 +630,7 @@ func sideIconCol(mode sideMode, sort string) int { return render.Width(sideTitle
 // mode. It comes after the message separator (sepRow), which always falls
 // higher: the sidebar runs over the whole height of the screen, and cutting it
 // would cost three chat lines.
-// ponytail: written by draw() rather than by sidebarLines — a fourteenth
+// ponytail: written by draw() rather than by sidebarLines — one more
 // parameter on that signature is not worth it.
 func sideNewLine(th theme.Theme, width int, hot bool) render.Line {
 	acc := theme.Style{FG: th.Color(theme.Accent), Bold: true}
@@ -642,26 +642,17 @@ func sideNewLine(th theme.Theme, width int, hot bool) render.Line {
 	if render.Width(label) > width { // narrow sidebar (floor of 12 columns)
 		label = i18n.T("sidebar_new_message_short")
 	}
-	return render.Line{Spans: []render.Span{{Text: fit(label, width), Style: acc}, sep}}
+	return render.Line{Spans: []render.Span{{Text: padTo(label, width), Style: acc}, sep}}
 }
 
-// sideMenuChat : chat whose sidebar line stays highlighted while its context
-// menu is open.
-// ponytail: a package variable because sidebarLines is a pure function called
-// by draw() with no access to the UI; only one goroutine touches the state of
-// the UI. To be made a parameter the day the signature can change.
-var sideMenuChat *model.Chat
-
-// sideSections : folded sections handed to sidebarLines out of band. sideBlock
-// posts u.folded here before each frame; it is nil everywhere else, and a nil
-// map means "no section header at all" — what every direct caller of
-// sidebarLines wants (the tests, and any UI with no fold state loaded).
-// ponytail: package-level state keeps sidebarLines' signature; pass rows as a
-// parameter if it grows.
-var sideSections map[string]bool
-
-// sidePulse : phase of the hot pulse during one drawing (see sideSections).
-var sidePulse bool
+// sideState : the state of the UI one frame of sidebarLines reads.
+type sideState struct {
+	// folded : the folded sections. nil means "no section header at all" —
+	// what the tests and a UI with no fold state loaded want.
+	folded   map[string]bool
+	pulse    bool        // phase of the hot pulse
+	menuChat *model.Chat // chat whose line stays highlighted while its context menu is open
+}
 
 // sideSecLine : spans of a section header — "── name ───────[-]" laid over the
 // same mark and unread columns as the chat lines, so the titles stay aligned;
@@ -683,7 +674,7 @@ func sideSecLine(r sideRow, th theme.Theme, width, gut int) []render.Span {
 	textW := width - 5 - gut
 	// The name is cut first: the marker and at least one ─ of rule always stay.
 	head := render.Truncate("── "+render.CleanLine(r.name)+" ", max(0, textW-4), "")
-	text := fit(head+strings.Repeat("─", max(1, textW-render.Width(head)-3))+marker, textW)
+	text := padTo(head+strings.Repeat("─", max(1, textW-render.Width(head)-3))+marker, textW)
 	var sp []render.Span
 	if gut > 0 {
 		sp = append(sp, render.Span{Text: strings.Repeat(" ", gut)})
@@ -717,8 +708,9 @@ func sideTitle(r sideRow, name func(*model.Chat) string) string {
 // with the mouse (resize running) — it goes to the accent colour. title: shown
 // name of a chat (u.title, local names included); nil = Telegram title. nets:
 // one badge cell for the network in front of each chat title (multi-network only).
+// state: folded sections, pulse and open menu of the frame (see sideState).
 func sidebarLines(mode sideMode, chats []*model.Chat, ws []*Window, wins []int, cur int, th theme.Theme,
-	width, height, scroll int, avatars, nets bool, step int, sepRow int, hot bool, title func(*model.Chat) string) []render.Line {
+	width, height, scroll int, avatars, nets bool, step int, sepRow int, hot bool, title func(*model.Chat) string, state sideState) []render.Line {
 	dim := th.Style(theme.Dim)
 	acc := theme.Style{FG: th.Color(theme.Accent), Bold: true}
 	red := theme.Style{FG: th.Color(theme.Error), Bold: true} // unread badge
@@ -745,9 +737,9 @@ func sidebarLines(mode sideMode, chats []*model.Chat, ws []*Window, wins []int, 
 			curChat = ws[cur].Chat
 		}
 		// Rows, not chats: sectionRows adds the headers when sections are on
-		// (sideSections not nil, two sections at least) and gives one row per
+		// (state.folded not nil, two sections at least) and gives one row per
 		// chat otherwise — the drawing of before, untouched.
-		secs := sectionRows(chats, ws, sideSections)
+		secs := sectionRows(chats, ws, state.folded)
 		n = len(secs)
 		row = func(k int) ([]render.Span, int64) {
 			r := secs[k]
@@ -766,7 +758,7 @@ func sidebarLines(mode sideMode, chats []*model.Chat, ws []*Window, wins []int, 
 			label := " " + sideTitle(r, title)
 			m, u, t := dim, red, theme.Style{}
 			isCur := c == curChat
-			if isCur || c == sideMenuChat { // current line, or line of the open menu
+			if isCur || c == state.menuChat { // current line, or line of the open menu
 				m, u, t = on, on, on
 				u.Bold = true
 			}
@@ -782,7 +774,7 @@ func sidebarLines(mode sideMode, chats []*model.Chat, ws []*Window, wins []int, 
 			// pfx and badge are outside the scrolling string: they stay fixed, only
 			// the title scrolls.
 			textW := width - 5 - gut - render.Width(pfx) - render.Width(badge)
-			text := fit(label, textW)
+			text := padTo(label, textW)
 			if isCur { // only the current line scrolls
 				text = marquee(label, textW, step)
 			}
@@ -804,7 +796,7 @@ func sidebarLines(mode sideMode, chats []*model.Chat, ws []*Window, wins []int, 
 			i := wins[k]
 			if i < 0 { // header of the split list (sidebar_split): a rule, no window
 				head := "── " + winSecName(i) + " "
-				return []render.Span{{Text: fit(head+strings.Repeat("─", max(0, width-render.Width(head))), width), Style: dim}}, 0
+				return []render.Span{{Text: padTo(head+strings.Repeat("─", max(0, width-render.Width(head))), width), Style: dim}}, 0
 			}
 			w := ws[i]
 			pfx := ""
@@ -826,12 +818,12 @@ func sidebarLines(mode sideMode, chats []*model.Chat, ws []*Window, wins []int, 
 			textW := width - render.Width(num)
 			st, p, a := theme.Style{}, dim, red
 			if w.Hot { // private message or mention waiting: the mention colour pulses
-				a = theme.Style{FG: th.Color(theme.Mention), Bold: true, Reverse: sidePulse}
+				a = theme.Style{FG: th.Color(theme.Mention), Bold: true, Reverse: state.pulse}
 			}
 			switch {
 			case i == cur: // one style on the whole line: the counter scrolls with the name
 				return []render.Span{{Text: num, Style: on}, {Text: marquee(pfx+s+act, textW, step), Style: on}}, 0
-			case w.Chat != nil && w.Chat == sideMenuChat: // line of the open menu
+			case w.Chat != nil && w.Chat == state.menuChat: // line of the open menu
 				st, p, a = on, on, on
 			}
 			name := render.Truncate(s, textW-render.Width(pfx)-render.Width(act), "")
@@ -869,11 +861,12 @@ func (u *UI) sideBlock(sepRow int) ([]render.Line, []sideRow) {
 	sorted := u.sideChats() // sorted and filtered once: one sort per frame
 	hot := u.sideHot()
 	side := sideHeader(u.side, u.cfg.SidebarSort, u.cfg.SidebarSplit, u.th, u.sideW, hot)
-	sideSections = u.folded // sections of this frame only: nil again right after
-	sidePulse = u.pulse
+	state := sideState{folded: u.folded, pulse: u.pulse}
+	if m := u.menu; m != nil && m.member == "" {
+		state.menuChat = m.chat // menu of a sidebar line (nil for the menu of a message)
+	}
 	side = append(side, sidebarLines(u.side, sorted, u.ws.List, u.sideWins(), u.ws.Cur, u.th, u.sideW, u.sideRows(),
-		u.sideScroll, u.avatarsOn(), u.multiNet(), u.marquee.step, sepRow, hot, u.title)...)
-	sideSections, sidePulse = nil, false
+		u.sideScroll, u.avatarsOn(), u.multiNet(), u.marquee.step, sepRow, hot, u.title, state)...)
 	if u.side == sideChats { // last line, outside the scroll
 		side = append(side, sideNewLine(u.th, u.sideW, hot))
 	}
@@ -883,12 +876,6 @@ func (u *UI) sideBlock(sepRow int) ([]render.Line, []sideRow) {
 // sideHot : the │ bar of the panel goes to the accent colour — while it is
 // dragged to resize, and while the pointer sits over the panel (follow-mouse).
 func (u *UI) sideHot() bool { return u.drag == dragSide || u.zone == zoneSide }
-
-// fit cuts or fills s to w columns.
-func fit(s string, w int) string {
-	s = render.Truncate(s, w, "")
-	return s + strings.Repeat(" ", max(0, w-render.Width(s)))
-}
 
 // marqueeClusters gives title cut into graphemes. Unit of the marquee shift
 // and cut: never a cluster (ZWJ emoji, vs16…) cut in two.
@@ -920,12 +907,12 @@ func marqueeMax(title string, width int) int {
 }
 
 // marquee gives the scrolling title, a window of width cells from the grapheme
-// step. title already fits in width → unchanged (fit). Otherwise: never a cut
+// step. title already fits in width → unchanged (padTo). Otherwise: never a cut
 // in the middle of a cluster, and a cluster that no longer fits whole leaves
 // filling rather than being cut; step capped at marqueeMax.
 func marquee(title string, width, step int) string {
 	if render.Width(title) <= width {
-		return fit(title, width)
+		return padTo(title, width)
 	}
 	if m := marqueeMax(title, width); step > m {
 		step = m

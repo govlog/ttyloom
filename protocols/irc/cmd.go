@@ -57,10 +57,10 @@ func (c *Client) Command(ctx context.Context, reply int64, room, name string, ar
 // roomArg : the room named first in args, else the room of the window; the
 // rest of the arguments follow. ok false with neither.
 func roomArg(args []string, room string) (string, []string, bool) {
-	if len(args) > 0 && isChannel(args[0]) {
+	if len(args) > 0 && model.IsIRCChannel(args[0]) {
 		return args[0], args[1:], true
 	}
-	return room, args, isChannel(room) // a private window gives no room to fall back on
+	return room, args, model.IsIRCChannel(room) // a private window gives no room to fall back on
 }
 
 // rest : what follows the first n words of text. The blanks are walked one

@@ -115,7 +115,7 @@ func complContext(line string, cursor int, names []string) (src complSource, tai
 		switch i, arg := ircArg(rest); {
 		case i == 0:
 			return complIrcTarget, arg, ""
-		case i == 1 && isIRCRoom(strings.Fields(rest)[0]):
+		case i == 1 && model.IsIRCChannel(strings.Fields(rest)[0]):
 			return complIrcNick, arg, ""
 		}
 		return complNone, "", ""

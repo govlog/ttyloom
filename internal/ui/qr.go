@@ -24,7 +24,7 @@ import (
 const (
 	qrQuiet  = 2       // modules of quiet zone around the code
 	qrChrome = 5       // lines of the box outside the QR: 2 borders, title, help, foot
-	qrPID    = 1 << 22 // kitty placement: outside the line, hover (1<<23) and avatar (1<<24) ranges
+	qrPID    = 1 << 22 // kitty placement: outside the line, hover (1<<23) and avatar (1<<24) ranges; customPID shares it, pids being per image
 )
 
 // qrHint, qrKeys : text lines of the box, per network (where the phone finds

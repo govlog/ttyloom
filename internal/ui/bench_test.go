@@ -78,3 +78,21 @@ func BenchmarkScroll(b *testing.B) {
 		u.scroll(w, -3)
 	}
 }
+
+// BenchmarkReadInbox : one read receipt with 100 windows of 2000 messages open.
+func BenchmarkReadInbox(b *testing.B) {
+	u := &UI{ws: NewWindows(), agg: &Window{}}
+	for i := 1; i <= 100; i++ {
+		w := u.ws.New(true)
+		w.Chat = &model.Chat{Net: model.NetTelegram, ID: int64(i)}
+		for j := 1; j <= 2000; j++ {
+			w.Items = append(w.Items, &Item{Msg: &model.Msg{Net: model.NetTelegram, ChatID: int64(i), ID: j}})
+		}
+	}
+	c := u.ws.List[1].Chat
+	b.ReportAllocs()
+	b.ResetTimer()
+	for n := range b.N {
+		u.readInbox(c, n+1, 0, false) // a new max each time: the sweep runs
+	}
+}

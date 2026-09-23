@@ -3,6 +3,7 @@ package model
 
 import (
 	"context"
+	"strings"
 	"time"
 )
 
@@ -34,6 +35,9 @@ func IRCName(net string) string {
 	}
 	return ""
 }
+
+// IsIRCChannel : name starts with one of the four channel prefixes of RFC 2811.
+func IsIRCChannel(name string) bool { return name != "" && strings.ContainsRune("#&!+", rune(name[0])) }
 
 // ChatKey identifies a chat across networks: Discord snowflakes and TDLib
 // ids can collide, the net disambiguates.
@@ -471,9 +475,9 @@ type EvPresence struct {
 	Status string
 }
 
-// Participant : one line of the member box (F3). Text is already cleaned and
-// ready to show; an empty Query = the line is not clickable (a counter, a
-// state message).
+// Participant : one line of the member box (F3). The backend sends Text and
+// Name raw: the UI cleans them when the event comes in. An empty Query = the
+// line is not clickable (a counter, a state message).
 type Participant struct {
 	Text   string
 	Name   string // the name alone, without the marks of Text (★, " (me)", @+): what a mention inserts

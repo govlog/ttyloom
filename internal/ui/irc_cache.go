@@ -122,6 +122,6 @@ func (u *UI) rekeyIRC(net string, idFor func(string) int64) {
 		}
 	}
 	if aliasesChanged && u.cfg != nil && filepath.Dir(u.cfg.Path()) != "." {
-		_ = saveAliases(filepath.Join(filepath.Dir(u.cfg.Path()), "aliases.toml"), u.aliases)
+		_ = saveAliases(aliasPath(), u.aliases)
 	}
 }

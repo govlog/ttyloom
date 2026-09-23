@@ -3,6 +3,7 @@ package ui
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -12,9 +13,11 @@ import (
 
 	"github.com/govlog/ttyloom/internal/cache"
 	"github.com/govlog/ttyloom/internal/config"
+	"github.com/govlog/ttyloom/internal/i18n"
 	"github.com/govlog/ttyloom/internal/model"
 	"github.com/govlog/ttyloom/internal/render"
 	"github.com/govlog/ttyloom/internal/term"
+	"github.com/govlog/ttyloom/internal/theme"
 )
 
 func TestRegressionQueryNetworkIsolation(t *testing.T) {
@@ -620,5 +623,137 @@ func TestRegressionMentionWithoutBoxMarks(t *testing.T) {
 	segs, _ := u.mentionSegs(g, []model.Seg{{Text: "yo @Bob"}})
 	if want := []model.Seg{{Text: "yo "}, {Text: "Bob", Kind: model.SegMention, UserID: 42}}; !slices.Equal(segs, want) {
 		t.Fatalf("segs: %+v", segs)
+	}
+}
+
+// viewText : the drawing of v, as the screen reads it.
+func viewText(u *UI, v *Window) string {
+	var sb strings.Builder
+	for _, l := range v.Lines(u.optsFor(v)) {
+		sb.WriteString(render.LineText(l) + "\n")
+	}
+	return sb.String()
+}
+
+// A read receipt sweeps only the views of its chat: its window, the
+// aggregate and a /search result (with a copy of its own) still get the
+// new ticks.
+func TestRegressionReadReceiptRedrawsChatViews(t *testing.T) {
+	u, _, room, _ := queryUI()
+	u.dispatch(model.Envelope{Net: room.Net, Ev: model.EvNewMessage{Chat: room,
+		Msg: model.Msg{ChatID: room.ID, ID: 5, Out: true, Text: "hello", Date: time.Now()}}})
+	found := u.ws.New(true)
+	found.Search, found.Chat = "hello", room
+	found.Upsert(&model.Msg{Net: room.Net, ChatID: room.ID, ID: 5, Out: true, Text: "hello", Date: time.Now()})
+	views := []*Window{u.winFor(room), u.agg, found}
+	for _, v := range views {
+		if got := viewText(u, v); !strings.Contains(got, "✓") || strings.Contains(got, "✓✓") {
+			t.Fatalf("%s before the receipt: %q", v.Name(), got)
+		}
+	}
+	u.dispatch(model.Envelope{Net: room.Net, Ev: model.EvReadOutbox{ChatID: room.ID, MaxID: 5}})
+	for _, v := range views {
+		if got := viewText(u, v); !strings.Contains(got, "✓✓") {
+			t.Fatalf("%s after the receipt: %q", v.Name(), got)
+		}
+	}
+}
+
+// A history page no longer repaints every window: the first page of a window
+// with unread messages still settles the view on the redline, 3rd row, with
+// the day separators drawn.
+func TestRegressionHistoryScrollsToRedline(t *testing.T) {
+	u, _, room, _ := queryUI()
+	u.cfg.Redline = true
+	w := u.winFor(room)
+	w.MarkID = 40 // read up to 40 when the window opened
+	start := time.Date(2026, 9, 1, 0, 30, 0, 0, time.UTC)
+	var page []model.Msg
+	for i := 1; i <= 100; i++ { // one message per hour: 5 days
+		page = append(page, model.Msg{ChatID: room.ID, ID: i, From: "alice", Text: fmt.Sprintf("m%d", i),
+			Date: start.Add(time.Duration(i) * time.Hour)})
+	}
+	u.dispatch(model.Envelope{Net: room.Net, Ev: model.EvHistory{ChatID: room.ID, Msgs: page}})
+	lines, items, idx := w.LineItems(u.optsFor(w))
+	if idx < 0 || items[idx+1] == nil || items[idx+1].Msg.ID != 41 {
+		t.Fatalf("redline at line %d, not right before message 41", idx)
+	}
+	if top := len(lines) - w.Scroll - u.viewRows(); idx-top != 2 {
+		t.Fatalf("redline on row %d of the view, want 2", idx-top)
+	}
+	seps := 0
+	for _, it := range items {
+		if it == nil {
+			seps++
+		}
+	}
+	if seps != 6 {
+		t.Fatalf("%d separator lines, want 5 days and the redline", seps)
+	}
+}
+
+// A history page that refreshes a message the aggregate shows too (an edit
+// made while offline) redraws it there, with no repaint of every window.
+func TestRegressionHistoryRedrawsSharedMessage(t *testing.T) {
+	u, _, room, _ := queryUI()
+	u.dispatch(model.Envelope{Net: room.Net, Ev: model.EvNewMessage{Chat: room,
+		Msg: model.Msg{ChatID: room.ID, ID: 7, Text: "typo", Date: time.Now()}}})
+	if got := viewText(u, u.agg); !strings.Contains(got, "typo") {
+		t.Fatalf("aggregate: %q", got)
+	}
+	u.dispatch(model.Envelope{Net: room.Net, Ev: model.EvHistory{ChatID: room.ID,
+		Msgs: []model.Msg{{ChatID: room.ID, ID: 7, Text: "fixed", Date: time.Now()}}}})
+	if got := viewText(u, u.agg); !strings.Contains(got, "fixed") {
+		t.Fatalf("aggregate after the page: %q", got)
+	}
+}
+
+// The day separators are kept from one frame to the next, and still follow
+// the width and the language of the frame.
+func TestRegressionDaySeparatorFollowsWidthAndLang(t *testing.T) {
+	w := &Window{}
+	w.Upsert(&model.Msg{ID: 1, Date: time.Date(2026, 9, 1, 10, 0, 0, 0, time.UTC), From: "a", Text: "x"})
+	o := render.Opts{Width: 40, Theme: theme.Terminal(), Images: "off"}
+	sep := func() string { return render.LineText(w.Lines(o)[0]) }
+	if got := sep(); !strings.Contains(got, "1 septembre 2026") || render.Width(got) != 40 {
+		t.Fatalf("separator: %q", got)
+	}
+	o.Width = 60
+	if got := sep(); render.Width(got) != 60 {
+		t.Fatalf("separator after a resize: %q", got)
+	}
+	i18n.Set("en")
+	t.Cleanup(func() { i18n.Set("fr") }) // TestMain sets fr for the package
+	if got := sep(); !strings.Contains(got, "September 1, 2026") {
+		t.Fatalf("separator after /set lang en: %q", got)
+	}
+}
+
+// The line of a chat stays highlighted while its context menu is open, and
+// only then: a menu dropped by a login prompt left the highlight behind.
+func TestRegressionSideMenuHighlight(t *testing.T) {
+	u, _, room, _ := queryUI()
+	u.side, u.sideW = sideChats, 26
+	lit := func() bool {
+		lines, _ := u.sideBlock(-1)
+		for _, l := range lines {
+			if strings.Contains(render.LineText(l), room.Title) {
+				return l.Spans[0].Style.Reverse
+			}
+		}
+		t.Fatal("no sidebar line for the room")
+		return false
+	}
+	for y := 0; y < u.t.Rows && u.menu == nil; y++ {
+		if u.sideChatAt(y) == room {
+			u.openMenu(1, y)
+		}
+	}
+	if u.menu == nil || !lit() {
+		t.Fatalf("menu open: menu %v, line not highlighted", u.menu != nil)
+	}
+	u.dispatch(model.Envelope{Net: model.NetTelegram, Ev: model.EvAuthPrompt{Question: "Code", Reply: make(chan string, 1)}})
+	if u.menu != nil || lit() {
+		t.Fatalf("menu dropped by the prompt: menu %v, line still highlighted", u.menu != nil)
 	}
 }

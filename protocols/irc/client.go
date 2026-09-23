@@ -96,7 +96,7 @@ func New(cfg Config, events chan<- model.Event) *Client {
 		c.ignores = append(c.ignores, ignoreMask(m))
 	}
 	for _, ch := range cfg.Channels {
-		if isChannel(ch) && !slices.Contains(c.channels, ch) {
+		if model.IsIRCChannel(ch) && !slices.Contains(c.channels, ch) {
 			c.channels = append(c.channels, ch)
 		}
 	}
@@ -344,7 +344,7 @@ func (c *Client) msgOf(e ircmsg.Message, chat *model.Chat, text string) model.Ms
 // the private chat of the sender (of the recipient for our own echo).
 func (c *Client) target(e ircmsg.Message) *model.Chat {
 	to := e.Params[0]
-	if isChannel(to) {
+	if model.IsIRCChannel(to) {
 		return c.chatOf(to)
 	}
 	nick := e.Nick()
@@ -417,7 +417,7 @@ func (c *Client) onNotice(e ircmsg.Message) {
 		c.onCTCPReply(e.Nick(), t[1:len(t)-1])
 		return
 	}
-	if isChannel(e.Params[0]) {
+	if model.IsIRCChannel(e.Params[0]) {
 		chat := c.chatOf(e.Params[0])
 		m := c.msgOf(e, chat, e.Params[1])
 		m.Text = "-" + e.Nick() + "- " + m.Text
@@ -638,7 +638,7 @@ func (c *Client) onTopic(e ircmsg.Message) {
 }
 
 func (c *Client) onMode(e ircmsg.Message) {
-	if len(e.Params) < 2 || !isChannel(e.Params[0]) || c.ignored(e) {
+	if len(e.Params) < 2 || !model.IsIRCChannel(e.Params[0]) || c.ignored(e) {
 		return
 	}
 	c.service(e.Params[0], i18n.T("irc_mode", e.Nick(), strings.Join(e.Params[1:], " ")), e)

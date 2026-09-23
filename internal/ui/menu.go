@@ -203,7 +203,7 @@ func (u *UI) openMenu(x, y int) {
 	if c == nil {
 		return
 	}
-	u.menu, sideMenuChat = &ctxMenu{chat: c, entries: menuEntries(c.Kind, false, u.caps(c)), x: x, y: y}, c
+	u.menu = &ctxMenu{chat: c, entries: menuEntries(c.Kind, false, u.caps(c)), x: x, y: y}
 }
 
 // openMemberMenu : right click on the line line of the member box, q being the
@@ -221,7 +221,7 @@ func (u *UI) openMemberMenu(q string, line, x, y int) {
 
 // closeMenu closes the menu and gives its line back its normal style.
 func (u *UI) closeMenu() {
-	u.menu, sideMenuChat = nil, nil
+	u.menu = nil
 	if u.parts != nil {
 		u.parts.mark = -1
 	}

@@ -3,7 +3,6 @@ package ui
 import (
 	"context"
 	"slices"
-	"strings"
 
 	"github.com/govlog/ttyloom/internal/model"
 )
@@ -67,7 +66,7 @@ func (u *UI) ircNicks() []string {
 		return nil
 	}
 	for _, c := range []*model.Chat{w.Target, w.Chat} {
-		if c != nil && c.Net == net && isIRCRoom(c.Title) {
+		if c != nil && c.Net == net && model.IsIRCChannel(c.Title) {
 			return l.Members(c) // the room first: a query target must not hide it
 		}
 	}
@@ -78,9 +77,6 @@ func (u *UI) ircNicks() []string {
 	}
 	return nil
 }
-
-// isIRCRoom : the four channel prefixes of RFC 2811.
-func isIRCRoom(s string) bool { return s != "" && strings.ContainsRune("#&!+", rune(s[0])) }
 
 // ircChans : the rooms joined on the IRC network of the shown window.
 func (u *UI) ircChans() []string {
@@ -114,7 +110,7 @@ func (u *UI) ircCommand(w *Window, net, name string, args []string, text string)
 	}
 	room := ""
 	for _, c := range []*model.Chat{w.Target, w.Chat} {
-		if c != nil && c.Net == net && isIRCRoom(c.Title) { // a private window has no default room
+		if c != nil && c.Net == net && model.IsIRCChannel(c.Title) { // a private window has no default room
 			room = c.Title
 			break
 		}

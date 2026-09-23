@@ -918,21 +918,31 @@ func (u *UI) chatOf(m *model.Msg) *model.Chat {
 	return u.chats[m.Key()]
 }
 
-// views gives every view where one message can show — the windows and the
-// aggregate, which is not in ws.List. A message shows in the window of its
-// chat, in the aggregate and in each /search result, with the same pointer or,
-// when the views loaded it apart, one pointer per view.
-//
-// ponytail: full sweep of the views at each edit or reaction; these events are
-// rare beside the incoming messages. Index by id if a burst of reactions ever
-// shows on the screen.
+// views gives every view — the windows and the aggregate, which is not in
+// ws.List. The views of one chat only: viewsOf.
 func (u *UI) views() []*Window { return append([]*Window{u.agg}, u.ws.List...) }
+
+// viewsOf gives the views where a message of the chat k can show: the
+// aggregate, the window of the chat and its /search results, which keep their
+// Chat — with the same pointer or, when a view loaded it apart, one pointer
+// per view. The sweeps of an event (read receipt, edit, reaction) go through
+// it: a sweep of every window cost 10^5 comparisons and more per event with
+// hundreds of windows open.
+func (u *UI) viewsOf(k model.ChatKey) []*Window {
+	out := []*Window{u.agg}
+	for _, w := range u.ws.List {
+		if w.Chat != nil && w.Chat.Key() == k {
+			out = append(out, w)
+		}
+	}
+	return out
+}
 
 // updateShared replaces m everywhere it shows: a remote edit comes with a new
 // pointer, and each view must take it.
 func (u *UI) updateShared(m *model.Msg) {
 	m.LiveAt = time.Now()
-	for _, w := range u.views() {
+	for _, w := range u.viewsOf(m.Key()) {
 		w.Update(m)
 	}
 }
@@ -940,7 +950,7 @@ func (u *UI) updateShared(m *model.Msg) {
 // touchShared does the same for a change in place (reaction, edit receipt) —
 // only the cached drawing is to be made again.
 func (u *UI) touchShared(m *model.Msg) {
-	for _, w := range u.views() {
+	for _, w := range u.viewsOf(m.Key()) {
 		w.Touch(m)
 	}
 }
@@ -1548,7 +1558,6 @@ func (u *UI) history(e model.EvHistory) {
 	} else {
 		w.Merge(ptrs, e.Started)
 	}
-	u.clear()
 	u.markDirty(key)
 	if e.Done {
 		w.Full = true
@@ -1569,6 +1578,17 @@ func (u *UI) history(e model.EvHistory) {
 	for _, it := range w.Items {
 		if it.Msg != nil && ids[it.Msg.ID] {
 			u.autoMedia(it.Msg, false)
+		}
+	}
+	// No repaint of every window: the new items have no drawing yet, and the
+	// day separators and the redline are laid out at each frame. Only the
+	// messages Merge refreshed in place are drawn again, in each view that
+	// shares them (aggregate, /search results).
+	for _, v := range u.viewsOf(key) {
+		for _, it := range v.Items {
+			if it.Msg != nil && ids[it.Msg.ID] && it.Msg.Key() == key {
+				it.Invalidate()
+			}
 		}
 	}
 	if recent && u.focused && u.view() == w {
@@ -2542,7 +2562,7 @@ func (u *UI) candidates(word string, atStart bool) []string {
 	case complIrcChan:
 		return multiWord(word, tail, u.ircChans())
 	case complIrcTarget:
-		if isIRCRoom(tail) {
+		if model.IsIRCChannel(tail) {
 			return multiWord(word, tail, u.ircChans())
 		}
 		return multiWord(word, tail, u.ircNicks())

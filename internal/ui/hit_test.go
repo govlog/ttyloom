@@ -156,7 +156,7 @@ func TestOverlayMouseClose(t *testing.T) {
 		t.Fatalf("menu: wheel inside the box, cur = %v", u.menu)
 	}
 	u.menuMouse(out)
-	if u.menu != nil || sideMenuChat != nil {
+	if u.menu != nil {
 		t.Fatal("menu: click outside box")
 	}
 }

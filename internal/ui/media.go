@@ -198,6 +198,10 @@ func (u *UI) downloadMap(b model.Backend, md *model.Media) {
 	b.DownloadMap(u.backendContext(b), md, path)
 }
 
+// invalidateMedia : the lines that show md are drawn again.
+// ponytail: every window is swept — a Media names no chat, and most callers
+// (download done, frames decoded) hold nothing else. Index the media by window
+// at Upsert time if the downloads of a window open ever stutter.
 func (u *UI) invalidateMedia(md *model.Media) {
 	for _, w := range u.ws.List {
 		w.InvalidateMedia(md)

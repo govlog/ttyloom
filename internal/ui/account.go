@@ -121,7 +121,7 @@ func (u *UI) clearAccount(net string) {
 		}
 	}
 	if changed && u.cfg != nil && filepath.Dir(u.cfg.Path()) != "." {
-		_ = saveAliases(filepath.Join(filepath.Dir(u.cfg.Path()), "aliases.toml"), u.aliases)
+		_ = saveAliases(aliasPath(), u.aliases)
 	}
 	for _, md := range u.customs {
 		u.dropFrames(md)

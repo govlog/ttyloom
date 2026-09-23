@@ -50,11 +50,6 @@ func (c *Client) chatOf(s string) *model.Chat { return chatOf(s, c.mapping()) }
 // ChatID lets the UI migrate cached names after the mapping is known.
 func (c *Client) ChatID(s string) int64 { return c.chatID(s) }
 
-// isChannel : the four channel prefixes of RFC 2811.
-func isChannel(name string) bool {
-	return name != "" && strings.ContainsRune("#&!+", rune(name[0]))
-}
-
 // chatID : the id of a channel or a nick — FNV-64a of its folded name, sign
 // bit cleared, never 0. IRC has no ids: the name is the identity, and a
 // stable hash keeps the disk cache and the windows across sessions.
@@ -71,7 +66,7 @@ func chatID(name string, mapping ...string) int64 {
 // chatOf builds the chat of a channel or a nick.
 func chatOf(name string, mapping ...string) *model.Chat {
 	kind := model.ChatUser
-	if isChannel(name) {
+	if model.IsIRCChannel(name) {
 		kind = model.ChatGroup
 	}
 	return &model.Chat{ID: chatID(name, mapping...), Kind: kind, Title: name, Peer: peer{Name: name}}

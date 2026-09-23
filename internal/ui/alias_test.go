@@ -106,7 +106,7 @@ func TestTitleAlias(t *testing.T) {
 	if u.aliases[c.Key()] != "maman" {
 		t.Fatalf("marker not stripped: %v", u.aliases)
 	}
-	line := body(sidebarLines(sideChats, u.chatList, u.ws.List, nil, u.ws.Cur, th, testSideW, 1, 0, false, false, 0, -1, false, u.title)[0])
+	line := body(sidebarLines(sideChats, u.chatList, u.ws.List, nil, u.ws.Cur, th, testSideW, 1, 0, false, false, 0, -1, false, u.title, sideState{})[0])
 	if !strings.Contains(line, "maman") || strings.Contains(line, "Alice") {
 		t.Fatalf("sidebar: %q", line)
 	}

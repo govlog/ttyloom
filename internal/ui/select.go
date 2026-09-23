@@ -295,14 +295,14 @@ func (u *UI) clearInfo(w *Window) {
 }
 
 // readOutbox : my messages up to maxID are read; the ticks must be made again
-// in every view. The chat is resolved by the caller: the event names it by a
-// bare id, which alone tells the networks apart no longer.
+// in every view of the chat. The chat is resolved by the caller: the event
+// names it by a bare id, which alone tells the networks apart no longer.
 func (u *UI) readOutbox(c *model.Chat, maxID int) {
 	if c == nil || maxID <= c.ReadOutboxMaxID {
 		return
 	}
 	c.ReadOutboxMaxID = maxID
-	for _, w := range u.views() {
+	for _, w := range u.viewsOf(c.Key()) {
 		for _, it := range w.Items {
 			if it.Msg != nil && it.Msg.Key() == c.Key() && it.Msg.Out {
 				it.lines = nil
@@ -312,17 +312,17 @@ func (u *UI) readOutbox(c *model.Chat, maxID int) {
 }
 
 // readInbox : my reads up to maxID; the ticks of the received messages
-// (someone else) must be made again in every view. Unread follows the unread
-// count as soon as hasUnread is true, even with maxID unchanged — another
-// client may have read without moving MaxID on our side. Like readOutbox, the
-// chat comes resolved from the caller.
+// (someone else) must be made again in every view of the chat. Unread follows
+// the unread count as soon as hasUnread is true, even with maxID unchanged —
+// another client may have read without moving MaxID on our side. Like
+// readOutbox, the chat comes resolved from the caller.
 func (u *UI) readInbox(c *model.Chat, maxID, unread int, hasUnread bool) {
 	if c == nil || maxID < c.ReadInboxMaxID {
 		return
 	}
 	if maxID > c.ReadInboxMaxID {
 		c.ReadInboxMaxID = maxID
-		for _, w := range u.views() {
+		for _, w := range u.viewsOf(c.Key()) {
 			for _, it := range w.Items {
 				if it.Msg != nil && it.Msg.Key() == c.Key() && !it.Msg.Out {
 					it.lines = nil
@@ -439,14 +439,14 @@ func (u *UI) applyEdit(w *Window, it *Item, text string) {
 // edited : edit receipt. Failure → "[failed: …]" under the message and the
 // input takes the text back to fix it.
 func (u *UI) edited(e model.EvEdited) {
-	// Every view, not only the window of the chat: a /search result older than
+	// Every view of the chat, not only its window: a /search result older than
 	// the loaded history has its own copy of the message, which would stay
 	// "pending" for ever.
 	view := u.view()
 	key := u.evKey(e.ChatID)
 	var cur *Item // copy shown, to take the edit up again on a failure
 	found := false
-	for _, w := range u.views() {
+	for _, w := range u.viewsOf(key) {
 		for _, it := range w.Items {
 			if it.Msg == nil || it.Msg.ID != e.ID || it.Msg.Key() != key {
 				continue
@@ -616,8 +616,8 @@ func nextReaction(rs []model.Reaction, pick string) string {
 // reactions : EvReactions replaces the reactions of the message and invalidates its drawing.
 func (u *UI) reactions(e model.EvReactions) {
 	key := u.evKey(e.ChatID)
-	found, mine := false, true    // a message not loaded may be mine: read to be safe
-	for _, w := range u.views() { // same as edited: each copy of the message
+	found, mine := false, true         // a message not loaded may be mine: read to be safe
+	for _, w := range u.viewsOf(key) { // same as edited: each copy of the message
 		for _, it := range w.Items {
 			if it.Msg != nil && it.Msg.ID == e.ID && it.Msg.Key() == key {
 				// A re-read does not empty a list already filled: only an update

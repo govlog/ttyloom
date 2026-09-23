@@ -58,7 +58,7 @@ func TestSidebarLines(t *testing.T) {
 	// input list is already sorted, as the real caller would have it.
 	sorted := sortChats([]*model.Chat{old, recent, pin}, "recent")
 
-	lines := sidebarLines(sideChats, sorted, ws, nil, 1, th, testSideW, 5, 0, false, false, 0, -1, false, nil)
+	lines := sidebarLines(sideChats, sorted, ws, nil, 1, th, testSideW, 5, 0, false, false, 0, -1, false, nil, sideState{})
 	if len(lines) != 5 {
 		t.Fatalf("height: %d lines", len(lines))
 	}
@@ -95,7 +95,7 @@ func TestSidebarLines(t *testing.T) {
 	}
 
 	ws[1].Act = 2
-	lines = sidebarLines(sideWindows, nil, ws, nil, 0, th, testSideW, 3, 0, false, false, 0, -1, false, nil)
+	lines = sidebarLines(sideWindows, nil, ws, nil, 0, th, testSideW, 3, 0, false, false, 0, -1, false, nil, sideState{})
 	if got := body(lines[0]); got != "0: *(none)" { // *: status window
 		t.Fatalf("window 0: %q", got)
 	}
@@ -113,7 +113,7 @@ func TestSidebarLines(t *testing.T) {
 	}
 
 	// Avatars: gutter of 3 cells at the head of the line, chat id on the line.
-	av := sidebarLines(sideChats, sorted, ws, nil, 1, th, testSideW, 5, 0, true, false, 0, -1, false, nil)
+	av := sidebarLines(sideChats, sorted, ws, nil, 1, th, testSideW, 5, 0, true, false, 0, -1, false, nil, sideState{})
 	for i, want := range []int64{3, 2, 1} { // pinned, recent, old
 		if av[i].Avatar != want {
 			t.Fatalf("line %d: avatar %d, want %d", i, av[i].Avatar, want)
@@ -128,13 +128,13 @@ func TestSidebarLines(t *testing.T) {
 	if av[3].Avatar != 0 { // filling line
 		t.Fatalf("filler: avatar %d", av[3].Avatar)
 	}
-	if sidebarLines(sideWindows, nil, ws, nil, 0, th, testSideW, 3, 0, true, false, 0, -1, false, nil)[0].Avatar != 0 {
+	if sidebarLines(sideWindows, nil, ws, nil, 0, th, testSideW, 3, 0, true, false, 0, -1, false, nil, sideState{})[0].Avatar != 0 {
 		t.Fatal("window mode: no avatar")
 	}
 
 	// sepRow : the vertical bar becomes ├ on that line, │ elsewhere, width
 	// unchanged (message separator, not the one of the sidebar).
-	sepLines := sidebarLines(sideChats, sorted, ws, nil, 1, th, testSideW, 5, 0, false, false, 0, 2, false, nil)
+	sepLines := sidebarLines(sideChats, sorted, ws, nil, 1, th, testSideW, 5, 0, false, false, 0, 2, false, nil, sideState{})
 	for i, l := range sepLines {
 		want := "│"
 		if i == 2 {
@@ -158,7 +158,7 @@ func TestSidebarKindPrefix(t *testing.T) {
 	grp := &model.Chat{ID: 2, Kind: model.ChatGroup, Title: "Groupe"}
 	canal := &model.Chat{ID: 3, Kind: model.ChatChannel, Title: "Canal"}
 
-	lines := sidebarLines(sideChats, []*model.Chat{priv, grp, canal}, []*Window{{}}, nil, 0, th, testSideW, 3, 0, false, false, 0, -1, false, nil)
+	lines := sidebarLines(sideChats, []*model.Chat{priv, grp, canal}, []*Window{{}}, nil, 0, th, testSideW, 3, 0, false, false, 0, -1, false, nil, sideState{})
 	want := []string{"@", "#", "&"} // entry order: sidebarLines no longer sorts (up to the caller)
 	for i, l := range lines {
 		b, pfx := body(l), want[i]
@@ -178,7 +178,7 @@ func TestSidebarKindPrefix(t *testing.T) {
 
 	// Window mode: prefix for the chat bound to each window.
 	ws := []*Window{{Chat: grp}, {Chat: canal}, {Chat: priv}, {}}
-	wlines := sidebarLines(sideWindows, nil, ws, nil, 0, th, testSideW, len(ws), 0, false, false, 0, -1, false, nil)
+	wlines := sidebarLines(sideWindows, nil, ws, nil, 0, th, testSideW, len(ws), 0, false, false, 0, -1, false, nil, sideState{})
 	wwant := []string{"#", "&", "@", ""}
 	for i, l := range wlines {
 		b, pfx := body(l), wwant[i]
@@ -199,14 +199,14 @@ func TestSidebarKindPrefix(t *testing.T) {
 	}
 }
 
-// fit must not shift the next column when the title holds an emoji with a
+// padTo must not shift the next column when the title holds an emoji with a
 // variation selector (❤️ counts 2 cells, not 1).
-func TestFitVS16(t *testing.T) {
-	if got := render.Width(fit("Friends ❤️ TBD", 20)); got != 20 {
-		t.Fatalf("fit ❤️: width %d", got)
+func TestPadToVS16(t *testing.T) {
+	if got := render.Width(padTo("Friends ❤️ TBD", 20)); got != 20 {
+		t.Fatalf("padTo ❤️: width %d", got)
 	}
-	if got := render.Width(fit("🙋🏻‍♀️ Support", 20)); got != 20 { // ZWJ + skin tone
-		t.Fatalf("fit ZWJ: width %d", got)
+	if got := render.Width(padTo("🙋🏻‍♀️ Support", 20)); got != 20 { // ZWJ + skin tone
+		t.Fatalf("padTo ZWJ: width %d", got)
 	}
 }
 
@@ -214,10 +214,10 @@ func TestFitVS16(t *testing.T) {
 // last step ending on the end of the title, clusters (❤️, ZWJ) never cut.
 func TestMarquee(t *testing.T) {
 	short := "Support"
-	if got, want := marquee(short, 20, 0), fit(short, 20); got != want {
+	if got, want := marquee(short, 20, 0), padTo(short, 20); got != want {
 		t.Fatalf("short title, step 0: %q, want %q", got, want)
 	}
-	if got, want := marquee(short, 20, 9), fit(short, 20); got != want { // step ignored when it fits
+	if got, want := marquee(short, 20, 9), padTo(short, 20); got != want { // step ignored when it fits
 		t.Fatalf("short title, step 9: %q, want %q", got, want)
 	}
 
@@ -228,8 +228,8 @@ func TestMarquee(t *testing.T) {
 	if render.Width(title) <= width {
 		t.Fatalf("test title not long enough: %d cells", render.Width(title))
 	}
-	if got := marquee(title, width, 0); got != fit(title, width) {
-		t.Fatalf("step 0 must show the beginning: %q, want %q", got, fit(title, width))
+	if got := marquee(title, width, 0); got != padTo(title, width) {
+		t.Fatalf("step 0 must show the beginning: %q, want %q", got, padTo(title, width))
 	}
 
 	max := marqueeMax(title, width)
@@ -542,7 +542,7 @@ func TestSideMouseNewLine(t *testing.T) {
 func TestSidebarSingleLine(t *testing.T) {
 	evil := &model.Chat{ID: 1, Title: strings.Repeat("\n", 500) + "TITRE", LastDate: time.Now()}
 	lines := sidebarLines(sideChats, []*model.Chat{evil}, []*Window{{}}, nil, 0,
-		theme.Terminal(), testSideW, 3, 0, false, false, 0, -1, false, nil)
+		theme.Terminal(), testSideW, 3, 0, false, false, 0, -1, false, nil, sideState{})
 	for i, l := range lines {
 		if strings.ContainsRune(render.LineText(l), '\n') {
 			t.Fatalf("line %d: remote line break written raw", i)
@@ -562,13 +562,13 @@ func TestSidebarNetBadge(t *testing.T) {
 		{Net: model.NetTelegram, ID: 1, Title: "tg", LastDate: time.Now()},
 		{Net: "discord", ID: 2, Title: "dc", LastDate: time.Now()},
 	}
-	off := sidebarLines(sideChats, chats, nil, nil, -1, th, testSideW, 2, 0, false, false, 0, -1, false, nil)
+	off := sidebarLines(sideChats, chats, nil, nil, -1, th, testSideW, 2, 0, false, false, 0, -1, false, nil, sideState{})
 	for i, l := range off {
 		if strings.ContainsAny(render.LineText(l), "ᵗᵈ") {
 			t.Fatalf("line %d: badge shown in single-network mode: %q", i, render.LineText(l))
 		}
 	}
-	on := sidebarLines(sideChats, chats, nil, nil, -1, th, testSideW, 2, 0, false, true, 0, -1, false, nil)
+	on := sidebarLines(sideChats, chats, nil, nil, -1, th, testSideW, 2, 0, false, true, 0, -1, false, nil, sideState{})
 	for i, want := range []string{"ᵗ tg", "ᵈ dc"} {
 		if !strings.Contains(render.LineText(on[i]), want) {
 			t.Fatalf("line %d: %q, want %q", i, render.LineText(on[i]), want)
@@ -591,9 +591,8 @@ func TestSidebarSections(t *testing.T) {
 	gen := &model.Chat{Net: model.NetDiscord, ID: 2, Kind: model.ChatGroup, Title: "Gophers / #general", LastDate: now.Add(-time.Hour)}
 	sorted := sortChats([]*model.Chat{bob, gen}, "recent")
 
-	sideSections = map[string]bool{} // sections on, nothing folded (sideBlock does this)
-	defer func() { sideSections = nil }()
-	lines := sidebarLines(sideChats, sorted, nil, nil, -1, th, testSideW, 4, 0, false, true, 0, -1, false, nil)
+	// Sections on, nothing folded (sideBlock does this).
+	lines := sidebarLines(sideChats, sorted, nil, nil, -1, th, testSideW, 4, 0, false, true, 0, -1, false, nil, sideState{folded: map[string]bool{}})
 	for i, want := range []string{"── Gophers ", "# general", "── telegram ", "@ Bob"} {
 		if !strings.Contains(render.LineText(lines[i]), want) {
 			t.Fatalf("line %d = %q, want %q", i, render.LineText(lines[i]), want)
@@ -623,9 +622,8 @@ func TestSidebarSectionFolded(t *testing.T) {
 	ann := &model.Chat{Net: model.NetDiscord, ID: 3, Kind: model.ChatGroup, Title: "Gophers / #annonces", Unread: 3, LastDate: now.Add(-2 * time.Hour)}
 	sorted := sortChats([]*model.Chat{bob, gen, ann}, "recent")
 
-	sideSections = map[string]bool{"discord:Gophers": true}
-	defer func() { sideSections = nil }()
-	lines := sidebarLines(sideChats, sorted, []*Window{{Chat: gen}}, nil, -1, th, testSideW, 3, 0, false, true, 0, -1, false, nil)
+	lines := sidebarLines(sideChats, sorted, []*Window{{Chat: gen}}, nil, -1, th, testSideW, 3, 0, false, true, 0, -1, false, nil,
+		sideState{folded: map[string]bool{"discord:Gophers": true}})
 	if head := render.LineText(lines[0]); !strings.Contains(head, "[+]") || !strings.Contains(head, "[·]") || !strings.Contains(head, " 7") {
 		t.Fatalf("folded header: %q", head)
 	}
@@ -775,7 +773,7 @@ func TestSideBlockNetFilter(t *testing.T) {
 func TestSidebarUnreadRed(t *testing.T) {
 	th := theme.Terminal()
 	c := &model.Chat{ID: 1, Title: "chat", Unread: 3, LastDate: time.Now()}
-	lines := sidebarLines(sideChats, []*model.Chat{c}, nil, nil, -1, th, testSideW, 1, 0, false, false, 0, -1, false, nil)
+	lines := sidebarLines(sideChats, []*model.Chat{c}, nil, nil, -1, th, testSideW, 1, 0, false, false, 0, -1, false, nil, sideState{})
 	for _, sp := range lines[0].Spans {
 		if strings.TrimSpace(sp.Text) == "3" {
 			if sp.Style.FG != th.Color(theme.Error) {
@@ -810,7 +808,7 @@ func TestSideHeader(t *testing.T) {
 func TestSideWindowZeroPrefix(t *testing.T) {
 	th := theme.Terminal()
 	ws := []*Window{{}, {Chat: &model.Chat{ID: 1, Kind: model.ChatGroup, Title: "g"}}}
-	lines := sidebarLines(sideWindows, nil, ws, nil, 1, th, testSideW, 2, 0, false, false, 0, -1, false, nil)
+	lines := sidebarLines(sideWindows, nil, ws, nil, 1, th, testSideW, 2, 0, false, false, 0, -1, false, nil, sideState{})
 	if got := render.LineText(lines[0]); !strings.HasPrefix(got, "0: *") {
 		t.Fatalf("window 0: %q, prefix * expected", got)
 	}
@@ -824,9 +822,7 @@ func TestSideWindowZeroPrefix(t *testing.T) {
 func TestSidebarHotCounter(t *testing.T) {
 	th := theme.Terminal()
 	ws := []*Window{{}, {Chat: &model.Chat{ID: 1, Kind: model.ChatUser, Title: "alice"}, Act: 3, Hot: true}}
-	sidePulse = true
-	defer func() { sidePulse = false }()
-	lines := sidebarLines(sideWindows, nil, ws, nil, 0, th, testSideW, 3, 0, false, false, 0, -1, false, nil)
+	lines := sidebarLines(sideWindows, nil, ws, nil, 0, th, testSideW, 3, 0, false, false, 0, -1, false, nil, sideState{pulse: true})
 	var hot *render.Span
 	for i := range lines {
 		for j := range lines[i].Spans {
@@ -1195,7 +1191,7 @@ func TestSideWheelHoverOffScrollsList(t *testing.T) {
 func TestSideWindowsActRed(t *testing.T) {
 	th := theme.Terminal()
 	ws := []*Window{{}, {Chat: &model.Chat{ID: 1, Kind: model.ChatUser, Title: "ancien"}, Act: 2}}
-	lines := sidebarLines(sideWindows, nil, ws, nil, 0, th, testSideW, 2, 0, false, false, 0, -1, false, nil)
+	lines := sidebarLines(sideWindows, nil, ws, nil, 0, th, testSideW, 2, 0, false, false, 0, -1, false, nil, sideState{})
 	red := theme.Style{FG: th.Color(theme.Error), Bold: true}
 	var act *render.Span
 	for i := range content(lines[1]) {
@@ -1219,7 +1215,7 @@ func TestSideWindowsActRed(t *testing.T) {
 func TestSideWindowDiscordHashNotDoubled(t *testing.T) {
 	th := theme.Terminal()
 	ws := []*Window{{}, {Chat: &model.Chat{Net: model.NetDiscord, ID: 1, Kind: model.ChatGroup, Title: "#general"}}}
-	lines := sidebarLines(sideWindows, nil, ws, nil, 0, th, testSideW, 2, 0, false, false, 0, -1, false, nil)
+	lines := sidebarLines(sideWindows, nil, ws, nil, 0, th, testSideW, 2, 0, false, false, 0, -1, false, nil, sideState{})
 	if got := body(lines[1]); got != "1: #general" {
 		t.Fatalf("window 1: %q", got)
 	}
@@ -1239,7 +1235,7 @@ func TestSideWinsSplit(t *testing.T) {
 	if got := u.sideWins(); !slices.Equal(got, []int{0, winSecChannels, 3, 1, winSecDirect, 2, 4}) {
 		t.Fatalf("split: %v", got)
 	}
-	lines := sidebarLines(sideWindows, nil, u.ws.List, u.sideWins(), 0, theme.Terminal(), testSideW, 7, 0, false, false, 0, -1, false, nil)
+	lines := sidebarLines(sideWindows, nil, u.ws.List, u.sideWins(), 0, theme.Terminal(), testSideW, 7, 0, false, false, 0, -1, false, nil, sideState{})
 	if got := body(lines[1]); !strings.HasPrefix(got, "── "+i18n.T("sidebar_sec_channels")+" ─") {
 		t.Fatalf("channels header: %q", got)
 	}

@@ -5,10 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"image"
-	"image/color"
 	"image/png"
-	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -161,43 +158,10 @@ const shotCols, shotRows = 138, 34
 
 var shotTime = time.Date(2026, 9, 5, 15, 42, 0, 0, time.UTC)
 
-// samplePNG draws a mountain landscape for the screenshot fixtures.
-func samplePNG(w, h int, tint color.RGBA) []byte {
-	img := image.NewRGBA(image.Rect(0, 0, w, h))
-	for y := 0; y < h; y++ {
-		for x := 0; x < w; x++ {
-			f, g := float64(x)/float64(w), float64(y)/float64(h)
-			c := color.RGBA{uint8(float64(tint.R) * (0.4 + 0.6*g)), uint8(float64(tint.G) * (0.4 + 0.6*g)), tint.B, 255}
-			dx, dy := f-0.72, (g-0.29)*float64(h)/float64(w)
-			if dx*dx+dy*dy < 0.004 {
-				c = color.RGBA{255, 223, 164, 255}
-			}
-			if g > 0.85-0.65*(1-math.Abs(f-0.3)*2) {
-				c = color.RGBA{91, 88, 142, 255}
-			}
-			if g > 0.95-0.55*(1-math.Abs(f-0.78)*2) {
-				c = color.RGBA{55, 65, 102, 255}
-			}
-			if g > 0.83 {
-				c = color.RGBA{uint8(37 + 20*g), uint8(69 + 30*f), uint8(105 + 40*f), 255}
-			}
-			img.Set(x, y, c)
-		}
-	}
-	var buf bytes.Buffer
-	png.Encode(&buf, img)
-	return buf.Bytes()
-}
-
 // span : the entity over sub in text, offsets in runes like the model.
 func span(text, sub string, kind model.SpanKind, url string) model.Span {
 	start := len([]rune(text[:strings.Index(text, sub)]))
 	return model.Span{Start: start, End: start + len([]rune(sub)), Kind: kind, URL: url}
-}
-
-func photo(label string, tint color.RGBA) *model.Media {
-	return &model.Media{Kind: model.MediaPhoto, Label: label, State: model.MediaReady, Path: "x",
-		Frames: [][]byte{samplePNG(320, 180, tint)}, FrameW: 320, FrameH: 180, W: 1280, H: 720, Loc: 1, Ext: ".jpg", Mime: "image/jpeg"}
 }
 
 // fixturePNG reads a GIF frame of docs/screenshots/fixtures and its size.

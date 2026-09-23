@@ -249,7 +249,7 @@ func TestOverlayMenu(t *testing.T) {
 	chat := &model.Chat{Net: model.NetTelegram, ID: 1, Title: "salon", Kind: model.ChatGroup}
 	entries := menuEntries(model.ChatGroup, false, model.AllCaps())
 	fill := func(cur int) *ctxMenu {
-		u.menu, sideMenuChat = &ctxMenu{chat: chat, entries: entries, x: 10, y: 5, cur: cur}, chat
+		u.menu = &ctxMenu{chat: chat, entries: entries, x: 10, y: 5, cur: cur}
 		return u.menu
 	}
 	// "search" is the last entry: with no network behind the chat it only says
@@ -271,13 +271,13 @@ func TestOverlayMenu(t *testing.T) {
 	}
 	// PgUp is not a move here: it closes, like any key that is not ↑/↓/Enter.
 	u.menuKey(term.Key{Code: term.PgUp})
-	if u.menu != nil || sideMenuChat != nil || said() {
+	if u.menu != nil || said() {
 		t.Fatalf("pgup must close the menu with no action: menu = %v", u.menu != nil)
 	}
 	// Enter runs the current entry and closes.
 	fill(last)
 	u.menuKey(term.Key{Code: term.Enter})
-	if u.menu != nil || sideMenuChat != nil || !said() {
+	if u.menu != nil || !said() {
 		t.Fatalf("enter: menu = %v, action run = %v", u.menu != nil, said())
 	}
 	// Click on the top border: nothing runs, the menu stays.
@@ -300,7 +300,7 @@ func TestOverlayMenu(t *testing.T) {
 	// menu closes.
 	u.view().Items = nil
 	u.menuMouse(term.MouseEvent{X: r.col + 1, Y: r.row + 1 + last, Button: 0, Press: true})
-	if u.menu != nil || sideMenuChat != nil || !said() {
+	if u.menu != nil || !said() {
 		t.Fatalf("click on an entry: menu = %v, action run = %v", u.menu != nil, said())
 	}
 }

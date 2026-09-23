@@ -46,7 +46,6 @@ func cropKeys(crop []image.Rectangle) string {
 
 // KittyDeletePlacement drops placements without touching the data sent
 // (lower case d=i): the one of pid, or every one of the image when pid is 0.
-// vaut 0.
 func KittyDeletePlacement(id, pid uint32) string {
 	if pid == 0 {
 		return fmt.Sprintf("\x1b_Ga=d,d=i,i=%d,q=2\x1b\\", id)
