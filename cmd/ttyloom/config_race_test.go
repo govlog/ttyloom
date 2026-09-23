@@ -16,7 +16,7 @@ func TestIRCConfigCallbackRace(t *testing.T) {
 	}
 	n := &config.IRCConfig{Name: "audit", Host: "localhost", Nick: "me"}
 	cfg.IRC = []*config.IRCConfig{n}
-	save := ircConfig(context.Background(), n, make(chan model.Event, 100)).SaveChannels
+	save := ircConfig(context.Background(), n, "", make(chan model.Event, 100)).SaveChannels
 	var wg sync.WaitGroup
 	wg.Add(2)
 	go func() {

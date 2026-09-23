@@ -2,6 +2,7 @@ package irc
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"strconv"
@@ -39,10 +40,15 @@ var usages = map[string]string{
 
 // Command runs one slash command from the UI. reply: chat of the window it
 // was typed in (0 = window 0); room: the channel of that window, if any.
-func (c *Client) Command(_ context.Context, reply int64, room, name string, args []string, text string) {
+// One token of the output pacer per command: a run of them is a flood too.
+func (c *Client) Command(ctx context.Context, reply int64, room, name string, args []string, text string) {
 	go func() {
 		defer c.Guard("Command", nil)
-		if err := c.command(reply, room, name, args, text); err != nil {
+		err := c.pace(ctx)
+		if err == nil {
+			err = c.command(reply, room, name, args, text)
+		}
+		if err != nil {
 			c.Post(model.EvLines{ChatID: reply, Lines: []string{err.Error()}})
 		}
 	}()
@@ -110,7 +116,13 @@ func (c *Client) command(reply int64, room, name string, args []string, text str
 		if len(args) != 1 {
 			return usage
 		}
-		return c.send("NICK", args[0])
+		if c.conn == nil || !c.conn.Connected() {
+			return errors.New(i18n.T("irc_not_connected", c.net()))
+		}
+		// SetNick, not a raw NICK: the library sends its preferred nick again
+		// at every keepalive when the current one differs — a raw change was
+		// undone four minutes later.
+		c.conn.SetNick(args[0])
 	case "notice":
 		if len(args) < 2 {
 			return usage
@@ -411,7 +423,9 @@ func (c *Client) onMotdLine(e ircmsg.Message) {
 		return
 	}
 	c.mu.Lock()
-	c.motd = append(c.motd, strings.TrimPrefix(e.Params[len(e.Params)-1], "- "))
+	if len(c.motd) < maxGather {
+		c.motd = append(c.motd, strings.TrimPrefix(e.Params[len(e.Params)-1], "- "))
+	}
 	c.mu.Unlock()
 }
 

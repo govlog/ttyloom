@@ -288,3 +288,19 @@ func TestIRCAddPresets(t *testing.T) {
 		t.Fatalf("back to free text: %q", v[fHost])
 	}
 }
+
+// /irc add refuses TLS no together with a password: it would go in clear.
+func TestRegressionIRCAddPlainPassword(t *testing.T) {
+	u, n := launchUI(nil)
+	cfg, err := config.LoadFrom(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	u.cfg = cfg
+	if e := u.ircAddSubmit([]string{"efnet", "irc.efnet.org", "6667", "no", "me", "", "", "pw"}); e != i18n.T("irc_tls_password") {
+		t.Fatalf("plain password: %q", e)
+	}
+	if cfg.IRCByName("efnet") != nil || *n != 0 {
+		t.Fatal("network written or launched")
+	}
+}

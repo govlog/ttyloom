@@ -64,18 +64,35 @@ type DiscordConfig struct {
 // PART) and joined again at the next connection — the client's own memory,
 // there being no bouncer.
 type IRCConfig struct {
-	Name             string   `toml:"name"`
-	Host             string   `toml:"host"`
-	Port             int      `toml:"port"`
-	TLS              bool     `toml:"tls"`
-	Nick             string   `toml:"nick"`
-	User             string   `toml:"user"`
-	RealName         string   `toml:"realname"`
-	NickServPassword string   `toml:"nickserv_password"`
-	Channels         []string `toml:"channels"`
-	Ignores          []string `toml:"ignores"`   // nick!user@host masks whose lines are dropped (/ignore)
-	DCCIP            string   `toml:"dcc_ip"`    // address announced by DCC SEND; empty = the one of the IRC socket
-	DCCPorts         string   `toml:"dcc_ports"` // "5000-5010"; empty = any free port
+	Name             string `toml:"name"`
+	Host             string `toml:"host"`
+	Port             int    `toml:"port"`
+	TLS              bool   `toml:"tls"`
+	Nick             string `toml:"nick"`
+	User             string `toml:"user"`
+	RealName         string `toml:"realname"`
+	NickServPassword string `toml:"nickserv_password"`
+	// NickServPasswordCmd : command printing the password, like the Discord
+	// token_cmd — the secret then never lands in config.toml. It wins over
+	// nickserv_password.
+	NickServPasswordCmd string `toml:"nickserv_password_cmd"`
+	// PasswordWithoutTLS sends the password on a connection without TLS,
+	// in clear; off (the default), it is withheld and a warning says so.
+	PasswordWithoutTLS bool     `toml:"password_without_tls"`
+	Channels           []string `toml:"channels"`
+	Ignores            []string `toml:"ignores"`   // nick!user@host masks whose lines are dropped (/ignore)
+	DCCIP              string   `toml:"dcc_ip"`    // address announced by DCC SEND; empty = the one of the IRC socket
+	DCCPorts           string   `toml:"dcc_ports"` // "5000-5010"; empty = any free port
+}
+
+// Password gives the NickServ password: the output of nickserv_password_cmd
+// when there is one, the plain nickserv_password otherwise. Read at each
+// launch of the network, never kept.
+func (n *IRCConfig) Password() (string, error) {
+	if strings.TrimSpace(n.NickServPasswordCmd) == "" {
+		return n.NickServPassword, nil
+	}
+	return secretCmd("irc:"+n.Name+": nickserv_password_cmd", n.NickServPasswordCmd)
 }
 
 // IRCByName gives the [[irc]] table of name, nil when there is none.
@@ -92,13 +109,8 @@ func (c *Config) IRCByName(name string) *IRCConfig {
 // is one, the token file otherwise — "" with no error when that file does not
 // exist yet, and the backend then logs in by QR and writes it. The token
 // never lands in config.toml, the log or an event.
-//
-// The timeout of the command is the one of a password prompt that nobody
-// answers: a pinentry waiting on a locked keyring would otherwise hold the
-// start of the whole client with an empty screen.
 func (d *DiscordConfig) Token(file string) (string, error) {
-	f := strings.Fields(d.TokenCmd)
-	if len(f) == 0 {
+	if strings.TrimSpace(d.TokenCmd) == "" {
 		b, err := os.ReadFile(file)
 		if errors.Is(err, os.ErrNotExist) {
 			return "", nil
@@ -108,6 +120,18 @@ func (d *DiscordConfig) Token(file string) (string, error) {
 		}
 		return strings.TrimSpace(string(b)), nil
 	}
+	return secretCmd("discord: token_cmd", d.TokenCmd)
+}
+
+// secretCmd runs cmd — split on blanks, no shell — and gives its trimmed
+// stdout: a secret read from a password manager (the Discord token, a
+// NickServ password). label heads the errors.
+//
+// The timeout of the command is the one of a password prompt that nobody
+// answers: a pinentry waiting on a locked keyring would otherwise hold the
+// start of the whole client with an empty screen.
+func secretCmd(label, cmd string) (string, error) {
+	f := strings.Fields(cmd)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	out, err := exec.CommandContext(ctx, f[0], f[1:]...).Output()
@@ -117,16 +141,16 @@ func (d *DiscordConfig) Token(file string) (string, error) {
 		var ee *exec.ExitError
 		if errors.As(err, &ee) {
 			if line, _, _ := strings.Cut(strings.TrimSpace(string(ee.Stderr)), "\n"); line != "" {
-				return "", fmt.Errorf("discord: token_cmd: %w: %s", err, line)
+				return "", fmt.Errorf("%s: %w: %s", label, err, line)
 			}
 		}
-		return "", fmt.Errorf("discord: token_cmd: %w", err)
+		return "", fmt.Errorf("%s: %w", label, err)
 	}
-	tok := strings.TrimSpace(string(out))
-	if tok == "" { // a command that succeeds and prints nothing is not a token
-		return "", errors.New("discord: token_cmd printed nothing")
+	s := strings.TrimSpace(string(out))
+	if s == "" { // a command that succeeds and prints nothing is not a secret
+		return "", fmt.Errorf("%s printed nothing", label)
 	}
-	return tok, nil
+	return s, nil
 }
 
 type Config struct {
@@ -210,7 +234,9 @@ const defaultFile = `# ttyloom
 #   port = 6697
 #   tls = true
 #   nick = "me"
-#   nickserv_password = ""       # SASL PLAIN, or NickServ IDENTIFY without SASL
+#   nickserv_password_cmd = "pass show irc/libera"  # prints the password (no shell, like token_cmd); wins over the next key
+#   nickserv_password = ""       # SASL PLAIN, or NickServ IDENTIFY when the server has no SASL
+#   password_without_tls = false # true sends the password in clear on a connection without TLS; withheld otherwise
 #   channels = ["#go-nuts"]      # kept up to date by /join and /part, joined again at start
 #   ignores = ["spammer!*@*"]    # kept up to date by /ignore: lines of those masks are dropped
 # Sections go at the END of the file: a plain key written after [discord]

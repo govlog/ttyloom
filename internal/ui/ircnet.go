@@ -157,6 +157,8 @@ func (u *UI) ircAddSubmit(v []string) string {
 		return i18n.T("irc_bad_host")
 	case v[4] == "" || strings.ContainsAny(v[4], " ,"):
 		return i18n.T("irc_bad_nick")
+	case !yes(v[3]) && v[7] != "": // the password would go in clear
+		return i18n.T("irc_tls_password")
 	}
 	port := 6697
 	if v[2] != "" {

@@ -10,7 +10,6 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	"io"
 	"log"
 	"net"
 	"slices"
@@ -37,10 +36,13 @@ type Config struct {
 	User     string
 	RealName string
 	Password string // NickServ / SASL PLAIN password; empty = none
-	Channels []string
-	DCCIP    string
-	DCCPorts string
-	Ignores  []string // nick!user@host masks whose lines are dropped (/ignore)
+	// PasswordWithoutTLS sends Password on a connection without TLS, where
+	// SASL PLAIN and IDENTIFY both carry it in clear; off, it is withheld.
+	PasswordWithoutTLS bool
+	Channels           []string
+	DCCIP              string
+	DCCPorts           string
+	Ignores            []string // nick!user@host masks whose lines are dropped (/ignore)
 	// SaveChannels writes the channel list back to the configuration — after
 	// a join or a part, so that the next start finds the same rooms.
 	SaveChannels func([]string) error
@@ -55,12 +57,15 @@ type Client struct {
 	ids     idGen
 	casemap atomic.Value
 
+	out  *pacer // user-initiated lines: burst outBurst, then one every outFill
+	ctcp *pacer // CTCP answers: burst 3, one every 2 s
+
 	mu       sync.Mutex
-	channels []string                  // rooms to be in: the config list, joined at each connection
-	members  map[string][]string       // folded channel -> nicks seen (NAMES, JOIN, PART…)
-	names    map[string][]string       // NAMES in progress, folded channel -> nicks
-	queries  map[string]string         // folded nick -> nick, private chats open
-	joining  map[string][]model.EvChat // folded channel -> Resolve query waiting for the JOIN
+	channels []string                     // rooms to be in: the config list, joined at each connection
+	members  map[string]map[string]string // folded channel -> folded nick -> nick as seen (NAMES, JOIN, PART…)
+	names    map[string][]string          // NAMES in progress, folded channel -> nicks
+	queries  map[string]string            // folded nick -> nick, private chats open
+	joining  map[string][]model.EvChat    // folded channel -> Resolve query waiting for the JOIN
 	naming   map[string]*model.Chat
 	whois    map[string]*whoisReq
 	offers   map[string]dccOffer  // folded nick -> last DCC offer received
@@ -70,8 +75,7 @@ type Client struct {
 	motd     []string             // MOTD lines gathered until 376/422
 	ignores  []string             // /ignore masks, nick!user@host with * and ?
 	pings    map[string]time.Time // folded nick -> CTCP PING sent at
-	saslOK   bool
-	ready    bool // EvReady posted (once per Run)
+	ready    bool                 // EvReady posted (once per Run)
 	sock     net.Conn
 }
 
@@ -84,7 +88,8 @@ type whoisReq struct {
 // New builds the client; nothing connects before Run.
 func New(cfg Config, events chan<- model.Event) *Client {
 	c := &Client{Poster: model.Poster{Events: events}, cfg: cfg,
-		members: map[string][]string{}, names: map[string][]string{}, queries: map[string]string{},
+		out: newPacer(outBurst, outFill), ctcp: newPacer(3, 2*time.Second),
+		members: map[string]map[string]string{}, names: map[string][]string{}, queries: map[string]string{},
 		joining: map[string][]model.EvChat{}, naming: map[string]*model.Chat{}, whois: map[string]*whoisReq{},
 		offers: map[string]dccOffer{}, asked: map[string]int64{}, pings: map[string]time.Time{}}
 	for _, m := range cfg.Ignores { // a hand-written "bob" is the mask bob!*@*
@@ -137,9 +142,8 @@ func (c *Client) build() *ircevent.Connection {
 		UseTLS:        cfg.TLS,
 		TLSConfig:     &tls.Config{ServerName: cfg.Host},
 		RequestCaps:   []string{"server-time"},
-		SASLOptional:  true, // a network without SASL identifies to NickServ after 001
-		EnableCTCP:    true, // VERSION/PING answered by the library, ACTION and DCC rewritten
-		Version:       "ttyloom",
+		SASLOptional:  true,  // a network without SASL identifies to NickServ after 001
+		EnableCTCP:    false, // CTCP parsed by onCTCP: ignore list and rate limit on the answers
 		QuitMessage:   "ttyloom",
 		ReconnectFreq: 20 * time.Second,
 		Log:           log.New(logWriter{c}, "", 0),
@@ -153,10 +157,19 @@ func (c *Client) build() *ircevent.Connection {
 			return s, err
 		},
 	}
-	if cfg.Password != "" {
-		conn.SASLLogin, conn.SASLPassword = cfg.Nick, cfg.Password
+	if pw := c.password(); pw != "" {
+		conn.SASLLogin, conn.SASLPassword = cfg.Nick, pw
 	}
 	return conn
+}
+
+// password : the one that may go on the wire — none without TLS unless the
+// configuration says so, SASL PLAIN and IDENTIFY both carrying it in clear.
+func (c *Client) password() string {
+	if c.cfg.TLS || c.cfg.PasswordWithoutTLS {
+		return c.cfg.Password
+	}
+	return ""
 }
 
 // Run connects (blocking until 001, the error of a first connection is the
@@ -164,6 +177,9 @@ func (c *Client) build() *ircevent.Connection {
 func (c *Client) Run(ctx context.Context) error {
 	if ctx.Err() != nil {
 		return nil // a launch already given up (a logout during the token read)
+	}
+	if c.cfg.Password != "" && c.password() == "" {
+		c.Post(model.EvLog{Level: "WARN", Msg: i18n.T("irc_password_withheld", c.net())})
 	}
 	c.conn = c.build()
 	c.wire(c.conn)
@@ -203,15 +219,8 @@ func (c *Client) Run(ctx context.Context) error {
 func (c *Client) wire(conn *ircevent.Connection) {
 	conn.AddConnectCallback(func(ircmsg.Message) { c.connected() })
 	conn.AddDisconnectCallback(func(ircmsg.Message) { c.Post(model.EvDisconnected{}) })
-	conn.AddCallback(ircevent.RPL_SASLSUCCESS, func(ircmsg.Message) {
-		c.mu.Lock()
-		c.saslOK = true
-		c.mu.Unlock()
-	})
 	conn.AddCallback("PRIVMSG", c.onPrivmsg)
 	conn.AddCallback("NOTICE", c.onNotice)
-	conn.AddCallback("CTCP_ACTION", c.onAction)
-	conn.AddCallback("CTCP", c.onCTCP)
 	conn.AddCallback("JOIN", c.onJoin)
 	conn.AddCallback("PART", c.onPart)
 	conn.AddCallback("KICK", c.onKick)
@@ -294,8 +303,10 @@ func (c *Client) me() string { return c.conn.CurrentNick() }
 func (c *Client) isMe(nick string) bool { return c.casefold(nick) == c.casefold(c.me()) }
 
 // connected : end of the registration, on every connection. EvReady once,
-// then the rooms of the list joined again and NickServ told when SASL did not
-// do it.
+// then the rooms of the list joined again and NickServ told when the server
+// has no SASL at all. One that offered SASL and refused the password is not
+// told a second time, and on a network without services (EFnet, IRCnet)
+// anyone may sit on the nick NickServ.
 func (c *Client) connected() {
 	mode := c.conn.ISupport()["CASEMAPPING"]
 	switch mode {
@@ -308,14 +319,13 @@ func (c *Client) connected() {
 	first := !c.ready
 	c.ready = true
 	chans := slices.Clone(c.channels)
-	sasl := c.saslOK
 	c.mu.Unlock()
 	if first {
 		c.Post(model.EvReady{SelfID: chatID(c.me(), "ascii"), SelfName: c.me()})
 	}
 	c.Post(model.EvConnected{})
-	if c.cfg.Password != "" && !sasl {
-		c.conn.Send("PRIVMSG", "NickServ", "IDENTIFY "+c.cfg.Password)
+	if _, sasl := c.conn.AcknowledgedCaps()["sasl"]; !sasl && c.password() != "" {
+		c.conn.Send("PRIVMSG", "NickServ", "IDENTIFY "+c.password())
 	}
 	for _, ch := range chans {
 		c.conn.Join(ch)
@@ -351,8 +361,48 @@ func (c *Client) onPrivmsg(e ircmsg.Message) {
 	if c.ignored(e) || len(e.Params) < 2 {
 		return
 	}
+	if t := e.Params[1]; len(t) > 1 && t[0] == 1 {
+		c.onCTCP(e, strings.TrimSuffix(t[1:], "\x01"))
+		return
+	}
 	chat := c.target(e)
 	c.Post(model.EvNewMessage{Msg: c.msgOf(e, chat, e.Params[1]), Chat: chat})
+}
+
+// onCTCP : a PRIVMSG wrapped in \x01, parsed here rather than by the library,
+// which answered every VERSION or TIME on its own — ignore list or not, at
+// any rate (an easy "Excess Flood"). ACTION and DCC SEND are messages;
+// VERSION, PING, TIME and CLIENTINFO get an answer when asked directly (not
+// through a room), from someone not ignored, and while the bucket has a
+// token. Everything else, USERINFO included, is dropped.
+func (c *Client) onCTCP(e ircmsg.Message, body string) {
+	verb, arg, _ := strings.Cut(body, " ")
+	switch verb = strings.ToUpper(verb); verb {
+	case "ACTION":
+		c.onAction(e, arg)
+	case "DCC":
+		c.onDCC(e, arg)
+	case "VERSION", "PING", "TIME", "CLIENTINFO":
+		if e.Nick() == "" || !c.isMe(e.Params[0]) || !c.ctcp.allow() {
+			return
+		}
+		reply := verb
+		switch verb {
+		case "VERSION":
+			reply += " ttyloom"
+		case "PING":
+			if arg != "" {
+				reply += " " + arg
+			}
+		case "TIME":
+			reply += " " + time.Now().UTC().Format(time.RFC1123)
+		case "CLIENTINFO":
+			reply += " ACTION CLIENTINFO DCC PING TIME VERSION"
+		}
+		// Straight out, past the output pacer: a callback never waits, and
+		// the bucket above is the limit of these lines.
+		c.conn.Send("NOTICE", e.Nick(), "\x01"+reply+"\x01")
+	}
 }
 
 // onNotice : a notice to a channel shows there as "-nick- text"; one to us
@@ -383,12 +433,9 @@ func (c *Client) onNotice(e ircmsg.Message) {
 }
 
 // onAction : CTCP ACTION, "* nick does" in italics.
-func (c *Client) onAction(e ircmsg.Message) {
-	if c.ignored(e) || len(e.Params) < 2 {
-		return
-	}
+func (c *Client) onAction(e ircmsg.Message, text string) {
 	chat := c.target(e)
-	m := c.msgOf(e, chat, e.Params[1])
+	m := c.msgOf(e, chat, text)
 	m.Text = "* " + e.Nick() + " " + m.Text
 	for i := range m.Entities {
 		m.Entities[i].Start += len([]rune("* " + e.Nick() + " "))
@@ -398,13 +445,14 @@ func (c *Client) onAction(e ircmsg.Message) {
 	c.Post(model.EvNewMessage{Msg: m, Chat: chat})
 }
 
-// onCTCP : every CTCP the library does not answer itself. DCC SEND becomes a
-// file offer in the private chat of the sender; the rest is dropped.
-func (c *Client) onCTCP(e ircmsg.Message) {
-	if c.ignored(e) || len(e.Params) < 2 || !strings.HasPrefix(strings.ToUpper(e.Params[1]), "DCC SEND ") {
+// onDCC : DCC SEND becomes a file offer in the private chat of the sender;
+// any other DCC (CHAT, RESUME…) is dropped.
+func (c *Client) onDCC(e ircmsg.Message, args string) {
+	kind, rest, _ := strings.Cut(args, " ")
+	if !strings.EqualFold(kind, "SEND") {
 		return
 	}
-	off, err := parseOffer(e.Nick(), e.Params[1][len("DCC SEND "):])
+	off, err := parseOffer(e.Nick(), rest, c.loopbackDCC())
 	if err != nil {
 		c.Post(model.EvLog{Level: "WARN", Msg: c.net() + ": DCC " + e.Nick() + ": " + err.Error()})
 		return
@@ -429,20 +477,21 @@ func (c *Client) service(channel, text string, e ircmsg.Message) {
 
 // member bookkeeping: NAMES fills the list, JOIN/PART/KICK/QUIT/NICK keep it
 // right. QUIT and NICK carry no channel: the lists say where the person was.
+// Folded keys: a netsplit is a burst of QUITs, one lookup each.
 func (c *Client) addMember(channel, nick string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	k := c.casefold(channel)
-	if !slices.ContainsFunc(c.members[k], func(n string) bool { return c.casefold(n) == c.casefold(nick) }) {
-		c.members[k] = append(c.members[k], nick)
+	if c.members[k] == nil {
+		c.members[k] = map[string]string{}
 	}
+	c.members[k][c.casefold(nick)] = nick
 }
 
 func (c *Client) dropMember(channel, nick string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	k := c.casefold(channel)
-	c.members[k] = slices.DeleteFunc(c.members[k], func(n string) bool { return c.casefold(n) == c.casefold(nick) })
+	delete(c.members[c.casefold(channel)], c.casefold(nick))
 }
 
 // channelsOf : the channels nick is seen in.
@@ -450,8 +499,9 @@ func (c *Client) channelsOf(nick string) []string {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	var out []string
+	f := c.casefold(nick)
 	for ch, ns := range c.members {
-		if slices.ContainsFunc(ns, func(n string) bool { return c.casefold(n) == c.casefold(nick) }) {
+		if _, in := ns[f]; in {
 			out = append(out, ch)
 		}
 	}
@@ -470,7 +520,7 @@ func (c *Client) onJoin(e ircmsg.Message) {
 			c.channels = append(c.channels, ch)
 			c.saveChannelsLocked()
 		}
-		c.members[c.casefold(ch)] = nil
+		c.members[c.casefold(ch)] = map[string]string{}
 		q, waiting := c.joining[c.casefold(ch)]
 		delete(c.joining, c.casefold(ch))
 		c.mu.Unlock()
@@ -484,7 +534,12 @@ func (c *Client) onJoin(e ircmsg.Message) {
 		c.service(ch, i18n.T("irc_you_joined", ch), e)
 		return
 	}
+	// An ignored person is still counted (the member list must stay right);
+	// only the line is dropped — same below for PART, QUIT, NICK, TOPIC, MODE.
 	c.addMember(ch, nick)
+	if c.ignored(e) {
+		return
+	}
 	c.service(ch, i18n.T("irc_joined", nick), e)
 }
 
@@ -500,6 +555,9 @@ func (c *Client) onPart(e ircmsg.Message) {
 		return // Leave already told the UI (EvChatGone)
 	}
 	c.dropMember(ch, nick)
+	if c.ignored(e) {
+		return
+	}
 	reason := ""
 	if len(e.Params) > 1 {
 		reason = " (" + e.Params[1] + ")"
@@ -532,9 +590,12 @@ func (c *Client) onQuit(e ircmsg.Message) {
 	if len(e.Params) > 0 {
 		reason = " (" + e.Params[0] + ")"
 	}
+	quiet := c.ignored(e)
 	for _, ch := range c.channelsOf(nick) {
 		c.dropMember(ch, nick)
-		c.service(ch, i18n.T("irc_quit", nick)+reason, e)
+		if !quiet {
+			c.service(ch, i18n.T("irc_quit", nick)+reason, e)
+		}
 	}
 }
 
@@ -543,10 +604,13 @@ func (c *Client) onNick(e ircmsg.Message) {
 		return
 	}
 	old, now := e.Nick(), e.Params[0]
+	quiet := c.ignored(e)
 	for _, ch := range c.channelsOf(old) {
 		c.dropMember(ch, old)
 		c.addMember(ch, now)
-		c.service(ch, i18n.T("irc_renamed", old, now), e)
+		if !quiet {
+			c.service(ch, i18n.T("irc_renamed", old, now), e)
+		}
 	}
 	if c.casefold(old) == c.casefold(now) {
 		return
@@ -561,24 +625,28 @@ func (c *Client) onNick(e ircmsg.Message) {
 		c.queries[c.casefold(now)] = now
 	}
 	c.mu.Unlock()
-	if open {
+	if open && !quiet {
 		c.service(old, i18n.T("irc_renamed", old, now), e)
 	}
 }
 
 func (c *Client) onTopic(e ircmsg.Message) {
-	if len(e.Params) < 2 {
+	if len(e.Params) < 2 || c.ignored(e) {
 		return
 	}
 	c.service(e.Params[0], i18n.T("irc_topic_set", e.Nick(), e.Params[1]), e)
 }
 
 func (c *Client) onMode(e ircmsg.Message) {
-	if len(e.Params) < 2 || !isChannel(e.Params[0]) {
+	if len(e.Params) < 2 || !isChannel(e.Params[0]) || c.ignored(e) {
 		return
 	}
 	c.service(e.Params[0], i18n.T("irc_mode", e.Nick(), strings.Join(e.Params[1:], " ")), e)
 }
+
+// maxGather : lines kept of a NAMES, WHOIS or MOTD answer. A server that
+// never sends the end numeric must not grow the heap without bound.
+const maxGather = 10000
 
 // onNames : 353 "<me> <=|*|@> <channel> :nick nick…", gathered until 366.
 func (c *Client) onNames(e ircmsg.Message) {
@@ -587,7 +655,9 @@ func (c *Client) onNames(e ircmsg.Message) {
 	}
 	k := c.casefold(e.Params[2])
 	c.mu.Lock()
-	c.names[k] = append(c.names[k], strings.Fields(e.Params[3])...)
+	if len(c.names[k]) < maxGather {
+		c.names[k] = append(c.names[k], strings.Fields(e.Params[3])...)
+	}
 	c.mu.Unlock()
 }
 
@@ -605,9 +675,10 @@ func (c *Client) onEndOfNames(e ircmsg.Message) {
 	// JOIN. A 366 for any other room (/names #other) must not create one, or
 	// Resolve would read it as "already joined" and skip the JOIN.
 	if _, joined := c.members[k]; joined {
-		c.members[k] = nil
+		c.members[k] = make(map[string]string, len(names))
 		for _, n := range names {
-			c.members[k] = append(c.members[k], strings.TrimLeft(n, "~&@%+"))
+			bare := strings.TrimLeft(n, "~&@%+")
+			c.members[k][c.casefold(bare)] = bare
 		}
 	}
 	chat := c.naming[k]
@@ -637,7 +708,7 @@ func (c *Client) onWhoisLine(e ircmsg.Message) {
 	}
 	c.mu.Lock()
 	r := c.whois[c.casefold(e.Params[1])]
-	if r != nil {
+	if r != nil && len(r.raw) < maxGather {
 		r.raw = append(r.raw, e)
 	}
 	_, whowas := c.asked["whowas"]
@@ -733,12 +804,18 @@ func (c *Client) sendRaw(line string) error {
 	return c.conn.SendRaw(line)
 }
 
-// localIP : the address of the IRC socket, what DCC SEND announces when the
-// configuration names none.
+// localIP : the address DCC SEND announces — dcc_ip, else the one of the
+// IRC socket.
 func (c *Client) localIP() string {
 	if c.cfg.DCCIP != "" {
 		return c.cfg.DCCIP
 	}
+	return c.sockIP()
+}
+
+// sockIP : the local address of the IRC socket, "" while there is none (or
+// when it is not TCP: the pipe of the tests).
+func (c *Client) sockIP() string {
 	c.mu.Lock()
 	s := c.sock
 	c.mu.Unlock()
@@ -751,12 +828,73 @@ func (c *Client) localIP() string {
 	return ""
 }
 
-// discard drains r: the acks of a DCC SEND, read and forgotten.
-func discard(r io.Reader) {
-	buf := make([]byte, 4096)
-	for {
-		if _, err := r.Read(buf); err != nil {
-			return
-		}
+// Output pacing: what the user sends (a pasted text, a run of commands, DCC
+// offers) goes out at outBurst lines, then one every outFill — under the
+// "Excess Flood" limit of the servers. The callbacks of the read goroutine
+// never wait on it: their lines go straight to send.
+const outBurst = 4
+
+var outFill = time.Second // a variable: the pacing test shortens it
+
+// pacer : a token bucket, burst tokens at rest and one more every fill.
+type pacer struct {
+	mu     sync.Mutex
+	burst  float64
+	fill   time.Duration
+	tokens float64
+	last   time.Time
+}
+
+func newPacer(burst int, fill time.Duration) *pacer {
+	return &pacer{burst: float64(burst), fill: fill, tokens: float64(burst), last: time.Now()}
+}
+
+// refill credits the time gone by; mu held.
+func (p *pacer) refill() {
+	now := time.Now()
+	p.tokens = min(p.burst, p.tokens+float64(now.Sub(p.last))/float64(p.fill))
+	p.last = now
+}
+
+// take reserves a token and gives the time to wait for it. The count may go
+// below zero — tokens owed — so the callers queue in the order they came.
+func (p *pacer) take() time.Duration {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.refill()
+	p.tokens--
+	if p.tokens >= 0 {
+		return 0
+	}
+	return time.Duration(-p.tokens * float64(p.fill))
+}
+
+// allow takes a token when one is there, false otherwise; never waits.
+func (p *pacer) allow() bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.refill()
+	if p.tokens < 1 {
+		return false
+	}
+	p.tokens--
+	return true
+}
+
+// pace holds a user-initiated line until the output bucket has a token for
+// it; ctx (the network: a logout, a disconnect) cuts the wait. Never called
+// from a callback.
+func (c *Client) pace(ctx context.Context) error {
+	d := c.out.take()
+	if d <= 0 {
+		return nil
+	}
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-t.C:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 }

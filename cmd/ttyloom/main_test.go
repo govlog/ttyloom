@@ -165,7 +165,7 @@ func TestBackendsIRC(t *testing.T) {
 		t.Fatal("an unknown IRC network must not launch")
 	}
 	raw := make(chan model.Event, 1)
-	if err := ircConfig(context.Background(), cfg.IRCByName("oftc"), raw).SaveChannels([]string{"#debian"}); err != nil {
+	if err := ircConfig(context.Background(), cfg.IRCByName("oftc"), "", raw).SaveChannels([]string{"#debian"}); err != nil {
 		t.Fatal(err)
 	}
 	if ev := (<-raw).(model.EvIRCChannels); !slices.Equal(ev.Channels, []string{"#debian"}) {

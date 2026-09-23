@@ -2,6 +2,7 @@ package irc
 
 import (
 	"context"
+	"maps"
 	"os"
 	"slices"
 	"strings"
@@ -60,14 +61,19 @@ func (c *Client) LoadHistorySince(_ context.Context, chat *model.Chat, _, _ int)
 
 // --- sends ---
 
-// sendText : text to the chat, one PRIVMSG per line piece; the receipt
-// unpends the local line (no server echo on IRC: the UI keeps what it has).
-func (c *Client) sendText(name string, chat *model.Chat, text string, tmpID int64) {
+// sendText : text to the chat, one PRIVMSG per line piece, paced (a pasted
+// text is many lines); the receipt unpends the local line (no server echo
+// on IRC: the UI keeps what it has).
+func (c *Client) sendText(ctx context.Context, name string, chat *model.Chat, text string, tmpID int64) {
 	go func() {
 		defer c.Guard(name, func(err string) { c.Post(model.EvSent{ChatID: chat.ID, TmpID: tmpID, Err: err}) })
 		to := nameOf(chat)
 		for _, line := range splitLines(text, maxLine) {
-			if err := c.send("PRIVMSG", to, line); err != nil {
+			err := c.pace(ctx)
+			if err == nil {
+				err = c.send("PRIVMSG", to, line)
+			}
+			if err != nil {
 				c.Post(model.EvSent{ChatID: chat.ID, TmpID: tmpID, Err: err.Error()})
 				return
 			}
@@ -76,23 +82,23 @@ func (c *Client) sendText(name string, chat *model.Chat, text string, tmpID int6
 	}()
 }
 
-func (c *Client) Send(_ context.Context, chat *model.Chat, text string, tmpID int64) {
-	c.sendText("Send", chat, text, tmpID)
+func (c *Client) Send(ctx context.Context, chat *model.Chat, text string, tmpID int64) {
+	c.sendText(ctx, "Send", chat, text, tmpID)
 }
 
 // SendReply : no reply on IRC — the nick of the author is put in front, the
 // usual way to answer someone in a room. The UI gives the id only; the text
 // of the message is not at hand here, so the prefix is what it can be.
-func (c *Client) SendReply(_ context.Context, chat *model.Chat, text string, _ int, tmpID int64) {
-	c.sendText("SendReply", chat, text, tmpID)
+func (c *Client) SendReply(ctx context.Context, chat *model.Chat, text string, _ int, tmpID int64) {
+	c.sendText(ctx, "SendReply", chat, text, tmpID)
 }
 
-func (c *Client) SendStyled(_ context.Context, chat *model.Chat, segs []model.Seg, tmpID int64) {
-	c.sendText("SendStyled", chat, styled(segs), tmpID)
+func (c *Client) SendStyled(ctx context.Context, chat *model.Chat, segs []model.Seg, tmpID int64) {
+	c.sendText(ctx, "SendStyled", chat, styled(segs), tmpID)
 }
 
-func (c *Client) SendPre(_ context.Context, chat *model.Chat, text string, tmpID int64) {
-	c.sendText("SendPre", chat, text, tmpID)
+func (c *Client) SendPre(ctx context.Context, chat *model.Chat, text string, tmpID int64) {
+	c.sendText(ctx, "SendPre", chat, text, tmpID)
 }
 
 // SendPhoto : a file like any other — DCC SEND, to a person only.
@@ -181,8 +187,8 @@ func (c *Client) Resolve(_ context.Context, q string, _ bool, request uint64) {
 }
 
 // Members : who the client knows in chat, as the UI completes them — the
-// member list of the room, kept up to date by NAMES and JOIN/PART, or the
-// peer alone for a private chat.
+// member list of the room, kept up to date by NAMES and JOIN/PART, sorted,
+// or the peer alone for a private chat.
 func (c *Client) Members(chat *model.Chat) []string {
 	name := nameOf(chat)
 	if !isChannel(name) {
@@ -190,7 +196,12 @@ func (c *Client) Members(chat *model.Chat) []string {
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return slices.Clone(c.members[c.casefold(name)])
+	m := c.members[c.casefold(name)]
+	out := make([]string, 0, len(m))
+	for _, k := range slices.Sorted(maps.Keys(m)) { // folded keys: case apart
+		out = append(out, m[k])
+	}
+	return out
 }
 
 // Participants : NAMES of the room (the answer lands on 366); a private chat

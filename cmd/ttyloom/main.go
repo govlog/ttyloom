@@ -140,10 +140,15 @@ func backends(ctx context.Context, cfg *config.Config, events chan<- model.Envel
 			return dsc.New(dsc.Config{Token: tok, TokenFile: tokenFile}, raw), nil
 		}
 		// An IRC network: its table is read now, not at start — /irc add
-		// writes one while the client runs.
+		// writes one while the client runs. Its password command runs at
+		// each launch, and a failing one is the error of the launch.
 		if name := model.IRCName(net); name != "" {
 			if n := cfg.IRCByName(name); n != nil {
-				return irc.New(ircConfig(nctx, n, raw), raw), nil
+				pw, err := n.Password()
+				if err != nil {
+					return nil, err
+				}
+				return irc.New(ircConfig(nctx, n, pw, raw), raw), nil
 			}
 		}
 		return nil, fmt.Errorf("%s: unknown network", net)
@@ -197,9 +202,11 @@ func backends(ctx context.Context, cfg *config.Config, events chan<- model.Envel
 }
 
 // ircConfig sends channel changes to the UI, which owns configuration writes.
-func ircConfig(ctx context.Context, n *config.IRCConfig, events chan<- model.Event) irc.Config {
+// password is the resolved one (IRCConfig.Password).
+func ircConfig(ctx context.Context, n *config.IRCConfig, password string, events chan<- model.Event) irc.Config {
 	return irc.Config{Name: n.Name, Host: n.Host, Port: n.Port, TLS: n.TLS, Nick: n.Nick, User: n.User,
-		RealName: n.RealName, Password: n.NickServPassword, Channels: n.Channels, DCCIP: n.DCCIP, DCCPorts: n.DCCPorts, Ignores: n.Ignores,
+		RealName: n.RealName, Password: password, PasswordWithoutTLS: n.PasswordWithoutTLS,
+		Channels: n.Channels, DCCIP: n.DCCIP, DCCPorts: n.DCCPorts, Ignores: n.Ignores,
 		SaveChannels: func(list []string) error {
 			select {
 			case events <- model.EvIRCChannels{Channels: list}:

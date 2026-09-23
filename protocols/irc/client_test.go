@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/base64"
+	"encoding/binary"
 	"fmt"
 	"net"
 	"os"
@@ -220,8 +221,9 @@ func TestCaps(t *testing.T) {
 
 // SASL PLAIN with the password, no NickServ line, and the rooms of the list
 // joined once registered; the JOIN echo becomes a service line of the room.
+// The pipe of the tests has no TLS: PasswordWithoutTLS lets the password out.
 func TestRegisterSASLAndRejoin(t *testing.T) {
-	_, s, events, _ := start(t, Config{Password: "secret", Channels: []string{"#go", "#go"}}, true)
+	_, s, events, _ := start(t, Config{Password: "secret", PasswordWithoutTLS: true, Channels: []string{"#go", "#go"}}, true)
 	if l := s.expect("JOIN"); l != "JOIN #go" {
 		t.Fatalf("join: %q", l)
 	}
@@ -235,7 +237,7 @@ func TestRegisterSASLAndRejoin(t *testing.T) {
 
 // No sasl cap on the server: the password goes to NickServ after 001.
 func TestNickServWithoutSASL(t *testing.T) {
-	_, s, _, _ := start(t, Config{Password: "secret"}, false)
+	_, s, _, _ := start(t, Config{Password: "secret", PasswordWithoutTLS: true}, false)
 	if l := s.expect("PRIVMSG NickServ"); l != "PRIVMSG NickServ :IDENTIFY secret" {
 		t.Fatalf("identify: %q", l)
 	}
@@ -378,20 +380,26 @@ func TestHistoryEmpty(t *testing.T) {
 // --- DCC ---
 
 func TestParseOffer(t *testing.T) {
-	off, err := parseOffer("bob", `"my file.txt" 2130706433 5000 42`)
+	off, err := parseOffer("bob", `"my file.txt" 2130706433 5000 42`, true)
 	if err != nil || off != (dccOffer{Nick: "bob", Name: "my file.txt", IP: "127.0.0.1", Port: 5000, Size: 42}) {
 		t.Fatalf("quoted: %+v %v", off, err)
 	}
-	off, err = parseOffer("bob", "../../etc/passwd 127.0.0.1 5000 42")
+	off, err = parseOffer("bob", "../../etc/passwd 127.0.0.1 5000 42", true)
 	if err != nil || off.Name != "passwd" {
 		t.Fatalf("path stripped: %+v %v", off, err)
 	}
-	off, err = parseOffer("bob", "x 0 0 42 token1")
+	off, err = parseOffer("bob", "x 0 0 42 token1", false)
 	if err != nil || off.Port != 0 || off.Token != "token1" {
 		t.Fatalf("reverse: %+v %v", off, err)
 	}
-	for _, bad := range []string{"x 127.0.0.1 5000 0", "x 127.0.0.1 5000", ".. 127.0.0.1 5000 42", "x 0 0 42", "x 999999999999 5000 42"} {
-		if _, err := parseOffer("bob", bad); err == nil {
+	if off, err = parseOffer("bob", "x 167772165 5000 42", false); err != nil || off.IP != "10.0.0.5" {
+		t.Fatalf("LAN address refused: %+v %v", off, err)
+	}
+	// A direct offer must name a peer: not the wildcard address, loopback
+	// (unless our own dcc_ip is), multicast or link-local.
+	for _, bad := range []string{"x 127.0.0.1 5000 0", "x 127.0.0.1 5000", ".. 127.0.0.1 5000 42", "x 0 0 42", "x 999999999999 5000 42",
+		"x 0 5000 42", "x 2130706433 5000 42", "x ::1 5000 42", "x 224.0.0.1 5000 42", "x 169.254.1.1 5000 42", "x fe80::1 5000 42"} {
+		if _, err := parseOffer("bob", bad, false); err == nil {
 			t.Errorf("%q accepted", bad)
 		}
 	}
@@ -482,8 +490,8 @@ func TestDCCGetReverse(t *testing.T) {
 	}
 }
 
-// SendFile announces the port, streams once the peer connected, then acks
-// the local line.
+// SendFile announces the port, streams once the peer connected, and acks
+// the local line once the peer acked the whole size.
 func TestDCCSend(t *testing.T) {
 	c, s, events, _ := start(t, Config{DCCIP: "127.0.0.1", DCCPorts: "40000-40100"}, false)
 	dir := t.TempDir()
@@ -508,13 +516,15 @@ func TestDCCSend(t *testing.T) {
 	defer conn.Close()
 	got := make([]byte, 0, len(payload))
 	buf := make([]byte, 8192)
+	ack := make([]byte, 4)
 	for len(got) < len(payload) {
 		n, err := conn.Read(buf)
 		got = append(got, buf[:n]...)
 		if err != nil {
 			break
 		}
-		conn.Write([]byte{0, 0, 0, byte(n)}) // an ack, ignored by the sender
+		binary.BigEndian.PutUint32(ack, uint32(len(got))) // the bytes got so far
+		conn.Write(ack)
 	}
 	if string(got) != payload {
 		t.Fatalf("received %d bytes", len(got))

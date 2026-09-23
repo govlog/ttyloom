@@ -273,6 +273,28 @@ func TestDiscordToken(t *testing.T) {
 	}
 }
 
+// nickserv_password_cmd is read like the Discord token_cmd: the words are
+// the argv (no shell), stdout trimmed, the first stderr line in the error;
+// the plain key stays when there is no command.
+func TestIRCPasswordCmd(t *testing.T) {
+	n := &IRCConfig{Name: "libera", NickServPassword: "plain"}
+	if pw, err := n.Password(); err != nil || pw != "plain" {
+		t.Fatalf("plain key: %q, %v", pw, err)
+	}
+	n.NickServPasswordCmd = "echo  s3cret "
+	if pw, err := n.Password(); err != nil || pw != "s3cret" {
+		t.Fatalf("command: %q, %v", pw, err)
+	}
+	n.NickServPasswordCmd = "cat /ttyloom-no-such-file"
+	if _, err := n.Password(); err == nil || !strings.Contains(err.Error(), "No such file") || !strings.Contains(err.Error(), "nickserv_password_cmd") {
+		t.Fatalf("stderr of the command missing: %v", err)
+	}
+	n.NickServPasswordCmd = "true"
+	if pw, err := n.Password(); err == nil {
+		t.Fatalf("empty output taken as a password: %q", pw)
+	}
+}
+
 // WriteAtomic : the file appears whole or not at all, private, and leaves no
 // temporary file behind.
 func TestWriteAtomic(t *testing.T) {

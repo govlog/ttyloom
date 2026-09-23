@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"slices"
@@ -25,19 +26,22 @@ import (
 // ip is the IPv4 as a decimal integer (or an IPv6 literal); port 0 with a
 // token is a reverse offer — the receiver listens and sends the line back
 // with its own ip and port. The receiver acks the bytes got so far as a
-// 4-byte big-endian counter; the sender reads and ignores them.
+// 4-byte big-endian counter; the sender is done once the last one is in.
 //
 // ponytail: no RESUME/ACCEPT, no DCC CHAT, no SDCC, no reverse send. A
 // transfer that fails starts over.
 
 const (
-	dccWait  = 2 * time.Minute // the peer has that long to connect
+	dccWait  = 2 * time.Minute // the peer has that long to connect, and its last ack that long to come
 	dccBlock = 64 * 1024
 )
 
 // parseOffer reads the arguments of a DCC SEND. A name with spaces comes
-// between double quotes.
-func parseOffer(nick, args string) (dccOffer, error) {
+// between double quotes. The address of a direct offer must be one a peer
+// can be at: not unspecified, multicast or link-local, and loopback only
+// when our own dcc_ip is (loopback) — a line from the network must not make
+// the client connect to a service of the machine.
+func parseOffer(nick, args string, loopback bool) (dccOffer, error) {
 	args = strings.TrimSpace(args)
 	var name string
 	if strings.HasPrefix(args, `"`) {
@@ -72,10 +76,21 @@ func parseOffer(nick, args string) (dccOffer, error) {
 	if port == 0 && off.Token == "" {
 		return dccOffer{}, errors.New("port 0 without a token")
 	}
-	if off.IP == "" && port != 0 {
-		return dccOffer{}, errors.New("bad address")
+	if port != 0 {
+		a, err := netip.ParseAddr(off.IP)
+		if err != nil || a.IsUnspecified() || a.IsMulticast() || a.IsLinkLocalUnicast() || a.IsLinkLocalMulticast() ||
+			(a.IsLoopback() && !loopback) {
+			return dccOffer{}, errors.New("bad address")
+		}
 	}
 	return off, nil
+}
+
+// loopbackDCC : our own dcc_ip is a loopback address (a test, a bouncer on
+// the machine): a loopback offer is then plausible.
+func (c *Client) loopbackDCC() bool {
+	a, err := netip.ParseAddr(c.cfg.DCCIP)
+	return err == nil && a.IsLoopback()
 }
 
 // parseIP : an IPv4 as a decimal integer (what every client sends) or a
@@ -100,9 +115,15 @@ func ipArg(ip string) string {
 }
 
 // media : the file offer as the UI shows it, the download key of the message.
+// The label carries the address the download would connect to: a LAN or a
+// loopback offer is allowed, the user sees where it points before taking it.
 func (o dccOffer) media() *model.Media {
+	label := i18n.T("dcc_offer_passive", o.Name, render.HumanSize(o.Size))
+	if o.Port != 0 {
+		label = i18n.T("dcc_offer", o.Name, render.HumanSize(o.Size), net.JoinHostPort(o.IP, strconv.Itoa(o.Port)))
+	}
 	return &model.Media{Kind: model.MediaFile, Name: o.Name, Size: o.Size, Ext: media.SafeExtension(o.Name, ""),
-		Label: i18n.T("dcc_offer", o.Name, render.HumanSize(o.Size)), Loc: o}
+		Label: label, Loc: o}
 }
 
 // dccName : the CTCP argument of a file name.
@@ -113,26 +134,43 @@ func dccName(name string) string {
 	return name
 }
 
-// listen opens a port of the configured range (any free one when empty).
+// listen opens a port of the configured range (any free one when empty) on
+// the address announced — never on every interface, where the first comer
+// of the two-minute window would take the file. Behind a NAT dcc_ip is not
+// an address of the machine: the one of the IRC socket then, which is the
+// side the peer reaches.
 func (c *Client) listen() (net.Listener, error) {
+	var ips []string
+	if c.cfg.DCCIP != "" {
+		ips = append(ips, c.cfg.DCCIP)
+	}
+	if ip := c.sockIP(); ip != "" && ip != c.cfg.DCCIP {
+		ips = append(ips, ip)
+	}
+	a, b := 0, 0
+	if c.cfg.DCCPorts != "" {
+		lo, hi, ok := strings.Cut(c.cfg.DCCPorts, "-")
+		var err1, err2 error
+		a, err1 = strconv.Atoi(strings.TrimSpace(lo))
+		b, err2 = strconv.Atoi(strings.TrimSpace(hi))
+		if !ok {
+			b, err2 = a, err1
+		}
+		if err1 != nil || err2 != nil || a < 1 || b > 65535 || a > b {
+			return nil, fmt.Errorf("dcc_ports %q", c.cfg.DCCPorts)
+		}
+	}
 	lc := net.ListenConfig{}
 	ctx := context.Background()
-	if c.cfg.DCCPorts == "" {
-		return lc.Listen(ctx, "tcp", ":0")
-	}
-	lo, hi, ok := strings.Cut(c.cfg.DCCPorts, "-")
-	a, err1 := strconv.Atoi(strings.TrimSpace(lo))
-	b, err2 := strconv.Atoi(strings.TrimSpace(hi))
-	if !ok {
-		b, err2 = a, err1
-	}
-	if err1 != nil || err2 != nil || a < 1 || b > 65535 || a > b {
-		return nil, fmt.Errorf("dcc_ports %q", c.cfg.DCCPorts)
-	}
-	for p := a; p <= b; p++ {
-		if l, err := lc.Listen(ctx, "tcp", ":"+strconv.Itoa(p)); err == nil {
-			return l, nil
+	for _, ip := range ips {
+		for p := a; p <= b; p++ {
+			if l, err := lc.Listen(ctx, "tcp", net.JoinHostPort(ip, strconv.Itoa(p))); err == nil {
+				return l, nil
+			}
 		}
+	}
+	if c.cfg.DCCPorts == "" {
+		return nil, errors.New(i18n.T("dcc_no_ip"))
 	}
 	return nil, errors.New(i18n.T("dcc_no_port", c.cfg.DCCPorts))
 }
@@ -214,6 +252,9 @@ func (c *Client) dccSend(ctx context.Context, nick, path string) error {
 	untrack := c.track(i18n.T("dcc_sending", name, nick))
 	defer untrack()
 	line := fmt.Sprintf("\x01DCC SEND %s %s %d %d\x01", dccName(name), ipArg(ip), port, st.Size())
+	if err := c.pace(ctx); err != nil {
+		return err
+	}
 	if err := c.send("PRIVMSG", nick, line); err != nil {
 		return err
 	}
@@ -233,10 +274,42 @@ func (c *Client) dccSend(ctx context.Context, nick, path string) error {
 	}
 	conn = watchDCC(ctx, conn)
 	defer conn.Close()
-	go discard(conn) // the acks
-	return c.stream(ctx, f, conn, st.Size(), func(pct int) {
+	acks := acked(conn, st.Size())
+	if err := c.stream(ctx, f, conn, st.Size(), func(pct int) {
 		c.PostNB(model.EvUpload{Text: i18n.T("dcc_progress", name, pct)})
-	})
+	}); err != nil {
+		return err
+	}
+	// The peer has the file once it acked the last byte: a close with bytes
+	// still in the send queue would drop them (RST). The read carries the
+	// dccWait idle deadline of dccConn, ctx cuts it.
+	return <-acks
+}
+
+// acked reads the 4-byte counters of the peer through the whole transfer —
+// unread, they would block a receiver that writes them in line with its
+// reads — and gives nil once the peer acked size bytes, or the read error
+// (a peer gone or silent past the deadline) before that. The counter of a
+// DCC ack wraps at 4 GiB: the compare is modulo 2^32.
+func acked(r io.Reader, size int64) <-chan error {
+	ch := make(chan error, 1)
+	go func() {
+		var buf [4]byte
+		done := false
+		for {
+			if _, err := io.ReadFull(r, buf[:]); err != nil {
+				if !done {
+					ch <- fmt.Errorf("ack: %w", err)
+				}
+				return
+			}
+			if !done && binary.BigEndian.Uint32(buf[:]) == uint32(size) {
+				done = true
+				ch <- nil
+			}
+		}
+	}()
+	return ch
 }
 
 // stream copies size bytes from src to dst, progress every 5 %; ctx cuts it.
@@ -373,6 +446,9 @@ func (c *Client) dccConnect(ctx context.Context, off dccOffer) (net.Conn, error)
 	defer l.Close()
 	port := l.Addr().(*net.TCPAddr).Port
 	line := fmt.Sprintf("\x01DCC SEND %s %s %d %d %s\x01", dccName(off.Name), ipArg(ip), port, off.Size, off.Token)
+	if err := c.pace(ctx); err != nil {
+		return nil, err
+	}
 	if err := c.send("PRIVMSG", off.Nick, line); err != nil {
 		return nil, err
 	}
