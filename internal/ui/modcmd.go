@@ -8,6 +8,30 @@ import (
 	"github.com/govlog/ttyloom/internal/module"
 )
 
+// commandNames : the commands that resolve and complete right now — the
+// client's, the general commands of the modules, plus the context ones of a
+// module where a network of it is meant.
+func (u *UI) commandNames() cmdNames {
+	n := cmdNames{general: slices.Clone(commandNames), module: map[string]bool{}}
+	win := u.win(u.view())
+	for _, m := range u.mods {
+		inCtx := host{u}.ContextNet(win, m.Name()) != ""
+		for _, c := range m.Commands() {
+			name := "/" + c.Name
+			switch {
+			case !c.Context:
+				n.general = append(n.general, name)
+			case inCtx:
+				n.context = append(n.context, name)
+			default:
+				continue
+			}
+			n.module[name] = true
+		}
+	}
+	return n
+}
+
 // modCommand : the module command called name (no slash), and its module.
 func (u *UI) modCommand(name string) (module.Module, *module.Command) {
 	for _, m := range u.mods {

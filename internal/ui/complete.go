@@ -29,27 +29,10 @@ const (
 	complFold                            // /fold <section>
 	complPath                            // /send <path>: files of the disk
 	complNetCmd                          // /telegram /discord <status|login|logout|disconnect>
-	complIrc                             // /irc <add|connect|disconnect> [name]
 	complLog                             // /log <on|off>
-	complIrcNick                         // /kick /invite /ctcp /whowas : a member of the room
-	complIrcChan                         // /part /mode /names … : a room joined on the network
-	complIrcTarget                       // /who /notice, first argument of /kick : a nick, or a room when it starts with "#"
-	complCtcp                            // /ctcp <nick> <request>
-	complIrcIgnore                       // /ignore : the members of the room and the masks already set
 	complNone                            // /open /history …
 	complModule                          // a command of a module: its Complete
 )
-
-// ircArg : the argument of an IRC command being typed in rest (everything
-// after the command) — its index, a trailing space starting the next one,
-// and its text.
-func ircArg(rest string) (int, string) {
-	done := strings.Fields(rest)
-	if n := len(done); n > 0 && !strings.HasSuffix(rest, " ") {
-		return n - 1, done[n-1] // the last word is the one being typed
-	}
-	return len(done), ""
-}
 
 // complContext gives the completion source and the line "tail" to complete
 // (everything after the command, for the candidates of several words). cursor
@@ -109,51 +92,8 @@ func complContext(line string, cursor int, names cmdNames) (src complSource, tai
 		return complFold, rest, ""
 	case model.NetTelegram, model.NetDiscord:
 		return complNetCmd, rest, ""
-	case "irc":
-		return complIrc, rest, ""
 	case "log":
 		return complLog, rest, ""
-	case "kick", "kickban", "ban":
-		// <target> <nick> <reason…>: a room takes a nick after it, the rest is free text.
-		switch i, arg := ircArg(rest); {
-		case i == 0:
-			return complIrcTarget, arg, ""
-		case i == 1 && model.IsIRCChannel(strings.Fields(rest)[0]):
-			return complIrcNick, arg, ""
-		}
-		return complNone, "", ""
-	case "who", "notice":
-		if i, arg := ircArg(rest); i == 0 {
-			return complIrcTarget, arg, ""
-		}
-		return complNone, "", ""
-	case "whowas":
-		if i, arg := ircArg(rest); i == 0 {
-			return complIrcNick, arg, ""
-		}
-		return complNone, "", ""
-	case "invite", "ctcp":
-		i, arg := ircArg(rest)
-		if i == 0 {
-			return complIrcNick, arg, ""
-		}
-		if i == 1 {
-			if name == "ctcp" {
-				return complCtcp, arg, ""
-			}
-			return complIrcChan, arg, ""
-		}
-		return complNone, "", ""
-	case "ignore":
-		if i, arg := ircArg(rest); i == 0 {
-			return complIrcIgnore, arg, ""
-		}
-		return complNone, "", ""
-	case "part", "cycle", "names", "topic", "mode":
-		if i, arg := ircArg(rest); i == 0 {
-			return complIrcChan, arg, ""
-		}
-		return complNone, "", ""
 	case "send":
 		// The whole tail: a path may hold spaces (splitSendArgs allows it);
 		// once it names a file, the rest is the caption.

@@ -119,7 +119,7 @@ func TestIRCRekeyPreservesHistory(t *testing.T) {
 		t.Fatal(err)
 	}
 	u.aliases = map[model.ChatKey]string{c.Key(): "friend"}
-	u.rekeyIRC(network, func(string) int64 { return 30 })
+	u.rekeyChats(network, func(string) int64 { return 30 })
 	key := model.ChatKey{Net: network, ID: 30}
 	msgs, err := cc.LoadHistory(30)
 	if err != nil || len(msgs) != 1 || msgs[0].ChatID != 30 || msgs[0].Text != "disk" {

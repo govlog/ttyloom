@@ -12,6 +12,7 @@ import (
 	"github.com/govlog/ttyloom/internal/config"
 	"github.com/govlog/ttyloom/internal/i18n"
 	"github.com/govlog/ttyloom/internal/model"
+	"github.com/govlog/ttyloom/internal/module"
 	"github.com/govlog/ttyloom/internal/term"
 	"github.com/govlog/ttyloom/protocols/irc"
 )
@@ -82,11 +83,11 @@ func TestIRCAdd(t *testing.T) {
 		t.Fatalf("form: %+v", u.form)
 	}
 	vals := []string{"Libera", "irc.libera.chat", "abc", "yes", "me", "", "", "pw"}
-	if e := u.ircAddSubmit(vals); e != i18n.T("irc_bad_port") {
+	if e := ircSubmit(u, vals); e != i18n.T("irc_bad_port") {
 		t.Fatalf("bad port: %q", e)
 	}
 	vals[2] = ""
-	if e := u.ircAddSubmit(vals); e != "" {
+	if e := ircSubmit(u, vals); e != "" {
 		t.Fatalf("submit: %q", e)
 	}
 	if got := m.ByName("libera"); got == nil || got.Port != 6697 || !got.TLS || got.NickServPassword != "pw" || got.Nick != "me" {
@@ -100,7 +101,7 @@ func TestIRCAdd(t *testing.T) {
 	if *n != 1 || u.nets["irc:libera"] == nil || u.netList[0] != model.NetDiscord || u.netList[1] != "irc:libera" {
 		t.Fatalf("launched %d, nets %v, list %v", *n, u.nets, u.netList)
 	}
-	if e := u.ircAddSubmit(vals); e != i18n.T("irc_name_taken", "libera") {
+	if e := ircSubmit(u, vals); e != i18n.T("irc_name_taken", "libera") {
 		t.Fatalf("taken name: %q", e)
 	}
 	w := u.ws.List[0]
@@ -114,6 +115,8 @@ func TestIRCAdd(t *testing.T) {
 // an unknown name is refused.
 func TestIRCConnectDisconnect(t *testing.T) {
 	u, n := launchUI(nil)
+	_, m := withIRC(t, u)
+	m.Add(&irc.NetConfig{Name: "oftc", Host: "irc.oftc.net", Nick: "me"})
 	u.netList = append(u.netList, "irc:oftc")
 	u.command("irc", []string{"connect", "oftc"}, "connect oftc")
 	if *n != 1 || u.nets["irc:oftc"] == nil {
@@ -137,7 +140,7 @@ func TestIRCConnectDisconnect(t *testing.T) {
 func TestIRCDelete(t *testing.T) {
 	u, _ := launchUI(nil)
 	cfg, m := withIRC(t, u)
-	if e := u.ircAddSubmit([]string{"libera", "irc.libera.chat", "", "yes", "me", "", "", ""}); e != "" {
+	if e := ircSubmit(u, []string{"libera", "irc.libera.chat", "", "yes", "me", "", "", ""}); e != "" {
 		t.Fatalf("add: %q", e)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -154,8 +157,8 @@ func TestIRCDelete(t *testing.T) {
 	if m.ByName("libera") != nil || again.ByName("libera") != nil {
 		t.Fatal("table kept")
 	}
-	if len(u.ircNets()) != 0 || u.chats[c.Key()] != nil || u.ws.ForChat(c.Key()) >= 0 {
-		t.Fatalf("list %v, chat %v, win %d", u.ircNets(), u.chats[c.Key()], u.ws.ForChat(c.Key()))
+	if len(u.modNets(m)) != 0 || u.chats[c.Key()] != nil || u.ws.ForChat(c.Key()) >= 0 {
+		t.Fatalf("list %v, chat %v, win %d", u.modNets(m), u.chats[c.Key()], u.ws.ForChat(c.Key()))
 	}
 }
 
@@ -196,6 +199,7 @@ func TestResolversFor(t *testing.T) {
 	lib := &queryBackend{fakeBackend: fakeBackend{caps: model.Caps{Resolve: true}}}
 	oftc := &queryBackend{fakeBackend: fakeBackend{caps: model.Caps{Resolve: true}}}
 	u := netUI()
+	u.mods = []module.Module{irc.NewModule()} // it claims the #rooms
 	u.nets = map[string]model.Backend{model.NetTelegram: tg, "irc:libera": lib, "irc:oftc": oftc}
 	if got := u.resolversFor(&Window{}, "#go"); len(got) != 2 {
 		t.Fatalf("#room: %d resolvers", len(got))
@@ -216,6 +220,9 @@ func TestDCCCommands(t *testing.T) {
 	u := netUI("irc:libera")
 	u.ctx = context.Background()
 	u.netList = []string{"irc:libera"}
+	m := irc.NewModule()
+	m.Add(&irc.NetConfig{Name: "libera", Host: "irc.libera.chat", Nick: "me"})
+	u.mods = []module.Module{m}
 	u.cfg.DownloadDir = t.TempDir()
 	b := u.nets["irc:libera"].(*fakeBackend)
 	w := u.ws.List[0]
@@ -252,6 +259,7 @@ func TestDCCCommands(t *testing.T) {
 // free host back; ← from the first preset returns to free text.
 func TestIRCAddPresets(t *testing.T) {
 	u, _ := launchUI(nil)
+	withIRC(t, u)
 	u.command("irc", []string{"add"}, "add")
 	f := u.form
 	f.cur = fHost
@@ -288,7 +296,7 @@ func TestIRCAddPresets(t *testing.T) {
 func TestRegressionIRCAddPlainPassword(t *testing.T) {
 	u, n := launchUI(nil)
 	_, m := withIRC(t, u)
-	if e := u.ircAddSubmit([]string{"efnet", "irc.efnet.org", "6667", "no", "me", "", "", "pw"}); e != i18n.T("irc_tls_password") {
+	if e := ircSubmit(u, []string{"efnet", "irc.efnet.org", "6667", "no", "me", "", "", "pw"}); e != i18n.T("irc_tls_password") {
 		t.Fatalf("plain password: %q", e)
 	}
 	if m.ByName("efnet") != nil || *n != 0 {
@@ -307,3 +315,20 @@ func withIRC(t *testing.T, u *UI) (*config.Config, *irc.Module) {
 	u.cfg, u.mods = cfg, append(u.mods, m)
 	return cfg, m
 }
+
+// ircSubmit : the answer of the /irc add form, the form opened first when it
+// is not.
+func ircSubmit(u *UI, vals []string) string {
+	if u.form == nil {
+		u.command("irc", []string{"add"}, "add")
+	}
+	return u.form.submit(vals)
+}
+
+// Field indexes of the /irc add form (protocols/irc).
+const (
+	fName = iota
+	fHost
+	fPort
+	fTLS
+)

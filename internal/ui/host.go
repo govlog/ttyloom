@@ -129,7 +129,7 @@ func (h host) Chats(net string) []*model.Chat {
 // ChatByTitle : the chat of net whose title is name, case apart.
 func (h host) ChatByTitle(net, name string) *model.Chat {
 	u := h.u
-	if b, ok := u.nets[net].(interface{ ChatID(string) int64 }); ok {
+	if b, ok := u.nets[net].(model.ChatIDer); ok {
 		return u.chats[model.ChatKey{Net: net, ID: b.ChatID(name)}]
 	}
 	for _, c := range u.chatList {

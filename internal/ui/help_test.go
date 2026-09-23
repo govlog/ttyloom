@@ -1,7 +1,7 @@
 package ui
 
 import (
-	"slices"
+	"github.com/govlog/ttyloom/internal/i18n"
 	"strings"
 	"testing"
 
@@ -9,43 +9,37 @@ import (
 )
 
 func TestHelpTopics(t *testing.T) {
+	u, _ := ircUI() // the real IRC module: its commands need topics too
+	u.goTo(1)       // an IRC room: its context commands count
+	topics := u.topics()
 	names := map[string]bool{}
-	for _, tp := range helpTopics {
+	for _, tp := range topics {
 		if names[tp.name] {
 			t.Fatalf("duplicate name: %q", tp.name)
 		}
 		names[tp.name] = true
-	}
-
-	for _, cmd := range slices.Concat(commandNames, ircCommandNames) {
-		found := false
-		for _, tp := range helpTopics {
-			if tp.name == cmd {
-				found = true
-				break
+		for _, suffix := range []string{"_name", "_short", "_long"} {
+			if k := tp.key + suffix; i18n.T(k) == k {
+				t.Errorf("topic %s: no text %q", tp.name, k)
 			}
 		}
-		if !found {
+	}
+
+	for _, cmd := range u.commandNames().all() {
+		if !names[cmd] {
 			t.Errorf("command without topic: %s", cmd)
 		}
 	}
 
 	for _, key := range setKeys {
-		found := false
-		for _, tp := range helpTopics {
-			if tp.name == key {
-				found = true
-				break
-			}
-		}
-		if !found {
+		if !names[key] {
 			t.Errorf("/set key without topic: %s", key)
 		}
 	}
 
-	lines := helpLines(helpTopics, helpSections, 80)
-	if len(lines) < len(helpTopics) {
-		t.Fatalf("helpLines: %d lines for %d topics", len(lines), len(helpTopics))
+	lines := helpLines(topics, u.sections(), 80)
+	if len(lines) < len(topics) {
+		t.Fatalf("helpLines: %d lines for %d topics", len(lines), len(topics))
 	}
 }
 

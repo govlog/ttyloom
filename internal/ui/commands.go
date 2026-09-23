@@ -20,7 +20,7 @@ var aliases = map[string]string{
 
 var commandNames = []string{"/window", "/close", "/query", "/join", "/new", "/msg", "/me", "/away", "/chats", "/net", "/fold", "/history",
 	"/search", "/whois", "/rename", "/unrename", "/open", "/view", "/send", "/theme", "/set", "/clear", "/log", "/debug", "/emoji", "/gif", "/help", "/quit",
-	"/telegram", "/discord", "/irc", "/dcc"}
+	"/telegram", "/discord"}
 
 // cmdNames : the commands valid now. general resolve first by prefix, then
 // context — the ones a network adds in its own windows (IRC's /kick), which
@@ -99,17 +99,6 @@ func (u *UI) command(name string, args []string, text string) {
 		return ""
 	}
 	if u.runModCommand(w, name, args, text) {
-		return
-	}
-	// The IRC commands need a network: the one of the window, of the tab, or
-	// the only one configured. With none configured at all they stay unknown.
-	if isIRCCommand(name) && len(u.ircNets()) > 0 {
-		net := u.ircNetFor(w)
-		if net == "" {
-			w.AddSys(i18n.T("irc_which_net"))
-			return
-		}
-		u.ircCommand(w, net, name, args, text)
 		return
 	}
 	switch name {
@@ -196,10 +185,6 @@ func (u *UI) command(name string, args []string, text string) {
 		u.netCmd(w, arg(0))
 	case model.NetTelegram, model.NetDiscord:
 		u.netAction(w, name, strings.ToLower(arg(0)))
-	case "irc":
-		u.ircCmd(w, args)
-	case "dcc":
-		u.dccCmd(w, args, text)
 	case "fold":
 		u.foldCmd(w, text)
 	case "history":
@@ -255,22 +240,23 @@ func (u *UI) command(name string, args []string, text string) {
 			b.Search(u.backendContext(b), w.Chat, text, searchLimit)
 		}
 	case "whois":
-		// On IRC a nick needs no chat: the network answers on the token. The
-		// context has to be anchored though — the window itself or its tab
-		// names the network. Inferred from a single IRC network configured
-		// (window 0, no IRC tab), the name is looked up as a chat first: it is
-		// a contact of another network more often than an IRC nick.
-		irc := u.ircNetFor(w)
-		if arg(0) == "" || !winOn(w, irc) { // a window on another network: a chat
-			irc = ""
+		// On a network whose Caps.NickWhois is set (IRC) a nick needs no chat:
+		// the network answers on the token. The context has to be anchored
+		// though — the window itself or its tab names the network. Inferred
+		// from a single such network (window 0, no tab), the name is looked
+		// up as a chat first: it is a contact of another network more often
+		// than a nick.
+		nickNet := ""
+		if arg(0) != "" {
+			nickNet = u.nickWhoisNet(w)
 		}
-		toIRC := irc != "" && (w.Chat != nil || w.Target != nil || model.IRCName(u.netFilter) != "")
+		toNick := nickNet != "" && (w.Chat != nil || w.Target != nil || u.netFilter == nickNet)
 		c := w.Chat
-		if !toIRC && arg(0) != "" {
+		if !toNick && arg(0) != "" {
 			var ambiguous bool
 			if c, ambiguous = u.findChat(arg(0), false); c == nil {
-				toIRC = irc != "" && !ambiguous // no chat of that name: a nick
-				if !toIRC {
+				toNick = nickNet != "" && !ambiguous // no chat of that name: a nick
+				if !toNick {
 					if !ambiguous {
 						w.AddSys(i18n.T("unknown_name", arg(0)))
 					}
@@ -278,10 +264,8 @@ func (u *UI) command(name string, args []string, text string) {
 				}
 			}
 		}
-		if toIRC {
-			if b := u.nets[irc]; b != nil {
-				b.WhoisMember(u.netContext(irc), strings.TrimPrefix(arg(0), "@"))
-			}
+		if toNick {
+			u.nets[nickNet].WhoisMember(u.netContext(nickNet), strings.TrimPrefix(arg(0), "@"))
 			return
 		}
 		if c == nil {
@@ -618,4 +602,66 @@ func (u *UI) relang(lang string) {
 			}
 		}
 	}
+}
+
+// nickWhoisNet : the network a bare nick of /whois from w goes to — the one of
+// its chat and target, else the /net filter, else the only running one —
+// when that network takes a whois by nick (Caps.NickWhois); "" otherwise.
+func (u *UI) nickWhoisNet(w *Window) string {
+	ok := func(n string) bool { return n != "" && backendCaps(u.nets[n]).NickWhois }
+	net := ""
+	for _, c := range []*model.Chat{w.Chat, w.Target} {
+		if c == nil {
+			continue
+		}
+		if !ok(c.Net) || (net != "" && c.Net != net) { // a window on another network: a chat
+			return ""
+		}
+		net = c.Net
+	}
+	if net != "" {
+		return net
+	}
+	if ok(u.netFilter) {
+		return u.netFilter
+	}
+	var nets []string
+	for _, n := range u.netList {
+		if ok(n) {
+			nets = append(nets, n)
+		}
+	}
+	if len(nets) == 1 {
+		return nets[0]
+	}
+	return ""
+}
+
+// resolversFor : the backends a lookup of name from w goes to. The network
+// of the window when it resolves (two IRC networks would both join the
+// room), else the networks of the module that claims name ("#room" for
+// IRC), else every resolving one.
+func (u *UI) resolversFor(w *Window, name string) []model.Backend {
+	if w != nil {
+		for _, c := range []*model.Chat{w.Chat, w.Target} {
+			if b := u.net(c); b != nil && b.Caps().Resolve {
+				return []model.Backend{b}
+			}
+		}
+	}
+	var out, claimed []model.Backend
+	for _, n := range u.netNames() {
+		b := u.nets[n]
+		if !b.Caps().Resolve {
+			continue
+		}
+		out = append(out, b)
+		if m := u.modOf(n); m != nil && m.Claims(name) {
+			claimed = append(claimed, b)
+		}
+	}
+	if len(claimed) > 0 {
+		return claimed
+	}
+	return out
 }

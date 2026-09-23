@@ -90,7 +90,18 @@ type Caps struct {
 	// Off (IRC), the cache is the only copy: the UI never drops or replaces
 	// it as a side effect — account change, chat gone, older cache format.
 	History bool
+	// NickWhois : /whois takes a bare nick with no chat (IRC): the network
+	// answers on the name alone.
+	NickWhois bool
 }
+
+// ChatIDer : a backend whose chat ids come from their titles (IRC): the UI
+// moves its cache keys when the mapping of the server changes.
+type ChatIDer interface{ ChatID(title string) int64 }
+
+// MemberLister : a backend that knows who is in a chat, for the Tab
+// completion of the names in a message.
+type MemberLister interface{ Members(chat *Chat) []string }
 
 // AllCaps : every capability on — Telegram, and the tests that draw a message
 // with nothing gated off.

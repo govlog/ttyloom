@@ -747,7 +747,6 @@ dcc_which_net = "plusieurs réseaux IRC : /dcc send depuis une fenêtre du rése
 dcc_no_offer = "aucune offre DCC en attente %s"
 
 # Commandes IRC (UI)
-irc_which_net = "plusieurs réseaux IRC : tapez la commande depuis une fenêtre du réseau, ou sur son onglet"
 help_section_irc = "IRC"
 help_part_name = "/part [#salon] [raison]"
 help_part_short = "quitte le salon (le courant par défaut) et l'oublie"

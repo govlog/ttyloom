@@ -747,7 +747,6 @@ dcc_which_net = "several IRC networks: use /dcc send from a window of the networ
 dcc_no_offer = "no DCC offer waiting %s"
 
 # IRC commands (UI)
-irc_which_net = "several IRC networks: type the command from a window of the network, or on its tab"
 help_section_irc = "IRC"
 help_part_name = "/part [#room] [reason]"
 help_part_short = "leaves the room (the current one by default) and forgets it"

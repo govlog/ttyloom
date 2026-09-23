@@ -214,7 +214,7 @@ func waitMsg(t *testing.T, events chan model.Event, f func(model.EvNewMessage) b
 
 func TestCaps(t *testing.T) {
 	got := New(Config{}, nil).Caps()
-	if got != (model.Caps{Whois: true, Resolve: true, Leave: true}) {
+	if got != (model.Caps{Whois: true, Resolve: true, Leave: true, NickWhois: true}) {
 		t.Fatalf("caps: %+v", got)
 	}
 }

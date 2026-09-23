@@ -137,8 +137,6 @@ func (m *Module) Remove(name string) (restore func()) {
 
 func (m *Module) Claims(name string) bool { return IsChannel(name) }
 
-func (m *Module) Commands() []module.Command { return nil } // task 6
-
 // Launch reads the table of net now: /irc add writes one while the client
 // runs. The password command runs at each launch; a failing one is the
 // error of the launch.

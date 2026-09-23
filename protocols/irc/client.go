@@ -112,7 +112,9 @@ func (c *Client) net() string { return model.IRCNet(c.cfg.Name) }
 
 // Caps : whois (WHOIS), name resolution (/join, /query) and leaving a room.
 // No history, no edit, no reaction, no read receipt, no search: IRC has none.
-func (c *Client) Caps() model.Caps { return model.Caps{Whois: true, Resolve: true, Leave: true} }
+func (c *Client) Caps() model.Caps {
+	return model.Caps{Whois: true, Resolve: true, Leave: true, NickWhois: true}
+}
 
 // logWriter : the ircevent log goes to /debug, never to the terminal.
 type logWriter struct{ c *Client }

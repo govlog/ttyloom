@@ -12,9 +12,11 @@ import (
 	"github.com/govlog/ttyloom/internal/config"
 	"github.com/govlog/ttyloom/internal/i18n"
 	"github.com/govlog/ttyloom/internal/model"
+	"github.com/govlog/ttyloom/internal/module"
 	"github.com/govlog/ttyloom/internal/render"
 	"github.com/govlog/ttyloom/internal/term"
 	"github.com/govlog/ttyloom/internal/theme"
+	"github.com/govlog/ttyloom/protocols/irc"
 )
 
 // TestSetUnknownKey : "/set foobar" alone used to say nothing at all, while
@@ -666,9 +668,14 @@ func (f *fakeIRC) Members(c *model.Chat) []string {
 // Telegram chat. The fake returned is the one of libera.
 func ircUI() (*UI, *fakeIRC) {
 	u := netUI(model.NetTelegram)
-	irc := &fakeIRC{}
-	u.nets[model.IRCNet("libera")] = irc
-	u.nets[model.IRCNet("oftc")] = &fakeIRC{}
+	m := irc.NewModule()
+	m.Add(&irc.NetConfig{Name: "libera", Host: "irc.libera.chat", Nick: "me"})
+	m.Add(&irc.NetConfig{Name: "oftc", Host: "irc.oftc.net", Nick: "me"})
+	u.mods = []module.Module{m}
+	nick := model.Caps{NickWhois: true} // what the IRC client says it can do
+	lib := &fakeIRC{fakeBackend: fakeBackend{caps: nick}}
+	u.nets[model.IRCNet("libera")] = lib
+	u.nets[model.IRCNet("oftc")] = &fakeIRC{fakeBackend: fakeBackend{caps: nick}}
 	u.netList = []string{model.NetTelegram, model.IRCNet("libera"), model.IRCNet("oftc")}
 	u.chats = map[model.ChatKey]*model.Chat{}
 	room := &model.Chat{Net: model.IRCNet("libera"), ID: 77, Kind: model.ChatGroup, Title: "#go"}
@@ -676,7 +683,7 @@ func ircUI() (*UI, *fakeIRC) {
 	u.bindChat(u.ws.New(true), room)
 	u.chats[u.chatList[0].Key()] = u.chatList[0]
 	u.bindChat(u.ws.New(true), u.chatList[0])
-	return u, irc
+	return u, lib
 }
 
 // An IRC command typed in an IRC room goes to that network with the room and
@@ -710,7 +717,7 @@ func TestIRCCommandRouting(t *testing.T) {
 	}
 	name, args, text, _ = ParseCommand("/kick bob", u.commandNames())
 	u.command(name, args, text)
-	if got := lastSys(u.view()); got != i18n.T("irc_which_net") {
+	if got := lastSys(u.view()); got != i18n.T("which_net", "irc") {
 		t.Fatalf("outside IRC: %q", got)
 	}
 	// The IRC tab makes the context: from window 0 the command reaches the network with no room.
@@ -777,6 +784,40 @@ func TestIRCArgCompletion(t *testing.T) {
 }
 
 // A private IRC window has no room: a bare /part must not aim at the peer.
+// From an IRC room, the arguments of the IRC commands complete from the
+// module: a nick or a room as the target, a nick after a room, the CTCP
+// requests, the rooms joined, the members and the masks for /ignore; free
+// text gets nothing.
+func TestIRCCompletionContexts(t *testing.T) {
+	u, _ := ircUI()
+	u.goTo(1)
+	u.listChat(u.view().Chat) // the room is listed, as after a join
+	for _, m := range u.mods {
+		if im, ok := m.(*irc.Module); ok {
+			im.ByName("libera").Ignores = []string{"spammer!*@*"}
+		}
+	}
+	for _, c := range []struct{ line, want string }{
+		{"/kick bo", "bob"},
+		{"/kick #go b", "bob"},
+		{"/kick #go bob re", ""}, // the reason is free text
+		{"/kick  #go b", "bob"},  // a double space is one separator
+		{"/kick &go b", "bob"},   // the four channel prefixes, not "#" alone
+		{"/invite bob #", "#go"},
+		{"/ctcp bob VE", "VERSION"},
+		{"/part #g", "#go"},
+		{"/ignore sp", "spammer!*@*"},
+		{"/quote PRIV", ""},
+	} {
+		u.ed.Set(c.line)
+		word := c.line[strings.LastIndex(c.line, " ")+1:]
+		got := u.candidates(word, false)
+		if c.want == "" && len(got) != 0 || c.want != "" && !slices.Contains(got, c.want) {
+			t.Errorf("%q: %v, want %q", c.line, got, c.want)
+		}
+	}
+}
+
 func TestIRCCommandPrivateNoRoom(t *testing.T) {
 	u, irc := ircUI()
 	carol := &model.Chat{Net: model.IRCNet("libera"), ID: 88, Kind: model.ChatUser, Title: "carol"}

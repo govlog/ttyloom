@@ -9,8 +9,10 @@ import (
 	"github.com/govlog/ttyloom/internal/model"
 )
 
-// rekeyIRC moves old ASCII cache keys to the server's negotiated mapping.
-func (u *UI) rekeyIRC(net string, idFor func(string) int64) {
+// rekeyChats moves the cache keys of a network whose chat ids come from their
+// titles (model.ChatIDer) to the mapping the server negotiated — IRC, whose
+// old keys folded ASCII only.
+func (u *UI) rekeyChats(net string, idFor func(string) int64) {
 	u.bgWait.Wait()
 	aliasesChanged := false
 	for _, c := range slices.Collect(maps.Values(u.chats)) {

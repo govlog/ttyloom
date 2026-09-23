@@ -1120,8 +1120,8 @@ func (u *UI) event(ev model.Event) {
 		}
 		u.accountID[net] = e.SelfID
 		u.self[net] = selfInfo{ID: e.SelfID, Name: render.CleanLine(e.SelfName), Bot: e.Bot}
-		if b, ok := u.nets[net].(interface{ ChatID(string) int64 }); ok {
-			u.rekeyIRC(net, b.ChatID)
+		if b, ok := u.nets[net].(model.ChatIDer); ok {
+			u.rekeyChats(net, b.ChatID)
 		}
 		u.status0(i18n.T("connected_as", e.SelfName))
 		// Only the cache of THAT network: another one keeps the account that
@@ -2498,6 +2498,23 @@ func (u *UI) sendMe(w *Window, arg string) {
 	b.SendStyled(u.backendContext(b), w.Chat, segs, u.tmpID)
 }
 
+// memberNames : the members of the room of the shown window — its send
+// target when it is a room, else its chat — for a backend that lists them.
+func (u *UI) memberNames() []string {
+	w := u.view()
+	for _, room := range []bool{true, false} { // the room first: a query target must not hide it
+		for _, c := range []*model.Chat{w.Target, w.Chat} {
+			if c == nil || (room && c.Kind == model.ChatUser) {
+				continue
+			}
+			if l, ok := u.nets[c.Net].(model.MemberLister); ok {
+				return l.Members(c)
+			}
+		}
+	}
+	return nil
+}
+
 // candidates for Tab: dispatch by command context (complContext).
 func (u *UI) candidates(word string, atStart bool) []string {
 	src, tail, setKey := complContext(u.ed.String(), u.ed.Cursor(), u.commandNames())
@@ -2508,7 +2525,7 @@ func (u *UI) candidates(word string, atStart bool) []string {
 		return u.modComplete(setKey, tail, word)
 	case complChats:
 		out := u.chatCandidates(word, tail)
-		nicks := slices.Clone(u.ircNicks())
+		nicks := slices.Clone(u.memberNames())
 		if atStart { // irssi style: a nick opening a message addresses it
 			for i, n := range nicks {
 				nicks[i] = n + ":" // the editor adds the space of a finished word
@@ -2543,15 +2560,6 @@ func (u *UI) candidates(word string, atStart bool) []string {
 		return append(u.netNames(), netAll)
 	case complNetCmd:
 		return []string{"status", "login", "logout", "disconnect"}
-	case complIrc:
-		if strings.Contains(tail, " ") { // after the sub-command: the network names
-			var names []string
-			for _, n := range u.ircNets() {
-				names = append(names, model.IRCName(n))
-			}
-			return names
-		}
-		return []string{"add", "connect", "disconnect", "delete"}
 	case complLog:
 		return []string{"on", "off"}
 	case complPath:
@@ -2568,19 +2576,6 @@ func (u *UI) candidates(word string, atStart bool) []string {
 		return out
 	case complFold:
 		return multiWord(word, tail, sectionKeys(u.foldSections()))
-	case complIrcNick:
-		return multiWord(word, tail, u.ircNicks())
-	case complIrcChan:
-		return multiWord(word, tail, u.ircChans())
-	case complIrcTarget:
-		if model.IsIRCChannel(tail) {
-			return multiWord(word, tail, u.ircChans())
-		}
-		return multiWord(word, tail, u.ircNicks())
-	case complCtcp:
-		return multiWord(word, tail, ctcpNames)
-	case complIrcIgnore:
-		return multiWord(word, tail, append(u.ircNicks(), u.ircIgnores()...))
 	default:
 		return nil
 	}
