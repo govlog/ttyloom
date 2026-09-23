@@ -10,10 +10,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/govlog/ttyloom/internal/cache"
 	"github.com/govlog/ttyloom/internal/config"
 	"github.com/govlog/ttyloom/internal/i18n"
-	"github.com/govlog/ttyloom/internal/model"
 	"github.com/govlog/ttyloom/internal/module"
 	"github.com/govlog/ttyloom/internal/term"
 	"github.com/govlog/ttyloom/internal/theme"
@@ -55,111 +53,14 @@ func main() {
 	}
 }
 
-// backends : the configured networks, their caches, and the launcher that
-// builds and runs one of them — at start for each, and again on /<net> login.
-// A network is configured only when its credentials are. ctx is the one of
-// the whole client: the last
-// event of a network is delivered as long as the UI runs.
-func backends(ctx context.Context, cfg *config.Config, events chan<- model.Envelope, mods []module.Module) ([]string, map[string]*cache.Cache, model.Launcher, error) {
-	// [telegram], or the historic flat keys synthesized into it by config.
-	tg := cfg.Telegram
-	useTelegram := tg != nil && (tg.APIID != 0 || tg.APIHash != "" || tg.BotToken != "")
-	if useTelegram && (tg.APIID <= 0 || tg.APIHash == "") {
-		return nil, nil, nil, fmt.Errorf(i18n.T("main_no_api_id"), cfg.Path())
-	}
-	var nets []string
-	caches := map[string]*cache.Cache{}
-	root := config.CacheDir()
-
-	if useTelegram {
-		nets = append(nets, model.NetTelegram)
-		if cfg.Cache {
-			dir := filepath.Join(root, model.NetTelegram) // one directory per network
-			tgRoot := root
-			if tg.BotToken != "" {
-				dir = filepath.Join(dir, "bot")       // a bot and an account do not share their cache
-				tgRoot = filepath.Join(tgRoot, "bot") // … and neither did they before the split
-			}
-			// Cache of the versions before the split: orphan files at the root of
-			// the directory. Dropped once, best effort — everything comes back under
-			// the network at the first write.
-			// ponytail: "history" here is the pre-split legacy directory name, not a
-			// network id — a future network literally named "history" would get its
-			// cache directory wiped on every start. Rename this cleanup (or check the
-			// network name) if that day comes; unlikely enough not to guard now.
-			_ = os.Remove(filepath.Join(tgRoot, "dialogs.gob"))
-			_ = os.RemoveAll(filepath.Join(tgRoot, "history"))
-			caches[model.NetTelegram] = cache.New(dir, cfg.CacheMessages)
-		}
-	}
-	modNets := 0 // the networks of the modules: the UI lists and launches them
-	for _, m := range mods {
-		modNets += len(m.Networks())
-	}
-	if len(nets) == 0 && modNets == 0 {
-		return nil, nil, nil, fmt.Errorf(i18n.T("main_no_networks"), cfg.Path())
-	}
-
-	// build makes the backend of net on its own chan. A token command that
-	// fails is the error of the launch: the UI shows it and starts nothing.
-	build := func(nctx context.Context, net string, raw chan<- model.Event) (model.Backend, error) {
-		switch net {
-		case model.NetTelegram:
-			return tgc.New(tgc.Config{AppID: tg.APIID, AppHash: tg.APIHash, BotToken: tg.BotToken,
-				SessionPath: cfg.SessionPath()}, raw), nil
-		}
-		return nil, fmt.Errorf("%s: unknown network", net)
-	}
-	// launch wires a backend: its own chan, the forwarder that stamps the
-	// network on every event, and the goroutine of its Run — an error or a
-	// panic comes back as an event rather than killing the terminal.
-	launch := func(nctx context.Context, net string) (model.Backend, error) {
-		raw := make(chan model.Event, 256)
-		b, err := build(nctx, net, raw)
-		if err != nil {
-			return nil, err
-		}
-		if p, ok := b.(interface{ SetContext(context.Context) }); ok {
-			p.SetContext(nctx)
-		}
-		go func() {
-			for {
-				select {
-				case <-nctx.Done():
-					return
-				case ev := <-raw:
-					select {
-					case events <- model.Envelope{Net: net, Ev: ev, Session: nctx}:
-					case <-nctx.Done():
-						return
-					}
-				}
-			}
-		}()
-		go func() {
-			var stopped model.EvStopped
-			// Straight into the UI chan, not through raw: when the context that
-			// ended Run is the one of a logout, the forwarder is already gone.
-			defer func() {
-				if r := recover(); r != nil {
-					stopped.Err = i18n.T("panic", r)
-				}
-				select {
-				case events <- model.Envelope{Net: net, Ev: stopped, Session: nctx}:
-				case <-ctx.Done():
-				}
-			}()
-			if err := b.Run(nctx); err != nil && nctx.Err() == nil {
-				stopped.Err = err.Error()
-			}
-		}()
-		return b, nil
-	}
-	return nets, caches, launch, nil
+// modules : the networks the client knows, in the order of their windows and
+// of /net. Adding one is a line here.
+func modules() []module.Module {
+	return []module.Module{tgc.NewModule(), dsc.NewModule(), irc.NewModule()}
 }
 
 func run() error {
-	mods := []module.Module{dsc.NewModule(), irc.NewModule()}
+	mods := modules()
 	cfg, err := config.Load(mods...)
 	if err != nil {
 		return err
@@ -170,15 +71,15 @@ func run() error {
 		lang = i18n.Detect(cmp.Or(os.Getenv("LC_ALL"), os.Getenv("LANG")))
 	}
 	i18n.Set(lang)
-	// One goroutine per backend chan, fan-in into the UI chan: a backend posts
-	// bare events, the UI wants to know which network they come from.
-	events := make(chan model.Envelope, 256)
+	n := 0
+	for _, m := range mods {
+		n += len(m.Networks())
+	}
+	if n == 0 {
+		return fmt.Errorf(i18n.T("main_no_networks"), cfg.Path())
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	nets, caches, launch, err := backends(ctx, cfg, events, mods)
-	if err != nil {
-		return err
-	}
 	name := cfg.Theme
 	if name == "" {
 		name = theme.GhosttyDefault()
@@ -206,5 +107,5 @@ func run() error {
 	}()
 	defer t.Close()
 
-	return ui.Run(ctx, cancel, t, cfg, th, nets, launch, events, caches, mods)
+	return ui.Run(ctx, cancel, t, cfg, th, mods...)
 }

@@ -1,60 +1,11 @@
 package main
 
 import (
-	"context"
 	"os"
 	"path/filepath"
-	"slices"
 	"testing"
 	"time"
-
-	"github.com/govlog/ttyloom/internal/config"
-	"github.com/govlog/ttyloom/internal/model"
 )
-
-// loadCfg : a configuration read from a file written for the test. The cache
-// and the session stay in the temporary directory (TTYLOOM_DIR).
-func loadCfg(t *testing.T, body string) *config.Config {
-	t.Helper()
-	dir := t.TempDir()
-	t.Setenv("TTYLOOM_DIR", dir)
-	for _, v := range []string{"TG_API_ID", "TG_API_HASH", "TG_BOT_TOKEN"} {
-		t.Setenv(v, "")
-	}
-	if err := os.WriteFile(filepath.Join(dir, "config.toml"), []byte(body), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	cfg, err := config.LoadFrom(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return cfg
-}
-
-const tgOnly = "api_id = 42\napi_hash = \"hash\"\n"
-
-// No [discord] section: one network, one cache.
-func TestBackendsTelegramOnly(t *testing.T) {
-	cfg := loadCfg(t, tgOnly)
-	nets, caches, launch, err := backends(context.Background(), cfg, make(chan model.Envelope, 8), nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !slices.Equal(nets, []string{model.NetTelegram}) || launch == nil {
-		t.Fatalf("networks: %v", nets)
-	}
-	if len(caches) != 1 || caches[model.NetTelegram] == nil {
-		t.Fatalf("caches %v", caches)
-	}
-}
-
-// Without api_id nothing starts: the message names the file to fill in.
-func TestBackendsNoAPIID(t *testing.T) {
-	cfg := loadCfg(t, "api_hash = \"hash\"\n")
-	if _, _, _, err := backends(context.Background(), cfg, make(chan model.Envelope, 8), nil); err == nil {
-		t.Fatal("no api_id: no error")
-	}
-}
 
 // A killed session leaves .part-* files at every depth a download uses:
 // download_dir, its maps/ and paste/, and avatars/<net>/. A recent one may

@@ -11,7 +11,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
-	"strconv"
 	"strings"
 	"time"
 
@@ -47,15 +46,6 @@ func (m *HoverMode) UnmarshalText(b []byte) error {
 	return nil
 }
 
-// TelegramConfig : the [telegram] section. The historic flat
-// keys (api_id, api_hash, bot_token at the top level) keep working and mean
-// [telegram]; the section wins when both are there.
-type TelegramConfig struct {
-	APIID    int    `toml:"api_id"`
-	APIHash  string `toml:"api_hash"`
-	BotToken string `toml:"bot_token"`
-}
-
 // SecretCmd runs cmd — split on blanks, no shell — and gives its trimmed
 // stdout: a secret read from a password manager (the Discord token, a
 // NickServ password). Shared by the modules. label heads the errors.
@@ -87,9 +77,6 @@ func SecretCmd(label, cmd string) (string, error) {
 }
 
 type Config struct {
-	APIID             int       `toml:"api_id"`
-	APIHash           string    `toml:"api_hash"`
-	BotToken          string    `toml:"bot_token"`
 	Theme             string    `toml:"theme"`
 	DownloadDir       string    `toml:"download_dir"`
 	AutoMediaMaxKB    int       `toml:"auto_media_max_kb"`
@@ -125,24 +112,11 @@ type Config struct {
 	SidebarWidth      int       `toml:"sidebar_width"`
 	Lang              string    `toml:"lang"`
 
-	// Sections, after every scalar: the TOML encoder writes the tables last.
-	Telegram *TelegramConfig `toml:"telegram"`
-
 	// Unknown : keys of the file no field takes (a typo, imagess = "off"). The
 	// UI says so at start, otherwise the user believes the option active.
 	Unknown []string `toml:"-"`
 
-	dir string
-	// Values read from the file, before the TG_* variables override them.
-	// Save writes those back: a secret given by the environment must never
-	// land in a config.toml the user deliberately left empty (a dotfiles
-	// repository, a backup…). fileTelegram is the [telegram] section of the
-	// file, nil when it had none: Save gives the file back its own shape.
-	fileID       int
-	fileHash     string
-	fileToken    string
-	fileTelegram *TelegramConfig
-
+	dir     string
 	mods    []module.Module // the modules, for Save
 	claimed map[string]bool // top-level keys the modules asked for, lower case
 }
@@ -177,17 +151,9 @@ type sink map[string]any
 func (s sink) Set(key string, v any) { s[key] = v }
 
 const defaultFile = `# ttyloom
-# api_id / api_hash / bot_token below are the telegram network. They can also
-# be written as a section, which then wins:
-#   [telegram]
-#   api_id = 0
-#   api_hash = ""
-#   bot_token = ""
-# Sections go at the END of the file: a plain key written after [discord]
-# would be read as one of its keys.
-api_id = 0            # https://my.telegram.org
-api_hash = ""
-bot_token = ""        # empty = user account; otherwise a BotFather token (bot mode)
+# Sections go at the END of the file: a plain key written after a [section]
+# would be read as one of its keys. The keys of each network follow the ones
+# of the client.
 theme = ""            # empty = current Ghostty theme, otherwise a theme name
 download_dir = "~/Downloads/ttyloom"
 auto_media_max_kb = 5120
@@ -311,52 +277,26 @@ func LoadFrom(dir string, mods ...module.Module) (*Config, error) {
 		}
 	}
 	c.Unknown = append(c.Unknown, src.unknown...)
-	// Shape of the file, kept as it is for Save.
-	c.fileID, c.fileHash, c.fileToken, c.fileTelegram = c.APIID, c.APIHash, c.BotToken, c.Telegram
-	if c.Telegram != nil { // the section wins over the flat keys
-		c.APIID, c.APIHash, c.BotToken = c.Telegram.APIID, c.Telegram.APIHash, c.Telegram.BotToken
-	}
 	c.AutoMediaMaxKB = min(max(c.AutoMediaMaxKB, 0), MaxAutoMediaKB)
-	if v := os.Getenv("TG_API_ID"); v != "" {
-		n, err := strconv.Atoi(v)
-		if err != nil {
-			return nil, fmt.Errorf(i18n.T("error_with_prefix"), "TG_API_ID", err)
-		}
-		c.APIID = n
-	}
-	if v := os.Getenv("TG_API_HASH"); v != "" {
-		c.APIHash = v
-	}
-	if v := os.Getenv("TG_BOT_TOKEN"); v != "" {
-		c.BotToken = v
-	}
-	// Effective telegram configuration, environment included: a fresh struct,
-	// never the one of the file kept by fileTelegram.
-	c.Telegram = &TelegramConfig{APIID: c.APIID, APIHash: c.APIHash, BotToken: c.BotToken}
 	return c, nil
 }
 
-// Save writes the configuration back. The identifiers keep the value read
-// from the file, never the one of the TG_* variables: F4 to F7 and every
-// /set call go through here. Same rule for the [telegram] section, which
-// Load rebuilt with the environment in it: the file gets its own back, and a
-// file without a section keeps none.
+// Save writes the configuration back: F4 to F7 and every /set call go
+// through here. Each module writes its own keys, as its file had them (never
+// a secret that came from the environment).
 //
 // The top-level keys of the file no field takes (a newer version's, a typo
 // still to fix) are written back as they are; a file that no longer parses
 // is left alone and the error says why.
 //
 // Temporary file then rename (WriteAtomic): a truncating write cut in the
-// middle would leave a config.toml without its api_id and its api_hash.
+// middle would leave a config.toml without the keys of its networks.
 func (c *Config) Save() error {
 	if c.dir == "" {
 		return nil // built with no file (the tests): nothing to write, and never the working directory
 	}
-	out := *c
-	out.APIID, out.APIHash, out.BotToken = c.fileID, c.fileHash, c.fileToken
-	out.Telegram = c.fileTelegram
 	var buf bytes.Buffer
-	if err := toml.NewEncoder(&buf).Encode(&out); err != nil {
+	if err := toml.NewEncoder(&buf).Encode(c); err != nil {
 		return err
 	}
 	var known map[string]any
@@ -424,15 +364,6 @@ func WriteAtomic(path string, data []byte, perm os.FileMode) error {
 }
 
 func (c *Config) Path() string { return filepath.Join(c.dir, "config.toml") }
-
-// SessionPath : one session per identity; a bot and a user account never
-// share the same file.
-func (c *Config) SessionPath() string {
-	if c.BotToken != "" {
-		return filepath.Join(c.dir, "session-bot.json")
-	}
-	return filepath.Join(c.dir, "session.json")
-}
 
 // Expand replaces ~ with the home directory.
 func Expand(p string) string {

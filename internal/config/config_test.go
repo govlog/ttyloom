@@ -9,12 +9,11 @@ import (
 
 func TestLoadFromDefaultsAndSave(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("TG_API_ID", "42")
 	c, err := LoadFrom(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c.APIID != 42 || c.Images != "auto" || !c.Avatars || !c.Timestamps || c.Hover != HoverMenu || c.AutoMediaMaxKB != 5120 || c.KittyImages != 48 || c.DownloadDir != "~/Downloads/ttyloom" || c.Maps {
+	if c.Images != "auto" || !c.Avatars || !c.Timestamps || c.Hover != HoverMenu || c.AutoMediaMaxKB != 5120 || c.KittyImages != 48 || c.DownloadDir != "~/Downloads/ttyloom" || c.Maps {
 		t.Fatalf("defaults: %+v", c)
 	}
 	if !c.Bell || c.AutoOpenDays != 7 {
@@ -35,31 +34,17 @@ func TestLoadFromDefaultsAndSave(t *testing.T) {
 	if c.SidebarSort != "recent" {
 		t.Fatalf("default sidebar_sort: %+v", c)
 	}
-	if c.BotToken != "" || filepath.Base(c.SessionPath()) != "session.json" {
-		t.Fatalf("user account: %q %s", c.BotToken, c.SessionPath())
-	}
 	c.Theme = "Catppuccin Mocha"
 	c.Bell, c.AutoOpenDays = false, 3
 	if err := c.Save(); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("TG_API_ID", "")
 	c2, err := LoadFrom(dir)
-	// api_id came from the environment: Save keeps the value of the file (0
-	// here), it does not persist the variable.
-	if err != nil || c2.Theme != "Catppuccin Mocha" || c2.APIID != 0 || !c2.Timestamps {
+	if err != nil || c2.Theme != "Catppuccin Mocha" || !c2.Timestamps {
 		t.Fatalf("reload: %v %+v", err, c2)
 	}
 	if c2.Bell || c2.AutoOpenDays != 3 {
 		t.Fatalf("reload bell/auto_open_days: %+v", c2)
-	}
-	t.Setenv("TG_BOT_TOKEN", "123:abc")
-	c3, err := LoadFrom(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if c3.BotToken != "123:abc" || filepath.Base(c3.SessionPath()) != "session-bot.json" {
-		t.Fatalf("bot mode: %q %s", c3.BotToken, c3.SessionPath())
 	}
 }
 
@@ -88,142 +73,15 @@ func TestHoverConfigCompat(t *testing.T) {
 	}
 }
 
-// TestSaveKeepsEnvSecretsOut : TG_API_ID / TG_API_HASH / TG_BOT_TOKEN take
-// over the file at load time, but Save must never write them into it —
-// /set, /theme and F4 to F7 all save, and a config.toml deliberately left
-// empty ends up in a dotfiles repository or in a backup.
-func TestSaveKeepsEnvSecretsOut(t *testing.T) {
-	dir := t.TempDir()
-	body := "api_id = 7\napi_hash = \"DU_FICHIER\"\nbot_token = \"\"\n"
-	if err := os.WriteFile(filepath.Join(dir, "config.toml"), []byte(body), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("TG_API_ID", "42")
-	t.Setenv("TG_API_HASH", "SECRET_API_HASH")
-	t.Setenv("TG_BOT_TOKEN", "123:SECRET_BOT_TOKEN")
-	c, err := LoadFrom(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if c.APIID != 42 || c.APIHash != "SECRET_API_HASH" || c.BotToken != "123:SECRET_BOT_TOKEN" {
-		t.Fatalf("environment ignored: %+v", c)
-	}
-	c.Theme = "Catppuccin Mocha"
-	if c.Save() != nil {
-		t.Fatal("Save")
-	}
-	fi, err := os.Stat(c.Path())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if fi.Mode().Perm() != 0o600 { // temporary file + rename must keep the mode
-		t.Fatalf("perms after Save: %v", fi.Mode())
-	}
-	b, err := os.ReadFile(c.Path())
-	if err != nil {
-		t.Fatal(err)
-	}
-	got := string(b)
-	for _, secret := range []string{"SECRET_API_HASH", "SECRET_BOT_TOKEN", "api_id = 42"} {
-		if strings.Contains(got, secret) {
-			t.Fatalf("%q written into config.toml:\n%s", secret, got)
-		}
-	}
-	t.Setenv("TG_API_ID", "")
-	t.Setenv("TG_API_HASH", "")
-	t.Setenv("TG_BOT_TOKEN", "")
-	c2, err := LoadFrom(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if c2.APIID != 7 || c2.APIHash != "DU_FICHIER" || c2.BotToken != "" {
-		t.Fatalf("file values lost: %+v", c2)
-	}
-	if c2.Theme != "Catppuccin Mocha" {
-		t.Fatalf("the rest was not saved: %+v", c2)
-	}
-}
-
-// TestTelegramSection : the historic flat keys keep meaning [telegram]; the
-// section wins when both are there. The effective values are also the flat
-// fields — SessionPath and tgc read those.
-func TestTelegramSection(t *testing.T) {
-	for _, c := range []struct {
-		name string
-		body string
-		want TelegramConfig
-	}{
-		{"plat", "api_id = 7\napi_hash = \"H\"\nbot_token = \"T\"\n", TelegramConfig{APIID: 7, APIHash: "H", BotToken: "T"}},
-		{"section", "[telegram]\napi_id = 9\napi_hash = \"S\"\n", TelegramConfig{APIID: 9, APIHash: "S"}},
-		{"both", "api_id = 7\napi_hash = \"H\"\nbot_token = \"T\"\n[telegram]\napi_id = 9\napi_hash = \"S\"\n", TelegramConfig{APIID: 9, APIHash: "S"}},
-	} {
-		t.Run(c.name, func(t *testing.T) {
-			dir := t.TempDir()
-			if err := os.WriteFile(filepath.Join(dir, "config.toml"), []byte(c.body), 0o600); err != nil {
-				t.Fatal(err)
-			}
-			cfg, err := LoadFrom(dir)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if cfg.Telegram == nil || *cfg.Telegram != c.want {
-				t.Fatalf("[telegram] = %+v, want %+v", cfg.Telegram, c.want)
-			}
-			if (TelegramConfig{APIID: cfg.APIID, APIHash: cfg.APIHash, BotToken: cfg.BotToken}) != c.want {
-				t.Fatalf("flat keys = %d %q %q, want %+v", cfg.APIID, cfg.APIHash, cfg.BotToken, c.want)
-			}
-		})
-	}
-}
-
-// TestSaveKeepsSectionShape : a config.toml written with [telegram] keeps its
-// section after a Save, and the TG_* secrets stay out of it just as much as
-// with the flat keys.
-func TestSaveKeepsSectionShape(t *testing.T) {
-	dir := t.TempDir()
-	body := "[telegram]\napi_id = 7\napi_hash = \"DU_FICHIER\"\n"
-	if err := os.WriteFile(filepath.Join(dir, "config.toml"), []byte(body), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("TG_API_HASH", "SECRET_API_HASH")
-	c, err := LoadFrom(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if c.APIHash != "SECRET_API_HASH" {
-		t.Fatalf("environment ignored: %+v", c.Telegram)
-	}
-	c.Theme = "Catppuccin Mocha"
-	if err := c.Save(); err != nil {
-		t.Fatal(err)
-	}
-	b, err := os.ReadFile(c.Path())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := string(b); strings.Contains(got, "SECRET_API_HASH") || !strings.Contains(got, "[telegram]") {
-		t.Fatalf("Save leaked the secret or lost the section:\n%s", got)
-	}
-	t.Setenv("TG_API_HASH", "")
-	c2, err := LoadFrom(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if c2.APIID != 7 || c2.APIHash != "DU_FICHIER" || c2.Theme != "Catppuccin Mocha" {
-		t.Fatalf("round trip: %+v %+v", c2, c2.Telegram)
-	}
-}
-
 // TestSaveKeepsUnknownKeys : the keys of config.toml no field takes (a newer
 // version's, a table of its own) stay through a Save. The known ones are the
-// struct's, and the TG_* secrets stay out.
+// struct's.
 func TestSaveKeepsUnknownKeys(t *testing.T) {
 	dir := t.TempDir()
-	body := "api_hash = \"DU_FICHIER\"\nfuture = \"kept\"\n[future_table]\nx = 1\n"
+	body := "future = \"kept\"\n[future_table]\nx = 1\n"
 	if err := os.WriteFile(filepath.Join(dir, "config.toml"), []byte(body), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("TG_API_HASH", "SECRET_API_HASH")
 	c, err := LoadFrom(dir)
 	if err != nil {
 		t.Fatal(err)
@@ -236,16 +94,12 @@ func TestSaveKeepsUnknownKeys(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(string(b), "SECRET_API_HASH") {
-		t.Fatalf("environment secret written into config.toml:\n%s", b)
-	}
-	t.Setenv("TG_API_HASH", "")
 	again, err := LoadFrom(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if again.Images != "kitty" || again.APIHash != "DU_FICHIER" {
-		t.Fatalf("known keys: images %q, api_hash %q\n%s", again.Images, again.APIHash, b)
+	if again.Images != "kitty" {
+		t.Fatalf("known keys: images %q\n%s", again.Images, b)
 	}
 	if got := strings.Join(again.Unknown, ","); got != "future,future_table,future_table.x" {
 		t.Fatalf("unknown keys after Save: %q\n%s", got, b)
@@ -319,7 +173,7 @@ func TestWriteAtomic(t *testing.T) {
 // would believe the option active.
 func TestLoadFromUnknownKeys(t *testing.T) {
 	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, "config.toml"), []byte("api_id = 1\nimagess = \"off\"\n"), 0o600)
+	os.WriteFile(filepath.Join(dir, "config.toml"), []byte("theme = \"x\"\nimagess = \"off\"\n"), 0o600)
 	c, err := LoadFrom(dir)
 	if err != nil {
 		t.Fatal(err)

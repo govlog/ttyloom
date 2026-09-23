@@ -18,6 +18,7 @@ import (
 	"github.com/govlog/ttyloom/internal/theme"
 	"github.com/govlog/ttyloom/protocols/dsc"
 	"github.com/govlog/ttyloom/protocols/irc"
+	"github.com/govlog/ttyloom/protocols/tgc"
 )
 
 // TestSetUnknownKey : "/set foobar" alone used to say nothing at all, while
@@ -466,7 +467,7 @@ func launchUI(err error) (*UI, *int) {
 	u := netUI()
 	u.ctx = context.Background()
 	u.netList = []string{model.NetDiscord, model.NetTelegram}
-	u.mods = []module.Module{dsc.NewModule()} // /discord
+	u.mods = []module.Module{tgc.NewModule(), dsc.NewModule()} // /telegram, /discord
 	u.netCancel = map[string]context.CancelFunc{}
 	u.self = map[string]selfInfo{}
 	n := new(int)
@@ -929,6 +930,15 @@ func TestNetCommandCompletion(t *testing.T) {
 	u, _ := launchUI(nil)
 	u.ed.Set("/discord l")
 	if got := u.candidates("l", false); !slices.Equal(got, []string{"login", "logout"}) {
+		t.Fatalf("candidates: %v", got)
+	}
+}
+
+// Tab after /telegram with nothing typed yet lists its sub-commands.
+func TestTelegramCommandCompletion(t *testing.T) {
+	u, _ := launchUI(nil)
+	u.ed.Set("/telegram ")
+	if got := u.candidates("", false); !slices.Equal(got, []string{"status", "login", "logout", "disconnect"}) {
 		t.Fatalf("candidates: %v", got)
 	}
 }

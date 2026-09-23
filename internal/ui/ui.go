@@ -207,64 +207,11 @@ type UI struct {
 // Run drives the UI. netList names the configured networks, launch starts one
 // of them (at start here, then on /<net> login); caches are keyed by network
 // name and events carries the envelopes of every backend, fanned in by main.
-func Run(ctx context.Context, cancel context.CancelFunc, t *term.Term, cfg *config.Config, th theme.Theme,
-	netList []string, launch model.Launcher, events chan model.Envelope, caches map[string]*cache.Cache, mods []module.Module) error {
-	u := &UI{ctx: ctx, cancel: cancel, t: t, cfg: cfg, th: th, nets: map[string]model.Backend{}, netList: netList, launch: launch, mods: mods, envs: events,
-		netCancel: map[string]context.CancelFunc{}, events: make(chan model.Event, 256), ws: NewWindows(),
-		agg: &Window{}, aggregate: cfg.Aggregate, debug: &Window{}, focused: true,
-		chats: map[model.ChatKey]*model.Chat{}, lookups: map[uint64]*lookup{}, typing: map[model.ChatKey]typing{}, lastTyping: map[model.ChatKey]time.Time{},
-		avatars: map[model.ChatKey]*model.Media{}, openNext: map[*model.Media]bool{}, fulls: map[*model.Media]bool{}, presence: map[model.ChatKey]string{},
-		caches: caches, dirty: map[model.ChatKey]bool{}, partsCache: map[model.ChatKey]partsEntry{}, whoCache: map[whoKey]whoEntry{},
-		sideW:       clampSideW(cfg.SidebarWidth, t.Cols),
-		aliases:     map[model.ChatKey]string{},
-		folded:      map[string]bool{},
-		self:        map[string]selfInfo{},
-		conn:        map[string]bool{},
-		dialogsSeen: map[string]bool{},
-		tabLast:     map[string]*Window{},
-		reactList:   map[string][]string{}}
-	u.ws.Log = cfg.Log
-	u.setMaxItems(cfg.CacheMessages)
+func Run(ctx context.Context, cancel context.CancelFunc, t *term.Term, cfg *config.Config, th theme.Theme, mods ...module.Module) error {
+	u := newUI(ctx, cancel, t, cfg, th, mods)
 	// Exit (/quit, Ctrl+C, end of the terminal): the cache goes to the disk
 	// before main gives the terminal back.
 	defer u.flushCache(true)
-	u.images = u.resolveImages(cfg.Images)
-	u.status0(i18n.T("banner_help"))
-	if len(cfg.Unknown) > 0 {
-		u.status0(i18n.T("config_unknown_keys", strings.Join(cfg.Unknown, ", ")))
-	}
-	u.status0(i18n.T("banner_terminal", t.Cols, t.Rows, t.CellW, t.CellH, t.Kitty, t.KittyKbd, u.images, th.Name))
-	if al, err := loadAliases(aliasPath()); err != nil {
-		u.status0(i18n.T("aliases_error", err)) // unreadable file: we start with no local names
-	} else {
-		u.aliases = al
-	}
-	if f, err := loadFolds(sidebarPath()); err != nil {
-		u.status0(i18n.T("sidebar_error", err)) // unreadable file: we start with everything unfolded
-	} else {
-		u.folded = f
-	}
-	// ponytail: two launchers until every network is a module (task 8).
-	legacy := launch
-	u.launch = func(ctx context.Context, net string) (model.Backend, error) {
-		if u.modOf(net) != nil {
-			return u.launchModule(ctx, net)
-		}
-		return legacy(ctx, net)
-	}
-	for _, m := range mods {
-		for _, net := range m.Networks() {
-			u.netList = append(u.netList, net)
-			u.addCache(m, net)
-		}
-	}
-	for _, n := range u.netList {
-		u.startNet(n)
-	}
-	u.loadCache() // no cache at all: the loop over u.caches has nothing to read
-	u.applySpell(cfg.Spell)
-	u.clear()
-	u.draw()
 	tick := time.NewTicker(100 * time.Millisecond)
 	defer tick.Stop()
 	for {
@@ -2558,8 +2505,6 @@ func (u *UI) candidates(word string, atStart bool) []string {
 		return helpCandidates(u.topics())
 	case complNet:
 		return append(u.netNames(), netAll)
-	case complNetCmd:
-		return []string{"status", "login", "logout", "disconnect"}
 	case complLog:
 		return []string{"on", "off"}
 	case complPath:

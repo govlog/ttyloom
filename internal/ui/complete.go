@@ -28,7 +28,6 @@ const (
 	complNet                             // /net <network>
 	complFold                            // /fold <section>
 	complPath                            // /send <path>: files of the disk
-	complNetCmd                          // /telegram /discord <status|login|logout|disconnect>
 	complLog                             // /log <on|off>
 	complNone                            // /open /history …
 	complModule                          // a command of a module: its Complete
@@ -90,8 +89,6 @@ func complContext(line string, cursor int, names cmdNames) (src complSource, tai
 		return complNet, rest, ""
 	case "fold":
 		return complFold, rest, ""
-	case model.NetTelegram:
-		return complNetCmd, rest, ""
 	case "log":
 		return complLog, rest, ""
 	case "send":
