@@ -98,9 +98,10 @@ ttyloom --version
 ttyloom
 ```
 
-With no network configured, the expected result is a setup message and a new
-`~/.config/ttyloom/config.toml` containing defaults. A source build without
-release flags reports `dev` for its version.
+With no network configured, the expected result is the Networks box (see
+[Networks box](#networks-box)) and a new `~/.config/ttyloom/config.toml`
+containing defaults. A source build without release flags reports `dev` for
+its version.
 
 To build without Hunspell or a C compiler:
 
@@ -982,12 +983,13 @@ session and credential handling in more detail.
 
 ## Troubleshooting
 
-### No network configured after moving directories
+### The Networks box opens after moving directories
 
-The active `config.toml` must contain your credentials directly in the directory
-named by the error, not inside a nested folder created by `mv`. Start with
-`TTYLOOM_DIR=/absolute/path/to/config ttyloom` to select the intended directory.
-Do not attach a complete configuration to a public issue.
+TTYloom starts on the Networks box, as at a first start, when the `config.toml`
+it reads holds no network. The active file must contain your credentials
+directly in the configuration directory, not inside a nested folder created by
+`mv`. Start with `TTYLOOM_DIR=/absolute/path/to/config ttyloom` to select the
+intended directory. Do not attach a complete configuration to a public issue.
 
 ### Viewer controls or videos do not respond
 
