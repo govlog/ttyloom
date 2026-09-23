@@ -11,7 +11,6 @@ import (
 	"github.com/govlog/ttyloom/internal/model"
 
 	"github.com/govlog/ttyloom/internal/i18n"
-	"github.com/govlog/ttyloom/internal/spell"
 )
 
 // complSource : kind of Tab completion for the command being typed.
@@ -160,38 +159,6 @@ func complContext(line string, cursor int, names []string) (src complSource, tai
 		return complPath, rest, ""
 	default:
 		return complNone, "", ""
-	}
-}
-
-// setKeys : keys that /set knows.
-var setKeys = []string{"timestamps", "timestamps_seconds", "cycle_mode", "multiline", "link_previews", "maps", "hover", "images", "images_hover", "video", "gifplay", "avatars", "auto_media_max_kb", "download_dir", "bell", "notify", "auto_open_days", "aggregate", "tabs", "log", "log_dir", "separator", "redline", "sidebar_sort", "sidebar_split", "sidebar_width", "spell", "spell_quotes", "kitty_images", "cache_messages", "lang"}
-
-// setValues gives the valid values of a /set key with a closed choice, nil otherwise.
-func setValues(key string) []string {
-	switch key {
-	case "images":
-		return []string{"auto", "kitty", "halfblock", "off"}
-	case "hover":
-		return []string{"menu", "highlight", "off"}
-	case "video":
-		return []string{"show", "hidden", "autoplay"}
-	case "gifplay":
-		return []string{"always", "hover", "off"}
-	case "notify":
-		return []string{"terminal", "desktop", "off"}
-	case "sidebar_sort":
-		return []string{"recent", "alpha", "unread"}
-	case "cycle_mode":
-		return []string{"next", "last_unread"}
-	case "spell":
-		// a chain ("fr+us") is typed by hand
-		return append([]string{"off", "us"}, spell.Available(spell.DictDir)...)
-	case "lang":
-		return i18n.Langs() // a chain ("fr+en") is typed by hand
-	case "timestamps", "timestamps_seconds", "link_previews", "maps", "images_hover", "avatars", "bell", "aggregate", "tabs", "log", "separator", "redline", "spell_quotes", "sidebar_split":
-		return []string{"on", "off"}
-	default:
-		return nil
 	}
 }
 

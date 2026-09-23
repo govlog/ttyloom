@@ -103,13 +103,9 @@ func privateParts(name string, c *model.Chat, presence string) []model.Participa
 	return out
 }
 
-// participants : answer of the backend. The text is remote: render.CleanLine once
-// here rather than at each repaint.
+// participants : answer of the backend (the text is remote: cleaned by stamp).
 func (u *UI) participants(e model.EvParticipants) {
 	lines := e.Lines
-	for i := range lines {
-		lines[i].Text, lines[i].Name = render.CleanLine(lines[i].Text), render.CleanLine(lines[i].Name)
-	}
 	key := u.evKey(e.ChatID)
 	if e.Err != "" {
 		lines = []model.Participant{{Text: i18n.T("unavailable")}}

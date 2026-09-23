@@ -424,7 +424,7 @@ func (u *UI) searchGlobalResult(e model.EvSearchGlobal) {
 		g.acc = append(g.acc, h)
 	}
 	if e.Err != "" {
-		g.errs = append(g.errs, render.CleanLine(e.Err))
+		g.errs = append(g.errs, e.Err)
 	}
 	if g.pending--; g.pending > 0 {
 		return

@@ -56,8 +56,9 @@ func (u *UI) loadCache() {
 			// The gob was written before the networks had a name: without this the
 			// chat would reach u.net() un-stamped and its calls would go nowhere.
 			// Stamped before remember: on an already known chat, the first
-			// insertion keeps its Net.
-			chats[i].Net = net
+			// insertion keeps its Net. A file written before the cleaning at
+			// ingestion may hold raw text: cleaned on its way in, like an event.
+			stampChat(net, &chats[i])
 			c := u.remember(&chats[i])
 			u.cached[c.Key()] = true
 			u.listChat(c)
@@ -101,7 +102,7 @@ func (u *UI) bindChat(w *Window, c *model.Chat) {
 	}
 	ptrs := make([]*model.Msg, len(msgs))
 	for k := range msgs {
-		msgs[k].Net = c.Net // same as loadCache: the gob carries no network
+		stampMsg(c.Net, &msgs[k]) // same as loadCache: the gob carries no network, and may carry raw text
 		ptrs[k] = &msgs[k]
 	}
 	w.Merge(ptrs)

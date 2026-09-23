@@ -173,7 +173,7 @@ func (u *UI) gifsResult(e model.EvGifs) {
 		return
 	}
 	u.gifFree() // the previews of the list before: frames and images go
-	g.err, g.sent, g.gifs, g.cur, g.top = render.CleanLine(e.Err), e.Query, e.Gifs, 0, 0
+	g.err, g.sent, g.gifs, g.cur, g.top = e.Err, e.Query, e.Gifs, 0, 0
 	if e.Err != "" {
 		g.asked = false // the same query can go out again
 	}

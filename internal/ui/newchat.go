@@ -271,7 +271,7 @@ func (u *UI) ncSend() {
 func (u *UI) contactsList(e model.EvContacts) {
 	if e.Err != "" {
 		u.gotContacts = false // try again at the next opening
-		u.status0(i18n.T("contacts_error", render.CleanLine(e.Err)))
+		u.status0(i18n.T("contacts_error", e.Err))
 		return
 	}
 	have := make(map[model.ChatKey]bool, len(u.contacts))
@@ -301,7 +301,7 @@ func (u *UI) contactsFound(e model.EvContactsFound) {
 		u.ncSend() // the query moved during the round trip
 		return
 	}
-	n.err, n.sent, n.found = render.CleanLine(e.Err), e.Query, nil
+	n.err, n.sent, n.found = e.Err, e.Query, nil
 	if e.Err != "" {
 		n.sent = "" // the same query can go out again after an error (like the global search)
 	}

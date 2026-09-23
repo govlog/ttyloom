@@ -107,7 +107,9 @@ func TestCleanLineOnSingleLineSites(t *testing.T) {
 	n := 0
 	// paste.go: a paste is multiline by nature. select.go: the copy joins
 	// several messages with '\n' and goes out in base64, never to the screen.
-	multiline := []string{"paste.go", "select.go"}
+	// stamp.go: the body of a message and a link description are multiline by
+	// nature, cleaned once when the event comes in; Wrap keeps their breaks.
+	multiline := []string{"paste.go", "select.go", "stamp.go"}
 	for _, path := range goFiles(t, ".") {
 		if slices.ContainsFunc(multiline, func(f string) bool { return strings.HasSuffix(path, f) }) {
 			continue

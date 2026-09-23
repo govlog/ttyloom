@@ -1244,7 +1244,7 @@ func (u *UI) event(ev model.Event) {
 			}
 		}
 	case model.EvTyping:
-		u.typing[u.evKey(e.ChatID)] = typing{render.CleanLine(e.Who), time.Now().Add(6 * time.Second)}
+		u.typing[u.evKey(e.ChatID)] = typing{e.Who, time.Now().Add(6 * time.Second)}
 	case model.EvPresence:
 		u.presence[u.evKey(e.UserID)] = e.Status
 	case model.EvParticipants:

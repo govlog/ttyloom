@@ -112,11 +112,11 @@ func (u *UI) whoText(key whoKey, m *model.Msg) string {
 	return i18n.T("loading")
 }
 
-// whoEv : answer of the backend — cached, and the open popup follows. The text is
-// remote: CleanLine once here.
+// whoEv : answer of the backend — cached, and the open popup follows (the text
+// is remote: cleaned by stamp).
 func (u *UI) whoEv(e model.EvWho) {
 	key := whoKey{net: u.dispatchNet, chatID: e.ChatID, id: e.ID, react: e.React}
-	en := whoEntry{text: render.CleanLine(e.Text), at: time.Now()}
+	en := whoEntry{text: e.Text, at: time.Now()}
 	u.whoCache[key] = en
 	if u.who != nil && u.who.key == key {
 		u.who.text = en.text
