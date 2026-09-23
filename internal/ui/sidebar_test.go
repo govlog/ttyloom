@@ -817,6 +817,38 @@ func TestSideWindowZeroPrefix(t *testing.T) {
 	}
 }
 
+// In windows mode the name of a chat goes from the text colour to Dim as its
+// last activity gets older: < 1 h, < 24 h, < 7 days, older. No date known:
+// the text colour.
+func TestSideWindowAgeColour(t *testing.T) {
+	grey := func(v uint8) theme.Color { return theme.Color{Kind: 2, RGB: theme.RGB{R: v, G: v, B: v}} }
+	th := theme.Theme{FG: grey(240)}
+	th.Palette[8] = grey(90)
+	now := time.Date(2026, 9, 23, 12, 0, 0, 0, time.UTC)
+	ages := []time.Duration{10 * time.Minute, 5 * time.Hour, 3 * 24 * time.Hour, 30 * 24 * time.Hour, -1}
+	want := []uint8{240, 190, 140, 90, 240}
+	ws := []*Window{{}}
+	for i, a := range ages {
+		c := &model.Chat{ID: int64(i + 1), Kind: model.ChatUser, Title: fmt.Sprintf("t%d", i)}
+		if a >= 0 {
+			c.LastDate = now.Add(-a)
+		}
+		ws = append(ws, &Window{Chat: c})
+	}
+	lines := sidebarLines(sideWindows, nil, ws, nil, 0, th, testSideW, len(ws), 0, false, false, 0, -1, false, nil, sideState{now: now})
+	for i := range ages {
+		var got *render.Span
+		for j, s := range lines[i+1].Spans {
+			if s.Text == fmt.Sprintf("t%d", i) {
+				got = &lines[i+1].Spans[j]
+			}
+		}
+		if got == nil || got.Style.FG != grey(want[i]) {
+			t.Fatalf("age %v: name span %+v, want grey %d", ages[i], got, want[i])
+		}
+	}
+}
+
 // A hot window of the window list shows its counter in the mention colour,
 // bold, with the pulse as reverse video.
 func TestSidebarHotCounter(t *testing.T) {

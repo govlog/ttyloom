@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/govlog/ttyloom/internal/i18n"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"slices"
@@ -34,6 +35,13 @@ func Hex(s string) (Color, bool) {
 		return Color{}, false
 	}
 	return Color{Kind: 2, RGB: RGB{uint8(v >> 16), uint8(v >> 8), uint8(v)}}, true
+}
+
+// Mix : the colour a fraction f (0 to 1) of the way from a to b. Both must be
+// RGB: there is nothing to mix in the 16 ANSI colours.
+func Mix(a, b Color, f float64) Color {
+	m := func(x, y uint8) uint8 { return uint8(math.Round(float64(x) + (float64(y)-float64(x))*f)) }
+	return Color{Kind: 2, RGB: RGB{m(a.RGB.R, b.RGB.R), m(a.RGB.G, b.RGB.G), m(a.RGB.B, b.RGB.B)}}
 }
 
 func (c Color) sgr(fg bool) string {

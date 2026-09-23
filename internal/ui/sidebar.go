@@ -652,6 +652,33 @@ type sideState struct {
 	folded   map[string]bool
 	pulse    bool        // phase of the hot pulse
 	menuChat *model.Chat // chat whose line stays highlighted while its context menu is open
+	// now : time of the frame, for the age colour of the windows mode; zero
+	// means no age colour.
+	now time.Time
+}
+
+// ageFG : colour of a chat name in windows mode, from the text colour (last
+// activity less than an hour ago) to Dim (a week or more), in four steps. A
+// theme with no RGB colours has two: the text colour for the last 24 hours,
+// Dim before. No date known: the text colour.
+func ageFG(th theme.Theme, last, now time.Time) theme.Color {
+	fg, dim := th.FG, th.Color(theme.Dim)
+	if last.IsZero() {
+		return fg
+	}
+	step := 0
+	for _, d := range []time.Duration{time.Hour, 24 * time.Hour, 7 * 24 * time.Hour} {
+		if now.Sub(last) >= d {
+			step++
+		}
+	}
+	if fg.Kind != 2 || dim.Kind != 2 {
+		if step >= 2 {
+			return dim
+		}
+		return fg
+	}
+	return theme.Mix(fg, dim, float64(step)/3)
 }
 
 // sideSecLine : spans of a section header — "── name ───────[-]" laid over the
@@ -817,6 +844,9 @@ func sidebarLines(mode sideMode, chats []*model.Chat, ws []*Window, wins []int, 
 			}
 			textW := width - render.Width(num)
 			st, p, a := theme.Style{}, dim, red
+			if !state.now.IsZero() && w.Chat != nil && w.Search == "" {
+				st.FG = ageFG(th, w.Chat.LastDate, state.now)
+			}
 			if w.Hot { // private message or mention waiting: the mention colour pulses
 				a = theme.Style{FG: th.Color(theme.Mention), Bold: true, Reverse: state.pulse}
 			}
@@ -861,7 +891,7 @@ func (u *UI) sideBlock(sepRow int) ([]render.Line, []sideRow) {
 	sorted := u.sideChats() // sorted and filtered once: one sort per frame
 	hot := u.sideHot()
 	side := sideHeader(u.side, u.cfg.SidebarSort, u.cfg.SidebarSplit, u.th, u.sideW, hot)
-	state := sideState{folded: u.folded, pulse: u.pulse}
+	state := sideState{folded: u.folded, pulse: u.pulse, now: time.Now()}
 	if m := u.menu; m != nil && m.member == "" {
 		state.menuChat = m.chat // menu of a sidebar line (nil for the menu of a message)
 	}

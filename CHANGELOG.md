@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Age colour in the window list**: in window mode, the number and the name of a chat window fade with the age of its last message, from the text colour (less than an hour) to the dim colour (a week or more), in four steps. The `terminal` theme, with no RGB colours, has two: the last 24 hours, then older. The unread counter, the mention pulse and the current line keep their colours.
+
 ## v0.7-beta — 2026-09-23
 
 ### Added

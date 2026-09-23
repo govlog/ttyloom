@@ -726,7 +726,7 @@ Sorting changes display order, not actual window numbers.
 
 The sidebar uses `#` for a group, `&` for a channel, `@` for a username and `*`
 for the status window; in window mode the number comes first, right-aligned,
-then the marker glued to the name (a Discord `#general` keeps one `#`). The `⊟`
+then the marker glued to the name (a Discord `#general` keeps one `#`). In window mode a name also fades with the age of the last message of its chat: the text colour under an hour, darker under a day, darker again under a week, and the dim colour after that (the `terminal` theme has two steps only: under a day or older). The `⊟`
 of the header, or `sidebar_split`, puts the windows in two sections, channels
 then direct messages; the section rules take no click. Kitty can show avatars. A long current-chat title scrolls
 within the column. Drag the vertical border to resize and save the panel width.
