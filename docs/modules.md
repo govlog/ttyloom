@@ -35,6 +35,22 @@ shortest.
 | `Launch(ctx, h, net, ev)` | Builds the backend of `net` from the configuration of the moment; the client runs it. An error (a token command that fails) starts nothing. |
 | `Commands()` | Its slash commands (see below). |
 | `Claims(name)` | A name only this module resolves (`"#room"` for IRC): `/query` and `/join` then ask its networks alone. |
+| `Label()` | The name of the module in the Networks box (`"Telegram"`): a brand name, not a text of the catalogue. |
+| `CanAdd()` | A network of the module can be added now: Telegram and Discord while none is configured, IRC always. The box shows `+ Add <Label>` when true. |
+| `OpenSetup(h)` | Opens the page of the module in the box: a form (`h.OpenForm`), described below. |
+
+A module whose networks the box can remove implements `module.Remover`:
+`Remove(h, w, net)` takes the network out of `config.toml` (`h.SaveConfig`)
+and stops it (`h.RemoveNetwork`). IRC does; Telegram and Discord do not.
+
+**The page.** `OpenSetup` opens a `module.Form`. `Intro` holds lines of guide,
+folded to the box above the fields; `Link` a link drawn under them, which
+Ctrl+O opens with no question (it comes from the module, not the network).
+`Submit` checks the values (an error text keeps the page open), sets the
+settings of the module, writes them with `h.SaveConfig()` (on `false`, put the
+settings back and return an error text) and calls `h.AddNetwork(net)`; the
+login follows as at every start. A page never changes a network already
+configured.
 
 A module keeps its own settings type and reads it with `Decode`. A key the
 client and no module took is listed as unknown at start.
@@ -53,7 +69,7 @@ Every method runs on the goroutine of the UI, except `Do`.
 | `ContextNet(w, mod)` | The network of your module that `w` means: the one of its chat or target, else the `/net` filter, else your only network. |
 | `SaveConfig()` | Writes `config.toml`. |
 | `Chats`, `ChatByTitle`, `SendFile`, `Resolve`, `Download`, `LastIncomingFile` | Actions of the UI on chats and files. |
-| `OpenForm(f)` | A centred form (see `module.Form`). |
+| `OpenForm(f)` | A centred form (see `module.Form`); in the Networks box, the page of the module. |
 | `Do(f)` | From a backend goroutine: `f` runs on the goroutine of the UI. The only way for a backend to change the configuration. |
 
 ## Commands, help, completion

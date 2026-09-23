@@ -113,6 +113,8 @@ GIF decoding works in Go without FFmpeg. macOS, Windows and other terminal combi
 
 Use Telegram, Discord, IRC, or any mix. **Telegram credentials are not required for the other networks.**
 
+The first start opens the **Networks** box: pick a network, follow its page (Telegram: how to get an api_id, then the QR code; Discord: the QR code or a `token_cmd`; IRC: the form of `/irc add`), and TTYloom writes `config.toml` and connects. `/networks` opens it again to see the state of each network, connect, disconnect, log out of an account or remove an IRC network. The sections below are the `config.toml` way.
+
 ### Telegram
 
 Create your application at [my.telegram.org/apps](https://my.telegram.org/apps), then edit the existing top-level keys in `config.toml`:

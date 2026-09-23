@@ -2,11 +2,19 @@
 
 [Back to README](../README.md) · [Full manual](guide.md)
 
-TTYloom can connect Telegram, Discord, IRC, or any mix of them. Run it once to create
-`~/.config/ttyloom/config.toml`, then edit that file. `TTYLOOM_DIR` can select
+TTYloom can connect Telegram, Discord, IRC, or any mix of them. The first start
+opens the **Networks** box (`/networks` later): pick a network, follow its page,
+and TTYloom writes `~/.config/ttyloom/config.toml` and connects. Editing that
+file by hand is the other way, described below. `TTYLOOM_DIR` can select
 another configuration directory. Keep top-level settings before TOML sections.
 
 ## Telegram
+
+The quickest way: start ttyloom and use the Networks box (`/networks`, opened
+at the first start). Its Telegram page links to my.telegram.org, takes the
+api_id and api_hash of your application, writes them to `config.toml` and
+shows the QR code. The steps below are the same with `config.toml`, and cover
+bots, which the box does not set up.
 
 ### Your personal account: API ID and API hash
 
@@ -69,6 +77,12 @@ For a bot, use BotFather to revoke and replace the token. Do not upload a sessio
 file, login code, API hash or token when reporting a problem.
 
 ## Discord
+
+The quickest way: start ttyloom and use the Networks box (`/networks`, opened
+at the first start). Its Discord page repeats the warning below, then writes
+`[discord]` and shows the QR code; fill its `token_cmd` field instead to give
+the token from a password manager. The sections below explain both ways with
+`config.toml`.
 
 ### Know which token the current adapter accepts
 

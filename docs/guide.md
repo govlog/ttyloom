@@ -114,6 +114,29 @@ Other optional tools are `wl-paste`/`wl-copy` (package `wl-clipboard`) or
 
 ## Configuration
 
+### Networks box
+
+The first start, with no network configured, opens the **Networks** box;
+`/networks` opens it again at any time. It lists each network with its state
+(connected as whom, connecting, stopped), then a `+ Add …` line per network
+that can be added: Telegram and Discord once, IRC as many times as you like.
+
+- **Enter on `+ Add …`** opens the page of that network in the box: a short
+  guide, and the fields to fill. Telegram: a link to my.telegram.org (Ctrl+O
+  opens it), then the api_id and api_hash of your application. Discord: the
+  warning about the terms of Discord, and an optional `token_cmd` (empty: the
+  QR code). IRC: the form of `/irc add`. Enter writes `config.toml` and
+  connects; Esc goes back to the list. The box does not set up a Telegram bot:
+  see [Telegram bot login](#telegram-bot-login).
+- **Enter on a network** gives its actions: Connect, Disconnect, Log out of the
+  account (Telegram and Discord), Remove (IRC, after a `y`).
+
+A login prompt or a QR code closes the box; once a network started from the
+box is connected, or has stopped, the box comes back with its new state.
+Closing the box with no network leaves a line in window 0 that points at
+`/networks`. The box does not change the settings of an existing network: edit
+`config.toml` for that.
+
 ### Configuration file
 
 The default file is `~/.config/ttyloom/config.toml`, or
@@ -316,6 +339,7 @@ is saved in `sidebar.toml`. One network without a server needs no section header
 
 | Command or key | Effect |
 | --- | --- |
+| `/networks` | The Networks box: each network and its state, add one, connect, disconnect, log out, remove (IRC). |
 | `/net`, Shift+F2 | Cycle all networks, then each network in name order. |
 | `/net discord` | Show Discord in the sidebar and aggregate view. |
 | `/net telegram` | Show Telegram. |
