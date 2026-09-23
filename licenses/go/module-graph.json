@@ -138,8 +138,8 @@
   },
   {
     "Path": "github.com/go-faster/errors",
-    "Version": "v0.7.1",
-    "Sum": "h1:MkJTnDoEdi9pDabt1dpWf7AA8/BaSYZqibYyhZ20AYg="
+    "Version": "v0.8.0",
+    "Sum": "h1:9T9eJrM+72dFk7n4DfhuaDDe6cyuFCSW2oNUkN77Yqc="
   },
   {
     "Path": "github.com/go-faster/jx",
@@ -176,7 +176,7 @@
   },
   {
     "Path": "github.com/go-openapi/inflect",
-    "Version": "v0.21.6"
+    "Version": "v1.0.0"
   },
   {
     "Path": "github.com/go-redis/redis/v8",
@@ -245,8 +245,8 @@
   },
   {
     "Path": "github.com/gotd/td",
-    "Version": "v0.161.0",
-    "Sum": "h1:krbzsb70cakdrqF+MUIo+W7BkQTVhyB1kNS7X/+BLcY="
+    "Version": "v0.162.0",
+    "Sum": "h1:3pUzBsEbb0I5QquvfSkXihkVBXI+QTtdd/upijjUbkw="
   },
   {
     "Path": "github.com/gotd/tl",
@@ -294,12 +294,12 @@
   },
   {
     "Path": "github.com/k0kubun/pp/v3",
-    "Version": "v3.5.1"
+    "Version": "v3.5.2"
   },
   {
     "Path": "github.com/klauspost/compress",
-    "Version": "v1.19.0",
-    "Sum": "h1:sXLILfc9jV2QYWkzFOPWStmcUVH2RHEB1JCdY2oVvCQ="
+    "Version": "v1.19.1",
+    "Sum": "h1:VsB4HPswih7mmZ8WleSFQ75c/Ui1M4trX5oAsJnhSlk="
   },
   {
     "Path": "github.com/klauspost/cpuid/v2",
@@ -325,8 +325,8 @@
   },
   {
     "Path": "github.com/mattn/go-colorable",
-    "Version": "v0.1.14",
-    "Sum": "h1:9A9LHSqF/7dyVVX6g0U9cwm9pG3kP9gSzcuIPHPsaIE="
+    "Version": "v0.1.15",
+    "Sum": "h1:+u9SLTRGnXv73cEsnsmoZBom+dMU88B2M0aDcWy0/jY="
   },
   {
     "Path": "github.com/mattn/go-isatty",
@@ -335,8 +335,8 @@
   },
   {
     "Path": "github.com/mattn/go-runewidth",
-    "Version": "v0.0.28",
-    "Sum": "h1:rPyg2ybwEKPebvpzVWe1gKBkH8EQFkxO4Y0hjBeLaBU="
+    "Version": "v0.0.30",
+    "Sum": "h1:+KUuiDA4fF0R1p5FeueHefjDm+GIM+kWfFnDjybOPgk="
   },
   {
     "Path": "github.com/minio/crc64nvme",
@@ -381,11 +381,11 @@
   },
   {
     "Path": "github.com/pion/ice/v4",
-    "Version": "v4.3.0"
+    "Version": "v4.4.0"
   },
   {
     "Path": "github.com/pion/interceptor",
-    "Version": "v0.1.45"
+    "Version": "v0.1.47"
   },
   {
     "Path": "github.com/pion/logging",
@@ -405,11 +405,11 @@
   },
   {
     "Path": "github.com/pion/rtp",
-    "Version": "v1.10.3"
+    "Version": "v1.10.5"
   },
   {
     "Path": "github.com/pion/sctp",
-    "Version": "v1.10.3"
+    "Version": "v1.11.1"
   },
   {
     "Path": "github.com/pion/sdp/v3",
@@ -433,7 +433,7 @@
   },
   {
     "Path": "github.com/pion/webrtc/v4",
-    "Version": "v4.2.16"
+    "Version": "v4.2.18"
   },
   {
     "Path": "github.com/pkg/errors",
@@ -526,8 +526,8 @@
   },
   {
     "Path": "github.com/yuin/goldmark",
-    "Version": "v1.8.4",
-    "Sum": "h1:oat/nd3U6NeQqFEL3xpEJq7d7c86NI+DbSNGAs4xnjA="
+    "Version": "v1.8.5",
+    "Sum": "h1:r6N5afV5qj/5S4UTch8agZHJ8UxNCMwX7WjkkJam2NA="
   },
   {
     "Path": "github.com/zeebo/xxh3",
@@ -604,8 +604,8 @@
   },
   {
     "Path": "golang.org/x/crypto",
-    "Version": "v0.55.0",
-    "Sum": "h1:+KWHjbgOaAQ66dh/YlkZKHlz9ZUlq61AFirAR9ntP8M="
+    "Version": "v0.56.0",
+    "Sum": "h1:GUh5Ii4J5jtcseSMiRqr1jXCNHoxjeV9Fmekc2oLy6Y="
   },
   {
     "Path": "golang.org/x/exp",
@@ -614,42 +614,42 @@
   },
   {
     "Path": "golang.org/x/image",
-    "Version": "v0.45.0",
-    "Sum": "h1:FMb1nTbH5H9vF55SriQHgFw5GnNL9Jg6L25BwXKzhB0="
+    "Version": "v0.46.0",
+    "Sum": "h1:b1+oYj0Jbp6K5MDT4i4/eZpYlk3V8SJhhDKh6LBHAyQ="
   },
   {
     "Path": "golang.org/x/mod",
-    "Version": "v0.38.0",
-    "Sum": "h1:MECBjubtXD7yj4HrhIUcywNaGeNVUdfVnxmPajOk4yk="
+    "Version": "v0.41.0",
+    "Sum": "h1:qJmnOUb4YB+FsEuM3HcWucdZASCPGhsX6uljO6pog0c="
   },
   {
     "Path": "golang.org/x/net",
-    "Version": "v0.57.0",
-    "Sum": "h1:K5+3DljvIuDG9/Jv9rvyMywYNFCQ9RSUY6OOTTkT+tE="
+    "Version": "v0.58.0",
+    "Sum": "h1:ynWG7rqYi4ccpTEuPZ2QGWHktVEM9DMCj9yzDE0Q7To="
   },
   {
     "Path": "golang.org/x/sync",
-    "Version": "v0.22.0",
-    "Sum": "h1:SZjpbeLmrCk4xhRSZFNZW5gFUeCeFgjekvI/+gfScek="
+    "Version": "v0.23.0",
+    "Sum": "h1:KameEIfc1IkluZyXWLn39Wd4tURc6GbCiISGiZm2bQk="
   },
   {
     "Path": "golang.org/x/sys",
-    "Version": "v0.47.0",
-    "Sum": "h1:o7XGOvZQCADBQQ4Y7VNq2dRWQR7JmOUW8Kxx4ZsNgWs="
+    "Version": "v0.48.0",
+    "Sum": "h1:bbX/i/6MgT9BVLM9RT1thmxL04yeTAhbEz4SyadbXoo="
   },
   {
     "Path": "golang.org/x/telemetry",
-    "Version": "v0.0.0-20260708182218-49f421fb7959"
+    "Version": "v0.0.0-20260811182544-a038080d80e5"
   },
   {
     "Path": "golang.org/x/term",
-    "Version": "v0.45.0",
-    "Sum": "h1:NwWyBmoJCbfTHpxrWoZ9C6/VxOf7ic219I8xZZFdrf0="
+    "Version": "v0.46.0",
+    "Sum": "h1:3+OXuTbaKDgwk8jTi3aSLHRlmWqHEUDUtxnbFigO4YE="
   },
   {
     "Path": "golang.org/x/text",
-    "Version": "v0.41.0",
-    "Sum": "h1:vz/seA0lnX87Othu2f/0L24RcgrXD9/YFTSuGjj3rH8="
+    "Version": "v0.42.0",
+    "Sum": "h1:JbOZXgfeCPU9gacVtYliJqOhD+zhrEqK4LfdpmlUZqI="
   },
   {
     "Path": "golang.org/x/time",
@@ -658,8 +658,8 @@
   },
   {
     "Path": "golang.org/x/tools",
-    "Version": "v0.48.0",
-    "Sum": "h1:3+hClM1aLL5mjMKm5ovokw9epgRXPuu2tILgismM6RE="
+    "Version": "v0.49.0",
+    "Sum": "h1:3NI7VXzL9+1WZD52Dx2ttoPwD5DWrFGpl9mFZDlmisI="
   },
   {
     "Path": "google.golang.org/protobuf",

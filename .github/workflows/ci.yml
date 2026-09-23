@@ -2,6 +2,8 @@ name: CI
 on:
   push:
   pull_request:
+  schedule:
+    - cron: '0 6 * * 1'
 permissions:
   contents: read
 jobs:
@@ -22,3 +24,5 @@ jobs:
       - run: go mod tidy -diff
       - name: Build without C dependencies
         run: CGO_ENABLED=0 go build -trimpath -tags nospell -o /tmp/ttyloom ./cmd/ttyloom
+      - name: govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
