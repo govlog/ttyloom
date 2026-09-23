@@ -52,7 +52,8 @@ func main() {
 }
 
 func run(out, query string, n int, timeout time.Duration) error {
-	cfg, err := config.Load()
+	m := mods{tg: tgc.NewModule(), dc: dsc.NewModule()}
+	_, err := config.Load(m.tg, m.dc)
 	if err != nil {
 		return err
 	}
@@ -67,8 +68,8 @@ func run(out, query string, n int, timeout time.Duration) error {
 		return err
 	}
 	var tiles []tile
-	for _, net := range []string{model.NetDiscord, model.NetTelegram} {
-		got, err := grab(ctx, cfg, net, query, n, tmp, out)
+	for _, net := range []string{dsc.Net, tgc.Net} {
+		got, err := grab(ctx, m, net, query, n, tmp, out)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "gifshots: %s: %v\n", net, err)
 		}
@@ -87,11 +88,11 @@ func run(out, query string, n int, timeout time.Duration) error {
 // grab connects net, searches query and writes at most n tiles. What was
 // already written comes back even with an error: a result the decoder refuses
 // must not lose the ones before it.
-func grab(ctx context.Context, cfg *config.Config, net, query string, n int, tmp, out string) ([]tile, error) {
+func grab(ctx context.Context, m mods, net, query string, n int, tmp, out string) ([]tile, error) {
 	// One reader for this chan, and the backend posts while we decode: the
 	// buffer holds the updates of a few seconds of connection.
 	events := make(chan model.Event, 1024)
-	b, err := build(cfg, net, events)
+	b, err := build(m, net, events)
 	if err != nil {
 		return nil, err
 	}
@@ -147,16 +148,23 @@ func grab(ctx context.Context, cfg *config.Config, net, query string, n int, tmp
 	return tiles, nil
 }
 
-// build makes the backend of net on events, the way cmd/ttyloom does. What it
-// reads stays where it is: the Discord token and the Telegram session go to
-// the backend and nowhere else, never to the output.
-func build(cfg *config.Config, net string, events chan<- model.Event) (model.Backend, error) {
+// mods : the two networks the tiles come from, read from config.toml by
+// their modules.
+type mods struct {
+	tg *tgc.Module
+	dc *dsc.Module
+}
+
+// build makes the backend of net on events through its module, the way the
+// client does. What it reads stays where it is: the Discord token and the
+// Telegram session go to the backend and nowhere else, never to the output.
+func build(m mods, net string, events chan<- model.Event) (model.Backend, error) {
 	switch net {
-	case model.NetDiscord:
-		if cfg.Discord == nil {
+	case dsc.Net:
+		if len(m.dc.Networks()) == 0 {
 			return nil, errors.New("no [discord] section in the configuration")
 		}
-		tok, err := cfg.Discord.Token(cfg.DiscordTokenPath())
+		tok, err := m.dc.Token()
 		if err != nil {
 			return nil, err
 		}
@@ -164,23 +172,18 @@ func build(cfg *config.Config, net string, events chan<- model.Event) (model.Bac
 			// No QR login here: it would wait for a scan nobody is watching.
 			return nil, errors.New("no token, log in with the client first")
 		}
-		file := ""
-		if cfg.Discord.TokenCmd == "" {
-			file = cfg.DiscordTokenPath()
-		}
-		return dsc.New(dsc.Config{Token: tok, TokenFile: file}, events), nil
-	case model.NetTelegram:
-		tg := cfg.Telegram
-		if tg == nil || tg.APIID <= 0 || tg.APIHash == "" {
+		return m.dc.Launch(context.Background(), nil, net, events)
+	case tgc.Net:
+		s := m.tg.Settings()
+		if s.APIID <= 0 || s.APIHash == "" {
 			return nil, errors.New("no api_id/api_hash in the configuration")
 		}
-		if tg.BotToken == "" {
-			if _, err := os.Stat(cfg.SessionPath()); err != nil {
+		if s.BotToken == "" {
+			if _, err := os.Stat(m.tg.SessionPath()); err != nil {
 				return nil, errors.New("no session, log in with the client first")
 			}
 		}
-		return tgc.New(tgc.Config{AppID: tg.APIID, AppHash: tg.APIHash, BotToken: tg.BotToken,
-			SessionPath: cfg.SessionPath()}, events), nil
+		return m.tg.Launch(context.Background(), nil, net, events)
 	}
 	return nil, errors.New("unknown network")
 }
@@ -189,7 +192,7 @@ func build(cfg *config.Config, net string, events chan<- model.Event) (model.Bac
 // the inline query to @gif inside one, Discord ignores it. The first dialog
 // of the account is enough — the query is never posted.
 func inlinePeer(ctx context.Context, net string, b model.Backend, events <-chan model.Event) (*model.Chat, error) {
-	if net != model.NetTelegram {
+	if net != tgc.Net {
 		return nil, nil
 	}
 	b.LoadDialogs(ctx)

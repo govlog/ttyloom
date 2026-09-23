@@ -74,8 +74,8 @@ func TestStyleEditAndMe(t *testing.T) {
 	u, _, room, _ := queryUI()
 	b := &styledBackend{}
 	b.caps = model.AllCaps()
-	u.nets[model.NetTelegram] = b
-	u.self = map[string]selfInfo{model.NetTelegram: {Name: "me"}}
+	u.nets[netTelegram] = b
+	u.self = map[string]selfInfo{netTelegram: {Name: "me"}}
 	u.ws.Cur = 1
 	w := u.view()
 	it := &Item{Msg: &model.Msg{Net: room.Net, ChatID: room.ID, ID: 7, Out: true, Text: "old"}}
@@ -96,7 +96,7 @@ func TestStyleKeysSend(t *testing.T) {
 	u, _, room, _ := queryUI()
 	b := &styledBackend{}
 	b.caps = model.AllCaps()
-	u.nets[model.NetTelegram] = b
+	u.nets[netTelegram] = b
 	u.ws.Cur = 1
 	w := u.view()
 	if w.Chat != room {
@@ -125,7 +125,7 @@ func TestStyleKeysSend(t *testing.T) {
 // The input line hides the markers and shows the style; the status bar
 // names the styles active at the cursor.
 func TestStyleInputAndStatus(t *testing.T) {
-	u := netUI(model.NetTelegram)
+	u := netUI(netTelegram)
 	u.th = theme.Terminal()
 	u.ws.New(false).Chat = u.chatList[0]
 	u.ed.Insert("a\x02b\x1fc")

@@ -275,7 +275,7 @@ func TestDialogsNetCollision(t *testing.T) {
 func TestDialogsCompletePrunes(t *testing.T) {
 	u := &UI{ws: NewWindows(), agg: &Window{}, debug: &Window{}, cfg: &config.Config{},
 		chats: map[model.ChatKey]*model.Chat{}, dialogsSeen: map[string]bool{},
-		nets: map[string]model.Backend{model.NetTelegram: &fakeBackend{}, model.NetDiscord: &fakeBackend{}}}
+		nets: map[string]model.Backend{netTelegram: &fakeBackend{}, netDiscord: &fakeBackend{}}}
 	dialogs := func(net string, complete bool, ids ...int64) {
 		chats := make([]*model.Chat, 0, len(ids))
 		for _, id := range ids {
@@ -294,13 +294,13 @@ func TestDialogsCompletePrunes(t *testing.T) {
 		}
 		return n
 	}
-	dialogs(model.NetTelegram, false, 1, 2)
-	dialogs(model.NetDiscord, false, 1, 2)
-	gone := model.ChatKey{Net: model.NetDiscord, ID: 2}
+	dialogs(netTelegram, false, 1, 2)
+	dialogs(netDiscord, false, 1, 2)
+	gone := model.ChatKey{Net: netDiscord, ID: 2}
 	u.bindChat(u.ws.New(false), u.chats[gone]) // a window open on the chat about to go
 	windows := len(u.ws.List)
 
-	dialogs(model.NetDiscord, true, 1) // the second discord chat has left the account
+	dialogs(netDiscord, true, 1) // the second discord chat has left the account
 
 	if u.chats[gone] != nil {
 		t.Fatal("chat gone still in u.chats")
@@ -315,14 +315,14 @@ func TestDialogsCompletePrunes(t *testing.T) {
 		t.Fatalf("%d chats_pruned lines, want exactly 1", n)
 	}
 	for _, id := range []int64{1, 2} {
-		if u.chats[model.ChatKey{Net: model.NetTelegram, ID: id}] == nil {
+		if u.chats[model.ChatKey{Net: netTelegram, ID: id}] == nil {
 			t.Fatalf("telegram chat %d dropped by a discord list", id)
 		}
 	}
 
 	// Telegram: an incomplete list drops nothing, whatever is missing from it.
-	dialogs(model.NetTelegram, false, 1)
-	if u.chats[model.ChatKey{Net: model.NetTelegram, ID: 2}] == nil {
+	dialogs(netTelegram, false, 1)
+	if u.chats[model.ChatKey{Net: netTelegram, ID: 2}] == nil {
 		t.Fatal("telegram chat dropped by a partial list")
 	}
 	if n := pruned(); n != 1 {
@@ -441,12 +441,12 @@ func TestFocusDeferredRead(t *testing.T) {
 // as away — the window is not read again (no MarkRead), and a message that
 // came meanwhile is seen, with no activity counted.
 func TestFocusQuickReturn(t *testing.T) {
-	u := netUI(model.NetDiscord)
+	u := netUI(netDiscord)
 	u.ctx, u.focused = context.Background(), true
-	b := u.nets[model.NetDiscord].(*fakeBackend)
+	b := u.nets[netDiscord].(*fakeBackend)
 	w := u.ws.Current()
 	w.Chat = u.chatList[0]
-	w.Merge([]*model.Msg{{ID: 5, ChatID: w.Chat.ID, Net: model.NetDiscord}})
+	w.Merge([]*model.Msg{{ID: 5, ChatID: w.Chat.ID, Net: netDiscord}})
 	w.ReadSent = 5
 	u.key(term.Key{Code: term.FocusOut})
 	if !u.focused || u.awayTick(time.Now()) {
@@ -500,16 +500,16 @@ func TestLogLine(t *testing.T) {
 // falls on a rune boundary, never inside a multi-byte character).
 func TestLogName(t *testing.T) {
 	long := strings.Repeat("a", 70) // longer than any readable cut
-	a := &Window{Chat: &model.Chat{Net: model.NetTelegram, ID: 1, Title: long + "alpha"}}
-	b := &Window{Chat: &model.Chat{Net: model.NetTelegram, ID: 2, Title: long + "beta"}}
+	a := &Window{Chat: &model.Chat{Net: netTelegram, ID: 1, Title: long + "alpha"}}
+	b := &Window{Chat: &model.Chat{Net: netTelegram, ID: 2, Title: long + "beta"}}
 	if logName(a) == logName(b) {
 		t.Fatalf("two chats in one journal: %q", logName(a))
 	}
-	accented := &Window{Chat: &model.Chat{Net: model.NetTelegram, ID: 3, Title: strings.Repeat("é", 60)}}
+	accented := &Window{Chat: &model.Chat{Net: netTelegram, ID: 3, Title: strings.Repeat("é", 60)}}
 	if got := logName(accented); !regexp.MustCompile(`^[A-Za-z0-9_-]+\.log$`).MatchString(got) {
 		t.Fatalf("not a plain file name: %q", got)
 	}
-	if got := logName(&Window{Chat: &model.Chat{Net: model.NetDiscord, ID: 7, Title: "Salon des amis"}}); got != "Salon_des_amis-discord-7.log" {
+	if got := logName(&Window{Chat: &model.Chat{Net: netDiscord, ID: 7, Title: "Salon des amis"}}); got != "Salon_des_amis-discord-7.log" {
 		t.Fatalf("short title: %q", got)
 	}
 }
@@ -671,11 +671,11 @@ func (f *fakeBackend) ReadReactions(context.Context, *model.Chat) { f.readReacts
 // one whose network is gone. Every call site skips the call on nil.
 func TestNetRouting(t *testing.T) {
 	b := &fakeBackend{}
-	u := &UI{nets: map[string]model.Backend{model.NetTelegram: b}}
-	if u.net(&model.Chat{Net: model.NetTelegram}) != model.Backend(b) {
+	u := &UI{nets: map[string]model.Backend{netTelegram: b}}
+	if u.net(&model.Chat{Net: netTelegram}) != model.Backend(b) {
 		t.Fatal("route telegram")
 	}
-	if u.netOf(model.NetTelegram) != model.Backend(b) {
+	if u.netOf(netTelegram) != model.Backend(b) {
 		t.Fatal("netOf telegram")
 	}
 	if u.net(nil) != nil || u.net(&model.Chat{}) != nil || u.net(&model.Chat{Net: "discord"}) != nil {
@@ -693,7 +693,7 @@ func TestNetRouting(t *testing.T) {
 func TestEachNetCap(t *testing.T) {
 	tg := &fakeBackend{caps: model.Caps{GlobalSearch: true}}
 	dc := &fakeBackend{}
-	u := &UI{nets: map[string]model.Backend{model.NetTelegram: tg, "discord": dc}}
+	u := &UI{nets: map[string]model.Backend{netTelegram: tg, "discord": dc}}
 	var seen []model.Backend
 	if !u.eachNetCap(func(c model.Caps) bool { return c.GlobalSearch },
 		func(b model.Backend) { seen = append(seen, b) }) {
@@ -711,15 +711,15 @@ func TestEachNetCap(t *testing.T) {
 // A command the network cannot do is refused with net_unsupported and the
 // backend is never asked; with the capability it goes through.
 func TestWhoisUnsupported(t *testing.T) {
-	u := netUI(model.NetTelegram)
-	b := u.nets[model.NetTelegram].(*fakeBackend)
+	u := netUI(netTelegram)
+	b := u.nets[netTelegram].(*fakeBackend)
 	w := u.ws.List[0]
-	w.Chat = &model.Chat{Net: model.NetTelegram, ID: 1, Kind: model.ChatUser, Title: "alice"}
+	w.Chat = &model.Chat{Net: netTelegram, ID: 1, Kind: model.ChatUser, Title: "alice"}
 	u.command("whois", nil, "")
 	if b.whois != 0 {
 		t.Fatalf("Whois called %d time(s) with no whois capability", b.whois)
 	}
-	if got := lastSys(w); got != i18n.T("net_unsupported", model.NetTelegram) {
+	if got := lastSys(w); got != i18n.T("net_unsupported", netTelegram) {
 		t.Fatalf("refusal line: %q", got)
 	}
 	b.caps = model.AllCaps()
@@ -733,15 +733,15 @@ func TestWhoisUnsupported(t *testing.T) {
 // the context menu says the same rather than filling in a command that would
 // be refused right after.
 func TestSearchUnsupported(t *testing.T) {
-	u := netUI(model.NetTelegram)
-	b := u.nets[model.NetTelegram].(*fakeBackend)
+	u := netUI(netTelegram)
+	b := u.nets[netTelegram].(*fakeBackend)
 	w := u.ws.List[0]
-	w.Chat = &model.Chat{Net: model.NetTelegram, ID: 1, Title: "room"}
+	w.Chat = &model.Chat{Net: netTelegram, ID: 1, Title: "room"}
 	u.command("search", nil, "hello")
 	if b.search != 0 {
 		t.Fatalf("Search called %d time(s) with no search capability", b.search)
 	}
-	if got := lastSys(w); got != i18n.T("net_unsupported", model.NetTelegram) {
+	if got := lastSys(w); got != i18n.T("net_unsupported", netTelegram) {
 		t.Fatalf("refusal line: %q", got)
 	}
 	u.menuDo(&ctxMenu{chat: w.Chat}, "search")
@@ -759,40 +759,40 @@ func TestSearchUnsupported(t *testing.T) {
 // is gone, and a Discord comeback must not hide a Telegram drop. The status
 // segment names the network as soon as there are two.
 func TestConnPerNet(t *testing.T) {
-	u := netUI(model.NetTelegram, model.NetDiscord)
-	if u.connStatus() != i18n.T("status_disconnected_net", model.NetDiscord+", "+model.NetTelegram) {
+	u := netUI(netTelegram, netDiscord)
+	if u.connStatus() != i18n.T("status_disconnected_net", netDiscord+", "+netTelegram) {
 		t.Fatalf("before any connection: %q", u.connStatus())
 	}
-	for _, n := range []string{model.NetTelegram, model.NetDiscord} {
+	for _, n := range []string{netTelegram, netDiscord} {
 		u.dispatchNet = n
 		u.event(model.EvConnected{})
 	}
 	if u.connStatus() != "" {
 		t.Fatalf("two connected networks: %q", u.connStatus())
 	}
-	u.dispatchNet = model.NetDiscord
+	u.dispatchNet = netDiscord
 	u.event(model.EvDisconnected{})
-	if got := u.connStatus(); got != i18n.T("status_disconnected_net", model.NetDiscord) {
+	if got := u.connStatus(); got != i18n.T("status_disconnected_net", netDiscord) {
 		t.Fatalf("discord gone: %q", got)
 	}
-	if !u.conn[model.NetTelegram] {
+	if !u.conn[netTelegram] {
 		t.Fatal("telegram is still connected")
 	}
 	u.event(model.EvConnected{}) // discord comes back while telegram drops
-	u.dispatchNet = model.NetTelegram
+	u.dispatchNet = netTelegram
 	u.event(model.EvDisconnected{})
-	if got := u.connStatus(); got != i18n.T("status_disconnected_net", model.NetTelegram) {
+	if got := u.connStatus(); got != i18n.T("status_disconnected_net", netTelegram) {
 		t.Fatalf("telegram gone: %q", got)
 	}
 }
 
 // With a single network the segment stays the one of before: no name.
 func TestConnStatusMono(t *testing.T) {
-	u := netUI(model.NetTelegram)
+	u := netUI(netTelegram)
 	if got := u.connStatus(); got != i18n.T("status_disconnected") {
 		t.Fatalf("single network, disconnected: %q", got)
 	}
-	u.dispatchNet = model.NetTelegram
+	u.dispatchNet = netTelegram
 	u.event(model.EvConnected{})
 	if got := u.connStatus(); got != "" {
 		t.Fatalf("single network, connected: %q", got)
@@ -818,18 +818,18 @@ func TestSelfPerNet(t *testing.T) {
 		}
 	}
 	u := &UI{ws: NewWindows(), agg: &Window{}, cfg: &config.Config{AutoOpenDays: 7},
-		caches: map[string]*cache.Cache{model.NetTelegram: tgCache, "discord": dcCache},
-		nets:   map[string]model.Backend{model.NetTelegram: &fakeBackend{}, "discord": &fakeBackend{caps: model.Caps{History: true}}},
+		caches: map[string]*cache.Cache{netTelegram: tgCache, "discord": dcCache},
+		nets:   map[string]model.Backend{netTelegram: &fakeBackend{}, "discord": &fakeBackend{caps: model.Caps{History: true}}},
 		chats:  map[model.ChatKey]*model.Chat{}, dirty: map[model.ChatKey]bool{},
 		self: map[string]selfInfo{}, dialogsSeen: map[string]bool{}, reactList: map[string][]string{}}
 	u.loadCache()
 
-	u.dispatch(model.Envelope{Net: model.NetTelegram, Ev: model.EvReady{SelfID: 10, SelfName: "alice"}})
+	u.dispatch(model.Envelope{Net: netTelegram, Ev: model.EvReady{SelfID: 10, SelfName: "alice"}})
 	u.dispatch(model.Envelope{Net: "discord", Ev: model.EvReady{SelfID: 77, SelfName: "bob", Bot: true}})
 
 	// EvReady asks for the dialogs of its own network alone; the discord one is
 	// a bot and asks for none.
-	if got := u.nets[model.NetTelegram].(*fakeBackend).dialogs; got != 1 {
+	if got := u.nets[netTelegram].(*fakeBackend).dialogs; got != 1 {
 		t.Fatalf("telegram LoadDialogs: %d call(s), want 1", got)
 	}
 	if got := u.nets["discord"].(*fakeBackend).dialogs; got != 0 {
@@ -838,7 +838,7 @@ func TestSelfPerNet(t *testing.T) {
 	if len(u.self) != 2 {
 		t.Fatalf("%d identities, want one per network: %+v", len(u.self), u.self)
 	}
-	if got := u.selfOf(model.NetTelegram); got != (selfInfo{ID: 10, Name: "alice"}) {
+	if got := u.selfOf(netTelegram); got != (selfInfo{ID: 10, Name: "alice"}) {
 		t.Fatalf("telegram identity: %+v", got)
 	}
 	if got := u.selfOf("discord"); got != (selfInfo{ID: 77, Name: "bob", Bot: true}) {
@@ -851,7 +851,7 @@ func TestSelfPerNet(t *testing.T) {
 	if !u.own(mine) {
 		t.Fatal("discord message of the discord account: Own must be true")
 	}
-	if other := (&model.Msg{Net: model.NetTelegram, FromID: 77}); u.own(other) {
+	if other := (&model.Msg{Net: netTelegram, FromID: 77}); u.own(other) {
 		t.Fatal("the discord id must not own a telegram message")
 	}
 
@@ -874,8 +874,8 @@ func TestSelfPerNet(t *testing.T) {
 // Shift+F2 cycles the /net filter, like /net with no argument: same order,
 // same status line. It leaves the side panel where it is.
 func TestShiftF2CyclesNet(t *testing.T) {
-	u := netUI(model.NetTelegram, "discord")
-	for _, want := range []string{"discord", model.NetTelegram, netAll} {
+	u := netUI(netTelegram, "discord")
+	for _, want := range []string{"discord", netTelegram, netAll} {
 		u.key(term.Key{Code: term.F2, Shift: true})
 		got := u.netFilter
 		if got == "" {
@@ -894,7 +894,7 @@ func TestShiftF2CyclesNet(t *testing.T) {
 	// A single network: the key changes nothing and answers nothing. /net says
 	// "a single network"; a key must not fill the window with a line nobody
 	// asked for.
-	m := netUI(model.NetTelegram)
+	m := netUI(netTelegram)
 	m.key(term.Key{Code: term.F2, Shift: true})
 	if m.netFilter != "" || len(m.ws.List[0].Items) != 0 {
 		t.Fatalf("single network: filter %q, %d lines", m.netFilter, len(m.ws.List[0].Items))
@@ -905,11 +905,11 @@ func TestShiftF2CyclesNet(t *testing.T) {
 // of one network at a time, then off with the filter lifted. With a single
 // network the three stops of F2 stay what they were.
 func TestF2CyclesNetsInWindowsMode(t *testing.T) {
-	u := netUI(model.NetTelegram, "discord")
+	u := netUI(netTelegram, "discord")
 	want := []struct {
 		side sideMode
 		net  string
-	}{{sideChats, ""}, {sideWindows, ""}, {sideWindows, "discord"}, {sideWindows, model.NetTelegram}, {sideHidden, ""}}
+	}{{sideChats, ""}, {sideWindows, ""}, {sideWindows, "discord"}, {sideWindows, netTelegram}, {sideHidden, ""}}
 	for i, w := range want {
 		u.key(term.Key{Code: term.F2})
 		if u.side != w.side || u.netFilter != w.net {
@@ -919,11 +919,11 @@ func TestF2CyclesNetsInWindowsMode(t *testing.T) {
 
 	// A filter set beforehand is kept when the windows mode opens: the cycle
 	// goes on from there, and its wrap lifts the filter, predicate included.
-	f := netUI(model.NetTelegram, "discord")
-	f.command("net", []string{model.NetTelegram}, model.NetTelegram)
+	f := netUI(netTelegram, "discord")
+	f.command("net", []string{netTelegram}, netTelegram)
 	f.key(term.Key{Code: term.F2})
 	f.key(term.Key{Code: term.F2})
-	if f.side != sideWindows || f.netFilter != model.NetTelegram {
+	if f.side != sideWindows || f.netFilter != netTelegram {
 		t.Fatalf("windows mode entered: side %d filter %q", f.side, f.netFilter)
 	}
 	f.key(term.Key{Code: term.F2})
@@ -931,7 +931,7 @@ func TestF2CyclesNetsInWindowsMode(t *testing.T) {
 		t.Fatalf("wrap: side %d filter %q predicate set %v", f.side, f.netFilter, f.agg.Filter != nil)
 	}
 
-	m := netUI(model.NetTelegram)
+	m := netUI(netTelegram)
 	for i, w := range []sideMode{sideChats, sideWindows, sideHidden} {
 		m.key(term.Key{Code: term.F2})
 		if m.side != w || m.netFilter != "" {
@@ -952,20 +952,20 @@ func (f *fakeBackend) SendFile(_ context.Context, _ *model.Chat, _, _ string, _ 
 // page of its loaded windows again — the current one now, the others at their
 // next visit. The first connection has nothing to do: no window is loaded yet.
 func TestReconnectReloadsWindows(t *testing.T) {
-	u := netUI(model.NetDiscord)
+	u := netUI(netDiscord)
 	u.ctx = context.Background()
-	b := u.nets[model.NetDiscord].(*fakeBackend)
+	b := u.nets[netDiscord].(*fakeBackend)
 	w := u.ws.New(false)
 	w.Chat = u.chatList[0]
 	x := u.ws.New(true)
 	x.Chat = u.chatList[0]
-	u.dispatch(model.Envelope{Net: model.NetDiscord, Ev: model.EvConnected{}})
+	u.dispatch(model.Envelope{Net: netDiscord, Ev: model.EvConnected{}})
 	if b.history != 0 {
 		t.Fatalf("first connection: %d loads, want 0", b.history)
 	}
 	w.Loaded, x.Loaded = true, true
-	u.dispatch(model.Envelope{Net: model.NetDiscord, Ev: model.EvDisconnected{}})
-	u.dispatch(model.Envelope{Net: model.NetDiscord, Ev: model.EvConnected{}})
+	u.dispatch(model.Envelope{Net: netDiscord, Ev: model.EvDisconnected{}})
+	u.dispatch(model.Envelope{Net: netDiscord, Ev: model.EvConnected{}})
 	if b.history != 1 || !w.Loading {
 		t.Fatalf("reconnection: %d loads, current window loading %v; want 1, true", b.history, w.Loading)
 	}
@@ -978,12 +978,12 @@ func TestReconnectReloadsWindows(t *testing.T) {
 // current one marks it hot besides its activity count; a visit clears both.
 func TestHotWindow(t *testing.T) {
 	u := &UI{ws: NewWindows(), agg: &Window{}, debug: &Window{}, cfg: &config.Config{}, t: &term.Term{Cols: 80, Rows: 24},
-		nets: map[string]model.Backend{model.NetTelegram: &fakeBackend{}}, conn: map[string]bool{}, focused: true,
+		nets: map[string]model.Backend{netTelegram: &fakeBackend{}}, conn: map[string]bool{}, focused: true,
 		chats: map[model.ChatKey]*model.Chat{}, dirty: map[model.ChatKey]bool{}, self: map[string]selfInfo{}}
-	dm := &model.Chat{Net: model.NetTelegram, ID: 1, Kind: model.ChatUser, Title: "alice"}
-	room := &model.Chat{Net: model.NetTelegram, ID: 2, Kind: model.ChatGroup, Title: "room"}
-	u.dispatch(model.Envelope{Net: model.NetTelegram, Ev: model.EvNewMessage{Chat: room, Msg: model.Msg{ID: 1, ChatID: 2, Text: "hi all", From: "bob"}}})
-	u.dispatch(model.Envelope{Net: model.NetTelegram, Ev: model.EvNewMessage{Chat: dm, Msg: model.Msg{ID: 2, ChatID: 1, Text: "psst", From: "alice"}}})
+	dm := &model.Chat{Net: netTelegram, ID: 1, Kind: model.ChatUser, Title: "alice"}
+	room := &model.Chat{Net: netTelegram, ID: 2, Kind: model.ChatGroup, Title: "room"}
+	u.dispatch(model.Envelope{Net: netTelegram, Ev: model.EvNewMessage{Chat: room, Msg: model.Msg{ID: 1, ChatID: 2, Text: "hi all", From: "bob"}}})
+	u.dispatch(model.Envelope{Net: netTelegram, Ev: model.EvNewMessage{Chat: dm, Msg: model.Msg{ID: 2, ChatID: 1, Text: "psst", From: "alice"}}})
 	roomWin, dmWin := u.ws.List[u.ws.ForChat(room.Key())], u.ws.List[u.ws.ForChat(dm.Key())]
 	if roomWin.Act != 1 || roomWin.Hot {
 		t.Fatalf("room: act=%d hot=%v, want 1 false", roomWin.Act, roomWin.Hot)

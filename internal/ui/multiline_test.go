@@ -11,7 +11,7 @@ import (
 
 func multiUI() *UI {
 	return &UI{ws: NewWindows(), agg: &Window{}, cfg: &config.Config{Multiline: true}, t: &term.Term{Rows: 24, Cols: 80},
-		nets: map[string]model.Backend{model.NetTelegram: &fakeBackend{caps: model.AllCaps()}}}
+		nets: map[string]model.Backend{netTelegram: &fakeBackend{caps: model.AllCaps()}}}
 }
 
 // /set multiline on: Shift+Enter opens the expanded zone, Enter sends and
@@ -51,7 +51,7 @@ func TestMultilineEscFolds(t *testing.T) {
 // a one-line message does not.
 func TestMultilineStartEdit(t *testing.T) {
 	u := multiUI()
-	u.startEdit(&Item{Msg: &model.Msg{Net: model.NetTelegram, ID: 1, Text: "a\nb"}})
+	u.startEdit(&Item{Msg: &model.Msg{Net: netTelegram, ID: 1, Text: "a\nb"}})
 	if !u.multi {
 		t.Fatal("multiline edit: zone not open")
 	}
@@ -59,7 +59,7 @@ func TestMultilineStartEdit(t *testing.T) {
 	if u.multi {
 		t.Fatal("cancelMode: zone stayed open")
 	}
-	u.startEdit(&Item{Msg: &model.Msg{Net: model.NetTelegram, ID: 2, Text: "une ligne"}})
+	u.startEdit(&Item{Msg: &model.Msg{Net: netTelegram, ID: 2, Text: "une ligne"}})
 	if u.multi {
 		t.Fatal("one-line edit: zone wrongly open")
 	}

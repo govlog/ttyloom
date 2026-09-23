@@ -95,7 +95,7 @@ func TestNewChatRect(t *testing.T) {
 	if !strings.Contains(render.LineText(lines[2]), "@ Alice (@alicem)") || !strings.Contains(render.LineText(lines[2]), "en ligne") {
 		t.Fatalf("contact line: %q", render.LineText(lines[2]))
 	}
-	if !strings.Contains(render.LineText(lines[3]), "sur Telegram") {
+	if !strings.Contains(render.LineText(lines[3]), "depuis le réseau") {
 		t.Fatalf("section header: %q", render.LineText(lines[3]))
 	}
 	if strings.ContainsRune(render.LineText(lines[4]), 0x1b) { // remote title: never raw

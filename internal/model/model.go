@@ -15,36 +15,12 @@ const (
 	ChatChannel
 )
 
-// NetTelegram : name of the Telegram network, key of the backend maps.
-const NetTelegram = "telegram"
-
-// NetDiscord : name of the Discord network, same key of the backend maps.
-const NetDiscord = "discord"
-
-// NetIRC : prefix of the IRC networks — there can be several, each one keyed
-// "irc:<name>" (IRCNet). The prefix alone is never a network.
-const NetIRC = "irc"
-
-// IRCNet gives the network key of the IRC network name.
-func IRCNet(name string) string { return NetIRC + ":" + name }
-
 // NetModule : the module of a network key, the part before ":" ("irc" for
 // "irc:libera"); a network of one account is its own module ("telegram").
 func NetModule(net string) string {
 	m, _, _ := strings.Cut(net, ":")
 	return m
 }
-
-// IRCName gives the name of an IRC network key, "" for any other network.
-func IRCName(net string) string {
-	if len(net) > len(NetIRC)+1 && net[:len(NetIRC)+1] == NetIRC+":" {
-		return net[len(NetIRC)+1:]
-	}
-	return ""
-}
-
-// IsIRCChannel : name starts with one of the four channel prefixes of RFC 2811.
-func IsIRCChannel(name string) bool { return name != "" && strings.ContainsRune("#&!+", rune(name[0])) }
 
 // ChatKey identifies a chat across networks: Discord snowflakes and TDLib
 // ids can collide, the net disambiguates.

@@ -52,11 +52,11 @@ func queryUI() (*UI, *queryBackend, *model.Chat, *model.Chat) {
 	b := &queryBackend{}
 	b.caps = model.AllCaps()
 	u.ctx = context.Background()
-	u.nets = map[string]model.Backend{model.NetTelegram: b}
+	u.nets = map[string]model.Backend{netTelegram: b}
 	u.chats = map[model.ChatKey]*model.Chat{}
 	u.lastTyping = map[model.ChatKey]time.Time{}
-	room := &model.Chat{Net: model.NetTelegram, ID: 1, Title: "Friends room", Kind: model.ChatGroup}
-	peer := &model.Chat{Net: model.NetTelegram, ID: 2, Title: "Blop", Username: "blop"}
+	room := &model.Chat{Net: netTelegram, ID: 1, Title: "Friends room", Kind: model.ChatGroup}
+	peer := &model.Chat{Net: netTelegram, ID: 2, Title: "Blop", Username: "blop"}
 	for _, c := range []*model.Chat{room, peer} {
 		u.remember(c)
 		u.listChat(c)
@@ -243,7 +243,7 @@ func TestQueryPendingKeepsDraftAndBlocksSends(t *testing.T) {
 	if len(b.sends) != 0 || len(b.typed) != 0 || u.gifs != nil {
 		t.Fatal("a send path used the old target while resolving")
 	}
-	u.dispatch(model.Envelope{Net: model.NetTelegram, Ev: model.EvChat{Request: b.requests[0], Query: "@unknown", Chat: &model.Chat{ID: 9, Title: "Unknown"}}})
+	u.dispatch(model.Envelope{Net: netTelegram, Ev: model.EvChat{Request: b.requests[0], Query: "@unknown", Chat: &model.Chat{ID: 9, Title: "Unknown"}}})
 	input(u, "now resolved")
 	if len(b.sends) != 1 || b.sends[0].ID != 9 {
 		t.Fatalf("resolved send: %v", b.sends)
@@ -277,12 +277,12 @@ func TestQueryRepliesAndExplicitMessages(t *testing.T) {
 func TestQueryCrossNetworkAndRemoval(t *testing.T) {
 	u, b, _, peer := queryUI()
 	dc := &queryBackend{}
-	u.nets[model.NetDiscord] = dc
-	other := &model.Chat{Net: model.NetDiscord, ID: peer.ID, Title: "Discord peer"}
+	u.nets[netDiscord] = dc
+	other := &model.Chat{Net: netDiscord, ID: peer.ID, Title: "Discord peer"}
 	u.listChat(u.remember(other))
 	u.aggregate = true
 	input(u, "/q Discord peer")
-	u.setNetFilter(model.NetTelegram)
+	u.setNetFilter(netTelegram)
 	input(u, "on Discord despite the filter")
 	if len(b.sends) != 0 || !slices.Equal(dc.sends, []model.ChatKey{other.Key()}) {
 		t.Fatal("query crossed networks")

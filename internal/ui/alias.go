@@ -24,10 +24,16 @@ type aliasFile struct {
 	Aliases map[string]string `toml:"aliases"`
 }
 
-// aliasKey encodes a ChatKey for aliases.toml: plain "<id>" for telegram
-// (files written before phase 1 keep working), "<net>:<id>" otherwise.
+// legacyAliasNet : the network of a key with no "<net>:" in aliases.toml —
+// the files written before the client had several networks were Telegram's.
+// The one network name of the core, kept for those files.
+const legacyAliasNet = "telegram"
+
+// aliasKey encodes a ChatKey for aliases.toml: plain "<id>" for
+// legacyAliasNet (files written before phase 1 keep working), "<net>:<id>"
+// otherwise.
 func aliasKey(k model.ChatKey) string {
-	if k.Net == model.NetTelegram {
+	if k.Net == legacyAliasNet {
 		return strconv.FormatInt(k.ID, 10)
 	}
 	return k.Net + ":" + strconv.FormatInt(k.ID, 10)
@@ -46,7 +52,7 @@ func parseAliasKey(s string) (model.ChatKey, bool) {
 	if err != nil {
 		return model.ChatKey{}, false
 	}
-	return model.ChatKey{Net: model.NetTelegram, ID: n}, true
+	return model.ChatKey{Net: legacyAliasNet, ID: n}, true
 }
 
 // aliasPath gives aliases.toml, beside config.toml (TTYLOOM_DIR included).

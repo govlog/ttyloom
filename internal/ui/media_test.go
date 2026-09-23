@@ -293,9 +293,9 @@ func TestFramesBudgetKeepsScreen(t *testing.T) {
 func TestShownItemLoadsAgain(t *testing.T) {
 	b := &fakeBackend{caps: model.AllCaps()}
 	u := &UI{ws: NewWindows(), agg: &Window{}, cfg: &config.Config{AutoMediaMaxKB: 1}, ctx: context.Background(),
-		images: "halfblock", t: &term.Term{Cols: 80, Rows: 24}, nets: map[string]model.Backend{model.NetTelegram: b}}
+		images: "halfblock", t: &term.Term{Cols: 80, Rows: 24}, nets: map[string]model.Backend{netTelegram: b}}
 	md := &model.Media{Kind: model.MediaPhoto, Loc: 1, Path: "/x.png", Mime: "image/png", Size: 100}
-	it := &Item{Msg: &model.Msg{Net: model.NetTelegram, ID: 1, Media: md}}
+	it := &Item{Msg: &model.Msg{Net: netTelegram, ID: 1, Media: md}}
 	u.showItem(nil)
 	u.showItem(it)
 	u.showItem(it) // repaint

@@ -325,10 +325,10 @@ func TestSortChats(t *testing.T) {
 // that looks like one ("notes / #general") is left alone.
 func TestSortChatsGuildGrouping(t *testing.T) {
 	now := time.Now()
-	gen := &model.Chat{Net: model.NetDiscord, ID: 1, Title: "Gophers / #general", Group: "Gophers", LastDate: now}
-	bob := &model.Chat{Net: model.NetTelegram, ID: 2, Title: "Bob", LastDate: now.Add(-time.Hour)}
-	ann := &model.Chat{Net: model.NetDiscord, ID: 3, Title: "Gophers / #annonces", Group: "Gophers", LastDate: now.Add(-2 * time.Hour)}
-	eve := &model.Chat{Net: model.NetDiscord, ID: 4, Title: "Eve", LastDate: now.Add(-3 * time.Hour)} // DM: no guild
+	gen := &model.Chat{Net: netDiscord, ID: 1, Title: "Gophers / #general", Group: "Gophers", LastDate: now}
+	bob := &model.Chat{Net: netTelegram, ID: 2, Title: "Bob", LastDate: now.Add(-time.Hour)}
+	ann := &model.Chat{Net: netDiscord, ID: 3, Title: "Gophers / #annonces", Group: "Gophers", LastDate: now.Add(-2 * time.Hour)}
+	eve := &model.Chat{Net: netDiscord, ID: 4, Title: "Eve", LastDate: now.Add(-3 * time.Hour)} // DM: no guild
 	list := []*model.Chat{gen, bob, ann, eve}
 
 	// recent : the guild sits where #general was, #annonces comes up with it.
@@ -345,8 +345,8 @@ func TestSortChatsGuildGrouping(t *testing.T) {
 	ann.Unread = 0
 
 	// A pinned channel stays in the pinned block alone: grouping never crosses it.
-	pin := &model.Chat{Net: model.NetDiscord, ID: 5, Title: "Gophers / #annonces", Group: "Gophers", Pinned: true, LastDate: now.Add(-9 * time.Hour)}
-	older := &model.Chat{Net: model.NetDiscord, ID: 6, Title: "Gophers / #general", Group: "Gophers", LastDate: now.Add(-4 * time.Hour)}
+	pin := &model.Chat{Net: netDiscord, ID: 5, Title: "Gophers / #annonces", Group: "Gophers", Pinned: true, LastDate: now.Add(-9 * time.Hour)}
+	older := &model.Chat{Net: netDiscord, ID: 6, Title: "Gophers / #general", Group: "Gophers", LastDate: now.Add(-4 * time.Hour)}
 	want = []string{"Gophers / #annonces", "Bob", "Gophers / #general"}
 	if got := chatTitles(sortChats([]*model.Chat{pin, bob, older}, "recent")); !slices.Equal(got, want) {
 		t.Fatalf("pinned: %v, want %v", got, want)
@@ -354,8 +354,8 @@ func TestSortChatsGuildGrouping(t *testing.T) {
 
 	// Telegram only: the pass changes nothing, even on a title shaped like a
 	// guild channel.
-	t1 := &model.Chat{Net: model.NetTelegram, ID: 7, Title: "notes / #general", LastDate: now}
-	t2 := &model.Chat{Net: model.NetTelegram, ID: 8, Title: "notes / #annonces", LastDate: now.Add(-2 * time.Hour)}
+	t1 := &model.Chat{Net: netTelegram, ID: 7, Title: "notes / #general", LastDate: now}
+	t2 := &model.Chat{Net: netTelegram, ID: 8, Title: "notes / #annonces", LastDate: now.Add(-2 * time.Hour)}
 	mono := []*model.Chat{t1, bob, t2}
 	want = []string{"notes / #general", "Bob", "notes / #annonces"}
 	if got := chatTitles(sortChats(mono, "recent")); !slices.Equal(got, want) {
@@ -384,10 +384,10 @@ func TestSectionOf(t *testing.T) {
 		chat *model.Chat
 		want string
 	}{
-		{&model.Chat{Net: model.NetTelegram, Title: "Bob"}, "telegram"},
-		{&model.Chat{Net: model.NetDiscord, Title: "Eve"}, "discord"},
-		{&model.Chat{Net: model.NetDiscord, Title: "Gophers / #general", Group: "Gophers"}, "discord:Gophers"},
-		{&model.Chat{Net: model.NetTelegram, Title: "notes / #general"}, "telegram"},
+		{&model.Chat{Net: netTelegram, Title: "Bob"}, "telegram"},
+		{&model.Chat{Net: netDiscord, Title: "Eve"}, "discord"},
+		{&model.Chat{Net: netDiscord, Title: "Gophers / #general", Group: "Gophers"}, "discord:Gophers"},
+		{&model.Chat{Net: netTelegram, Title: "notes / #general"}, "telegram"},
 	} {
 		if got := sectionOf(c.chat); got != c.want {
 			t.Fatalf("%q: %q, want %q", c.chat.Title, got, c.want)
@@ -404,17 +404,17 @@ func TestSectionOf(t *testing.T) {
 // DMs before the guilds, the guilds in the order groupGuilds gave them.
 func TestSectionRows(t *testing.T) {
 	now := time.Now()
-	bob := &model.Chat{Net: model.NetTelegram, ID: 1, Title: "Bob", LastDate: now}
-	alice := &model.Chat{Net: model.NetTelegram, ID: 2, Title: "Alice", LastDate: now.Add(-time.Hour)}
+	bob := &model.Chat{Net: netTelegram, ID: 1, Title: "Bob", LastDate: now}
+	alice := &model.Chat{Net: netTelegram, ID: 2, Title: "Alice", LastDate: now.Add(-time.Hour)}
 
 	mono := sortChats([]*model.Chat{bob, alice}, "recent")
 	if got := rowNames(sectionRows(mono, nil, map[string]bool{})); !slices.Equal(got, []string{"Bob", "Alice"}) {
 		t.Fatalf("single section: %v", got)
 	}
 
-	eve := &model.Chat{Net: model.NetDiscord, ID: 3, Title: "Eve", LastDate: now.Add(-2 * time.Hour)}
-	gen := &model.Chat{Net: model.NetDiscord, ID: 4, Title: "Gophers / #general", Group: "Gophers", LastDate: now.Add(-3 * time.Hour)}
-	ann := &model.Chat{Net: model.NetDiscord, ID: 5, Title: "Gophers / #annonces", Group: "Gophers", LastDate: now.Add(-4 * time.Hour)}
+	eve := &model.Chat{Net: netDiscord, ID: 3, Title: "Eve", LastDate: now.Add(-2 * time.Hour)}
+	gen := &model.Chat{Net: netDiscord, ID: 4, Title: "Gophers / #general", Group: "Gophers", LastDate: now.Add(-3 * time.Hour)}
+	ann := &model.Chat{Net: netDiscord, ID: 5, Title: "Gophers / #annonces", Group: "Gophers", LastDate: now.Add(-4 * time.Hour)}
 	sorted := sortChats([]*model.Chat{bob, alice, eve, gen, ann}, "recent")
 
 	want := []string{"=discord", "Eve", "=Gophers", "Gophers / #annonces", "Gophers / #general", "=telegram", "Bob", "Alice"}
@@ -559,7 +559,7 @@ func TestSidebarSingleLine(t *testing.T) {
 func TestSidebarNetBadge(t *testing.T) {
 	th := theme.Terminal()
 	chats := []*model.Chat{
-		{Net: model.NetTelegram, ID: 1, Title: "tg", LastDate: time.Now()},
+		{Net: netTelegram, ID: 1, Title: "tg", LastDate: time.Now()},
 		{Net: "discord", ID: 2, Title: "dc", LastDate: time.Now()},
 	}
 	off := sidebarLines(sideChats, chats, nil, nil, -1, th, testSideW, 2, 0, false, false, 0, -1, false, nil, sideState{})
@@ -587,8 +587,8 @@ func TestSidebarNetBadge(t *testing.T) {
 func TestSidebarSections(t *testing.T) {
 	th := theme.Terminal()
 	now := time.Now()
-	bob := &model.Chat{Net: model.NetTelegram, ID: 1, Kind: model.ChatUser, Title: "Bob", LastDate: now}
-	gen := &model.Chat{Net: model.NetDiscord, ID: 2, Kind: model.ChatGroup, Title: "Gophers / #general", Group: "Gophers", LastDate: now.Add(-time.Hour)}
+	bob := &model.Chat{Net: netTelegram, ID: 1, Kind: model.ChatUser, Title: "Bob", LastDate: now}
+	gen := &model.Chat{Net: netDiscord, ID: 2, Kind: model.ChatGroup, Title: "Gophers / #general", Group: "Gophers", LastDate: now.Add(-time.Hour)}
 	sorted := sortChats([]*model.Chat{bob, gen}, "recent")
 
 	// Sections on, nothing folded (sideBlock does this).
@@ -617,9 +617,9 @@ func TestSidebarSections(t *testing.T) {
 func TestSidebarSectionFolded(t *testing.T) {
 	th := theme.Terminal()
 	now := time.Now()
-	bob := &model.Chat{Net: model.NetTelegram, ID: 1, Kind: model.ChatUser, Title: "Bob", LastDate: now}
-	gen := &model.Chat{Net: model.NetDiscord, ID: 2, Kind: model.ChatGroup, Title: "Gophers / #general", Group: "Gophers", Unread: 4, LastDate: now.Add(-time.Hour)}
-	ann := &model.Chat{Net: model.NetDiscord, ID: 3, Kind: model.ChatGroup, Title: "Gophers / #annonces", Group: "Gophers", Unread: 3, LastDate: now.Add(-2 * time.Hour)}
+	bob := &model.Chat{Net: netTelegram, ID: 1, Kind: model.ChatUser, Title: "Bob", LastDate: now}
+	gen := &model.Chat{Net: netDiscord, ID: 2, Kind: model.ChatGroup, Title: "Gophers / #general", Group: "Gophers", Unread: 4, LastDate: now.Add(-time.Hour)}
+	ann := &model.Chat{Net: netDiscord, ID: 3, Kind: model.ChatGroup, Title: "Gophers / #annonces", Group: "Gophers", Unread: 3, LastDate: now.Add(-2 * time.Hour)}
 	sorted := sortChats([]*model.Chat{bob, gen, ann}, "recent")
 
 	lines := sidebarLines(sideChats, sorted, []*Window{{Chat: gen}}, nil, -1, th, testSideW, 3, 0, false, true, 0, -1, false, nil,
@@ -641,7 +641,7 @@ func TestSidebarSectionFolded(t *testing.T) {
 // not nil) — the sidebar still carries no header at all. Hard constraint of
 // the feature.
 func TestSideBlockMonoNoHeader(t *testing.T) {
-	u := netUI(model.NetTelegram)
+	u := netUI(netTelegram)
 	u.th, u.side, u.sideW, u.folded = theme.Terminal(), sideChats, testSideW, map[string]bool{}
 	lines, rows := u.sideBlock(-1)
 	if len(rows) != 1 || rows[0].chat == nil {
@@ -657,7 +657,7 @@ func TestSideBlockMonoNoHeader(t *testing.T) {
 // TestSideBlockSections : two networks and the fold state loaded — sideBlock
 // wires the headers and drops the badge.
 func TestSideBlockSections(t *testing.T) {
-	u := netUI(model.NetTelegram, model.NetDiscord)
+	u := netUI(netTelegram, netDiscord)
 	u.th, u.side, u.sideW, u.folded = theme.Terminal(), sideChats, testSideW, map[string]bool{}
 	lines, rows := u.sideBlock(-1)
 	if len(rows) != 4 {
@@ -676,7 +676,7 @@ func TestSideBlockSections(t *testing.T) {
 // one unfolds it; the row→chat mapping counts the header lines, and the wheel
 // bounds itself on the rows.
 func TestSideSectionToggle(t *testing.T) {
-	u := netUI(model.NetTelegram, model.NetDiscord)
+	u := netUI(netTelegram, netDiscord)
 	u.th, u.side, u.sideW, u.folded = theme.Terminal(), sideChats, testSideW, map[string]bool{}
 	if got := rowNames(u.sideRowList()); !slices.Equal(got, []string{"=discord", "discord-chat", "=telegram", "telegram-chat"}) {
 		t.Fatalf("rows: %v", got)
@@ -685,7 +685,7 @@ func TestSideSectionToggle(t *testing.T) {
 	if u.sideChatAt(sideHdr) != nil {
 		t.Fatal("a header line carries no chat")
 	}
-	if c := u.sideChatAt(sideHdr + 1); c == nil || c.Net != model.NetDiscord {
+	if c := u.sideChatAt(sideHdr + 1); c == nil || c.Net != netDiscord {
 		t.Fatalf("chat line under the header: %+v", c)
 	}
 	// Right click on a header: no chat, so no context menu.
@@ -694,7 +694,7 @@ func TestSideSectionToggle(t *testing.T) {
 		t.Fatal("context menu on a header line")
 	}
 	u.sideClick(0, sideHdr)
-	if !u.folded[model.NetDiscord] {
+	if !u.folded[netDiscord] {
 		t.Fatalf("click on the header: %v", u.folded)
 	}
 	if u.ws.Cur != 0 {
@@ -703,11 +703,11 @@ func TestSideSectionToggle(t *testing.T) {
 	if got := rowNames(u.sideRowList()); !slices.Equal(got, []string{"=discord", "=telegram", "telegram-chat"}) {
 		t.Fatalf("folded: %v", got)
 	}
-	if c := u.sideChatAt(sideHdr + 2); c == nil || c.Net != model.NetTelegram {
+	if c := u.sideChatAt(sideHdr + 2); c == nil || c.Net != netTelegram {
 		t.Fatalf("mapping after the fold: %+v", c) // the hidden row is gone from the count
 	}
 	u.sideClick(0, sideHdr)
-	if u.folded[model.NetDiscord] {
+	if u.folded[netDiscord] {
 		t.Fatalf("second click: %v", u.folded)
 	}
 	// Wheel: 4 rows for 3 lines shown (24 -> 6 rows of screen).
@@ -722,7 +722,7 @@ func TestSideSectionToggle(t *testing.T) {
 // view, header lines counted; a chat hidden by a fold moves nothing, and a
 // window with no chat still finds no line (it must not land on a header).
 func TestSideRevealSection(t *testing.T) {
-	u := netUI(model.NetTelegram, model.NetDiscord)
+	u := netUI(netTelegram, netDiscord)
 	u.th, u.side, u.sideW, u.folded = theme.Terminal(), sideChats, testSideW, map[string]bool{}
 	u.t.Rows = 4 // sideRows() = 1: one row shown
 	w := u.ws.New(false)
@@ -732,7 +732,7 @@ func TestSideRevealSection(t *testing.T) {
 	if u.sideScroll != 3 {
 		t.Fatalf("row of the current chat: scroll %d, want 3", u.sideScroll)
 	}
-	u.folded[model.NetTelegram], u.sideScroll = true, 0
+	u.folded[netTelegram], u.sideScroll = true, 0
 	u.sideReveal()
 	if u.sideScroll != 0 {
 		t.Fatalf("chat hidden by a fold: scroll %d", u.sideScroll)
@@ -749,7 +749,7 @@ func TestSideRevealSection(t *testing.T) {
 // prove that wiring.
 // No fold state here: this test covers the /net filter alone, sections off.
 func TestSideBlockNetFilter(t *testing.T) {
-	u := netUI(model.NetTelegram, "discord")
+	u := netUI(netTelegram, "discord")
 	u.th, u.side, u.sideW = theme.Terminal(), sideChats, testSideW
 	text := func() string {
 		lines, sorted := u.sideBlock(-1)
@@ -907,7 +907,7 @@ func TestSideHeaderWindowsSort(t *testing.T) {
 // another network goes away, one bound to no chat (window 0) stays, and the
 // lines left keep pointing at their own window.
 func TestSideWindowsHonoursNetFilter(t *testing.T) {
-	u := netUI(model.NetTelegram, "discord")
+	u := netUI(netTelegram, "discord")
 	u.th, u.sideW, u.side = theme.Terminal(), testSideW, sideWindows
 	for _, c := range u.chatList { // window 1: telegram-chat, window 2: discord-chat
 		u.ws.New(true).Chat = c
@@ -938,7 +938,7 @@ func TestFoldsFile(t *testing.T) {
 	if err != nil || got == nil || len(got) != 0 {
 		t.Fatalf("missing file: %v, %v", got, err)
 	}
-	if err := saveFolds(path, map[string]bool{"discord:Gophers": true, model.NetTelegram: false}); err != nil {
+	if err := saveFolds(path, map[string]bool{"discord:Gophers": true, netTelegram: false}); err != nil {
 		t.Fatal(err)
 	}
 	if got, err = loadFolds(path); err != nil || len(got) != 1 || !got["discord:Gophers"] {
@@ -965,11 +965,11 @@ func TestFoldsFile(t *testing.T) {
 // one line instead of bringing the interface down.
 func TestSideToggleSaves(t *testing.T) {
 	t.Setenv("TTYLOOM_DIR", t.TempDir())
-	u := netUI(model.NetTelegram, model.NetDiscord)
+	u := netUI(netTelegram, netDiscord)
 	u.th, u.side, u.sideW, u.folded = theme.Terminal(), sideChats, testSideW, map[string]bool{}
 	u.sideClick(0, sideHdr) // header of the discord section, first line of the list
 	got, err := loadFolds(sidebarPath())
-	if err != nil || !got[model.NetDiscord] {
+	if err != nil || !got[netDiscord] {
 		t.Fatalf("after the fold: %v, %v", got, err)
 	}
 	u.sideClick(0, sideHdr)
@@ -980,7 +980,7 @@ func TestSideToggleSaves(t *testing.T) {
 	// write says so on one line.
 	t.Setenv("TTYLOOM_DIR", filepath.Join(t.TempDir(), "gone"))
 	u.sideClick(0, sideHdr)
-	if !u.folded[model.NetDiscord] {
+	if !u.folded[netDiscord] {
 		t.Fatalf("fold dropped by the write failure: %v", u.folded)
 	}
 	if s := lastSys(u.view()); !strings.Contains(s, "sidebar.toml") {
@@ -992,9 +992,9 @@ func TestSideToggleSaves(t *testing.T) {
 // folds nothing in mono-Telegram — one section is not a section, so the keys
 // read from the file light up no header.
 func TestFoldsStaleMono(t *testing.T) {
-	u := netUI(model.NetTelegram)
+	u := netUI(netTelegram)
 	u.th, u.side, u.sideW = theme.Terminal(), sideChats, testSideW
-	u.folded = map[string]bool{"discord:Gophers": true, model.NetTelegram: true}
+	u.folded = map[string]bool{"discord:Gophers": true, netTelegram: true}
 	if rows := u.sideRowList(); len(rows) != 1 || rows[0].chat == nil {
 		t.Fatalf("stale keys: %v", rowNames(rows))
 	}
@@ -1005,9 +1005,9 @@ func TestFoldsStaleMono(t *testing.T) {
 // and one window bound to nothing.
 func winSortUI() *UI {
 	now := time.Now()
-	c1 := &model.Chat{Net: model.NetTelegram, ID: 1, Title: "Charlie", LastDate: now}
-	c2 := &model.Chat{Net: model.NetTelegram, ID: 2, Title: "alice", LastDate: now.Add(-2 * time.Hour), Unread: 1}
-	c3 := &model.Chat{Net: model.NetTelegram, ID: 3, Title: "Bob", LastDate: now.Add(-time.Hour), Unread: 5}
+	c1 := &model.Chat{Net: netTelegram, ID: 1, Title: "Charlie", LastDate: now}
+	c2 := &model.Chat{Net: netTelegram, ID: 2, Title: "alice", LastDate: now.Add(-2 * time.Hour), Unread: 1}
+	c3 := &model.Chat{Net: netTelegram, ID: 3, Title: "Bob", LastDate: now.Add(-time.Hour), Unread: 5}
 	u := &UI{ws: NewWindows(), agg: &Window{}, debug: &Window{},
 		cfg: &config.Config{SidebarSort: "recent"}, t: &term.Term{Cols: 80, Rows: 24},
 		th: theme.Terminal(), sideW: testSideW, side: sideWindows,
@@ -1088,13 +1088,13 @@ func wheelUI() *UI {
 	u := &UI{ws: NewWindows(), agg: &Window{}, debug: &Window{}, th: theme.Terminal(),
 		cfg: &config.Config{SidebarSort: "recent", Hover: config.HoverMenu},
 		t:   &term.Term{Cols: 80, Rows: 24}, side: sideChats, sideW: testSideW,
-		nets:    map[string]model.Backend{model.NetDiscord: &fakeBackend{}, model.NetTelegram: &fakeBackend{}},
+		nets:    map[string]model.Backend{netDiscord: &fakeBackend{}, netTelegram: &fakeBackend{}},
 		chats:   map[model.ChatKey]*model.Chat{},
 		aliases: map[model.ChatKey]string{}, folded: map[string]bool{}, gotContacts: true}
 	for _, c := range []*model.Chat{
-		{Net: model.NetDiscord, ID: 1, Kind: model.ChatUser, Title: "discord-win", LastDate: now},
-		{Net: model.NetTelegram, ID: 2, Kind: model.ChatUser, Title: "telegram-none", LastDate: now.Add(-time.Hour)},
-		{Net: model.NetTelegram, ID: 3, Kind: model.ChatUser, Title: "telegram-win", LastDate: now.Add(-2 * time.Hour)},
+		{Net: netDiscord, ID: 1, Kind: model.ChatUser, Title: "discord-win", LastDate: now},
+		{Net: netTelegram, ID: 2, Kind: model.ChatUser, Title: "telegram-none", LastDate: now.Add(-time.Hour)},
+		{Net: netTelegram, ID: 3, Kind: model.ChatUser, Title: "telegram-win", LastDate: now.Add(-2 * time.Hour)},
 	} {
 		u.chatList = append(u.chatList, c)
 		u.chats[c.Key()] = c
@@ -1152,12 +1152,12 @@ func TestSideWheelChangesChat(t *testing.T) {
 	}
 	// The section of the current chat gets folded: its row is gone, so the
 	// wheel enters the list again by the end it comes from.
-	u.folded[model.NetDiscord] = true
+	u.folded[netDiscord] = true
 	wheelOn(u, 65)
 	if u.ws.Cur != 2 {
 		t.Fatalf("current chat folded away: window %d", u.ws.Cur)
 	}
-	delete(u.folded, model.NetDiscord)
+	delete(u.folded, netDiscord)
 	u.ws.Cur = 0 // nothing current again: upwards it enters by the last step
 	wheelOn(u, 64)
 	if u.ws.Cur != 2 {
@@ -1167,12 +1167,12 @@ func TestSideWheelChangesChat(t *testing.T) {
 	// a step like the others, and landing on it loads its first page, exactly
 	// as a click or Alt+N would. The notches above walked loaded windows only,
 	// which is why the counters were still at zero.
-	auto := &model.Chat{Net: model.NetTelegram, ID: 4, Kind: model.ChatUser,
+	auto := &model.Chat{Net: netTelegram, ID: 4, Kind: model.ChatUser,
 		Title: "telegram-auto", LastDate: time.Now().Add(-3 * time.Hour)}
 	u.chatList = append(u.chatList, auto)
 	u.chats[auto.Key()] = auto
 	u.ws.New(true).Chat = auto // Loaded stays false: never visited
-	tg := u.nets[model.NetTelegram].(*fakeBackend)
+	tg := u.nets[netTelegram].(*fakeBackend)
 	wheelOn(u, 65) // from telegram-win, the step just above it
 	if u.ws.Cur != 3 || tg.history != 1 {
 		t.Fatalf("landing on a window never visited: window %d, %d history calls", u.ws.Cur, tg.history)
@@ -1246,7 +1246,7 @@ func TestSideWindowsActRed(t *testing.T) {
 // double the marker.
 func TestSideWindowDiscordHashNotDoubled(t *testing.T) {
 	th := theme.Terminal()
-	ws := []*Window{{}, {Chat: &model.Chat{Net: model.NetDiscord, ID: 1, Kind: model.ChatGroup, Title: "#general"}}}
+	ws := []*Window{{}, {Chat: &model.Chat{Net: netDiscord, ID: 1, Kind: model.ChatGroup, Title: "#general"}}}
 	lines := sidebarLines(sideWindows, nil, ws, nil, 0, th, testSideW, 2, 0, false, false, 0, -1, false, nil, sideState{})
 	if got := body(lines[1]); got != "1: #general" {
 		t.Fatalf("window 1: %q", got)

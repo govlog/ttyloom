@@ -9,7 +9,7 @@ import (
 )
 
 // tgk : telegram chat key, where a test used to name a chat by its bare id.
-func tgk(id int64) model.ChatKey { return model.ChatKey{Net: model.NetTelegram, ID: id} }
+func tgk(id int64) model.ChatKey { return model.ChatKey{Net: netTelegram, ID: id} }
 
 // TestMain : the tests compare labels and box widths. The language is
 // therefore fixed, otherwise the result would depend on $LANG.

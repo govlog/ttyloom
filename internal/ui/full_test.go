@@ -18,7 +18,7 @@ func TestFullSizePhotoForOpenAndViewer(t *testing.T) {
 	w := u.ws.List[1]
 	full := &model.Media{Kind: model.MediaPhoto, Loc: "y", Ext: ".jpg", W: 1280, H: 960}
 	md := &model.Media{Kind: model.MediaPhoto, Loc: "x", Ext: ".jpg", W: 800, H: 600, Full: full}
-	m := &model.Msg{Net: model.NetTelegram, ChatID: 1, ID: 7, Date: time.Now(), Media: md}
+	m := &model.Msg{Net: netTelegram, ChatID: 1, ID: 7, Date: time.Now(), Media: md}
 	it := &Item{Msg: m}
 	w.Items = append(w.Items, it)
 
@@ -48,7 +48,7 @@ func TestPhotoWithoutFullUsesLineMedia(t *testing.T) {
 	u.openNext, u.fulls = map[*model.Media]bool{}, map[*model.Media]bool{}
 	w := u.ws.List[1]
 	md := &model.Media{Kind: model.MediaPhoto, Loc: "x", Ext: ".jpg", W: 800, H: 600}
-	m := &model.Msg{Net: model.NetTelegram, ChatID: 1, ID: 8, Date: time.Now(), Media: md}
+	m := &model.Msg{Net: netTelegram, ChatID: 1, ID: 8, Date: time.Now(), Media: md}
 	it := &Item{Msg: m}
 	w.Items = append(w.Items, it)
 

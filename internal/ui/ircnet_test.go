@@ -98,7 +98,7 @@ func TestIRCAdd(t *testing.T) {
 	if again.ByName("libera") == nil {
 		t.Fatal("table not written")
 	}
-	if *n != 1 || u.nets["irc:libera"] == nil || u.netList[0] != model.NetDiscord || u.netList[1] != "irc:libera" {
+	if *n != 1 || u.nets["irc:libera"] == nil || u.netList[0] != netDiscord || u.netList[1] != "irc:libera" {
 		t.Fatalf("launched %d, nets %v, list %v", *n, u.nets, u.netList)
 	}
 	if e := ircSubmit(u, vals); e != i18n.T("irc_name_taken", "libera") {
@@ -179,7 +179,7 @@ func TestNetDisconnectKeepsSession(t *testing.T) {
 	u.launch = func(context.Context, string) (model.Backend, error) { return b, nil }
 	u.command("discord", []string{"login"}, "login")
 	ctx, cancel := context.WithCancel(context.Background())
-	u.netCancel[model.NetDiscord] = cancel
+	u.netCancel[netDiscord] = cancel
 	u.command("discord", []string{"disconnect"}, "disconnect")
 	if ctx.Err() == nil || b.logouts.Load() != 0 {
 		t.Fatalf("disconnect: cancelled %v, logouts %d", ctx.Err() != nil, b.logouts.Load())
@@ -200,7 +200,7 @@ func TestResolversFor(t *testing.T) {
 	oftc := &queryBackend{fakeBackend: fakeBackend{caps: model.Caps{Resolve: true}}}
 	u := netUI()
 	u.mods = []module.Module{irc.NewModule()} // it claims the #rooms
-	u.nets = map[string]model.Backend{model.NetTelegram: tg, "irc:libera": lib, "irc:oftc": oftc}
+	u.nets = map[string]model.Backend{netTelegram: tg, "irc:libera": lib, "irc:oftc": oftc}
 	if got := u.resolversFor(&Window{}, "#go"); len(got) != 2 {
 		t.Fatalf("#room: %d resolvers", len(got))
 	}

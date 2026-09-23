@@ -335,7 +335,7 @@ func TestTabBarClick(t *testing.T) {
 	x0, _ := u.layout()
 	_, u.tabHits = u.tabSpans(x0)
 	u.mouse(term.MouseEvent{Button: 0, X: x0 + 5, Y: u.tabRow(), Press: true}) // "[discord]"
-	if u.netFilter != model.NetDiscord {
+	if u.netFilter != netDiscord {
 		t.Fatalf("click on the discord tab: filter %q", u.netFilter)
 	}
 	u.tabTo("")

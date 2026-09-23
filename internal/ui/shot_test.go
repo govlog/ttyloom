@@ -198,17 +198,17 @@ func shotUI(t *testing.T, th theme.Theme, out *bytes.Buffer) *UI {
 	tg := &fakeBackend{caps: model.AllCaps()}
 	dc := &fakeBackend{caps: model.Caps{Reactions: true, Edit: true, Gifs: true, Search: true, GlobalSearch: true}}
 	irc := &fakeBackend{caps: model.Caps{Whois: true, Resolve: true, Leave: true}}
-	libera := model.IRCNet("libera")
+	libera := ircNet("libera")
 	u := &UI{ctx: context.Background(), t: tm, cfg: cfg, th: th, events: make(chan model.Event, 8), ws: NewWindows(),
 		agg: &Window{}, debug: &Window{}, focused: true, images: "kitty", side: sideChats, sideW: 26,
-		nets:  map[string]model.Backend{model.NetTelegram: tg, model.NetDiscord: dc, libera: irc},
+		nets:  map[string]model.Backend{netTelegram: tg, netDiscord: dc, libera: irc},
 		chats: map[model.ChatKey]*model.Chat{}, lookups: map[uint64]*lookup{}, typing: map[model.ChatKey]typing{},
 		lastTyping: map[model.ChatKey]time.Time{}, avatars: map[model.ChatKey]*model.Media{}, openNext: map[*model.Media]bool{},
 		presence: map[model.ChatKey]string{}, dirty: map[model.ChatKey]bool{},
 		partsCache: map[model.ChatKey]partsEntry{}, whoCache: map[whoKey]whoEntry{}, aliases: map[model.ChatKey]string{},
 		folded: map[string]bool{}, tabLast: map[string]*Window{},
-		self: map[string]selfInfo{model.NetTelegram: {ID: 1, Name: "chris"}, model.NetDiscord: {ID: 2, Name: "chris"}, libera: {ID: 3, Name: "chris"}},
-		conn: map[string]bool{model.NetTelegram: true, model.NetDiscord: true, libera: true}, dialogsSeen: map[string]bool{},
+		self: map[string]selfInfo{netTelegram: {ID: 1, Name: "chris"}, netDiscord: {ID: 2, Name: "chris"}, libera: {ID: 3, Name: "chris"}},
+		conn: map[string]bool{netTelegram: true, netDiscord: true, libera: true}, dialogsSeen: map[string]bool{},
 		reactList: map[string][]string{}}
 	u.setMaxItems(2000)
 	now := shotTime
@@ -217,22 +217,22 @@ func shotUI(t *testing.T, th theme.Theme, out *bytes.Buffer) *UI {
 		u.chatList = append(u.chatList, c)
 		return c
 	}
-	gophers := add(&model.Chat{Net: model.NetTelegram, ID: 100, Kind: model.ChatGroup, Title: "Gophers", Username: "gophers", LastDate: now, ReadOutboxMaxID: 8, ReadInboxMaxID: 6, Unread: 2, Pinned: true})
-	add(&model.Chat{Net: model.NetTelegram, ID: 7, Kind: model.ChatUser, Title: "Alice", Username: "alice", LastDate: now.Add(-9 * time.Minute), Unread: 1})
-	add(&model.Chat{Net: model.NetTelegram, ID: 8, Kind: model.ChatUser, Title: "Bob", Username: "bob", LastDate: now.Add(-3 * time.Hour)})
-	add(&model.Chat{Net: model.NetTelegram, ID: 101, Kind: model.ChatChannel, Title: "Go Announcements", Username: "golang_news", LastDate: now.Add(-26 * time.Hour), Channel: true})
-	add(&model.Chat{Net: model.NetDiscord, ID: 9, Kind: model.ChatUser, Title: "dave", Username: "dave", LastDate: now.Add(-40 * time.Minute), Unread: 3})
-	add(&model.Chat{Net: model.NetDiscord, ID: 201, Kind: model.ChatGroup, Title: "Gophers / #general", Group: "Gophers", LastDate: now.Add(-20 * time.Minute)})
-	add(&model.Chat{Net: model.NetDiscord, ID: 202, Kind: model.ChatGroup, Title: "Gophers / #help", Group: "Gophers", LastDate: now.Add(-2 * time.Hour), Unread: 12})
-	add(&model.Chat{Net: model.NetDiscord, ID: 203, Kind: model.ChatGroup, Title: "Gophers / #offtopic", Group: "Gophers", LastDate: now.Add(-5 * time.Hour)})
+	gophers := add(&model.Chat{Net: netTelegram, ID: 100, Kind: model.ChatGroup, Title: "Gophers", Username: "gophers", LastDate: now, ReadOutboxMaxID: 8, ReadInboxMaxID: 6, Unread: 2, Pinned: true})
+	add(&model.Chat{Net: netTelegram, ID: 7, Kind: model.ChatUser, Title: "Alice", Username: "alice", LastDate: now.Add(-9 * time.Minute), Unread: 1})
+	add(&model.Chat{Net: netTelegram, ID: 8, Kind: model.ChatUser, Title: "Bob", Username: "bob", LastDate: now.Add(-3 * time.Hour)})
+	add(&model.Chat{Net: netTelegram, ID: 101, Kind: model.ChatChannel, Title: "Go Announcements", Username: "golang_news", LastDate: now.Add(-26 * time.Hour), Channel: true})
+	add(&model.Chat{Net: netDiscord, ID: 9, Kind: model.ChatUser, Title: "dave", Username: "dave", LastDate: now.Add(-40 * time.Minute), Unread: 3})
+	add(&model.Chat{Net: netDiscord, ID: 201, Kind: model.ChatGroup, Title: "Gophers / #general", Group: "Gophers", LastDate: now.Add(-20 * time.Minute)})
+	add(&model.Chat{Net: netDiscord, ID: 202, Kind: model.ChatGroup, Title: "Gophers / #help", Group: "Gophers", LastDate: now.Add(-2 * time.Hour), Unread: 12})
+	add(&model.Chat{Net: netDiscord, ID: 203, Kind: model.ChatGroup, Title: "Gophers / #offtopic", Group: "Gophers", LastDate: now.Add(-5 * time.Hour)})
 	goChan := add(&model.Chat{Net: libera, ID: 900, Kind: model.ChatGroup, Title: "#go", LastDate: now.Add(-3 * time.Minute)})
 	aliceIRC := add(&model.Chat{Net: libera, ID: 901, Kind: model.ChatUser, Title: "alice", LastDate: now.Add(-7 * time.Minute), Unread: 2})
-	u.presence[model.ChatKey{Net: model.NetTelegram, ID: 7}] = "online"
+	u.presence[model.ChatKey{Net: netTelegram, ID: 7}] = "online"
 
 	w := u.ws.New(false)
 	w.Chat, w.Loaded, w.MarkID = gophers, true, 6
 	msg := func(id int, from string, fromID int64, at time.Duration, text string) *model.Msg {
-		return &model.Msg{Net: model.NetTelegram, ChatID: 100, ID: id, Date: now.Add(at), From: from, FromID: fromID, Text: text}
+		return &model.Msg{Net: netTelegram, ChatID: 100, ID: id, Date: now.Add(at), From: from, FromID: fromID, Text: text}
 	}
 	m1 := msg(1, "alice", 7, -52*time.Minute, "Morning! Has anyone tried the kitty graphics protocol from Go yet?")
 	m1.Entities = []model.Span{span(m1.Text, "kitty graphics protocol", model.SpanBold, "")}
@@ -315,7 +315,7 @@ func shotMembers(_ *testing.T, u *UI) {
 func shotNewChat(_ *testing.T, u *UI) {
 	u.newChat = &newChatBox{query: []rune("go")}
 	u.ncFilter()
-	u.newChat.found = []*model.Chat{{Net: model.NetTelegram, ID: 300, Kind: model.ChatChannel, Title: "Go Weekly", Username: "goweekly"}}
+	u.newChat.found = []*model.Chat{{Net: netTelegram, ID: 300, Kind: model.ChatChannel, Title: "Go Weekly", Username: "goweekly"}}
 	u.ncFilter()
 }
 
@@ -337,7 +337,7 @@ func shotDiscord(t *testing.T, u *UI) {
 		{"erin", "Press Ctrl+F twice to search across both networks."},
 	}
 	for i, item := range messages {
-		m := &model.Msg{Net: model.NetDiscord, ChatID: chat.ID, ChatLabel: chat.Title, ID: 40 + i,
+		m := &model.Msg{Net: netDiscord, ChatID: chat.ID, ChatLabel: chat.Title, ID: 40 + i,
 			Date: shotTime.Add(time.Duration(i-5) * time.Minute), From: item.from, FromID: int64(i + 10), Text: item.text}
 		if i == 1 {
 			m.Reactions = []model.Reaction{{Emoji: "👍", Count: 4, Mine: true}}
@@ -361,7 +361,7 @@ func shotMain(_ *testing.T, u *UI) { u.cfg.Tabs = true }
 // and the away message in the status bar.
 func shotTabs(_ *testing.T, u *UI) {
 	u.cfg.Tabs = true
-	libera := model.IRCNet("libera")
+	libera := ircNet("libera")
 	u.setNetFilter(libera)
 	u.ws.Cur = 2 // #go
 	w := u.ws.Current()

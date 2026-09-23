@@ -24,7 +24,7 @@ import (
 
 func TestFileName(t *testing.T) {
 	d := time.Date(2026, 8, 29, 12, 3, 1, 0, time.UTC)
-	key := model.ChatKey{Net: model.NetTelegram, ID: 7}
+	key := model.ChatKey{Net: "telegram", ID: 7}
 	name := FileName(key, "Antonio Gómez", 12, d, ".jpg")
 	if name != "20260829-120301_telegram_7_Antonio_G_mez_12.jpg" {
 		t.Fatal(name)

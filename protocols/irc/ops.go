@@ -130,7 +130,7 @@ func (c *Client) Contacts(context.Context) {
 // error numeric); anything else is a nick, a private chat opens at once.
 func (c *Client) Resolve(_ context.Context, q string, _ bool, request uint64) {
 	q = strings.TrimSpace(q)
-	if !model.IsIRCChannel(q) {
+	if !IsChannel(q) {
 		nick := strings.TrimPrefix(q, "@")
 		if nick == "" || strings.ContainsAny(nick, " ,") {
 			c.Refuse("Resolve", model.EvChat{Request: request, Query: q, Err: i18n.T("irc_bad_nick")})
@@ -177,7 +177,7 @@ func (c *Client) Resolve(_ context.Context, q string, _ bool, request uint64) {
 // or the peer alone for a private chat.
 func (c *Client) Members(chat *model.Chat) []string {
 	name := nameOf(chat)
-	if !model.IsIRCChannel(name) {
+	if !IsChannel(name) {
 		return []string{name}
 	}
 	c.mu.Lock()
@@ -194,7 +194,7 @@ func (c *Client) Members(chat *model.Chat) []string {
 // has the two of us.
 func (c *Client) Participants(_ context.Context, chat *model.Chat) {
 	name := nameOf(chat)
-	if !model.IsIRCChannel(name) {
+	if !IsChannel(name) {
 		c.Refuse("Participants", model.EvParticipants{ChatID: chat.ID, Lines: []model.Participant{
 			{Text: c.me(), Query: c.me()}, {Text: name, Query: name}}})
 		return
@@ -266,7 +266,7 @@ func (c *Client) BlockMember(context.Context, string) { c.Warn(c.net(), "BlockMe
 // Leave : PART, the room leaves the list (and the file), the UI drops it.
 func (c *Client) Leave(_ context.Context, chat *model.Chat) {
 	name := nameOf(chat)
-	if !model.IsIRCChannel(name) {
+	if !IsChannel(name) {
 		c.DeleteChat(context.Background(), chat)
 		return
 	}
@@ -296,7 +296,7 @@ func (c *Client) part(name, reason string) {
 // through Leave.
 func (c *Client) DeleteChat(ctx context.Context, chat *model.Chat) {
 	name := nameOf(chat)
-	if model.IsIRCChannel(name) {
+	if IsChannel(name) {
 		c.Leave(ctx, chat)
 		return
 	}

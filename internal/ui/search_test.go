@@ -212,31 +212,31 @@ func (f *fakeBackend) SearchGlobal(_ context.Context, q string, _ int) {
 // /net filter alone (F2 in windows mode cycles it) — and shows the answers
 // merged, newest first, once they are all in.
 func TestGlobalSearchNetsMerged(t *testing.T) {
-	u := netUI(model.NetTelegram, model.NetDiscord)
+	u := netUI(netTelegram, netDiscord)
 	u.chats = map[model.ChatKey]*model.Chat{}
 	for _, b := range u.nets {
 		b.(*fakeBackend).caps = model.Caps{GlobalSearch: true}
 	}
-	tg, dc := u.nets[model.NetTelegram].(*fakeBackend), u.nets[model.NetDiscord].(*fakeBackend)
+	tg, dc := u.nets[netTelegram].(*fakeBackend), u.nets[netDiscord].(*fakeBackend)
 	u.search = &searchState{q: []rune("cat")}
 	u.searchGlobalOpen()
 	if len(tg.gsearch) != 1 || len(dc.gsearch) != 1 {
 		t.Fatalf("both networks asked: tg %v, dc %v", tg.gsearch, dc.gsearch)
 	}
 	old, recent := time.Now().Add(-time.Hour), time.Now()
-	u.dispatch(model.Envelope{Net: model.NetTelegram, Ev: model.EvSearchGlobal{Query: "cat",
+	u.dispatch(model.Envelope{Net: netTelegram, Ev: model.EvSearchGlobal{Query: "cat",
 		Hits: []model.SearchHit{{Chat: u.chatList[0], MsgID: 1, Date: old, Text: "tg"}}}})
 	if g := u.gsearch; g.inflight == "" || len(g.hits) != 0 {
 		t.Fatalf("one answer of two: inflight %q, %d hits shown", g.inflight, len(g.hits))
 	}
-	u.dispatch(model.Envelope{Net: model.NetDiscord, Ev: model.EvSearchGlobal{Query: "cat",
+	u.dispatch(model.Envelope{Net: netDiscord, Ev: model.EvSearchGlobal{Query: "cat",
 		Hits: []model.SearchHit{{Chat: u.chatList[1], MsgID: 2, Date: recent, Text: "dc"}}}})
 	g := u.gsearch
 	if g.inflight != "" || len(g.hits) != 2 || g.hits[0].Text != "dc" || g.hits[1].Text != "tg" {
 		t.Fatalf("merged: inflight %q, hits %+v", g.inflight, g.hits)
 	}
 	// /net discord: only that network is asked.
-	u.setNetFilter(model.NetDiscord)
+	u.setNetFilter(netDiscord)
 	g.query = []rune("dog")
 	u.gsSend()
 	if len(tg.gsearch) != 1 || len(dc.gsearch) != 2 {

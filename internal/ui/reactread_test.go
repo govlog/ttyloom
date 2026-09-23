@@ -11,10 +11,10 @@ import (
 // reaction to someone else's message reads nothing.
 func TestReactionOnMyMessageIsReadAtOnce(t *testing.T) {
 	u, b := gifUI()
-	u.ws.Cur, u.focused, u.dispatchNet = 1, true, model.NetTelegram
+	u.ws.Cur, u.focused, u.dispatchNet = 1, true, netTelegram
 	w := u.ws.List[1]
-	mine := &model.Msg{Net: model.NetTelegram, ChatID: 1, ID: 5, Out: true}
-	theirs := &model.Msg{Net: model.NetTelegram, ChatID: 1, ID: 6}
+	mine := &model.Msg{Net: netTelegram, ChatID: 1, ID: 5, Out: true}
+	theirs := &model.Msg{Net: netTelegram, ChatID: 1, ID: 6}
 	w.Items = append(w.Items, &Item{Msg: mine}, &Item{Msg: theirs})
 
 	u.reactions(model.EvReactions{ChatID: 1, ID: 6, Reactions: []model.Reaction{{Emoji: "👍", Count: 1}}})

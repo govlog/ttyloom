@@ -23,11 +23,11 @@ func (f *fakeBackend) Download(_ context.Context, _ *model.Media, path string) {
 // gifUI : a kitty terminal, one Telegram chat in window 1 (window 0 is shown).
 func gifUI() (*UI, *fakeBackend) {
 	b := &fakeBackend{caps: model.AllCaps()}
-	c := &model.Chat{Net: model.NetTelegram, ID: 1, Kind: model.ChatUser, Title: "Alice"}
+	c := &model.Chat{Net: netTelegram, ID: 1, Kind: model.ChatUser, Title: "Alice"}
 	u := &UI{ws: NewWindows(), agg: &Window{}, debug: &Window{}, th: theme.Terminal(), cfg: &config.Config{},
 		t: &term.Term{Cols: 100, Rows: 30, CellW: 10, CellH: 20, Kitty: true}, images: "kitty",
-		nets: map[string]model.Backend{model.NetTelegram: b}, chats: map[model.ChatKey]*model.Chat{c.Key(): c},
-		self: map[string]selfInfo{model.NetTelegram: {ID: 9, Name: "me"}}, ctx: context.Background(),
+		nets: map[string]model.Backend{netTelegram: b}, chats: map[model.ChatKey]*model.Chat{c.Key(): c},
+		self: map[string]selfInfo{netTelegram: {ID: 9, Name: "me"}}, ctx: context.Background(),
 		chatList: []*model.Chat{c}}
 	w := u.ws.New(true)
 	w.Chat, w.Loaded = c, true
@@ -64,7 +64,7 @@ func TestGifSend(t *testing.T) {
 	u, b := gifUI()
 	u.ws.Cur = 1
 	u.openGifs("cat")
-	u.dispatch(model.Envelope{Net: model.NetTelegram, Ev: model.EvGifs{Query: "cat", Gifs: gifList(12)}})
+	u.dispatch(model.Envelope{Net: netTelegram, Ev: model.EvGifs{Query: "cat", Gifs: gifList(12)}})
 	g := u.gifs
 	if len(g.gifs) != 12 || g.perRow < 2 || g.rows < 2 {
 		t.Fatalf("grid: %d gifs, %dx%d", len(g.gifs), g.perRow, g.rows)
@@ -94,11 +94,11 @@ func TestGifStaleAndClose(t *testing.T) {
 	u, _ := gifUI()
 	u.ws.Cur = 1
 	u.openGifs("cat")
-	u.dispatch(model.Envelope{Net: model.NetTelegram, Ev: model.EvGifs{Query: "dog", Gifs: gifList(3)}})
+	u.dispatch(model.Envelope{Net: netTelegram, Ev: model.EvGifs{Query: "dog", Gifs: gifList(3)}})
 	if len(u.gifs.gifs) != 0 {
 		t.Fatal("answer of a query given up taken")
 	}
-	u.dispatch(model.Envelope{Net: model.NetTelegram, Ev: model.EvGifs{Query: "cat", Gifs: gifList(3)}})
+	u.dispatch(model.Envelope{Net: netTelegram, Ev: model.EvGifs{Query: "cat", Gifs: gifList(3)}})
 	md := u.gifs.gifs[0].Preview
 	md.State, md.Frames = model.MediaReady, [][]byte{{1}}
 	u.gifKey(term.Key{Code: term.Esc})

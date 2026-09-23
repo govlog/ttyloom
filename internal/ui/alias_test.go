@@ -45,7 +45,7 @@ func TestAliasRoundTrip(t *testing.T) {
 	if err != nil || len(got) != 0 {
 		t.Fatalf("missing file: %v, %v", got, err)
 	}
-	tg := func(id int64) model.ChatKey { return model.ChatKey{Net: model.NetTelegram, ID: id} }
+	tg := func(id int64) model.ChatKey { return model.ChatKey{Net: netTelegram, ID: id} }
 	want := map[model.ChatKey]string{tg(7): "maman", tg(-1001234): "le canal"}
 	if err := saveAliases(path, want); err != nil {
 		t.Fatal(err)
@@ -74,8 +74,8 @@ func TestAliasRoundTrip(t *testing.T) {
 // TestFindChatCollision : a local name that copies the title of another chat
 // is no longer resolved in silence.
 func TestFindChatCollision(t *testing.T) {
-	a := &model.Chat{Net: model.NetTelegram, ID: 1, Title: "Alice"}
-	b := &model.Chat{Net: model.NetTelegram, ID: 2, Title: "Bob"}
+	a := &model.Chat{Net: netTelegram, ID: 1, Title: "Alice"}
+	b := &model.Chat{Net: netTelegram, ID: 2, Title: "Bob"}
 	u := &UI{ws: NewWindows(), agg: &Window{}, chats: map[model.ChatKey]*model.Chat{a.Key(): a, b.Key(): b},
 		chatList: []*model.Chat{a, b}, aliases: map[model.ChatKey]string{b.Key(): "Alice"}}
 	if got, ambiguous := u.findChat("Alice", false); got != nil || !ambiguous {
@@ -91,7 +91,7 @@ func TestFindChatCollision(t *testing.T) {
 func TestTitleAlias(t *testing.T) {
 	t.Setenv("TTYLOOM_DIR", t.TempDir()) // setAlias writes aliases.toml
 	th := theme.Terminal()
-	c := &model.Chat{Net: model.NetTelegram, ID: 7, Kind: model.ChatUser, Title: "Alice Dupont"}
+	c := &model.Chat{Net: netTelegram, ID: 7, Kind: model.ChatUser, Title: "Alice Dupont"}
 	u := &UI{ws: NewWindows(), agg: &Window{}, debug: &Window{}, cfg: &config.Config{}, th: th,
 		chats: map[model.ChatKey]*model.Chat{c.Key(): c}, chatList: []*model.Chat{c}, aliases: map[model.ChatKey]string{}}
 	w := u.ws.New(false)
@@ -117,7 +117,7 @@ func TestTitleAlias(t *testing.T) {
 	}
 	// Drawing: [chat] label of the aggregate and peer name in a private chat
 	// (the peer carries the id of the chat).
-	m := &model.Msg{Net: model.NetTelegram, ID: 1, ChatID: 7, FromID: 7, From: "Alice Dupont", ChatLabel: "Alice Dupont",
+	m := &model.Msg{Net: netTelegram, ID: 1, ChatID: 7, FromID: 7, From: "Alice Dupont", ChatLabel: "Alice Dupont",
 		Text: "salut", Date: time.Now()}
 	if got := render.LineText(render.Message(m, render.Opts{Width: 60, Theme: th, ShowChat: true, Alias: u.aliasOf})[0]); !strings.Contains(got, "[maman]") || !strings.Contains(got, "<maman>") {
 		t.Fatalf("rendered: %q", got)

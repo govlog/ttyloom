@@ -18,7 +18,7 @@ import (
 // the session file, the launch.
 
 // Net : the network key of Telegram.
-const Net = model.NetTelegram
+const Net = "telegram"
 
 // Settings : the [telegram] section, or the historic flat keys of the same
 // names at the top of config.toml.

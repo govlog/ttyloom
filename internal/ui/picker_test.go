@@ -202,11 +202,11 @@ func TestPickerCustoms(t *testing.T) {
 // allowed = no picker, just a status message.
 func TestOpenReactPicker(t *testing.T) {
 	t.Setenv("XDG_CACHE_HOME", t.TempDir())
-	c := &model.Chat{Net: model.NetTelegram, ID: 5, Reactions: []string{"🔥"}}
+	c := &model.Chat{Net: netTelegram, ID: 5, Reactions: []string{"🔥"}}
 	u := &UI{ws: NewWindows(), agg: &Window{}, t: &term.Term{Cols: 80, Rows: 24},
 		chats:     map[model.ChatKey]*model.Chat{c.Key(): c},
-		reactList: map[string][]string{model.NetTelegram: {"👍", "🔥"}}}
-	it := &Item{Msg: &model.Msg{Net: model.NetTelegram, ID: 7, ChatID: 5}}
+		reactList: map[string][]string{netTelegram: {"👍", "🔥"}}}
+	it := &Item{Msg: &model.Msg{Net: netTelegram, ID: 7, ChatID: 5}}
 	u.openReactPicker(it)
 	if u.picker == nil || len(u.picker.items) != 1 || u.picker.items[0].Char != "🔥" {
 		t.Fatalf("picker: %+v", u.picker)

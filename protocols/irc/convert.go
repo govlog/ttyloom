@@ -66,7 +66,7 @@ func chatID(name string, mapping ...string) int64 {
 // chatOf builds the chat of a channel or a nick.
 func chatOf(name string, mapping ...string) *model.Chat {
 	kind := model.ChatUser
-	if model.IsIRCChannel(name) {
+	if IsChannel(name) {
 		kind = model.ChatGroup
 	}
 	return &model.Chat{ID: chatID(name, mapping...), Kind: kind, Title: name, Peer: peer{Name: name}}

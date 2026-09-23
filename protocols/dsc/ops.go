@@ -49,7 +49,7 @@ func (c *Client) rest(ctx context.Context) *api.Client { return c.state().Client
 
 // unsupported : text shown in the window of a chat for an action Discord has
 // no equivalent of.
-func unsupported() string { return i18n.T("net_unsupported", model.NetDiscord) }
+func unsupported() string { return i18n.T("net_unsupported", Net) }
 
 func (c *Client) SearchContacts(_ context.Context, q string, _ int) {
 	c.Refuse("SearchContacts", model.EvContactsFound{Query: q, Err: unsupported()})
@@ -80,9 +80,9 @@ func (c *Client) WhoRead(_ context.Context, chat *model.Chat, id, _ int) {
 // Block, BlockMember and Leave are out of the v1: nothing half done, and no
 // event that would drop the chat from the sidebar for an action that never
 // happened.
-func (c *Client) Block(context.Context, *model.Chat)  { c.Warn(model.NetDiscord, "Block") }
-func (c *Client) BlockMember(context.Context, string) { c.Warn(model.NetDiscord, "BlockMember") }
-func (c *Client) Leave(context.Context, *model.Chat)  { c.Warn(model.NetDiscord, "Leave") }
+func (c *Client) Block(context.Context, *model.Chat)  { c.Warn(Net, "Block") }
+func (c *Client) BlockMember(context.Context, string) { c.Warn(Net, "BlockMember") }
+func (c *Client) Leave(context.Context, *model.Chat)  { c.Warn(Net, "Leave") }
 
 // DownloadMap : no Discord media carries coordinates, the UI never asks. The
 // event still comes back — without it the media would spin for ever.
@@ -273,7 +273,7 @@ func (c *Client) DeleteChat(ctx context.Context, chat *model.Chat) {
 		// — Caps.Leave and Caps.Block gate their entries out — so what is left
 		// is DeleteChat on a guild channel, refused with nothing but that one
 		// log line.
-		c.Warn(model.NetDiscord, "DeleteChat")
+		c.Warn(Net, "DeleteChat")
 		return
 	}
 	title := chat.Title // read here: the goroutine never touches the state of the UI

@@ -1864,7 +1864,7 @@ func (u *UI) whois(e model.EvWhois) {
 	}
 	// Renamed locally: the real title stays visible here.
 	if c := u.chats[u.evKey(e.ChatID)]; c != nil && u.aliases[u.evKey(e.ChatID)] != "" {
-		u.sys(i18n.T("telegram_title", render.CleanLine(c.Title)))
+		u.sys(i18n.T("whois_real_title", c.Net, render.CleanLine(c.Title)))
 	}
 	for _, l := range e.Lines {
 		u.sys(l)

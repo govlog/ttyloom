@@ -219,13 +219,13 @@ func TestAllowedReactions(t *testing.T) {
 // the window of the chat.
 func TestReactNotAllowed(t *testing.T) {
 	u := &UI{ws: NewWindows(), agg: &Window{}, chats: map[model.ChatKey]*model.Chat{},
-		nets: map[string]model.Backend{model.NetTelegram: &fakeBackend{caps: model.AllCaps()}}}
-	c := &model.Chat{Net: model.NetTelegram, ID: 5, Reactions: []string{"👍"}}
+		nets: map[string]model.Backend{netTelegram: &fakeBackend{caps: model.AllCaps()}}}
+	c := &model.Chat{Net: netTelegram, ID: 5, Reactions: []string{"👍"}}
 	u.chats[c.Key()] = c
-	u.reactList = map[string][]string{model.NetTelegram: {"👍", "🔥"}}
+	u.reactList = map[string][]string{netTelegram: {"👍", "🔥"}}
 	w := u.ws.New(true)
 	w.Chat = c
-	it := &Item{Msg: &model.Msg{Net: model.NetTelegram, ID: 7, ChatID: 5}}
+	it := &Item{Msg: &model.Msg{Net: netTelegram, ID: 7, ChatID: 5}}
 	w.Items = append(w.Items, it)
 	u.react(it, "💕") // outside the list: refused before any call to the network
 	last := w.Items[len(w.Items)-1]
@@ -239,14 +239,14 @@ func TestReactNotAllowed(t *testing.T) {
 func TestReactNoCapability(t *testing.T) {
 	b := &fakeBackend{}
 	u := &UI{ws: NewWindows(), agg: &Window{}, chats: map[model.ChatKey]*model.Chat{},
-		nets:        map[string]model.Backend{model.NetTelegram: b},
-		dispatchNet: model.NetTelegram}
-	c := &model.Chat{Net: model.NetTelegram, ID: 5}
+		nets:        map[string]model.Backend{netTelegram: b},
+		dispatchNet: netTelegram}
+	c := &model.Chat{Net: netTelegram, ID: 5}
 	u.chats[c.Key()] = c
-	u.reactList = map[string][]string{model.NetTelegram: {"👍"}}
+	u.reactList = map[string][]string{netTelegram: {"👍"}}
 	w := u.ws.New(true)
 	w.Chat = c
-	it := &Item{Msg: &model.Msg{Net: model.NetTelegram, ID: 7, ChatID: 5}}
+	it := &Item{Msg: &model.Msg{Net: netTelegram, ID: 7, ChatID: 5}}
 	w.Items = append(w.Items, it)
 	u.react(it, "👍")
 	if b.reacts != 0 {

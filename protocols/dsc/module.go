@@ -16,7 +16,7 @@ import (
 // The Discord module: the [discord] section, the token, the launch.
 
 // Net : the network key of Discord.
-const Net = model.NetDiscord
+const Net = "discord"
 
 // Settings : the [discord] section.
 type Settings struct {
@@ -99,6 +99,16 @@ func (m *Module) Networks() []string {
 
 func (m *Module) Cache(net string) (string, bool) { return net, false }
 func (m *Module) Claims(string) bool              { return false }
+
+// Token gives the token as a launch would read it now, "" with no [discord]
+// — for the tools of the repository (scripts/gifshots.go), which must not
+// wait for a QR login nobody watches.
+func (m *Module) Token() (string, error) {
+	if m.set == nil {
+		return "", nil
+	}
+	return m.set.Token(tokenPath())
+}
 
 // tokenPath : the token file of the QR login (mode 0600, next to the
 // Telegram session), read when [discord] has no token_cmd.

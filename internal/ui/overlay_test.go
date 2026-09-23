@@ -246,7 +246,7 @@ func TestOverlayGlobalSearch(t *testing.T) {
 // closes — a click runs the entry under the pointer, whatever the current one.
 func TestOverlayMenu(t *testing.T) {
 	u := listUI()
-	chat := &model.Chat{Net: model.NetTelegram, ID: 1, Title: "salon", Kind: model.ChatGroup}
+	chat := &model.Chat{Net: netTelegram, ID: 1, Title: "salon", Kind: model.ChatGroup}
 	entries := menuEntries(model.ChatGroup, false, model.AllCaps())
 	fill := func(cur int) *ctxMenu {
 		u.menu = &ctxMenu{chat: chat, entries: entries, x: 10, y: 5, cur: cur}
@@ -257,7 +257,7 @@ func TestOverlayMenu(t *testing.T) {
 	last := len(entries) - 1
 	said := func() bool {
 		its := u.view().Items
-		return len(its) > 0 && strings.Contains(its[len(its)-1].Sys, i18n.T("net_unsupported", model.NetTelegram))
+		return len(its) > 0 && strings.Contains(its[len(its)-1].Sys, i18n.T("net_unsupported", netTelegram))
 	}
 	m := fill(0)
 	u.menuKey(term.Key{Code: term.Down})

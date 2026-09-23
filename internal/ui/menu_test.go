@@ -165,7 +165,7 @@ func TestMenuMemberQueryUnsupported(t *testing.T) {
 func TestMenuMemberPinsChat(t *testing.T) {
 	tg, dc := &fakeBackend{caps: model.AllCaps()}, &fakeBackend{caps: model.AllCaps()}
 	u := &UI{ws: NewWindows(), agg: &Window{},
-		nets:  map[string]model.Backend{model.NetTelegram: tg, "discord": dc},
+		nets:  map[string]model.Backend{netTelegram: tg, "discord": dc},
 		parts: &partsBox{mark: -1}}
 	w := u.ws.New(true)
 	w.Chat = &model.Chat{Net: "discord", ID: 7, Kind: model.ChatUser}
@@ -236,18 +236,18 @@ func msgUI(t *testing.T) (*UI, *fakeBackend, *Window) {
 	b := &fakeBackend{caps: model.AllCaps()}
 	u := &UI{ws: NewWindows(), agg: &Window{}, debug: &Window{}, cfg: &config.Config{}, th: theme.Terminal(),
 		t: &term.Term{Cols: 100, Rows: 30}, chats: map[model.ChatKey]*model.Chat{},
-		nets: map[string]model.Backend{model.NetTelegram: b}, dispatchNet: model.NetTelegram,
-		reactList: map[string][]string{model.NetTelegram: {"👍", "❤", "🔥"}}, parts: &partsBox{mark: -1}}
-	c := &model.Chat{Net: model.NetTelegram, ID: 5, Kind: model.ChatGroup, Title: "grp"}
+		nets: map[string]model.Backend{netTelegram: b}, dispatchNet: netTelegram,
+		reactList: map[string][]string{netTelegram: {"👍", "❤", "🔥"}}, parts: &partsBox{mark: -1}}
+	c := &model.Chat{Net: netTelegram, ID: 5, Kind: model.ChatGroup, Title: "grp"}
 	u.chats[c.Key()] = c
 	w := u.ws.New(true)
 	w.Chat = c
 	u.ws.Cur = len(u.ws.List) - 1
 	d := time.Date(2026, 9, 10, 9, 0, 0, 0, time.UTC)
 	for _, m := range []*model.Msg{
-		{Net: model.NetTelegram, ChatID: 5, ID: 1, Date: d, From: "moi", Out: true, Text: "un"},
-		{Net: model.NetTelegram, ChatID: 5, ID: 2, Date: d, From: "alice", FromID: 9, Text: "deux"},
-		{Net: model.NetTelegram, ChatID: 5, ID: 3, Date: d, From: "moi", Out: true, Text: "trois"},
+		{Net: netTelegram, ChatID: 5, ID: 1, Date: d, From: "moi", Out: true, Text: "un"},
+		{Net: netTelegram, ChatID: 5, ID: 2, Date: d, From: "alice", FromID: 9, Text: "deux"},
+		{Net: netTelegram, ChatID: 5, ID: 3, Date: d, From: "moi", Out: true, Text: "trois"},
 	} {
 		w.Upsert(m)
 	}

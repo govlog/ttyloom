@@ -71,7 +71,7 @@ func TestFinalCacheFlushWaitsForOlderWrite(t *testing.T) {
 	c := cache.New(t.TempDir(), 20)
 	u := newCacheUI(t, c)
 	w := u.ws.New(true)
-	w.Chat = &model.Chat{Net: model.NetTelegram, ID: 1}
+	w.Chat = &model.Chat{Net: netTelegram, ID: 1}
 	w.Upsert(&model.Msg{ID: 7, ChatID: 1, Text: "latest"})
 	u.dirty[w.Chat.Key()] = true
 	release := make(chan struct{})
@@ -134,7 +134,7 @@ func TestMergeOlderAfterCache(t *testing.T) {
 func newCacheUI(t *testing.T, c *cache.Cache) *UI {
 	t.Helper()
 	return &UI{ws: NewWindows(), agg: &Window{}, cfg: &config.Config{AutoOpenDays: 7},
-		caches: map[string]*cache.Cache{model.NetTelegram: c},
+		caches: map[string]*cache.Cache{netTelegram: c},
 		chats:  map[model.ChatKey]*model.Chat{}, dirty: map[model.ChatKey]bool{},
 		self: map[string]selfInfo{}, dialogsSeen: map[string]bool{}, reactList: map[string][]string{}}
 }
@@ -155,12 +155,12 @@ func TestLoadCache(t *testing.T) {
 	u := newCacheUI(t, c)
 	u.loadCache()
 
-	if len(u.chatList) != 2 || u.chats[tgk(1)] == nil || u.cacheSelf[model.NetTelegram] != 10 {
+	if len(u.chatList) != 2 || u.chats[tgk(1)] == nil || u.cacheSelf[netTelegram] != 10 {
 		t.Fatalf("chatList %+v, selfID %+v", u.chatList, u.cacheSelf)
 	}
 	// The gob does not carry a network: with no stamp at load time, u.net
 	// would give nil and every call on the chat would go nowhere.
-	if u.chats[tgk(1)].Net != model.NetTelegram {
+	if u.chats[tgk(1)].Net != netTelegram {
 		t.Fatalf("cache chat not stamped: Net %q", u.chats[tgk(1)].Net)
 	}
 	i := u.ws.ForChat(tgk(1))
@@ -189,7 +189,7 @@ func TestLoadCache(t *testing.T) {
 	if tard.Chat.ID != 2 || len(tard.Items) != 2 || tard.Loaded || tard.Full {
 		t.Fatalf("late bindChat: %+v", tard.Items)
 	}
-	if tard.Items[0].Msg.Net != model.NetTelegram {
+	if tard.Items[0].Msg.Net != netTelegram {
 		t.Fatalf("cache message not stamped: Net %q", tard.Items[0].Msg.Net)
 	}
 }
@@ -234,13 +234,13 @@ func TestLoadCacheAutreCompte(t *testing.T) {
 	}
 
 	u := newCacheUI(t, c)
-	u.nets = map[string]model.Backend{model.NetTelegram: &fakeBackend{caps: model.Caps{History: true}}}
+	u.nets = map[string]model.Backend{netTelegram: &fakeBackend{caps: model.Caps{History: true}}}
 	u.loadCache()
 	if u.ws.ForChat(tgk(1)) < 0 {
 		t.Fatal("cache window missing before EvReady")
 	}
 	// Bot: no network call; dispatched, since the drop reads the net of the envelope.
-	u.dispatch(model.Envelope{Net: model.NetTelegram, Ev: model.EvReady{SelfID: 99, Bot: true}})
+	u.dispatch(model.Envelope{Net: netTelegram, Ev: model.EvReady{SelfID: 99, Bot: true}})
 
 	if len(u.ws.List) != 1 || len(u.chatList) != 0 || len(u.chats) != 0 {
 		t.Fatalf("cache not discarded: %d windows, %d chats", len(u.ws.List), len(u.chatList))
@@ -282,18 +282,18 @@ func TestSyncSkipsNetWithoutSync(t *testing.T) {
 	u.ctx = context.Background()
 	dc := &fakeBackend{}                      // zero Caps: no Sync
 	tg := &fakeBackend{caps: model.AllCaps()} // Telegram: swept as before
-	u.nets = map[string]model.Backend{model.NetDiscord: dc, model.NetTelegram: tg}
+	u.nets = map[string]model.Backend{netDiscord: dc, netTelegram: tg}
 	u.chatList = []*model.Chat{
-		{Net: model.NetDiscord, ID: 1, Title: "#general"},
-		{Net: model.NetTelegram, ID: 2, Title: "Céline"},
+		{Net: netDiscord, ID: 1, Title: "#general"},
+		{Net: netTelegram, ID: 2, Title: "Céline"},
 	}
 
-	u.syncStart(model.NetDiscord)
+	u.syncStart(netDiscord)
 	if dc.since != 0 {
 		t.Fatalf("discord: %d history reads at login, want none", dc.since)
 	}
 
-	u.syncStart(model.NetTelegram)
+	u.syncStart(netTelegram)
 	if tg.since != 1 {
 		t.Fatalf("telegram: %d history reads, want 1", tg.since)
 	}
@@ -324,7 +324,7 @@ func TestBindChatAutoMedia(t *testing.T) {
 	dir := t.TempDir()
 	c := cache.New(dir, 2000)
 	date := time.Date(2026, 8, 29, 10, 0, 0, 0, time.UTC)
-	chat := &model.Chat{Net: model.NetTelegram, ID: 1, Title: "Céline"} // stamped the way loadCache does it
+	chat := &model.Chat{Net: netTelegram, ID: 1, Title: "Céline"} // stamped the way loadCache does it
 	msgs := []model.Msg{
 		{ID: 4, ChatID: 1, Date: date, Media: &model.Media{Kind: model.MediaPhoto,
 			Loc: &tg.InputPhotoFileLocation{ID: 4}, Ext: ".jpg", Size: 43 * 1024}},
@@ -346,7 +346,7 @@ func TestBindChatAutoMedia(t *testing.T) {
 	u.cfg.DownloadDir = dir
 	u.t = &term.Term{Cols: 80, Rows: 24}
 	ev := make(chan model.Event, 8)
-	u.nets = map[string]model.Backend{model.NetTelegram: tgc.New(tgc.Config{}, ev)}
+	u.nets = map[string]model.Backend{netTelegram: tgc.New(tgc.Config{}, ev)}
 
 	w := u.ws.New(true)
 	u.bindChat(w, chat)
@@ -392,9 +392,9 @@ func TestSaveDialogsWithoutIdentity(t *testing.T) {
 		t.Fatal(err)
 	}
 	u := newCacheUI(t, a)
-	u.caches["discord"] = b                                     // no EvReady on discord
-	u.self[model.NetTelegram] = selfInfo{ID: 10, Name: "alice"} // telegram alone knows us
-	u.chatList = []*model.Chat{{Net: model.NetTelegram, ID: 1, Title: "a"}}
+	u.caches["discord"] = b                               // no EvReady on discord
+	u.self[netTelegram] = selfInfo{ID: 10, Name: "alice"} // telegram alone knows us
+	u.chatList = []*model.Chat{{Net: netTelegram, ID: 1, Title: "a"}}
 
 	u.saveDialogs()
 	u.bgWait.Wait() // every write landed: what follows is a decision, not a race

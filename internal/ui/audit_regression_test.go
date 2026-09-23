@@ -22,7 +22,7 @@ import (
 
 func TestRegressionQueryNetworkIsolation(t *testing.T) {
 	u, a, room, _ := queryUI()
-	netB := model.IRCNet("second")
+	netB := ircNet("second")
 	b := &queryBackend{}
 	b.caps = model.AllCaps()
 	u.nets[netB] = b
@@ -47,11 +47,11 @@ func TestAuthQueueRestoresDraft(t *testing.T) {
 	w := u.view()
 	u.ed.Set("unfinished message")
 	a, b := make(chan string, 1), make(chan string, 1)
-	u.authStart(model.NetTelegram, model.EvAuthPrompt{Secret: true, Reply: a})
+	u.authStart(netTelegram, model.EvAuthPrompt{Secret: true, Reply: a})
 	u.ed.Set("password")
-	u.authStart(model.NetDiscord, model.EvAuthPrompt{Reply: b})
+	u.authStart(netDiscord, model.EvAuthPrompt{Reply: b})
 	u.submit()
-	if u.promptNet != model.NetDiscord || u.ed.String() != "" {
+	if u.promptNet != netDiscord || u.ed.String() != "" {
 		t.Fatal("queued prompt inherited the previous input")
 	}
 	u.ed.Set("code")
@@ -107,7 +107,7 @@ func TestRefreshKeepsLiveEditAndMedia(t *testing.T) {
 
 func TestIRCRekeyPreservesHistory(t *testing.T) {
 	u, _, _, _ := queryUI()
-	network := model.IRCNet("test")
+	network := ircNet("test")
 	c := &model.Chat{Net: network, ID: 20, Title: "alice["}
 	u.remember(c)
 	u.listChat(c)
@@ -134,7 +134,7 @@ func TestRegressionFilteredAggregateRead(t *testing.T) {
 	u, b, room, _ := queryUI()
 	u.focused, u.aggregate = true, true
 	u.ws.Cur = 0
-	u.setNetFilter(model.NetDiscord)
+	u.setNetFilter(netDiscord)
 	u.dispatch(model.Envelope{Net: room.Net, Ev: model.EvNewMessage{Chat: room, Msg: model.Msg{ID: 100, ChatID: room.ID, Text: "hidden", Date: time.Now()}}})
 	if b.markRead != 0 || room.Unread != 1 {
 		t.Fatalf("hidden message marked read: RPCs=%d unread=%d", b.markRead, room.Unread)
@@ -167,9 +167,9 @@ func TestRegressionAccountChange(t *testing.T) {
 
 func TestRegressionPromptOwnership(t *testing.T) {
 	u, _, _, _ := queryUI()
-	u.dispatch(model.Envelope{Net: model.NetTelegram, Ev: model.EvAuthPrompt{Question: "Password", Secret: true, Reply: make(chan string, 1)}})
+	u.dispatch(model.Envelope{Net: netTelegram, Ev: model.EvAuthPrompt{Question: "Password", Secret: true, Reply: make(chan string, 1)}})
 	u.ed.Set("fictional-secret")
-	u.dispatch(model.Envelope{Net: model.NetDiscord, Ev: model.EvAuthPrompt{Question: "Scan QR", Reply: make(chan string, 1)}})
+	u.dispatch(model.Envelope{Net: netDiscord, Ev: model.EvAuthPrompt{Question: "Scan QR", Reply: make(chan string, 1)}})
 	if u.prompt != nil && !u.prompt.Secret && u.ed.String() == "fictional-secret" {
 		t.Fatal("secret input remains in editor after another network installs a visible prompt")
 	}
@@ -177,8 +177,8 @@ func TestRegressionPromptOwnership(t *testing.T) {
 
 func TestRegressionQRDoneOwnership(t *testing.T) {
 	u, _, _, _ := queryUI()
-	u.dispatch(model.Envelope{Net: model.NetTelegram, Ev: model.EvAuthPrompt{Question: "Code", Reply: make(chan string, 1)}})
-	u.dispatch(model.Envelope{Net: model.NetDiscord, Ev: model.EvQRDone{}})
+	u.dispatch(model.Envelope{Net: netTelegram, Ev: model.EvAuthPrompt{Question: "Code", Reply: make(chan string, 1)}})
+	u.dispatch(model.Envelope{Net: netDiscord, Ev: model.EvQRDone{}})
 	if u.prompt == nil {
 		t.Fatal("Discord QR completion removed the Telegram prompt")
 	}
@@ -219,9 +219,9 @@ func TestRegressionSecretRendering(t *testing.T) {
 	u, _, _, _ := queryUI()
 	var out bytes.Buffer
 	u.t = term.NewOffscreen(&out, 100, 30)
-	u.dispatch(model.Envelope{Net: model.NetTelegram, Ev: model.EvAuthPrompt{Question: "Password", Secret: true, Reply: make(chan string, 1)}})
+	u.dispatch(model.Envelope{Net: netTelegram, Ev: model.EvAuthPrompt{Question: "Password", Secret: true, Reply: make(chan string, 1)}})
 	u.ed.Set("fictional-secret")
-	u.dispatch(model.Envelope{Net: model.NetDiscord, Ev: model.EvAuthPrompt{Question: "Scan QR", Reply: make(chan string, 1)}})
+	u.dispatch(model.Envelope{Net: netDiscord, Ev: model.EvAuthPrompt{Question: "Scan QR", Reply: make(chan string, 1)}})
 	u.draw()
 	u.t.Flush()
 	if strings.Contains(out.String(), "fictional-secret") {
@@ -231,7 +231,7 @@ func TestRegressionSecretRendering(t *testing.T) {
 
 func TestRegressionDCCResolveCollision(t *testing.T) {
 	u, b, room, _ := queryUI()
-	network := model.IRCNet("test")
+	network := ircNet("test")
 	irc := &queryBackend{}
 	irc.caps = model.AllCaps()
 	u.nets[network] = irc
@@ -241,7 +241,7 @@ func TestRegressionDCCResolveCollision(t *testing.T) {
 	}
 	u.resolve(u.winFor(room), "alice", false, []model.Backend{irc}, false, path)
 	request := irc.requests[0]
-	u.dispatch(model.Envelope{Net: model.NetTelegram, Ev: model.EvChat{Request: request, Query: "alice", Chat: &model.Chat{ID: 40, Title: "alice"}}})
+	u.dispatch(model.Envelope{Net: netTelegram, Ev: model.EvChat{Request: request, Query: "alice", Chat: &model.Chat{ID: 40, Title: "alice"}}})
 	if b.file != 0 || len(u.lookups) != 1 {
 		t.Fatal("unrelated network consumed a pending file send")
 	}
@@ -252,7 +252,7 @@ func TestRegressionDCCResolveCollision(t *testing.T) {
 }
 
 func TestRegressionIRCAliasRoundTrip(t *testing.T) {
-	want := model.ChatKey{Net: model.IRCNet("libera"), ID: 123}
+	want := model.ChatKey{Net: ircNet("libera"), ID: 123}
 	got, ok := parseAliasKey(aliasKey(want))
 	if !ok || got != want {
 		t.Fatalf("IRC alias key does not round trip: encoded=%q got=%+v ok=%v", aliasKey(want), got, ok)
@@ -261,7 +261,7 @@ func TestRegressionIRCAliasRoundTrip(t *testing.T) {
 
 func TestRegressionClosedWindowCache(t *testing.T) {
 	u, _, _, _ := queryUI()
-	network := model.IRCNet("local")
+	network := ircNet("local")
 	b := &queryBackend{}
 	b.caps = model.AllCaps()
 	u.nets[network] = b
@@ -406,7 +406,7 @@ func TestRegressionFlushMergeWindowWins(t *testing.T) {
 	}
 	u := newCacheUI(t, c)
 	w := u.ws.New(true)
-	w.Chat = &model.Chat{Net: model.NetTelegram, ID: 1}
+	w.Chat = &model.Chat{Net: netTelegram, ID: 1}
 	w.Upsert(&model.Msg{ID: 5, ChatID: 1, Text: "edited"})
 	u.dirty[w.Chat.Key()] = true
 	u.flushCache(true)
@@ -558,7 +558,7 @@ func TestRegressionPromptQuestionCleaned(t *testing.T) {
 	u, _, _, _ := queryUI()
 	var out bytes.Buffer
 	u.t = term.NewOffscreen(&out, 100, 30)
-	u.dispatch(model.Envelope{Net: model.NetDiscord, Ev: model.EvAuthPrompt{Question: "Scanned by \x1b]0;pwned\x07", Reply: make(chan string, 1)}})
+	u.dispatch(model.Envelope{Net: netDiscord, Ev: model.EvAuthPrompt{Question: "Scanned by \x1b]0;pwned\x07", Reply: make(chan string, 1)}})
 	u.draw()
 	u.t.Flush()
 	if strings.Contains(out.String(), "\x1b]0;pwned") {
@@ -712,7 +712,7 @@ func TestRegressionSideMenuHighlight(t *testing.T) {
 	if u.menu == nil || !lit() {
 		t.Fatalf("menu open: menu %v, line not highlighted", u.menu != nil)
 	}
-	u.dispatch(model.Envelope{Net: model.NetTelegram, Ev: model.EvAuthPrompt{Question: "Code", Reply: make(chan string, 1)}})
+	u.dispatch(model.Envelope{Net: netTelegram, Ev: model.EvAuthPrompt{Question: "Code", Reply: make(chan string, 1)}})
 	if u.menu != nil || lit() {
 		t.Fatalf("menu dropped by the prompt: menu %v, line still highlighted", u.menu != nil)
 	}

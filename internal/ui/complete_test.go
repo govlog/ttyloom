@@ -146,7 +146,7 @@ func TestTabCommandCycle(t *testing.T) {
 		}
 	}
 	// Editing ends the cycle; the next Tab completes the network argument.
-	u.nets = map[string]model.Backend{model.NetTelegram: &fakeBackend{}}
+	u.nets = map[string]model.Backend{netTelegram: &fakeBackend{}}
 	u.key(term.Key{Rune: ' '})
 	u.key(term.Key{Rune: 't'})
 	u.key(term.Key{Code: term.Tab})
@@ -181,7 +181,7 @@ func TestEmptyChatCompletionExpandsOnlineFirst(t *testing.T) {
 				kind = model.ChatChannel
 			}
 			for i := 0; i < 35; i++ {
-				u.chatList = append(u.chatList, &model.Chat{Net: model.NetTelegram, ID: int64(i + 1), Kind: kind,
+				u.chatList = append(u.chatList, &model.Chat{Net: netTelegram, ID: int64(i + 1), Kind: kind,
 					Title: fmt.Sprintf("contact%02d", i), Username: fmt.Sprintf("contact%02d", i)})
 			}
 			u.presence[u.chatList[34].Key()] = i18n.T("presence_online")
@@ -265,7 +265,7 @@ func TestChatCandidatesByCommand(t *testing.T) {
 func TestEscDropsCompletionChoices(t *testing.T) {
 	u := listUI()
 	for i := 0; i < 35; i++ {
-		u.chatList = append(u.chatList, &model.Chat{Net: model.NetTelegram, ID: int64(i + 1), Kind: model.ChatUser,
+		u.chatList = append(u.chatList, &model.Chat{Net: netTelegram, ID: int64(i + 1), Kind: model.ChatUser,
 			Title: fmt.Sprintf("contact%02d", i), Username: fmt.Sprintf("contact%02d", i)})
 	}
 	u.ed.Set("/m ")

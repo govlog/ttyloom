@@ -278,3 +278,12 @@ type chanHost struct {
 }
 
 func (h *chanHost) Do(f func()) { h.ch <- f }
+
+func TestNetName(t *testing.T) {
+	if Net("libera") != "irc:libera" || Name("irc:libera") != "libera" {
+		t.Fatal("irc:libera round trip")
+	}
+	if Name("irc") != "" || Name("irc:") != "" || Name("discord") != "" {
+		t.Fatal("not an IRC network key")
+	}
+}

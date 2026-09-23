@@ -223,7 +223,7 @@ func (c *Client) SendFile(ctx context.Context, chat *model.Chat, path, _ string,
 }
 
 func (c *Client) dccSend(ctx context.Context, nick, path string) error {
-	if model.IsIRCChannel(nick) {
+	if IsChannel(nick) {
 		return errors.New(i18n.T("dcc_private_only"))
 	}
 	f, err := os.Open(path)

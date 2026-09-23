@@ -19,7 +19,7 @@ func benchUI() *UI {
 		chats: map[model.ChatKey]*model.Chat{}, images: "off"}
 	now := time.Now()
 	for i := 1; i <= 500; i++ {
-		c := &model.Chat{Net: model.NetTelegram, ID: int64(i), Kind: model.ChatGroup, Title: fmt.Sprintf("Salon numéro %d avec un titre long", i),
+		c := &model.Chat{Net: netTelegram, ID: int64(i), Kind: model.ChatGroup, Title: fmt.Sprintf("Salon numéro %d avec un titre long", i),
 			LastDate: now.Add(-time.Duration(i) * time.Minute), Unread: i % 3}
 		u.chats[c.Key()] = c
 		u.chatList = append(u.chatList, c)
@@ -27,7 +27,7 @@ func benchUI() *UI {
 	w := u.ws.New(false)
 	w.Chat = u.chatList[0]
 	for i := 1; i <= 2000; i++ {
-		w.Items = append(w.Items, &Item{Msg: &model.Msg{Net: model.NetTelegram, ChatID: 1, ID: i, Date: now, From: "alice", FromID: int64(i % 5),
+		w.Items = append(w.Items, &Item{Msg: &model.Msg{Net: netTelegram, ChatID: 1, ID: i, Date: now, From: "alice", FromID: int64(i % 5),
 			Text: fmt.Sprintf("message %d — some text that wraps over a couple of lines when the window is narrow enough", i)}})
 	}
 	return u
@@ -84,9 +84,9 @@ func BenchmarkReadInbox(b *testing.B) {
 	u := &UI{ws: NewWindows(), agg: &Window{}}
 	for i := 1; i <= 100; i++ {
 		w := u.ws.New(true)
-		w.Chat = &model.Chat{Net: model.NetTelegram, ID: int64(i)}
+		w.Chat = &model.Chat{Net: netTelegram, ID: int64(i)}
 		for j := 1; j <= 2000; j++ {
-			w.Items = append(w.Items, &Item{Msg: &model.Msg{Net: model.NetTelegram, ChatID: int64(i), ID: j}})
+			w.Items = append(w.Items, &Item{Msg: &model.Msg{Net: netTelegram, ChatID: int64(i), ID: j}})
 		}
 	}
 	c := u.ws.List[1].Chat

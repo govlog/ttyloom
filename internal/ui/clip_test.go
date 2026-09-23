@@ -84,12 +84,12 @@ func TestSendPathPending(t *testing.T) {
 	if err := os.WriteFile(path, []byte("\x89PNG\r\n\x1a\n0123456789"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	c := &model.Chat{Net: model.NetTelegram, ID: 7, Title: "alice"}
+	c := &model.Chat{Net: netTelegram, ID: 7, Title: "alice"}
 	b := &fakeBackend{}
 	u := &UI{ws: NewWindows(), agg: &Window{}, cfg: &config.Config{},
 		chats: map[model.ChatKey]*model.Chat{c.Key(): c},
-		self:  map[string]selfInfo{model.NetTelegram: {ID: 10, Name: "moi"}},
-		nets:  map[string]model.Backend{model.NetTelegram: b}}
+		self:  map[string]selfInfo{netTelegram: {ID: 10, Name: "moi"}},
+		nets:  map[string]model.Backend{netTelegram: b}}
 	w := u.ws.New(false)
 	w.Chat = c
 
@@ -116,7 +116,7 @@ func TestSendPathPending(t *testing.T) {
 	// the network replaces the placeholder.
 	w.Sent(m.TmpID, 55, "")
 	real := &model.Media{Kind: model.MediaPhoto, Label: "[photo 1x1 · 12 B]", Loc: "loc"}
-	w.Upsert(&model.Msg{Net: model.NetTelegram, ChatID: 7, ID: 55, Out: true, Text: "légende", Media: real})
+	w.Upsert(&model.Msg{Net: netTelegram, ChatID: 7, ID: 55, Out: true, Text: "légende", Media: real})
 	if len(w.Items) != 1 {
 		t.Fatalf("echo doubled the message: %d items", len(w.Items))
 	}
@@ -134,12 +134,12 @@ func TestSendPathRoutedWindow(t *testing.T) {
 	if err := os.WriteFile(path, []byte("bonjour"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	c := &model.Chat{Net: model.NetTelegram, ID: 7, Title: "alice"}
+	c := &model.Chat{Net: netTelegram, ID: 7, Title: "alice"}
 	b := &fakeBackend{}
 	u := &UI{ws: NewWindows(), agg: &Window{}, cfg: &config.Config{},
 		chats: map[model.ChatKey]*model.Chat{c.Key(): c},
-		self:  map[string]selfInfo{model.NetTelegram: {ID: 10, Name: "moi"}},
-		nets:  map[string]model.Backend{model.NetTelegram: b}}
+		self:  map[string]selfInfo{netTelegram: {ID: 10, Name: "moi"}},
+		nets:  map[string]model.Backend{netTelegram: b}}
 	chatWin := u.ws.New(true)
 	chatWin.Chat = c
 	sw := u.ws.New(false) // /search result on the same chat: the current window

@@ -140,7 +140,7 @@ func (n *newChatBox) Lines(th theme.Theme, w, h int, title func(*model.Chat) str
 			}
 			out = append(out, b.text(s, dim))
 		case n.rows[j].sep:
-			s := i18n.T("on_telegram_sep")
+			s := i18n.T("on_server_sep")
 			if k := inner - render.Width(s); k > 0 {
 				s += strings.Repeat("─", k)
 			}

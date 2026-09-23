@@ -13,12 +13,23 @@ import (
 
 // The IRC module: its [[irc]] tables, the launch of each network.
 
-// Prefix, Net, Name, IsChannel : the network keys of IRC ("irc:<name>").
-const Prefix = model.NetIRC
+// Prefix : the IRC networks — there can be several, each one keyed
+// "irc:<name>" (Net). The prefix alone is never a network.
+const Prefix = "irc"
 
-func Net(name string) string     { return model.IRCNet(name) }
-func Name(net string) string     { return model.IRCName(net) }
-func IsChannel(name string) bool { return model.IsIRCChannel(name) }
+// Net gives the network key of the IRC network name.
+func Net(name string) string { return Prefix + ":" + name }
+
+// Name gives the name of an IRC network key, "" for any other network.
+func Name(net string) string {
+	if len(net) > len(Prefix)+1 && net[:len(Prefix)+1] == Prefix+":" {
+		return net[len(Prefix)+1:]
+	}
+	return ""
+}
+
+// IsChannel : name starts with one of the four channel prefixes of RFC 2811.
+func IsChannel(name string) bool { return name != "" && strings.ContainsRune("#&!+", rune(name[0])) }
 
 // NetConfig : one IRC network ([[irc]] table). Name is the key of the
 // network (irc:<name>); Channels is kept up to date by the backend (JOIN and

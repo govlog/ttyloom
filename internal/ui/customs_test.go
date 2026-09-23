@@ -31,11 +31,11 @@ func TestPickerCustomImage(t *testing.T) {
 	if err := os.WriteFile(path, buf.Bytes(), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	u := netUI(model.NetDiscord)
+	u := netUI(netDiscord)
 	u.ctx, u.images, u.th = context.Background(), "kitty", theme.Terminal()
 	u.events = make(chan model.Event, 4)
 	u.t = &term.Term{Cols: 80, Rows: 24, Kitty: true, CellW: 9, CellH: 18}
-	b := u.nets[model.NetDiscord].(*fakeBackend)
+	b := u.nets[netDiscord].(*fakeBackend)
 	c := u.chatList[0]
 	c.Customs = []string{":profil:"}
 	c.CustomLocs = map[string]any{":profil:": "https://cdn.example/emojis/1.png"}

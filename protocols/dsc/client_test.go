@@ -54,7 +54,7 @@ func evOf(t *testing.T, call func(*Client)) model.Event {
 // must never do half of a destructive action.
 func TestUnsupported(t *testing.T) {
 	ctx := context.Background()
-	no := i18n.T("net_unsupported", model.NetDiscord)
+	no := i18n.T("net_unsupported", Net)
 	warn := func(name string) model.Event {
 		return model.EvLog{Level: "WARN", Msg: "discord: " + name + " not supported"}
 	}
