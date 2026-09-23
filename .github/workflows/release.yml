@@ -47,6 +47,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
+          notes="$RUNNER_TEMP/notes.md"
+          echo 'Portable Linux binaries for x86-64 and ARM64 (without Hunspell), matching source and SHA-256 checksums. See the README for installation and source builds with spell checking.' > "$notes"
+          awk -v h="## $RELEASE_TAG " 'index($0, "## ") == 1 { p = index($0, h) == 1; next } p' CHANGELOG.md > "$notes.section"
+          grep -q . "$notes.section" || { echo "CHANGELOG.md has no section for $RELEASE_TAG" >&2; exit 1; }
+          cat "$notes.section" >> "$notes"
           gh release create "$RELEASE_TAG" "dist/$RELEASE_TAG/"*.tar.gz "dist/$RELEASE_TAG/SHA256SUMS" \
             --verify-tag --draft --prerelease --title "TTYloom $RELEASE_TAG" \
-            --notes 'Portable Linux binaries for x86-64 and ARM64 (without Hunspell), matching source and SHA-256 checksums. See the README for installation and source builds with spell checking.'
+            --notes-file "$notes"

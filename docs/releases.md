@@ -29,6 +29,8 @@ While TTYloom is in beta, versions are numbered `v0.N-beta` (`v0.7-beta`, then `
 4. Wait for CI and the Release workflow. The release job tests the portable
    build, creates the archives, verifies checksums, runs the x86-64 binary and
    runs the ARM64 binary with QEMU, then uploads a **draft** GitHub release.
+   Its notes are the changelog section of the tag; the job fails if there is
+   none.
 5. Review its files and release notes, then publish the draft from GitHub or:
 
    ```bash
