@@ -14,6 +14,9 @@ type fakeMod struct {
 	nets     []string
 	launched []string
 	cmds     []module.Command
+	canAdd   bool
+	setups   int      // OpenSetup calls
+	removed  []string // Remove calls
 }
 
 func (m *fakeMod) Name() string                    { return "fake" }
@@ -24,6 +27,18 @@ func (m *fakeMod) Networks() []string              { return m.nets }
 func (m *fakeMod) Cache(net string) (string, bool) { return net, true }
 func (m *fakeMod) Commands() []module.Command      { return m.cmds }
 func (m *fakeMod) Claims(name string) bool         { return strings.HasPrefix(name, "%") }
+func (m *fakeMod) Label() string                   { return "Fake" }
+func (m *fakeMod) CanAdd() bool                    { return m.canAdd }
+func (m *fakeMod) OpenSetup(h module.Host) {
+	m.setups++
+	h.OpenForm(&module.Form{Title: "Fake", Intro: []string{"guide"}, Fields: []module.Field{{Label: "name", Sel: -1}},
+		Submit: func(v []string) string {
+			m.nets = append(m.nets, "fake:"+v[0])
+			h.AddNetwork("fake:" + v[0])
+			return ""
+		}})
+}
+func (m *fakeMod) Remove(_ module.Host, _ module.Win, net string) { m.removed = append(m.removed, net) }
 func (m *fakeMod) Launch(_ context.Context, _ module.Host, net string, _ chan<- model.Event) (model.Backend, error) {
 	m.launched = append(m.launched, net)
 	return &runBackend{}, nil

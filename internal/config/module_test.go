@@ -39,6 +39,9 @@ func (m *fakeMod) Networks() []string          { return nil }
 func (m *fakeMod) Cache(string) (string, bool) { return "", false }
 func (m *fakeMod) Commands() []module.Command  { return nil }
 func (m *fakeMod) Claims(string) bool          { return false }
+func (m *fakeMod) Label() string               { return "Fake" }
+func (m *fakeMod) CanAdd() bool                { return false }
+func (m *fakeMod) OpenSetup(module.Host)       {}
 func (m *fakeMod) Launch(context.Context, module.Host, string, chan<- model.Event) (model.Backend, error) {
 	return nil, nil
 }

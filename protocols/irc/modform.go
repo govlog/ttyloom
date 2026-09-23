@@ -51,7 +51,7 @@ const (
 // hostname field cycles through ircPresets (← → or Space); a preset fills
 // host, port, TLS, and the name when it is still empty or came from a preset.
 func (m *Module) openForm(h module.Host) {
-	f := &module.Form{Title: i18n.T("irc_add_title")}
+	f := &module.Form{Title: i18n.T("irc_add_title"), Intro: []string{i18n.T("irc_setup_intro")}}
 	for _, l := range []struct {
 		key, def string
 		secret   bool
@@ -113,7 +113,7 @@ func (m *Module) submit(h module.Host, v []string) string {
 	}
 	m.Add(&NetConfig{Name: name, Host: v[1], Port: port, TLS: yes(v[3]), Nick: v[4], User: v[5], RealName: v[6], NickServPassword: v[7]})
 	if !h.SaveConfig() {
-		m.Remove(name)
+		m.removeTable(name)
 		return i18n.T("irc_not_saved")
 	}
 	net := Net(name)
@@ -125,7 +125,7 @@ func (m *Module) submit(h module.Host, v []string) string {
 // delete : /irc delete <name>. The [[irc]] table leaves config.toml first
 // (nothing changes when the write fails), then the network goes.
 func (m *Module) delete(h module.Host, w module.Win, net string) {
-	restore := m.Remove(Name(net))
+	restore := m.removeTable(Name(net))
 	if !h.SaveConfig() {
 		restore()
 		return

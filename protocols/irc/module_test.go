@@ -18,12 +18,18 @@ import (
 // the UI goroutine); saves counts SaveConfig.
 type fakeHost struct {
 	module.Host
-	cfg   *config.Config
-	saves int
+	cfg     *config.Config
+	saves   int
+	form    *module.Form
+	removed []string
+	lines   []string
 }
 
-func (h *fakeHost) Do(f func())      { f() }
-func (h *fakeHost) SaveConfig() bool { h.saves++; return h.cfg.Save() == nil }
+func (h *fakeHost) Do(f func())                  { f() }
+func (h *fakeHost) SaveConfig() bool             { h.saves++; return h.cfg.Save() == nil }
+func (h *fakeHost) OpenForm(f *module.Form)      { h.form = f }
+func (h *fakeHost) RemoveNetwork(net string)     { h.removed = append(h.removed, net) }
+func (h *fakeHost) Print(_ module.Win, l string) { h.lines = append(h.lines, l) }
 
 func loadIRC(t *testing.T, body string) (*config.Config, *Module) {
 	t.Helper()
@@ -144,7 +150,7 @@ func TestValidName(t *testing.T) {
 // no one takes stay.
 func TestModuleDeleteKeepsUnknown(t *testing.T) {
 	c, m := loadIRC(t, "future = \"kept\"\n[[irc]]\nname = \"libera\"\nhost = \"irc.libera.chat\"\n")
-	m.Remove("libera")
+	m.removeTable("libera")
 	if err := c.Save(); err != nil {
 		t.Fatal(err)
 	}
@@ -285,5 +291,25 @@ func TestNetName(t *testing.T) {
 	}
 	if Name("irc") != "" || Name("irc:") != "" || Name("discord") != "" {
 		t.Fatal("not an IRC network key")
+	}
+}
+
+// IRC always adds a network: its page is the form of /irc add with a line of
+// guide; Remove takes a table out of config.toml and the network away.
+func TestIRCSetupAndRemove(t *testing.T) {
+	cfg, m := loadIRC(t, "[[irc]]\nname = \"libera\"\nhost = \"irc.libera.chat\"\nnick = \"me\"\n")
+	h := &fakeHost{cfg: cfg}
+	if m.Label() != "IRC" || !m.CanAdd() {
+		t.Fatalf("label %q, can add %v", m.Label(), m.CanAdd())
+	}
+	m.OpenSetup(h)
+	if h.form == nil || len(h.form.Intro) != 1 || len(h.form.Fields) != 8 {
+		t.Fatalf("form: %+v", h.form)
+	}
+	var r module.Remover = m
+	r.Remove(h, module.Win{}, "irc:libera")
+	again := NewModule()
+	if _, err := config.LoadFrom(filepath.Dir(cfg.Path()), again); err != nil || len(again.Networks()) != 0 || !slices.Equal(h.removed, []string{"irc:libera"}) {
+		t.Fatalf("after remove: %v %v %v", again.Networks(), h.removed, err)
 	}
 }

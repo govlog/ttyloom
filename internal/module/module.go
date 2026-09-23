@@ -36,6 +36,21 @@ type Module interface {
 	// Claims : a name only this module resolves ("#room" for IRC): /query and
 	// /join then ask its networks alone.
 	Claims(name string) bool
+	// Label : the name of the module in the hub ("Telegram").
+	Label() string
+	// CanAdd : a network of the module can be added now (Telegram: none
+	// configured; IRC: always).
+	CanAdd() bool
+	// OpenSetup opens the page of the module in the hub: a form (Host.OpenForm)
+	// whose Submit writes the configuration and adds the network
+	// (Host.SaveConfig, Host.AddNetwork).
+	OpenSetup(h Host)
+}
+
+// Remover : a module whose networks the hub can remove (IRC: the [[irc]]
+// table goes, the network stops). Optional.
+type Remover interface {
+	Remove(h Host, w Win, net string)
 }
 
 // Win : the window a command comes from. Ref is the UI's own handle, opaque

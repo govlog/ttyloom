@@ -117,3 +117,4 @@ help_quote_long = "The line goes to the server with nothing added — for what t
 help_ignore_name = "/ignore [nick | mask]"
 help_ignore_short = "lists, adds or removes an ignored mask (saved in ignores of [[irc]])"
 help_ignore_long = "A nick becomes nick!*@*, user@host becomes *!user@host; * and ? are wildcards. Typing an existing mask removes it. Messages, notices, actions and CTCP of a matching source are dropped by the network."
+irc_setup_intro = "Pick a known network with ← →, or type a server."

@@ -138,15 +138,26 @@ func (m *Module) ByName(name string) *NetConfig {
 
 func (m *Module) Add(n *NetConfig) { m.nets = append(m.nets, n) }
 
-// Remove takes the table of name out; restore puts the list back as it was
-// (the write of config.toml failed).
-func (m *Module) Remove(name string) (restore func()) {
+// removeTable takes the table of name out; restore puts the list back as it
+// was (the write of config.toml failed).
+func (m *Module) removeTable(name string) (restore func()) {
 	was := m.nets
 	m.nets = slices.DeleteFunc(slices.Clone(was), func(n *NetConfig) bool { return n.Name == name })
 	return func() { m.nets = was }
 }
 
 func (m *Module) Claims(name string) bool { return IsChannel(name) }
+
+func (m *Module) Label() string { return "IRC" }
+
+// CanAdd : IRC takes as many networks as one wants.
+func (m *Module) CanAdd() bool { return true }
+
+// OpenSetup : the form of /irc add, with its line of guide.
+func (m *Module) OpenSetup(h module.Host) { m.openForm(h) }
+
+// Remove : the [[irc]] table of net goes, then the network (/irc delete).
+func (m *Module) Remove(h module.Host, w module.Win, net string) { m.delete(h, w, net) }
 
 // Launch reads the table of net now: /irc add writes one while the client
 // runs. The password command runs at each launch; a failing one is the

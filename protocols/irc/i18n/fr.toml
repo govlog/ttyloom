@@ -117,3 +117,4 @@ help_quote_long = "La ligne part au serveur sans rien y ajouter, pour ce dont le
 help_ignore_name = "/ignore [pseudo | masque]"
 help_ignore_short = "liste, ajoute ou retire un masque ignoré (gardé dans ignores de [[irc]])"
 help_ignore_long = "Un pseudo devient pseudo!*@*, user@hôte devient *!user@hôte ; * et ? sont des jokers. Retaper un masque existant le retire. Messages, notices, actions et CTCP d'une source correspondante sont jetés par le réseau."
+irc_setup_intro = "Choisissez un réseau connu avec ← →, ou tapez un serveur."

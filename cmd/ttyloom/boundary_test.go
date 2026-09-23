@@ -130,6 +130,10 @@ func TestModuleHelpTexts(t *testing.T) {
 		}
 		for _, lang := range []string{"en", "fr"} {
 			mod, core := i18n.Table(cat, lang), i18n.Table(i18n.Core, lang)
+			// The label of the hub is a brand name, not a key left raw.
+			if _, raw := mod[m.Label()]; m.Label() == "" || raw || strings.Contains(m.Label(), "_") {
+				t.Errorf("%s (%s): label %q", m.Name(), lang, m.Label())
+			}
 			for _, c := range m.Commands() {
 				for _, suffix := range []string{"_name", "_short", "_long"} {
 					if _, ok := mod[c.Help.Key+suffix]; !ok {
