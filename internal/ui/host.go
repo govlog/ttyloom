@@ -5,6 +5,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/govlog/ttyloom/internal/i18n"
 	"github.com/govlog/ttyloom/internal/model"
 	"github.com/govlog/ttyloom/internal/module"
 )
@@ -55,8 +56,14 @@ func (h host) NetAction(w module.Win, net, sub string) {
 	h.u.netAction(win, net, sub)
 }
 
+// AddNetwork from the page of the hub closes the hub and marks the network:
+// the hub comes back when it is ready or stops.
 func (h host) AddNetwork(net string) {
 	u := h.u
+	fromHub := u.hub != nil
+	if fromHub {
+		u.hubReturn[net], u.hub = true, nil
+	}
 	if !slices.Contains(u.netList, net) {
 		u.netList = append(u.netList, net)
 		slices.Sort(u.netList)
@@ -65,6 +72,9 @@ func (h host) AddNetwork(net string) {
 		u.addCache(m, net)
 	}
 	u.startNet(net)
+	if fromHub {
+		u.hubLaunched(net)
+	}
 }
 
 // RemoveNetwork : the network stops, its chats and windows go, and the list
@@ -171,6 +181,10 @@ func (h host) LastIncomingFile(w module.Win) *model.Msg {
 func (h host) OpenForm(f *module.Form) {
 	h.u.form = newFormBox(f)
 	h.u.form.openLink = h.u.open // the link comes from the module, not from the network: no question
+	if h.u.hub != nil {
+		// A page of the hub: the box says where it is.
+		h.u.form.title = i18n.T("hub_title") + " › " + f.Title
+	}
 }
 
 func (h host) Do(f func()) {

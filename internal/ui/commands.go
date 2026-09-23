@@ -18,7 +18,7 @@ var aliases = map[string]string{
 	"hist": "history", "t": "theme", "o": "open", "c": "clear", "h": "help", "exit": "quit",
 }
 
-var commandNames = []string{"/window", "/close", "/query", "/join", "/new", "/msg", "/me", "/away", "/chats", "/net", "/fold", "/history",
+var commandNames = []string{"/window", "/close", "/query", "/join", "/new", "/msg", "/me", "/away", "/chats", "/networks", "/net", "/fold", "/history",
 	"/search", "/whois", "/rename", "/unrename", "/open", "/view", "/send", "/theme", "/set", "/clear", "/log", "/debug", "/emoji", "/gif", "/help", "/quit"}
 
 // cmdNames : the commands valid now. general resolve first by prefix, then
@@ -304,6 +304,8 @@ func (u *UI) command(name string, args []string, text string) {
 		u.sendCmd(u.sendWin(), text)
 	case "theme":
 		u.themeCmd(args)
+	case "networks":
+		u.openHub()
 	case "set":
 		u.setCmd(args)
 	case "clear":

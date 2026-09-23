@@ -400,10 +400,16 @@ func (u *UI) askKey(k term.Key) bool {
 	}
 	a := u.ask
 	u.ask = nil
-	if k.Code == term.None && (k.Rune == 'y' || k.Rune == 'Y') && time.Since(a.at) >= 300*time.Millisecond {
+	if answeredYes(k, a.at) {
 		a.do()
 	}
 	return true
+}
+
+// answeredYes : k confirms a question asked at at — y or Y, 300 ms or more
+// after it; sooner, it is typing, not an answer.
+func answeredYes(k term.Key, at time.Time) bool {
+	return k.Code == term.None && (k.Rune == 'y' || k.Rune == 'Y') && time.Since(at) >= 300*time.Millisecond
 }
 
 // applyEdit sends the edit; an empty text = cancel.

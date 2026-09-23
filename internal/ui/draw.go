@@ -212,7 +212,7 @@ func (u *UI) draw() {
 
 // cursorShown : the input cursor is drawn; an open overlay keeps it hidden.
 func (u *UI) cursorShown() bool {
-	return u.picker == nil && u.menu == nil && u.themePick == nil && u.gsearch == nil && u.newChat == nil && u.gifs == nil && u.form == nil
+	return u.picker == nil && u.menu == nil && u.themePick == nil && u.gsearch == nil && u.newChat == nil && u.gifs == nil && u.form == nil && u.hub == nil
 }
 
 // drawScrollbar : column kept free at the right of the message area. Always
@@ -504,6 +504,11 @@ func (u *UI) overlay() overlays {
 	if u.newChat != nil { // new chat: it takes everything too
 		r := u.ncRect()
 		out = append(out, overlayBox{rect: r, lines: u.newChat.Lines(u.th, r.w, r.h, u.title, u.online)})
+	}
+	if u.hub != nil && u.form == nil { // hub "Networks": its page (a form) takes its place
+		u.hubRefresh()
+		r := u.hubRect()
+		out = append(out, overlayBox{rect: r, lines: u.hub.Lines(u.th, r.w)})
 	}
 	if u.form != nil { // form (/irc add): it takes everything too
 		r := u.formRect()

@@ -27,7 +27,7 @@ func (u *UI) authStart(net string, prompt model.EvAuthPrompt) {
 		if u.gifs != nil {
 			u.gifClose()
 		}
-		u.picker, u.menu, u.newChat, u.gsearch, u.form, u.themePick = nil, nil, nil, nil, nil, nil
+		u.picker, u.menu, u.newChat, u.gsearch, u.form, u.themePick, u.hub = nil, nil, nil, nil, nil, nil, nil
 		u.pasteAsk = ""
 	}
 	u.ed = Editor{}

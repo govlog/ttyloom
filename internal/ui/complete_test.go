@@ -139,7 +139,7 @@ func TestCompleteListsWhenStuck(t *testing.T) {
 func TestTabCommandCycle(t *testing.T) {
 	u := listUI()
 	u.ed.Set("/ne")
-	for _, want := range []string{"/net", "/new", "/net"} {
+	for _, want := range []string{"/net", "/networks", "/new", "/net"} {
 		u.key(term.Key{Code: term.Tab})
 		if u.ed.String() != want {
 			t.Fatalf("Tab = %q, want %q", u.ed.String(), want)
@@ -159,7 +159,7 @@ func TestTabCommandCycle(t *testing.T) {
 	u.key(term.Key{Code: term.Left})
 	u.key(term.Key{Code: term.Right})
 	u.key(term.Key{Code: term.Tab})
-	if u.ed.String() != "/net " {
+	if u.ed.String() != "/net" { // /net and /networks: a fresh Tab stays; a stale cycle goes on
 		t.Fatalf("stale cycle after moving the cursor: %q", u.ed.String())
 	}
 	u.ed.Set("/se blop")

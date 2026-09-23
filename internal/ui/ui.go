@@ -159,6 +159,8 @@ type UI struct {
 	gsearch     *globalSearch           // 2nd Ctrl+F: overlay of the server results, it takes everything
 	newChat     *newChatBox             // "new chat" overlay: it takes everything
 	form        *formBox                // form overlay (/irc add): it takes everything
+	hub         *hubBox                 // hub "Networks" open: it takes everything but its page (form)
+	hubReturn   map[string]bool         // networks started from the hub: it comes back at their EvReady or EvStopped
 	gifs        *gifBox                 // GIF box (Ctrl+G): it takes everything
 	customs     map[string]*model.Media // images of the custom emojis, by URL, kept for the session (customs.go)
 	gifOrphan   map[*model.Media]bool   // previews of a closed GIF box whose download still comes
@@ -1081,6 +1083,7 @@ func (u *UI) event(ev model.Event) {
 			// up. eachNet here would ask a backend that is not connected yet.
 			b.LoadDialogs(u.backendContext(b))
 		}
+		u.hubBack(net)
 	case model.EvConnected:
 		u.conn[u.dispatchNet] = true
 		// Nothing promises the gateway replays what came while it was down
@@ -1121,6 +1124,7 @@ func (u *UI) event(ev model.Event) {
 		delete(u.dialogsSeen, net) // the next login auto-opens and syncs again
 		u.conn[net] = false
 		u.authDone(net)
+		u.hubBack(net) // before the return of an error: a failed start brings it back too
 		if e.Err != "" {
 			u.status0(i18n.T("net_stopped_error", net, e.Err, net))
 			u.goTo(0)
@@ -2016,7 +2020,8 @@ func (u *UI) key(k term.Key) {
 	for _, o := range []leadOverlay{
 		{u.themePick != nil, u.themeKey, u.themeMouse}, // like the emoji picker: lead until Enter or Esc
 		{u.newChat != nil, u.ncKey, u.ncMouse},         // new chat
-		{u.form != nil, u.formKey, u.formMouse},        // form (/irc add)
+		{u.form != nil, u.formKey, u.formMouse},        // form (/irc add, a page of the hub)
+		{u.hub != nil, u.hubKey, u.hubMouse},           // hub "Networks", under its page
 		{u.gifs != nil, u.gifKey, u.gifMouse},          // GIF box
 		{u.gsearch != nil, u.gsKey, u.gsMouse},         // global search
 		{u.menu != nil, u.menuKey, u.menuMouse},        // context menu, until the choice
