@@ -93,8 +93,9 @@ the next ones stay quiet until the hook works again. `/debug` keeps every
 failure, `/hooks` the last result.
 
 Each run has its own process: TTYloom never waits for one. A program left in
-the background (`mpv ding.ogg &`) does not hold the run more than a second
-past the end of the script.
+the background does not hold the run more than a second past the end of the
+script, but what it writes to the standard output during that second is part
+of the reply: send its output elsewhere (`mpv ding.ogg >/dev/null 2>&1 &`).
 
 Two guards, per hook: at most 4 runs at a time — one message more is skipped
 and counted; at most 10 `send` replies a minute — one more is dropped and
@@ -109,7 +110,7 @@ become spaces. An empty output does nothing, whatever the mode.
 | `reply` | What happens |
 | --- | --- |
 | `send` | Sent as a normal message in the chat of the message, even when its window is not shown. Your input line, the reply you are preparing and the typing indicator stay as they are. Several lines make one message (one message per line on IRC). A reply too long for the network fails like any send. |
-| `draft` | Put in the input line of the chat when it is empty: the input on the screen, or the draft you find when you go to that window. Your own text is never replaced: then the output shows as with `display`. |
+| `draft` | Put in the input line of the chat when it is empty: the input on the screen, or the draft you find when you go to that window. Your own text is never replaced, nor a reply or an edit you are preparing: then the output shows as with `display`. |
 | `display` | Each line becomes a line of the window of the chat, `[name] text`. Nothing leaves your machine. |
 | `none` | The output is ignored: the hook works for what it does (a notification, a log). |
 
@@ -213,5 +214,5 @@ reply = anthropic.Anthropic().messages.create(
     system="Suggest a short reply to this chat message, in its language. Answer with the reply only.",
     messages=[{"role": "user", "content": f"{os.environ['TTYLOOM_FROM']}: {text}"}],
 )
-print(reply.content[0].text)
+print(next(b.text for b in reply.content if b.type == "text"))
 ```

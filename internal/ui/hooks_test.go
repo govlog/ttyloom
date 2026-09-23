@@ -158,8 +158,8 @@ reply = "send"`, shScript(t, `echo " pong "`)))
 }
 
 // draft: the draft of a hidden window, taken back at the visit; the input of
-// the window shown when it is empty; my text is never replaced, the output
-// then shows as display.
+// the window shown when it is empty; my text is never replaced, nor the reply
+// I am preparing — the output then shows as display.
 func TestHookDraft(t *testing.T) {
 	u, _, room := hookUI(t, fmt.Sprintf(`[[hook]]
 name  = "idea"
@@ -184,6 +184,14 @@ reply = "draft"`, shScript(t, "echo try this")))
 	incoming(u, room, model.Msg{ID: 3, Text: "c"})
 	if u.ed.String() != "mine" || sysLines(w, "[idea] try this") != 1 {
 		t.Fatalf("busy input: %q, %d lines", u.ed.String(), sysLines(w, "[idea] try this"))
+	}
+	// A reply being prepared, input still empty: Enter would send the idea
+	// quoting a message it was not written for.
+	u.ed.Set("")
+	u.reply = &Item{Msg: &model.Msg{Net: netTelegram, ChatID: room.ID, ID: 3}}
+	incoming(u, room, model.Msg{ID: 4, Text: "d"})
+	if u.ed.String() != "" || sysLines(w, "[idea] try this") != 2 {
+		t.Fatalf("reply being prepared: input %q, %d lines", u.ed.String(), sysLines(w, "[idea] try this"))
 	}
 }
 

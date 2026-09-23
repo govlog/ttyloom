@@ -40,6 +40,8 @@ func Run(ctx context.Context, h Hook, env []string, stdin string) (string, error
 	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
 	// A child left in the background (mpv ding.ogg &) holds stdout open: Wait
 	// stops waiting for it after this delay, the program itself being done.
+	// What the child writes to stdout meanwhile is part of the output: nothing
+	// tells its writes from the program's (docs/hooks.md says to redirect it).
 	cmd.WaitDelay = time.Second
 	err := cmd.Run()
 	if errors.Is(err, exec.ErrWaitDelay) {

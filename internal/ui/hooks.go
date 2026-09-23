@@ -215,11 +215,13 @@ func (u *UI) hookSend(name string, st *hookStat, c *model.Chat, text string) {
 
 // hookDraft : a draft reply goes into the input of the window of c when it is
 // empty — the editor when that window is shown, its Draft otherwise, taken
-// back at the visit. My text is never replaced: then it shows as display.
+// back at the visit. My text is never replaced, nor a mode I am in (a reply
+// being prepared would quote a message the draft was not written for): then
+// it shows as display.
 func (u *UI) hookDraft(name string, c *model.Chat, text string) {
 	w := u.winFor(c)
 	if w == u.view() {
-		if u.ed.String() == "" && u.edit == nil && u.prompt == nil && u.sendAsk == nil && u.pasteAsk == "" {
+		if u.ed.String() == "" && u.edit == nil && u.reply == nil && u.prompt == nil && u.sendAsk == nil && u.pasteAsk == "" {
 			u.ed.Set(text)
 			return
 		}
