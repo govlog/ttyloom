@@ -17,6 +17,7 @@ import (
 
 	"github.com/govlog/ttyloom/internal/cache"
 	"github.com/govlog/ttyloom/internal/config"
+	"github.com/govlog/ttyloom/internal/hook"
 	"github.com/govlog/ttyloom/internal/i18n"
 	"github.com/govlog/ttyloom/internal/media"
 	"github.com/govlog/ttyloom/internal/model"
@@ -200,6 +201,12 @@ type UI struct {
 	syncCur   *model.Chat   // step in flight (nil: none)
 	syncTotal int           // size of the queue at the start, for the progress
 	syncNew   int           // messages brought back by the sync
+
+	hooks     []hook.Hook          // hooks.toml (hooks.go)
+	hookStats map[string]*hookStat // their counters, by name
+	// hookWait : the hook runs in flight. Waiting on it is what lets a test
+	// read what a run left, as bgWait does for the cache.
+	hookWait sync.WaitGroup
 
 	// dispatchNet : network of the envelope being dispatched. The events that
 	// name a chat by a bare id read it back. UI goroutine only.
@@ -1263,6 +1270,8 @@ func (u *UI) event(ev model.Event) {
 		}
 	case evFlash:
 		u.flash(e.Text)
+	case evHook:
+		u.hookDone(e)
 	}
 }
 
@@ -1348,6 +1357,9 @@ func (u *UI) newMessage(e model.EvNewMessage) {
 	}
 	u.autoMedia(&m, false)
 	u.markDirty(m.Key())
+	if added {
+		u.runHooks(chat, &m)
+	}
 }
 
 // logLine formats m for the window log: text (or media label with no text),

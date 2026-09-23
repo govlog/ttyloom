@@ -60,6 +60,7 @@ func newUI(ctx context.Context, cancel context.CancelFunc, t *term.Term, cfg *co
 	for _, n := range u.netList {
 		u.startNet(n)
 	}
+	u.loadHooks(u.status0, false)
 	if len(u.netList) == 0 { // first start: the hub says what to add
 		u.openHub()
 	}

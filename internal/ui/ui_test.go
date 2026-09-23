@@ -641,6 +641,7 @@ type fakeBackend struct {
 	gifQueries []string
 	gifsSent   []model.Gif
 	downloads  []string
+	sends      []string // Send calls: "<chat title>: <text>"
 }
 
 func (f *fakeBackend) Caps() model.Caps { return f.caps }
@@ -666,6 +667,10 @@ func (f *fakeBackend) LoadHistory(context.Context, *model.Chat, int, int) { f.hi
 
 func (f *fakeBackend) MarkRead(context.Context, *model.Chat, int) { f.markRead++ }
 func (f *fakeBackend) ReadReactions(context.Context, *model.Chat) { f.readReacts++ }
+
+func (f *fakeBackend) Send(_ context.Context, c *model.Chat, text string, _ int64) {
+	f.sends = append(f.sends, c.Title+": "+text)
+}
 
 // net routes by the Net of the chat; nil for a nil chat, one not stamped, or
 // one whose network is gone. Every call site skips the call on nil.
