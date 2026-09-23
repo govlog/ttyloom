@@ -441,10 +441,11 @@ const (
 
 // linkStyle : style of the label of a link preview — it carries the URL, and
 // so the click (and the OSC 8 link). SafeURL filters: the URL goes out as it
-// is in the terminal sequence as well as under xdg-open.
+// is in the terminal sequence as well as under xdg-open. The label (site name
+// and title, given by the page) never shows the URL: masked.
 func linkStyle(md *model.Media, st theme.Style) theme.Style {
 	if md.Kind == model.MediaWebPage && SafeURL(md.URL) {
-		st.URL = md.URL
+		st.URL, st.Masked = md.URL, true
 	}
 	return st
 }

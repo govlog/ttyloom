@@ -385,20 +385,23 @@ func (u *UI) cancelMode() {
 type confirm struct {
 	q  string
 	do func()
+	at time.Time // when the question opened
 }
 
-func (u *UI) confirm(q string, do func()) { u.ask = &confirm{q: q, do: do} }
+func (u *UI) confirm(q string, do func()) { u.ask = &confirm{q: q, do: do, at: time.Now()} }
 
 // askKey : answer to a confirmation. It swallows every key, like pasteKey: y
-// (or Y) confirms, everything else cancels — the prompt never stays stuck.
+// (or Y) confirms, everything else cancels — the prompt never stays stuck. A
+// y within 300 ms of the question is typing, not an answer ("dy…" over one of
+// my selected messages): it cancels too.
 func (u *UI) askKey(k term.Key) bool {
 	if k.Code == term.Mouse {
 		return true // click, wheel: swallowed without touching the confirmation
 	}
-	do := u.ask.do
+	a := u.ask
 	u.ask = nil
-	if k.Code == term.None && (k.Rune == 'y' || k.Rune == 'Y') {
-		do()
+	if k.Code == term.None && (k.Rune == 'y' || k.Rune == 'Y') && time.Since(a.at) >= 300*time.Millisecond {
+		a.do()
 	}
 	return true
 }

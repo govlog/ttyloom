@@ -108,7 +108,7 @@ func privateParts(name string, c *model.Chat, presence string) []model.Participa
 func (u *UI) participants(e model.EvParticipants) {
 	lines := e.Lines
 	for i := range lines {
-		lines[i].Text = render.CleanLine(lines[i].Text)
+		lines[i].Text, lines[i].Name = render.CleanLine(lines[i].Text), render.CleanLine(lines[i].Name)
 	}
 	key := u.evKey(e.ChatID)
 	if e.Err != "" {

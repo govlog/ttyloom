@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/govlog/ttyloom/internal/config"
+	"github.com/govlog/ttyloom/internal/i18n"
 	"github.com/govlog/ttyloom/internal/render"
 	"github.com/govlog/ttyloom/internal/term"
 )
@@ -20,13 +21,15 @@ type rowHit struct {
 type urlSpan struct {
 	col0, col1 int // [col0, col1)
 	url        string
+	masked     bool // the text shown is not url: a click asks first
 }
 
 type hit struct {
-	item *Item
-	img  *render.Img
-	url  string
-	act  *render.Action
+	item   *Item
+	img    *render.Img
+	url    string
+	masked bool
+	act    *render.Action
 }
 
 // hitAt : screen line y (0 = first message line), column x.
@@ -42,7 +45,7 @@ func hitAt(rows []rowHit, x, y int) hit {
 	}
 	for _, s := range r.urls {
 		if x >= s.col0 && x < s.col1 {
-			return hit{item: r.item, url: s.url}
+			return hit{item: r.item, url: s.url, masked: s.masked}
 		}
 	}
 	return hit{item: r.item, img: r.img}
@@ -148,6 +151,9 @@ func (u *UI) mouse(m term.MouseEvent) {
 		switch {
 		case h.act != nil:
 			u.actClick(u.view(), h.item, *h.act)
+		case h.url != "" && h.masked: // the text hides where the link goes: show it first
+			url := h.url
+			u.confirm(i18n.T("confirm_open_link", render.CleanLine(url)), func() { u.open(url) })
 		case h.url != "":
 			u.open(h.url) // xdg-open opens a URL as well as a path
 		case h.img != nil && h.item != nil && h.item.Msg != nil:

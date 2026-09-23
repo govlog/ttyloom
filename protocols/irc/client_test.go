@@ -350,7 +350,7 @@ func TestWhoisNamesQuit(t *testing.T) {
 	s.send(":srv 353 me = #go :@alice +bob me")
 	s.send(":srv 366 me #go :End of NAMES")
 	p := waitFor[model.EvParticipants](t, events)
-	if len(p.Lines) != 3 || p.Lines[0].Text != "@alice" || p.Lines[0].Query != "alice" || p.Lines[1].Query != "bob" {
+	if len(p.Lines) != 3 || p.Lines[0].Text != "@alice" || p.Lines[0].Name != "alice" || p.Lines[0].Query != "alice" || p.Lines[1].Query != "bob" {
 		t.Fatalf("participants: %+v", p)
 	}
 	if m := c.Members(chatOf("#go")); !slices.Equal(m, []string{"alice", "bob", "me"}) {

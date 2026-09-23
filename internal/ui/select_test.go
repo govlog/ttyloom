@@ -363,8 +363,10 @@ func TestAskKeys(t *testing.T) {
 	u := &UI{}
 	ran := 0
 	do := func() { ran++ }
+	past := time.Now().Add(-time.Second) // the question has been on screen for a while
 
 	u.confirm("ok ?", do)
+	u.ask.at = past
 	if !u.askKey(term.Key{Code: term.Mouse}) || u.ask == nil || ran != 0 {
 		t.Fatalf("mouse: ask=%v ran=%d", u.ask, ran)
 	}
@@ -372,6 +374,7 @@ func TestAskKeys(t *testing.T) {
 		t.Fatalf("y: ask=%v ran=%d", u.ask, ran)
 	}
 	u.confirm("ok ?", do)
+	u.ask.at = past
 	u.askKey(term.Key{Rune: 'Y'})
 	if u.ask != nil || ran != 2 {
 		t.Fatalf("Y: ask=%v ran=%d", u.ask, ran)

@@ -27,6 +27,18 @@ func notifyArgs(title, body string) (string, string) {
 	return clean(title), runewidth.Truncate(clean(body), 200, "")
 }
 
+// markupEscape : &, < and > only, the entities every daemon reads — GNOME
+// Shell shows the &#39; of html.EscapeString as it is.
+var markupEscape = strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;")
+
+// desktopArgs : notifyArgs for notify-send. The body is markup for the
+// notification daemon (Desktop Notifications spec: <b>, <a href>, <img>):
+// escaped, a remote text shows as it was typed. The summary is plain text.
+func desktopArgs(title, body string) (string, string) {
+	t, b := notifyArgs(title, body)
+	return t, markupEscape.Replace(b)
+}
+
 // notify sends a desktop notification on a new message (same conditions as
 // the bell, see newMessage). Title = title of the chat ("<title> · <nick>" in
 // a group), body = text or media label.
@@ -47,7 +59,7 @@ func (u *UI) notify(chat *model.Chat, m *model.Msg) {
 		if notifySendBin == "" {
 			return
 		}
-		t, b := notifyArgs(title, body)
+		t, b := desktopArgs(title, body)
 		cmd := exec.Command(notifySendBin, "-a", "ttyloom", "-i", "dialog-information", "--", t, b)
 		if cmd.Start() == nil { // error ignored: desktop notification, best effort
 			go cmd.Wait()

@@ -641,8 +641,8 @@ func (c *Client) Participants(_ context.Context, chat *model.Chat) {
 // have — the line is readable, not clickable. Opening a DM from the box is a
 // matter for the UI, not for this handle.
 func (c *Client) member(guild discord.GuildID, u discord.User, nick string) model.Participant {
-	p := model.Participant{Text: cmp.Or(nick, u.DisplayOrUsername()),
-		Query: strconv.FormatUint(uint64(u.ID), 10)}
+	name := cmp.Or(nick, u.DisplayOrUsername())
+	p := model.Participant{Text: name, Name: name, Query: strconv.FormatUint(uint64(u.ID), 10)}
 	if u.Username != "" {
 		p.Query = "@" + u.Username
 	}

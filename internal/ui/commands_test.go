@@ -547,13 +547,13 @@ func TestFindChatContains(t *testing.T) {
 	u := &UI{ws: NewWindows(), agg: &Window{}, cfg: &config.Config{}, t: &term.Term{Cols: 80, Rows: 24},
 		chatList: []*model.Chat{{Net: "telegram", ID: 1, Title: "Les copains du foot"}, {Net: "telegram", ID: 2, Title: "Foot en salle"},
 			{Net: "telegram", ID: 3, Title: "Club de foot"}}}
-	if c, _ := u.findChat("copains du foot"); c == nil || c.ID != 1 {
+	if c, _ := u.findChat("copains du foot", false); c == nil || c.ID != 1 {
 		t.Fatalf("inside the title: %+v", c)
 	}
-	if c, _ := u.findChat("foot"); c == nil || c.ID != 2 { // a prefix wins over the pieces inside
+	if c, _ := u.findChat("foot", false); c == nil || c.ID != 2 { // a prefix wins over the pieces inside
 		t.Fatalf("prefix first: %+v", c)
 	}
-	if c, _ := u.findChat("de foot"); c == nil || c.ID != 3 { // inside one title only
+	if c, _ := u.findChat("de foot", false); c == nil || c.ID != 3 { // inside one title only
 		t.Fatalf("inside, unique: %+v", c)
 	}
 }

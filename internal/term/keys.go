@@ -124,6 +124,8 @@ func parseOne(b []byte, final bool) (Key, int, bool) {
 		switch b[1] {
 		case '[':
 			return parseCSI(b, final)
+		case '_', 'P', ']', '^', 'X': // APC, DCS, OSC, PM, SOS
+			return parseString(b, final)
 		case 'O':
 			if len(b) < 3 {
 				if final {
@@ -194,6 +196,30 @@ const maxPasteCSI = 1 << 20
 // keeps waiting on it rather than finalise after 30 ms of silence: over a slow
 // link the terminal hands a paste over in pieces.
 func pasteOpen(b []byte) bool { return bytes.HasPrefix(b, []byte("\x1b[200~")) }
+
+// parseString consumes a control string (APC, DCS, OSC, PM, SOS) up to its ST
+// (ESC \), or BEL for an OSC. Only the terminal sends one — the answer to the
+// kitty probe is an APC, late on a slow link — so it is never a key. An ESC
+// that starts anything else ends the string too, as in a terminal: the key it
+// starts is read. A string cut before its end waits for the rest, up to
+// maxPasteCSI; final drops it.
+func parseString(b []byte, final bool) (Key, int, bool) {
+	i := 2
+	for i < len(b) && b[i] != 0x1b && (b[i] != 0x07 || b[1] != ']') {
+		i++
+	}
+	switch {
+	case i < len(b) && b[i] == 0x07:
+		return Key{}, i + 1, true
+	case i+1 < len(b) && b[i+1] == '\\':
+		return Key{}, i + 2, true
+	case i+1 < len(b):
+		return Key{}, i, true
+	case final || len(b) > maxPasteCSI:
+		return Key{}, len(b), true
+	}
+	return Key{}, 0, false
+}
 
 func parseCSI(b []byte, final bool) (Key, int, bool) {
 	i := 2

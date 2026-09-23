@@ -72,6 +72,7 @@ type Style struct {
 	FG, BG                                               Color
 	Bold, Italic, Underline, Curly, Strike, Dim, Reverse bool   // Curly : wavy underline, ignored if !Underline
 	URL                                                  string // OSC 8 link
+	Masked                                               bool   // the text shown is not URL: a click asks first
 }
 
 // Curly : undercurl available on this terminal (Ghostty/kitty/WezTerm/foot) —

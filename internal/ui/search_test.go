@@ -38,6 +38,11 @@ func TestHighlight(t *testing.T) {
 	if same := highlight(l, "zzz", st); len(same.Spans) != 1 || same.Spans[0].Text != "hello world" {
 		t.Fatalf("no match: %+v", same.Spans)
 	}
+	// A masked link stays one under the highlight: its click still asks.
+	link := theme.Style{URL: "https://evil.example", Masked: true}
+	if got := highlight(render.Line{Spans: []render.Span{{Text: "bank", Style: link}}}, "an", st); len(got.Spans) != 3 || got.Spans[1].Style.URL != link.URL || !got.Spans[1].Style.Masked {
+		t.Fatalf("link under the highlight: %+v", got.Spans)
+	}
 }
 
 func TestMatchLines(t *testing.T) {

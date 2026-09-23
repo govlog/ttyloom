@@ -476,6 +476,7 @@ type EvPresence struct {
 // state message).
 type Participant struct {
 	Text   string
+	Name   string // the name alone, without the marks of Text (★, " (me)", @+): what a mention inserts
 	Query  string // /query on click: @username, or user id when there is none
 	Online bool   // shown in the accent colour
 }

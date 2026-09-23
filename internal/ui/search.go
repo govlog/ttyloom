@@ -116,7 +116,7 @@ func highlight(l render.Line, q string, st theme.Style) render.Line {
 			style := sp.Style
 			if inside(i) {
 				style = st
-				style.URL = sp.Style.URL // the OSC 8 link survives the highlight
+				style.URL, style.Masked = sp.Style.URL, sp.Style.Masked // the OSC 8 link survives the highlight
 			}
 			if n := len(out); n > 0 && out[n-1].Style == style {
 				out[n-1].Text += string(r)

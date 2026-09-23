@@ -310,3 +310,28 @@ func TestWheelBurstCollapsed(t *testing.T) {
 		t.Fatalf("events that are not one notch kept apart: %+v", keys)
 	}
 }
+
+// A terminal answer that comes after the probe gave up (the kitty APC, late on
+// a slow link) is consumed whole and never typed: whole, cut in two reads, or
+// cut and then finalised by the 30 ms of silence of readLoop. An ESC that
+// starts a key ends a string, so that key is not lost.
+func TestRegressionLateGraphicsReply(t *testing.T) {
+	for in, want := range map[string][]Key{
+		"\x1b_Gi=31;OK\x1b\\a":         {{Rune: 'a'}},
+		"\x1b]11;rgb:0/0/0\x07a":       {{Rune: 'a'}}, // OSC may end on BEL
+		"\x1bP1$r0m\x1b\\\x1b^x\x1b\\": nil,           // DCS, PM
+		"\x1b_Gi=31\x1b[A":             {{Code: Up}},
+	} {
+		if got, rest := Parse([]byte(in), false); !reflect.DeepEqual(got, want) || rest != nil {
+			t.Errorf("%q: got %+v rest %q", in, got, rest)
+		}
+	}
+	var d Decoder
+	if keys := append(d.Feed([]byte("\x1b_Gi=3"), false), d.Feed([]byte("1;OK\x1b\\a"), false)...); len(keys) != 1 || keys[0].Rune != 'a' {
+		t.Fatalf("answer cut in two reads: %+v", keys)
+	}
+	keys := append(d.Feed([]byte("\x1b_Gi=3"), false), d.Feed(nil, true)...)
+	if keys = append(keys, d.Feed([]byte("a"), false)...); len(keys) != 1 || keys[0].Rune != 'a' {
+		t.Fatalf("cut answer finalised: %+v", keys)
+	}
+}

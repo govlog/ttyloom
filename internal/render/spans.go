@@ -102,7 +102,8 @@ const maxURL = 2048
 // by the desktop (xdg-open). It comes from the network: no control character
 // (it would go out as it is in the sequence), and only http, https and mailto
 // — never file:, javascript: nor an exotic handler. url.Parse puts the scheme
-// in lower case.
+// in lower case. A mailto: carries an address only: its header fields
+// (?attach=/home/…) made mail clients attach a local file.
 func SafeURL(s string) bool {
 	if s == "" || len(s) > maxURL || hasControl(s) {
 		return false
@@ -112,10 +113,27 @@ func SafeURL(s string) bool {
 		return false
 	}
 	switch v.Scheme {
-	case "http", "https", "mailto":
+	case "http", "https":
 		return true
+	case "mailto":
+		return !strings.ContainsAny(s, "?#")
 	}
 	return false
+}
+
+// sameLink tells whether the text of a link shows its target: the scheme and
+// a last "/" aside ("example.com" is https://example.com/), case ignored.
+func sameLink(text, target string) bool {
+	norm := func(s string) string {
+		s = strings.TrimSuffix(strings.ToLower(s), "/")
+		for _, p := range []string{"https://", "http://", "mailto:"} {
+			if t, ok := strings.CutPrefix(s, p); ok {
+				return t
+			}
+		}
+		return s
+	}
+	return norm(text) == norm(target)
 }
 
 func hasControl(s string) bool {
@@ -144,10 +162,11 @@ func Runs(text string, ents []model.Span, base theme.Style, th theme.Theme) []Sp
 			continue
 		}
 		var url string
+		masked := false
 		switch e.Kind {
 		case model.SpanURL:
 			if SafeURL(e.URL) { // scheme and control characters: what goes out in OSC 8 and under xdg-open
-				url = e.URL
+				url, masked = e.URL, !sameLink(string(runes[ri:rj]), e.URL)
 			}
 		case model.SpanQuote:
 			quote[ri] = true
@@ -179,7 +198,7 @@ func Runs(text string, ents []model.Span, base theme.Style, th theme.Theme) []Sp
 			case model.SpanURL:
 				s.FG, s.Underline, s.Curly = th.Color(theme.Link), true, theme.Curly
 				if url != "" {
-					s.URL = url
+					s.URL, s.Masked = url, masked
 				}
 			case model.SpanMention:
 				s.FG = th.Color(theme.Mention)

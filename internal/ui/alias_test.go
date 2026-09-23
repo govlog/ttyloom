@@ -78,10 +78,10 @@ func TestFindChatCollision(t *testing.T) {
 	b := &model.Chat{Net: model.NetTelegram, ID: 2, Title: "Bob"}
 	u := &UI{ws: NewWindows(), agg: &Window{}, chats: map[model.ChatKey]*model.Chat{a.Key(): a, b.Key(): b},
 		chatList: []*model.Chat{a, b}, aliases: map[model.ChatKey]string{b.Key(): "Alice"}}
-	if got, ambiguous := u.findChat("Alice"); got != nil || !ambiguous {
+	if got, ambiguous := u.findChat("Alice", false); got != nil || !ambiguous {
 		t.Fatalf("exact collision: %v, %v", got, ambiguous)
 	}
-	if got, _ := u.findChat("Bob"); got != b { // unique exact name: always resolved
+	if got, _ := u.findChat("Bob", false); got != b { // unique exact name: always resolved
 		t.Fatal("unique title not resolved")
 	}
 }
@@ -134,7 +134,7 @@ func TestTitleAlias(t *testing.T) {
 		t.Fatalf("quoted name: %q", u.title(c))
 	}
 	// findChat resolves the local name like a title.
-	if got, _ := u.findChat("maman"); got != c {
+	if got, _ := u.findChat("maman", false); got != c {
 		t.Fatal("findChat on the local name")
 	}
 

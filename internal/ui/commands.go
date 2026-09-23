@@ -135,7 +135,7 @@ func (u *UI) command(name string, args []string, text string) {
 			w.AddSys(i18n.T("usage_msg"))
 			return
 		}
-		c, _ := u.findChat(arg(0))
+		c, _ := u.findChat(arg(0), true)
 		if c == nil {
 			w.AddSys(i18n.T("unknown_name", arg(0)))
 			return
@@ -256,7 +256,7 @@ func (u *UI) command(name string, args []string, text string) {
 		c := w.Chat
 		if !toIRC && arg(0) != "" {
 			var ambiguous bool
-			if c, ambiguous = u.findChat(arg(0)); c == nil {
+			if c, ambiguous = u.findChat(arg(0), false); c == nil {
 				toIRC = irc != "" && !ambiguous // no chat of that name: a nick
 				if !toIRC {
 					if !ambiguous {
@@ -410,7 +410,7 @@ func (u *UI) bind(w *Window, name string, join bool) {
 		w.AddSys(i18n.T("window0_no_bind"))
 		return
 	}
-	if c, ambiguous := u.findChat(name); c != nil {
+	if c, ambiguous := u.findChat(name, false); c != nil {
 		u.attach(w, c)
 		return
 	} else if ambiguous {

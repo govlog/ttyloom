@@ -695,7 +695,7 @@ func (c *Client) onEndOfNames(e ircmsg.Message) {
 	ev := model.EvParticipants{ChatID: chat.ID}
 	for _, n := range names {
 		bare := strings.TrimLeft(n, "~&@%+")
-		ev.Lines = append(ev.Lines, model.Participant{Text: n, Query: bare})
+		ev.Lines = append(ev.Lines, model.Participant{Text: n, Name: bare, Query: bare})
 	}
 	c.Post(ev)
 }

@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"cmp"
 	"slices"
 	"strconv"
 	"strings"
@@ -50,7 +51,7 @@ func mentionFilter(all []model.Participant, q string) []model.Participant {
 		if p.Query == "" {
 			continue // header or "loading…" line
 		}
-		if q == "" || (mentionByID(p) == 0 && strings.HasPrefix(render.Fold(p.Query[1:]), q)) || strings.HasPrefix(render.Fold(p.Text), q) {
+		if q == "" || (mentionByID(p) == 0 && strings.HasPrefix(render.Fold(p.Query[1:]), q)) || strings.HasPrefix(render.Fold(mentionName(p)), q) {
 			out = append(out, p)
 		}
 	}
@@ -70,10 +71,14 @@ func mentionByID(p model.Participant) int64 {
 // a member with no username (mentionSegs turns it into a mention by id).
 func mentionInsert(p model.Participant) string {
 	if mentionByID(p) != 0 {
-		return "@" + p.Text
+		return "@" + mentionName(p)
 	}
 	return p.Query
 }
+
+// mentionName : the name of a member without the marks of the box (★, " (me)");
+// Text for a line that has no Name.
+func mentionName(p model.Participant) string { return cmp.Or(p.Name, p.Text) }
 
 func wordRune(r rune) bool { return unicode.IsLetter(r) || unicode.IsDigit(r) }
 
@@ -84,6 +89,7 @@ func (u *UI) mentionSegs(c *model.Chat, segs []model.Seg) ([]model.Seg, bool) {
 	var names []model.Participant
 	for _, p := range u.partsCache[c.Key()].lines {
 		if mentionByID(p) != 0 {
+			p.Text = mentionName(p) // a copy: the box keeps its marks
 			names = append(names, p)
 		}
 	}

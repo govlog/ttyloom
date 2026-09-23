@@ -562,7 +562,7 @@ func (u *UI) writeLine(b *strings.Builder, l render.Line, cols int, rh *rowHit) 
 			tw = render.Width(text)
 		}
 		if rh != nil && st.URL != "" {
-			rh.urls = append(rh.urls, urlSpan{col0: w, col1: w + tw, url: st.URL})
+			rh.urls = append(rh.urls, urlSpan{col0: w, col1: w + tw, url: st.URL, masked: st.Masked})
 		}
 		b.WriteString(st.SGR())
 		if st.URL != "" {
@@ -921,7 +921,7 @@ func (u *UI) drawInput(b *strings.Builder, row, x0, cols int) (curRow, curCol in
 	case u.sendAsk != nil:
 		prompt = u.sendAsk.prompt()
 	case u.prompt != nil:
-		prompt = u.prompt.Question + " "
+		prompt = render.CleanLine(u.prompt.Question) + " " // it can carry a remote name (Discord QR)
 	case u.search != nil:
 		prompt = i18n.T("search_prompt")
 	case u.edit != nil:

@@ -23,13 +23,13 @@ func TestParticipantsLines(t *testing.T) {
 	if len(got) != 3 {
 		t.Fatalf("%+v", got)
 	}
-	if got[0].Text != "★ alice" || !got[0].Online || got[0].Query != "@alice" {
+	if got[0].Text != "★ alice" || got[0].Name != "alice" || !got[0].Online || got[0].Query != "@alice" {
 		t.Fatalf("admin first: %+v", got[0])
 	}
 	if got[1].Text != "Bob Sans Pseudo" || got[1].Online || got[1].Query != "2" {
 		t.Fatalf("no @username: %+v", got[1])
 	}
-	if got[2].Text != "moi (moi)" {
+	if got[2].Text != "moi (moi)" || got[2].Name != "moi" { // Name: what a mention inserts, no mark
 		t.Fatalf("me: %+v", got[2])
 	}
 }

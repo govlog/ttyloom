@@ -213,7 +213,8 @@ func channelParts(ps []tg.ChannelParticipantClass) ([]int64, map[int64]bool) {
 func participantLines(ids []int64, admins map[int64]bool, users map[int64]*tg.User, me int64, now time.Time, name func(int64) string) []model.Participant {
 	var head, tail []model.Participant
 	for _, id := range ids {
-		p := model.Participant{Text: name(id), Query: strconv.FormatInt(id, 10)}
+		n := name(id)
+		p := model.Participant{Text: n, Name: n, Query: strconv.FormatInt(id, 10)}
 		self := me != 0 && id == me
 		if u := users[id]; u != nil {
 			if u.Username != "" {

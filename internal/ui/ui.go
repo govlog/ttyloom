@@ -1916,8 +1916,9 @@ func (u *UI) lines(e model.EvLines) {
 }
 
 // findChat : exact name (username, title or local name) then unique prefix,
-// case insensitive.
-func (u *UI) findChat(q string) (chat *model.Chat, ambiguous bool) {
+// case insensitive, then a unique piece inside a name. strict stops at the
+// prefix: a command that sends at once (/msg) never guesses its chat.
+func (u *UI) findChat(q string, strict bool) (chat *model.Chat, ambiguous bool) {
 	q = strings.ToLower(strings.TrimPrefix(q, "@"))
 	var exact, pref, inside []*model.Chat
 	for _, c := range u.chatList {
@@ -1938,7 +1939,7 @@ func (u *UI) findChat(q string) (chat *model.Chat, ambiguous bool) {
 	switch {
 	case len(exact) > 0:
 		pref = exact
-	case len(pref) == 0:
+	case len(pref) == 0 && !strict:
 		pref = inside
 	}
 	if len(pref) == 1 {

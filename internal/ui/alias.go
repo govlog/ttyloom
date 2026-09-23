@@ -176,7 +176,7 @@ func (u *UI) rename(w *Window, text string) {
 	target, rest := cutTarget(text)
 	c, name := w.Chat, target
 	if rest != "" {
-		t, ambiguous := u.findChat(target)
+		t, ambiguous := u.findChat(target, false)
 		if ambiguous {
 			return // findChat has already listed the candidates
 		}
@@ -209,7 +209,7 @@ func (u *UI) unrename(w *Window, target string) {
 	target = unquote(target)
 	if target != "" {
 		var ambiguous bool
-		if c, ambiguous = u.findChat(target); c == nil {
+		if c, ambiguous = u.findChat(target, false); c == nil {
 			if !ambiguous {
 				w.AddSys(i18n.T("unknown_name", target))
 			}

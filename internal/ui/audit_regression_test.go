@@ -5,6 +5,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"github.com/govlog/ttyloom/internal/cache"
 	"github.com/govlog/ttyloom/internal/config"
 	"github.com/govlog/ttyloom/internal/model"
+	"github.com/govlog/ttyloom/internal/render"
 	"github.com/govlog/ttyloom/internal/term"
 )
 
@@ -471,5 +473,152 @@ func TestRegressionLoadCacheWithoutDialogs(t *testing.T) {
 		if !keepOld && (len(msgs) != 0 || len(aside) != 1) {
 			t.Fatalf("history not set aside with no dialogs file: %+v, %v", msgs, aside)
 		}
+	}
+}
+
+// "/msg ends …" with no chat named "ends": a command that sends at once takes
+// an exact name or a unique prefix, never a piece inside "Friends room".
+func TestRegressionMsgNoSubstringTarget(t *testing.T) {
+	u, b, _, peer := queryUI()
+	input(u, "/msg ends private text")
+	if len(b.sends) != 0 {
+		t.Fatalf("/msg to an unknown name delivered to %v (%q) by a substring match", b.sends, b.text)
+	}
+	input(u, "/msg blo hi")
+	if len(b.sends) != 1 || b.sends[0] != peer.Key() {
+		t.Fatalf("/msg by unique prefix: %v", b.sends)
+	}
+}
+
+// A click on a link whose text is not its target asks first and names the
+// target; y then opens it. A link that shows its target opens at once.
+func TestRegressionMaskedLinkAsks(t *testing.T) {
+	t.Setenv("PATH", t.TempDir()) // no xdg-open: each open leaves its error line
+	u := hoverUI()
+	u.t = term.NewOffscreen(&bytes.Buffer{}, 80, 10)
+	w := u.view()
+	w.Upsert(&model.Msg{ID: 1, From: "alice", FromID: 7, Date: time.Now(), Text: "bank.example example.org",
+		Entities: []model.Span{{Start: 0, End: 12, Kind: model.SpanURL, URL: "https://evil.example/login"},
+			{Start: 13, End: 24, Kind: model.SpanURL, URL: "https://example.org/"}}})
+	u.draw()
+	opens := func() int {
+		n := 0
+		for _, it := range w.Items {
+			if strings.HasPrefix(it.Sys, "xdg-open") {
+				n++
+			}
+		}
+		return n
+	}
+	click := func(url string) {
+		t.Helper()
+		x0, cols := u.layout()
+		for y := range u.hits {
+			for x := 0; x < cols; x++ {
+				if hitAt(u.hits, x, y).url == url {
+					u.key(term.Key{Code: term.Mouse, Mouse: term.MouseEvent{X: x0 + x, Y: y, Press: true}})
+					return
+				}
+			}
+		}
+		t.Fatalf("%s not drawn", url)
+	}
+	click("https://evil.example/login")
+	if u.ask == nil || !strings.Contains(u.ask.q, "https://evil.example/login") || opens() != 0 {
+		t.Fatalf("masked link: question %+v, %d opens", u.ask, opens())
+	}
+	u.ask.at = time.Now().Add(-time.Second)
+	u.key(term.Key{Rune: 'y'})
+	if opens() != 1 {
+		t.Fatalf("masked link confirmed: %d opens", opens())
+	}
+	click("https://example.org/")
+	if u.ask != nil || opens() != 2 {
+		t.Fatalf("plain link: question %+v, %d opens", u.ask, opens())
+	}
+}
+
+// A mailto: with header fields never reaches OSC 8 nor xdg-open: attach= made
+// mail clients attach a local file.
+func TestRegressionMailtoAttach(t *testing.T) {
+	const s = "mailto:a@example.org?attach=/home/user/.ssh/id_ed25519"
+	if render.SafeURL(s) || openable(s) {
+		t.Fatal("mailto with attach= accepted for xdg-open")
+	}
+}
+
+// The body of a desktop notification is markup for the daemon: escaped, and
+// only &, < and > (an apostrophe stays one).
+func TestRegressionNotifyMarkup(t *testing.T) {
+	_, body := desktopArgs("t", `<b>URGENT</b> <a href="https://evil.example">bank</a> & l'appli`)
+	if want := `&lt;b&gt;URGENT&lt;/b&gt; &lt;a href="https://evil.example"&gt;bank&lt;/a&gt; &amp; l'appli`; body != want {
+		t.Fatalf("notify-send body %q, want %q", body, want)
+	}
+}
+
+type deleteBackend struct {
+	queryBackend
+	deleted []int
+}
+
+func (b *deleteBackend) Delete(_ context.Context, _ *model.Chat, id int) {
+	b.deleted = append(b.deleted, id)
+}
+
+// "dy…" typed over one of my selected messages: the y comes within 300 ms of
+// the question and cancels it; a y after that deletes.
+func TestRegressionTypedYCancelsDelete(t *testing.T) {
+	u, _, room, _ := queryUI()
+	b := &deleteBackend{}
+	b.caps = model.AllCaps()
+	u.nets[room.Net] = b
+	w := u.winFor(room)
+	u.goTo(u.ws.ForChat(room.Key()))
+	w.Upsert(&model.Msg{Net: room.Net, ChatID: room.ID, ID: 5, Out: true, Text: "mine", Date: time.Now()})
+	u.setSel(w, w.Items[len(w.Items)-1])
+	u.key(term.Key{Rune: 'd'})
+	u.key(term.Key{Rune: 'y'})
+	if len(b.deleted) != 0 || u.ask != nil {
+		t.Fatalf("typed y: deleted %v, question %+v", b.deleted, u.ask)
+	}
+	u.key(term.Key{Rune: 'd'})
+	u.ask.at = time.Now().Add(-300 * time.Millisecond)
+	u.key(term.Key{Rune: 'y'})
+	if len(b.deleted) != 1 || b.deleted[0] != 5 {
+		t.Fatalf("y after 300 ms: deleted %v", b.deleted)
+	}
+}
+
+// The question of a login prompt can carry a remote name (Discord QR: the
+// account that scanned it): drawn cleaned, never as a terminal sequence.
+func TestRegressionPromptQuestionCleaned(t *testing.T) {
+	u, _, _, _ := queryUI()
+	var out bytes.Buffer
+	u.t = term.NewOffscreen(&out, 100, 30)
+	u.dispatch(model.Envelope{Net: model.NetDiscord, Ev: model.EvAuthPrompt{Question: "Scanned by \x1b]0;pwned\x07", Reply: make(chan string, 1)}})
+	u.draw()
+	u.t.Flush()
+	if strings.Contains(out.String(), "\x1b]0;pwned") {
+		t.Fatal("prompt question written raw to the terminal")
+	}
+}
+
+// An admin with no @username (★ and the (me) mark in the box): the mention
+// offers, inserts and sends the name alone.
+func TestRegressionMentionWithoutBoxMarks(t *testing.T) {
+	g := &model.Chat{ID: 7, Kind: model.ChatGroup, Title: "grp"}
+	u := &UI{ws: NewWindows(), agg: &Window{}, cfg: &config.Config{}, t: &term.Term{Cols: 80, Rows: 24},
+		partsCache: map[model.ChatKey]partsEntry{g.Key(): {at: time.Now(),
+			lines: []model.Participant{{Text: "★ Bob (me)", Name: "Bob", Query: "42"}}}}}
+	u.ws.List = append(u.ws.List, &Window{Chat: g})
+	u.ws.Cur = 1
+	u.ed.Set("yo @b")
+	u.mentionScan()
+	if u.mention == nil || !u.mentionKey(term.Key{Code: term.Enter}) || u.ed.String() != "yo @Bob " {
+		t.Fatalf("pick: %q", u.ed.String())
+	}
+	segs, _ := u.mentionSegs(g, []model.Seg{{Text: "yo @Bob"}})
+	if want := []model.Seg{{Text: "yo "}, {Text: "Bob", Kind: model.SegMention, UserID: 42}}; !slices.Equal(segs, want) {
+		t.Fatalf("segs: %+v", segs)
 	}
 }

@@ -600,15 +600,17 @@ func TestRenderLinkPreview(t *testing.T) {
 	if !strings.HasSuffix(got[len(got)-1], "…") {
 		t.Fatalf("truncated description: %q", got)
 	}
-	// The label carries the URL: click and OSC 8 link.
+	// The label carries the URL: click and OSC 8 link. It does not show it:
+	// the click asks first.
 	var url string
+	masked := false
 	for _, sp := range Message(m, o)[1].Spans {
 		if sp.Style.URL != "" {
-			url = sp.Style.URL
+			url, masked = sp.Style.URL, sp.Style.Masked
 		}
 	}
-	if url != md.URL {
-		t.Fatalf("label url: %q", url)
+	if url != md.URL || !masked {
+		t.Fatalf("label url: %q, masked %v", url, masked)
 	}
 
 	o.LinkPreviews = false

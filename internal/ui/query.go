@@ -46,7 +46,7 @@ func (u *UI) query(w *Window, name string, join bool) {
 		}
 		return
 	}
-	if c, ambiguous := u.findChat(name); c != nil {
+	if c, ambiguous := u.findChat(name, false); c != nil {
 		u.cancelQuery(w)
 		u.setQuery(w, c)
 		return
