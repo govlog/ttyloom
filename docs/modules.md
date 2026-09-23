@@ -120,6 +120,24 @@ when the event arrives; a backend never writes to the terminal.
 A QR login posts `model.EvQR` with the keys of its two help lines (`Hint`,
 `Keys`) in your catalogue.
 
+## Hooks
+
+Hooks ([hooks.md](hooks.md)) run on the messages your backend posts. Three
+things tell them about your network:
+
+- `model.Caps.NameIsID`: the name of a person is its identity (IRC: the
+  nick). A hook's `from` then compares names, case apart, and a bare name in
+  a message counts as a mention.
+- `model.Msg.Notice`: a message no program should answer (IRC NOTICE). It
+  never fires a hook.
+- `module.AutoReplyWarner` (optional): `AutoReplyWarning()` gives a text of
+  your catalogue, printed at load for each hook that sends to one of your
+  networks. Discord has one: an automatic reply from a user account is a
+  self-bot.
+
+A message of mine (`Out`, or a `FromID` equal to the id of `EvReady`) never
+fires a hook: set them right, and a hook never answers itself.
+
 ## Checklist
 
 1. `protocols/<x>/`: the backend (`model.Backend`) and `module.go` (`Module`).

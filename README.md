@@ -27,6 +27,7 @@
 - **React without a detour.** A right-click menu with quick reactions, double-click 👍, replies, edits (`Ctrl+↑` walks your previous messages), custom Discord emojis and message details. `F3` shows members and presence; click a member to open a conversation.
 - **Give your draft some room.** Expand the multiline editor, paste a code block, complete an `@mention`, pick an emoji or paste an image with `Ctrl+V`. `Ctrl+B`, `Ctrl+I` and `Ctrl+U` style the draft in bold, italic and underline, sent as Discord Markdown or Telegram entities. Optional Hunspell underlines misspellings; `Ctrl+R` offers corrections.
 - **Keep the useful little details.** Drag to copy several messages, preview themes live, show seconds in timestamps, spot the unread divider, and keep a local history cache. Typing indicators, focus-aware read state and configurable notifications complete the flow.
+- **Answer with your own programs.** Hooks run a script when a message matches a network, a chat, a sender or a pattern; its output is sent, proposed in the input line or shown. [Hooks](docs/hooks.md).
 - **Switch languages while chatting.** French and English interface: `/set lang fr` or `/set lang en` applies immediately.
 
 Capabilities depend on the network. Unsupported actions are hidden.

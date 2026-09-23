@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Hooks**: `hooks.toml`, next to `config.toml`, runs a program when an incoming message matches its filters (network, chat, kind, sender, pattern, mention); its output is sent as a reply, put in the input line, shown in the window, or ignored. `/hooks` lists them with their counters, `/hooks reload` reads the file again, `/hooks test <name> <text>` tries one without sending anything. At most 4 runs at a time and 10 sent replies a minute per hook; your own messages, notices and messages caught up after a cut never fire one. [docs/hooks.md](docs/hooks.md).
+
+### Changed
+
+- **Telegram `/whois`** shows the id of the account, the value `from` takes in `hooks.toml`.
+
 ## v0.8-beta — 2026-09-23
 
 ### Added

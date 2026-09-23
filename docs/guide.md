@@ -341,6 +341,7 @@ is saved in `sidebar.toml`. One network without a server needs no section header
 | Command or key | Effect |
 | --- | --- |
 | `/networks` | The Networks box: each network and its state, add one, connect, disconnect, log out, remove (IRC). |
+| `/hooks` | Hooks: list them; `/hooks reload` reads `hooks.toml` again; `/hooks test <name> <text>` tries one without sending anything. See [Hooks](hooks.md). |
 | `/net`, Shift+F2 | Cycle all networks, then each network in name order. |
 | `/net discord` | Show Discord in the sidebar and aggregate view. |
 | `/net telegram` | Show Telegram. |
@@ -845,7 +846,7 @@ conversation. `/close` closes the search window.
 /whois alice
 ```
 
-Telegram contact information can include name, username, phone, bio, last seen
+Telegram contact information can include name, username, id, phone, bio, last seen
 and common chats. With no argument, `/whois` describes the current private
 conversation. A DM status bar can show presence such as online or last seen.
 Discord does not support `/whois`.
@@ -953,6 +954,17 @@ work without leaving the conversation.
 ```
 
 `/set` lists live settings; `/set key value` changes one and saves it.
+
+### Hooks
+
+A hook runs a program when an incoming message matches its filters — a
+network, a chat, a kind of chat, a sender, a pattern, a mention — and its
+output can be sent as a reply, put in the input line, shown in the window or
+ignored. Hooks live in `hooks.toml`, next to `config.toml`; TTYloom never
+writes that file. `/hooks` lists them with their counters, `/hooks reload`
+reads the file again, `/hooks test <name> <text>` tries one without sending
+anything. The file, the variables, the guards and four examples:
+[Hooks](hooks.md).
 
 ## Version and limits
 
