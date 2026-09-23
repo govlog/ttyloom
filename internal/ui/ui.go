@@ -1266,7 +1266,7 @@ func (u *UI) event(ev model.Event) {
 func (u *UI) remember(c *model.Chat) *model.Chat {
 	if old := u.chats[c.Key()]; old != nil {
 		// Never ID nor Peer: the windows and the running RPCs point at them.
-		old.Title, old.Username, old.Kind = c.Title, c.Username, c.Kind
+		old.Title, old.Username, old.Kind, old.Group = c.Title, c.Username, c.Kind, c.Group
 		old.Pinned, old.Channel = c.Pinned, c.Channel
 		// max: a read update that came before the dialog list does not get
 		// wiped by an older value (Unread included).

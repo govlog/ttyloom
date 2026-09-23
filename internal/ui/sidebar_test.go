@@ -1305,3 +1305,19 @@ func TestSidebarGuildFromGroup(t *testing.T) {
 		t.Fatalf("title under its guild: %q", got)
 	}
 }
+
+// A chat read from an old cache, with no Group, takes the Group the network
+// sends with its dialog list: its guild section comes back (the other half
+// of TestSidebarGuildFromGroup).
+func TestDialogsBringGroup(t *testing.T) {
+	u, _ := launchUI(nil)
+	old := &model.Chat{Net: netDiscord, ID: 5, Kind: model.ChatGroup, Title: "Gophers / #general"}
+	u.chats = map[model.ChatKey]*model.Chat{old.Key(): old}
+	u.chatList = []*model.Chat{old}
+	u.dialogsSeen = map[string]bool{netDiscord: true} // not the first list: no auto-open
+	fresh := &model.Chat{ID: 5, Kind: model.ChatGroup, Title: "Gophers / #general", Group: "Gophers"}
+	u.dispatch(model.Envelope{Net: netDiscord, Ev: model.EvDialogs{Chats: []*model.Chat{fresh}}})
+	if c := u.chats[old.Key()]; c == nil || sectionOf(c) != "discord:Gophers" {
+		t.Fatalf("chat after the dialog list: %+v", c)
+	}
+}
