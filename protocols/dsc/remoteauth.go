@@ -89,6 +89,7 @@ func (r remoteAuth) run(ctx context.Context) (string, error) {
 		return "", err
 	}
 	defer conn.Close()
+	conn.SetReadLimit(64 << 10)                // a gateway message is a few hundred bytes
 	go func() { <-ctx.Done(); conn.Close() }() // the reads have no context
 	var wmu sync.Mutex                         // one writer at a time: the heartbeat runs beside
 	send := func(m raMsg) error {

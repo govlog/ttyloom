@@ -102,7 +102,7 @@ func (c *Client) SearchGifs(ctx context.Context, _ *model.Chat, q string) {
 func (c *Client) SendGif(ctx context.Context, chat *model.Chat, g model.Gif, tmpID int64) {
 	page, ok := g.Send.(string)
 	if !ok || !rend.SafeURL(page) { // handle of another network: nothing to post here
-		c.refuse("SendGif", model.EvSent{ChatID: chat.ID, TmpID: tmpID, Err: i18n.T("media_foreign")})
+		c.Refuse("SendGif", model.EvSent{ChatID: chat.ID, TmpID: tmpID, Err: i18n.T("media_foreign")})
 		return
 	}
 	c.send(ctx, "SendGif", chat, tmpID, api.SendMessageData{Content: page})

@@ -100,8 +100,9 @@ func AllCaps() Caps {
 }
 
 // Poster : how a backend talks to the UI — the event channel, a blocking and
-// a non-blocking send, and the panic guard of its goroutines. Embedded by
-// every backend: one copy of the three, not one per network.
+// a non-blocking send, the panic guard of its goroutines, and the answer of a
+// method with no network work (Refuse, Warn). Embedded by every backend: one
+// copy of each, not one per network.
 type Poster struct {
 	Events chan<- Event
 	Done   <-chan struct{}
@@ -123,6 +124,24 @@ func (p Poster) PostNB(e Event) {
 	case p.Events <- e:
 	default:
 	}
+}
+
+// Refuse posts ev from a goroutine of its own, the shape of every other
+// answer, for a method with no network work (one the network has no
+// equivalent of, or an answer already at hand): the method gives the hand
+// back at once, and Post, unlike PostNB, never drops the event the window
+// waits for when the UI channel is full.
+func (p Poster) Refuse(name string, ev Event) {
+	go func() {
+		defer p.Guard(name, nil)
+		p.Post(ev)
+	}()
+}
+
+// Warn : Refuse for a method the UI waits no event from — a WARN line of the
+// debug log (/debug) is all it leaves.
+func (p Poster) Warn(net, name string) {
+	p.Refuse(name, EvLog{Level: "WARN", Msg: net + ": " + name + " not supported"})
 }
 
 // Guard, deferred in a goroutine: a panic would kill the terminal and leave

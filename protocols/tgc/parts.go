@@ -104,10 +104,10 @@ func (c *Client) channelParts(ctx context.Context, id int64, ch *tg.InputChannel
 	c.postReactions(id, ar)
 	var out []model.Participant
 	if n, ok := cf.GetParticipantsCount(); ok {
-		out = append(out, model.Participant{Text: i18n.T(pluralKey(n, "subscribers"), n)})
+		out = append(out, model.Participant{Text: i18n.T(i18n.Plural(n, "subscribers"), n)})
 	}
 	if n, ok := cf.GetAdminsCount(); ok {
-		out = append(out, model.Participant{Text: i18n.T(pluralKey(n, "admins"), n)})
+		out = append(out, model.Participant{Text: i18n.T(i18n.Plural(n, "admins"), n)})
 	}
 	ids, admins, ent, err := c.channelMembers(ctx, ch, &tg.ChannelParticipantsAdmins{})
 	if err != nil {
@@ -164,8 +164,8 @@ func (c *Client) entities(users []tg.UserClass) peer.Entities {
 // lines formats the members, names resolved in the entities of that batch only.
 func (c *Client) lines(ids []int64, admins map[int64]bool, ent peer.Entities) []model.Participant {
 	var me int64
-	if c.me != nil {
-		me = c.me.ID
+	if self := c.me.Load(); self != nil {
+		me = self.ID
 	}
 	return participantLines(ids, admins, ent.Users(), me, time.Now(), func(id int64) string {
 		return c.nameOf(ent, &tg.PeerUser{UserID: id})
@@ -237,6 +237,3 @@ func participantLines(ids []int64, admins map[int64]bool, users map[int64]*tg.Us
 	}
 	return append(head, tail...)
 }
-
-// pluralKey : i18n key, singular or plural, for a count.
-func pluralKey(n int, base string) string { return i18n.Plural(n, base) }

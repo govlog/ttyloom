@@ -51,65 +51,43 @@ func (c *Client) rest(ctx context.Context) *api.Client { return c.state().Client
 // no equivalent of.
 func unsupported() string { return i18n.T("net_unsupported", model.NetDiscord) }
 
-// warn : answer of a method Discord has no equivalent of and that the UI
-// waits no event from. Same goroutine + post shape as refuse: postNB would
-// drop the line whenever the UI channel is full, and the promised trace in
-// /debug is the only thing these methods leave behind.
-//
-// ponytail: the line lands in the debug log only (/debug), never in a window.
-// Leave and Block no longer reach it from the menu — Caps.Leave and Caps.Block
-// gate their entries out — so what is left here is DeleteChat on a guild
-// channel, refused with nothing but that one log line.
-func (c *Client) warn(name string) {
-	c.refuse(name, model.EvLog{Level: "WARN", Msg: "discord: " + name + " not supported"})
-}
-
-// refuse : same thing for a method the UI does wait an event from — the
-// window would keep waiting for an answer that will never come.
-func (c *Client) refuse(name string, ev model.Event) {
-	go func() {
-		defer c.Guard(name, nil)
-		c.Post(ev)
-	}()
-}
-
 func (c *Client) SearchContacts(_ context.Context, q string, _ int) {
-	c.refuse("SearchContacts", model.EvContactsFound{Query: q, Err: unsupported()})
+	c.Refuse("SearchContacts", model.EvContactsFound{Query: q, Err: unsupported()})
 }
 
 func (c *Client) Contacts(context.Context) {
-	c.refuse("Contacts", model.EvContacts{Err: unsupported()})
+	c.Refuse("Contacts", model.EvContacts{Err: unsupported()})
 }
 
 func (c *Client) Resolve(_ context.Context, q string, _ bool, request uint64) {
-	c.refuse("Resolve", model.EvChat{Request: request, Query: q, Err: unsupported()})
+	c.Refuse("Resolve", model.EvChat{Request: request, Query: q, Err: unsupported()})
 }
 
 func (c *Client) Whois(_ context.Context, chat *model.Chat) {
-	c.refuse("Whois", model.EvWhois{ChatID: chat.ID, Err: unsupported()})
+	c.Refuse("Whois", model.EvWhois{ChatID: chat.ID, Err: unsupported()})
 }
 
 func (c *Client) WhoisMember(context.Context, string) {
-	c.refuse("WhoisMember", model.EvWhois{Err: unsupported()})
+	c.Refuse("WhoisMember", model.EvWhois{Err: unsupported()})
 }
 
 // WhoRead : Discord has no read receipt (Caps.ReadReceipts false), so the
 // popup of the tick never opens on its own. The line says so all the same.
 func (c *Client) WhoRead(_ context.Context, chat *model.Chat, id, _ int) {
-	c.refuse("WhoRead", model.EvWho{ChatID: chat.ID, ID: id, Text: unsupported()})
+	c.Refuse("WhoRead", model.EvWho{ChatID: chat.ID, ID: id, Text: unsupported()})
 }
 
 // Block, BlockMember and Leave are out of the v1: nothing half done, and no
 // event that would drop the chat from the sidebar for an action that never
 // happened.
-func (c *Client) Block(context.Context, *model.Chat)  { c.warn("Block") }
-func (c *Client) BlockMember(context.Context, string) { c.warn("BlockMember") }
-func (c *Client) Leave(context.Context, *model.Chat)  { c.warn("Leave") }
+func (c *Client) Block(context.Context, *model.Chat)  { c.Warn(model.NetDiscord, "Block") }
+func (c *Client) BlockMember(context.Context, string) { c.Warn(model.NetDiscord, "BlockMember") }
+func (c *Client) Leave(context.Context, *model.Chat)  { c.Warn(model.NetDiscord, "Leave") }
 
 // DownloadMap : no Discord media carries coordinates, the UI never asks. The
 // event still comes back — without it the media would spin for ever.
 func (c *Client) DownloadMap(_ context.Context, m *model.Media, _ string) {
-	c.refuse("DownloadMap", model.EvDownloaded{Media: m, Err: unsupported()})
+	c.Refuse("DownloadMap", model.EvDownloaded{Media: m, Err: unsupported()})
 }
 
 // --- sends ---
@@ -177,7 +155,12 @@ func (c *Client) upload(ctx context.Context, chat *model.Chat, path, caption str
 		}
 		defer c.Guard("upload", fail)
 		// Own semaphore: a send never waits behind three downloads.
-		c.ulSem <- struct{}{}
+		select {
+		case c.ulSem <- struct{}{}:
+		case <-ctx.Done():
+			fail(ctx.Err().Error())
+			return
+		}
 		defer func() { <-c.ulSem }()
 		f, err := os.Open(path)
 		if err != nil {
@@ -285,7 +268,12 @@ func (c *Client) DeleteChat(ctx context.Context, chat *model.Chat) {
 	chID, _ := ids(chat)
 	ch, err := c.state().Cabinet.Channel(chID)
 	if err != nil || (ch.Type != discord.DirectMessage && ch.Type != discord.GroupDM) {
-		c.warn("DeleteChat")
+		// ponytail: the line of Warn lands in the debug log only (/debug),
+		// never in a window. Leave and Block no longer reach it from the menu
+		// — Caps.Leave and Caps.Block gate their entries out — so what is left
+		// is DeleteChat on a guild channel, refused with nothing but that one
+		// log line.
+		c.Warn(model.NetDiscord, "DeleteChat")
 		return
 	}
 	title := chat.Title // read here: the goroutine never touches the state of the UI

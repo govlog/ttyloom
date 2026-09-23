@@ -17,19 +17,6 @@ import (
 
 func (c *Client) unsupported() string { return i18n.T("net_unsupported", c.net()) }
 
-// warn : a method IRC has no equivalent of and the UI waits no event from.
-func (c *Client) warn(name string) {
-	c.refuse(name, model.EvLog{Level: "WARN", Msg: c.net() + ": " + name + " not supported"})
-}
-
-// refuse : same for a method the UI does wait an event from.
-func (c *Client) refuse(name string, ev model.Event) {
-	go func() {
-		defer c.Guard(name, nil)
-		c.Post(ev)
-	}()
-}
-
 // LoadDialogs : the rooms of the list and the private chats open. Never
 // Complete — a chat the UI knows from its cache stays.
 func (c *Client) LoadDialogs(context.Context) {
@@ -42,21 +29,21 @@ func (c *Client) LoadDialogs(context.Context) {
 		chats = append(chats, c.chatOf(n))
 	}
 	c.mu.Unlock()
-	c.refuse("LoadDialogs", model.EvDialogs{Chats: chats})
+	c.Refuse("LoadDialogs", model.EvDialogs{Chats: chats})
 }
 
 // No history on the server: every page is empty and final, the disk cache
 // of the UI is the scrollback.
 func (c *Client) LoadHistory(_ context.Context, chat *model.Chat, beforeID, _ int) {
-	c.refuse("LoadHistory", model.EvHistory{ChatID: chat.ID, Older: beforeID > 0, Done: true})
+	c.Refuse("LoadHistory", model.EvHistory{ChatID: chat.ID, Older: beforeID > 0, Done: true})
 }
 
 func (c *Client) LoadHistoryAround(_ context.Context, chat *model.Chat, id, _ int) {
-	c.refuse("LoadHistoryAround", model.EvHistory{ChatID: chat.ID, Around: true, AroundID: id, Done: true})
+	c.Refuse("LoadHistoryAround", model.EvHistory{ChatID: chat.ID, Around: true, AroundID: id, Done: true})
 }
 
 func (c *Client) LoadHistorySince(_ context.Context, chat *model.Chat, _, _ int) {
-	c.refuse("LoadHistorySince", model.EvHistory{ChatID: chat.ID, Since: true, Done: true})
+	c.Refuse("LoadHistorySince", model.EvHistory{ChatID: chat.ID, Since: true, Done: true})
 }
 
 // --- sends ---
@@ -107,17 +94,17 @@ func (c *Client) SendPhoto(ctx context.Context, chat *model.Chat, path, caption 
 }
 
 func (c *Client) Edit(_ context.Context, chat *model.Chat, id int, _ string) {
-	c.refuse("Edit", model.EvEdited{ChatID: chat.ID, ID: id, Err: c.unsupported()})
+	c.Refuse("Edit", model.EvEdited{ChatID: chat.ID, ID: id, Err: c.unsupported()})
 }
 
 func (c *Client) EditStyled(_ context.Context, chat *model.Chat, id int, _ []model.Seg) {
-	c.refuse("EditStyled", model.EvEdited{ChatID: chat.ID, ID: id, Err: c.unsupported()})
+	c.Refuse("EditStyled", model.EvEdited{ChatID: chat.ID, ID: id, Err: c.unsupported()})
 }
 
-func (c *Client) Delete(context.Context, *model.Chat, int) { c.warn("Delete") }
+func (c *Client) Delete(context.Context, *model.Chat, int) { c.Warn(c.net(), "Delete") }
 
 func (c *Client) React(_ context.Context, chat *model.Chat, id int, e string) {
-	c.refuse("React", model.EvReactionFailed{ChatID: chat.ID, ID: id, Emoji: e, Reason: c.unsupported()})
+	c.Refuse("React", model.EvReactionFailed{ChatID: chat.ID, ID: id, Emoji: e, Reason: c.unsupported()})
 }
 
 // Typing and MarkRead : nothing to tell the server.
@@ -125,19 +112,19 @@ func (c *Client) Typing(context.Context, *model.Chat, bool)  {}
 func (c *Client) MarkRead(context.Context, *model.Chat, int) {}
 
 func (c *Client) Search(_ context.Context, chat *model.Chat, q string, _ int) {
-	c.refuse("Search", model.EvSearch{ChatID: chat.ID, Query: q, Err: c.unsupported()})
+	c.Refuse("Search", model.EvSearch{ChatID: chat.ID, Query: q, Err: c.unsupported()})
 }
 
 func (c *Client) SearchGlobal(_ context.Context, q string, _ int) {
-	c.refuse("SearchGlobal", model.EvSearchGlobal{Query: q, Err: c.unsupported()})
+	c.Refuse("SearchGlobal", model.EvSearchGlobal{Query: q, Err: c.unsupported()})
 }
 
 func (c *Client) SearchContacts(_ context.Context, q string, _ int) {
-	c.refuse("SearchContacts", model.EvContactsFound{Query: q, Err: c.unsupported()})
+	c.Refuse("SearchContacts", model.EvContactsFound{Query: q, Err: c.unsupported()})
 }
 
 func (c *Client) Contacts(context.Context) {
-	c.refuse("Contacts", model.EvContacts{Err: c.unsupported()})
+	c.Refuse("Contacts", model.EvContacts{Err: c.unsupported()})
 }
 
 // Resolve : "#room" joins it (the answer comes with the JOIN, or with the
@@ -147,13 +134,13 @@ func (c *Client) Resolve(_ context.Context, q string, _ bool, request uint64) {
 	if !isChannel(q) {
 		nick := strings.TrimPrefix(q, "@")
 		if nick == "" || strings.ContainsAny(nick, " ,") {
-			c.refuse("Resolve", model.EvChat{Request: request, Query: q, Err: i18n.T("irc_bad_nick")})
+			c.Refuse("Resolve", model.EvChat{Request: request, Query: q, Err: i18n.T("irc_bad_nick")})
 			return
 		}
 		c.mu.Lock()
 		c.queries[c.casefold(nick)] = nick
 		c.mu.Unlock()
-		c.refuse("Resolve", model.EvChat{Request: request, Query: q, Chat: c.chatOf(nick)})
+		c.Refuse("Resolve", model.EvChat{Request: request, Query: q, Chat: c.chatOf(nick)})
 		return
 	}
 	name, key, _ := strings.Cut(q, " ") // "#room key" joins a room with a key
@@ -164,7 +151,7 @@ func (c *Client) Resolve(_ context.Context, q string, _ bool, request uint64) {
 	}
 	c.mu.Unlock()
 	if in {
-		c.refuse("Resolve", model.EvChat{Request: request, Query: q, Chat: c.chatOf(name)})
+		c.Refuse("Resolve", model.EvChat{Request: request, Query: q, Chat: c.chatOf(name)})
 		return
 	}
 	go func() {
@@ -209,7 +196,7 @@ func (c *Client) Members(chat *model.Chat) []string {
 func (c *Client) Participants(_ context.Context, chat *model.Chat) {
 	name := nameOf(chat)
 	if !isChannel(name) {
-		c.refuse("Participants", model.EvParticipants{ChatID: chat.ID, Lines: []model.Participant{
+		c.Refuse("Participants", model.EvParticipants{ChatID: chat.ID, Lines: []model.Participant{
 			{Text: c.me(), Query: c.me()}, {Text: name, Query: name}}})
 		return
 	}
@@ -263,19 +250,19 @@ func (c *Client) Whois(_ context.Context, chat *model.Chat) { c.whoisNick(nameOf
 func (c *Client) WhoisMember(_ context.Context, token string) { c.whoisNick(token, c.chatID(token)) }
 
 func (c *Client) WhoRead(_ context.Context, chat *model.Chat, id, _ int) {
-	c.refuse("WhoRead", model.EvWho{ChatID: chat.ID, ID: id, Text: c.unsupported()})
+	c.Refuse("WhoRead", model.EvWho{ChatID: chat.ID, ID: id, Text: c.unsupported()})
 }
 
 func (c *Client) WhoReacted(_ context.Context, chat *model.Chat, id int, _ []model.Reaction) {
-	c.refuse("WhoReacted", model.EvWho{ChatID: chat.ID, ID: id, React: true, Text: c.unsupported()})
+	c.Refuse("WhoReacted", model.EvWho{ChatID: chat.ID, ID: id, React: true, Text: c.unsupported()})
 }
 
 func (c *Client) Info(_ context.Context, chat *model.Chat, id, _, _ int) {
-	c.refuse("Info", model.EvInfo{ChatID: chat.ID, ID: id, Lines: []string{i18n.T("info_error", c.unsupported())}})
+	c.Refuse("Info", model.EvInfo{ChatID: chat.ID, ID: id, Lines: []string{i18n.T("info_error", c.unsupported())}})
 }
 
-func (c *Client) Block(context.Context, *model.Chat)  { c.warn("Block") }
-func (c *Client) BlockMember(context.Context, string) { c.warn("BlockMember") }
+func (c *Client) Block(context.Context, *model.Chat)  { c.Warn(c.net(), "Block") }
+func (c *Client) BlockMember(context.Context, string) { c.Warn(c.net(), "BlockMember") }
 
 // Leave : PART, the room leaves the list (and the file), the UI drops it.
 func (c *Client) Leave(_ context.Context, chat *model.Chat) {
@@ -318,31 +305,31 @@ func (c *Client) DeleteChat(ctx context.Context, chat *model.Chat) {
 	delete(c.queries, c.casefold(name))
 	delete(c.offers, c.casefold(name))
 	c.mu.Unlock()
-	c.refuse("DeleteChat", model.EvChatGone{ChatID: chat.ID})
+	c.Refuse("DeleteChat", model.EvChatGone{ChatID: chat.ID})
 }
 
 // Download : a DCC offer is the only media of this network.
 func (c *Client) Download(ctx context.Context, m *model.Media, path string) {
 	off, ok := m.Loc.(dccOffer)
 	if !ok {
-		c.refuse("Download", model.EvDownloaded{Media: m, Err: i18n.T("media_foreign")})
+		c.Refuse("Download", model.EvDownloaded{Media: m, Err: i18n.T("media_foreign")})
 		return
 	}
 	if _, err := os.Stat(path); err == nil {
-		c.refuse("Download", model.EvDownloaded{Media: m, Path: path})
+		c.Refuse("Download", model.EvDownloaded{Media: m, Path: path})
 		return
 	}
 	go c.dccGet(ctx, m, off, path)
 }
 
 func (c *Client) DownloadMap(_ context.Context, m *model.Media, _ string) {
-	c.refuse("DownloadMap", model.EvDownloaded{Media: m, Err: c.unsupported()})
+	c.Refuse("DownloadMap", model.EvDownloaded{Media: m, Err: c.unsupported()})
 }
 
 func (c *Client) SearchGifs(_ context.Context, _ *model.Chat, q string) {
-	c.refuse("SearchGifs", model.EvGifs{Query: q, Err: c.unsupported()})
+	c.Refuse("SearchGifs", model.EvGifs{Query: q, Err: c.unsupported()})
 }
 
 func (c *Client) SendGif(_ context.Context, chat *model.Chat, _ model.Gif, tmpID int64) {
-	c.refuse("SendGif", model.EvSent{ChatID: chat.ID, TmpID: tmpID, Err: c.unsupported()})
+	c.Refuse("SendGif", model.EvSent{ChatID: chat.ID, TmpID: tmpID, Err: c.unsupported()})
 }

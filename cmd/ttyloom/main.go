@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/govlog/ttyloom/internal/cache"
 	"github.com/govlog/ttyloom/internal/config"
@@ -25,12 +26,16 @@ var version = "dev"
 var commit = "unknown"
 
 // cleanParts removes download temp files left by a killed session — at the
-// root, in maps/ and paste/, and in avatars/<net>/.
+// root, in maps/ and paste/, and in avatars/<net>/. Only the ones untouched
+// for an hour: a second instance on the same download_dir may be writing the
+// others.
 func cleanParts(dir string) {
 	for _, pat := range []string{"/.part-*", "/*/.part-*", "/*/*/.part-*"} {
 		if m, _ := filepath.Glob(dir + pat); m != nil {
 			for _, f := range m {
-				_ = os.Remove(f)
+				if st, err := os.Lstat(f); err == nil && time.Since(st.ModTime()) > time.Hour {
+					_ = os.Remove(f)
+				}
 			}
 		}
 	}

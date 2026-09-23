@@ -214,6 +214,63 @@ func TestSaveKeepsSectionShape(t *testing.T) {
 	}
 }
 
+// TestSaveKeepsUnknownKeys : the keys of config.toml no field takes (a newer
+// version's, a table of its own) stay through a Save. The known ones are the
+// struct's — a network deleted stays deleted — and the TG_* secrets stay out.
+func TestSaveKeepsUnknownKeys(t *testing.T) {
+	dir := t.TempDir()
+	body := "api_hash = \"DU_FICHIER\"\nfuture = \"kept\"\n[future_table]\nx = 1\n[[irc]]\nname = \"libera\"\nhost = \"irc.libera.chat\"\n"
+	if err := os.WriteFile(filepath.Join(dir, "config.toml"), []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("TG_API_HASH", "SECRET_API_HASH")
+	c, err := LoadFrom(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.Images, c.IRC = "kitty", nil
+	if err := c.Save(); err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(c.Path())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(b), "SECRET_API_HASH") {
+		t.Fatalf("environment secret written into config.toml:\n%s", b)
+	}
+	t.Setenv("TG_API_HASH", "")
+	again, err := LoadFrom(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if again.Images != "kitty" || again.APIHash != "DU_FICHIER" || len(again.IRC) != 0 {
+		t.Fatalf("known keys: images %q, api_hash %q, irc %+v\n%s", again.Images, again.APIHash, again.IRC, b)
+	}
+	if got := strings.Join(again.Unknown, ","); got != "future,future_table,future_table.x" {
+		t.Fatalf("unknown keys after Save: %q\n%s", got, b)
+	}
+}
+
+// TestSaveLeavesBrokenFile : a config.toml broken by hand while the client
+// runs is not written over — Save fails and names the file.
+func TestSaveLeavesBrokenFile(t *testing.T) {
+	c, err := LoadFrom(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	const broken = "theme = \n"
+	if err := os.WriteFile(c.Path(), []byte(broken), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Save(); err == nil || !strings.Contains(err.Error(), c.Path()) {
+		t.Fatalf("Save over a broken file: %v", err)
+	}
+	if b, _ := os.ReadFile(c.Path()); string(b) != broken {
+		t.Fatalf("broken file written over:\n%s", b)
+	}
+}
+
 // TestAutoMediaMaxKBBounded : a hand-written value must not cut every
 // automatic download in silence (negative) nor make int64(n)*1024 overflow.
 func TestAutoMediaMaxKBBounded(t *testing.T) {

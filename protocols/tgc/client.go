@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"mime"
 	"os"
 	"path/filepath"
@@ -13,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gotd/contrib/middleware/floodwait"
@@ -29,6 +31,7 @@ import (
 	"github.com/gotd/td/telegram/message/unpack"
 	"github.com/gotd/td/telegram/peers"
 	"github.com/gotd/td/telegram/query"
+	"github.com/gotd/td/telegram/query/messages"
 	"github.com/gotd/td/telegram/updates"
 	"github.com/gotd/td/telegram/updates/hook"
 	"github.com/gotd/td/telegram/uploader"
@@ -62,7 +65,9 @@ type Client struct {
 	// ulSem : uploads apart from the downloads — a send must never wait for
 	// three files being fetched.
 	ulSem chan struct{}
-	me    *tg.User
+	// me : the account, set by Run once logged in; read by the requests,
+	// which the UI can start before that.
+	me atomic.Pointer[tg.User]
 	// loggedIn : tg.UpdateLoginToken signal, armed from New (the QR is offered
 	// before the gap handler runs).
 	loggedIn qrlogin.LoggedIn
@@ -153,7 +158,7 @@ func (c *Client) Run(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		c.me = me
+		c.me.Store(me)
 		return c.gaps.Run(ctx, c.api, me.ID, updates.AuthOptions{IsBot: me.Bot, OnStart: func(ctx context.Context) {
 			c.Post(model.EvReady{SelfID: me.ID, SelfName: nick(c.peers.User(me)), Bot: me.Bot})
 			go c.loadReactions(ctx)
@@ -596,10 +601,11 @@ func (c *Client) convert(ctx context.Context, mc tg.MessageClass, ent peer.Entit
 		}
 	}
 	if m.From == "" {
+		self := c.me.Load()
 		switch {
-		case out && c.me != nil:
-			me := c.peers.User(c.me)
-			m.From, m.FromID, m.FromPhoto = nick(me), c.me.ID, peerPhoto(me)
+		case out && self != nil:
+			me := c.peers.User(self)
+			m.From, m.FromID, m.FromPhoto = nick(me), self.ID, peerPhoto(me)
 		case fromID == nil && chat.Kind == model.ChatUser:
 			// Private chat: from_id missing on the MTProto side (the incoming
 			// sender is the peer for sure). Avatar = the one of the chat, already resolved.
@@ -804,15 +810,54 @@ func (c *Client) LoadHistoryAround(ctx context.Context, chat *model.Chat, id, li
 				msgs = append(msgs, m)
 			}
 		}
-		ptrs := make([]*model.Msg, len(msgs))
-		for i := range msgs {
-			ptrs[i] = &msgs[i]
-		}
-		c.fillReplies(ctx, chat, ptrs)
-		slices.Reverse(msgs) // server: newest → oldest
-		ev.Msgs = msgs
+		ev.Msgs = c.finishPage(ctx, chat, msgs)
 		c.Post(ev)
 	}()
+}
+
+// finishPage fills in the quoted messages of a page and gives it oldest
+// first: the server sends the newest first.
+func (c *Client) finishPage(ctx context.Context, chat *model.Chat, msgs []model.Msg) []model.Msg {
+	ptrs := make([]*model.Msg, len(msgs))
+	for i := range msgs {
+		ptrs[i] = &msgs[i]
+	}
+	c.fillReplies(ctx, chat, ptrs)
+	slices.Reverse(msgs)
+	return msgs
+}
+
+// page reads it up to limit messages, down to the first id at or below minID
+// (0: no floor), and gives them finished (finishPage).
+func (c *Client) page(ctx context.Context, chat *model.Chat, it *messages.Iterator, limit, minID int) ([]model.Msg, error) {
+	var msgs []model.Msg
+	var last peer.Entities
+	for len(msgs) < limit && it.Next(ctx) {
+		e := it.Value()
+		// Every message of a batch carries the entities of the whole batch:
+		// applied once per batch, not once per message.
+		if !maps.Equal(e.Entities.Users(), last.Users()) || !maps.Equal(e.Entities.Chats(), last.Chats()) ||
+			!maps.Equal(e.Entities.Channels(), last.Channels()) {
+			c.applyEntities(ctx, e.Entities)
+			last = e.Entities
+		}
+		mc, ok := e.Msg.(tg.MessageClass) // Elem.Msg: NotEmptyMessage subset
+		if !ok {
+			continue
+		}
+		// GetHistory does not expose min_id: the read goes from the newest to the
+		// oldest, the first message already known stops everything.
+		if mc.GetID() <= minID {
+			break
+		}
+		if m, _, ok := c.convert(ctx, mc, e.Entities, chat); ok {
+			msgs = append(msgs, m)
+		}
+	}
+	if err := it.Err(); err != nil {
+		return nil, err
+	}
+	return c.finishPage(ctx, chat, msgs), nil
 }
 
 // LoadHistorySince loads up to limit messages with an id above minID (sync of
@@ -836,36 +881,11 @@ func (c *Client) history(ctx context.Context, chat *model.Chat, beforeID, minID,
 	if beforeID > 0 {
 		q = q.OffsetID(beforeID)
 	}
-	it := q.Iter()
-	var msgs []model.Msg
-	for len(msgs) < limit && it.Next(ctx) {
-		e := it.Value()
-		c.applyEntities(ctx, e.Entities)
-		mc, ok := e.Msg.(tg.MessageClass) // Elem.Msg: NotEmptyMessage subset
-		if !ok {
-			continue
-		}
-		// GetHistory does not expose min_id: the read goes from the newest to the
-		// oldest, the first message already known stops everything.
-		if mc.GetID() <= minID {
-			break
-		}
-		if m, _, ok := c.convert(ctx, mc, e.Entities, chat); ok {
-			msgs = append(msgs, m)
-		}
-	}
-	if err := it.Err(); err != nil {
+	msgs, err := c.page(ctx, chat, q.Iter(), limit, minID)
+	if err != nil {
 		ev.Err = err.Error()
 		c.Post(ev)
 		return
-	}
-	ptrs := make([]*model.Msg, len(msgs))
-	for i := range msgs {
-		ptrs[i] = &msgs[i]
-	}
-	c.fillReplies(ctx, chat, ptrs)
-	for i, j := 0, len(msgs)-1; i < j; i, j = i+1, j-1 { // server: newest → oldest
-		msgs[i], msgs[j] = msgs[j], msgs[i]
 	}
 	ev.Msgs = msgs
 	// A short sync proves nothing about the older messages: Done (w.Full) stays
@@ -887,29 +907,12 @@ func (c *Client) Search(ctx context.Context, chat *model.Chat, q string, limit i
 			c.Post(ev)
 		})
 		it := query.Messages(c.api).Search(c.peer(chat)).Q(q).BatchSize(min(limit, 100)).Iter()
-		var msgs []model.Msg
-		for len(msgs) < limit && it.Next(ctx) {
-			e := it.Value()
-			c.applyEntities(ctx, e.Entities)
-			mc, ok := e.Msg.(tg.MessageClass) // Elem.Msg: NotEmptyMessage subset
-			if !ok {
-				continue
-			}
-			if m, _, ok := c.convert(ctx, mc, e.Entities, chat); ok {
-				msgs = append(msgs, m)
-			}
-		}
-		if err := it.Err(); err != nil {
+		msgs, err := c.page(ctx, chat, it, limit, 0)
+		if err != nil {
 			ev.Err = err.Error()
 			c.Post(ev)
 			return
 		}
-		ptrs := make([]*model.Msg, len(msgs))
-		for i := range msgs {
-			ptrs[i] = &msgs[i]
-		}
-		c.fillReplies(ctx, chat, ptrs)
-		slices.Reverse(msgs) // server: newest → oldest
 		ev.Msgs = msgs
 		c.Post(ev)
 	}()
@@ -1144,7 +1147,8 @@ func (c *Client) loadReactions(ctx context.Context) {
 		c.Post(model.EvReactionsList{Emojis: model.DefaultReactions})
 		return
 	}
-	premium := c.me != nil && c.me.Premium
+	me := c.me.Load()
+	premium := me != nil && me.Premium
 	out := make([]string, 0, len(list.Reactions))
 	for _, r := range list.Reactions {
 		if r.Inactive || (r.Premium && !premium) {
@@ -1457,7 +1461,12 @@ func (c *Client) upload(ctx context.Context, chat *model.Chat, path, caption str
 		}
 		defer c.Guard("upload", fail)
 		// Own semaphore: a send never waits behind three downloads.
-		c.ulSem <- struct{}{}
+		select {
+		case c.ulSem <- struct{}{}:
+		case <-ctx.Done():
+			fail(ctx.Err().Error())
+			return
+		}
 		defer func() { <-c.ulSem }()
 		f, err := uploader.NewUploader(c.api).WithProgress(&upProgress{c: c, last: -1}).FromPath(ctx, path)
 		if err != nil {

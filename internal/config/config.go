@@ -6,9 +6,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -380,6 +382,10 @@ func LoadFrom(dir string) (*Config, error) {
 // Load rebuilt with the environment in it: the file gets its own back, and a
 // file without a section keeps none.
 //
+// The top-level keys of the file no field takes (a newer version's, a typo
+// still to fix) are written back as they are; a file that no longer parses
+// is left alone and the error says why.
+//
 // Temporary file then rename (WriteAtomic): a truncating write cut in the
 // middle would leave a config.toml without its api_id and its api_hash.
 func (c *Config) Save() error {
@@ -392,6 +398,37 @@ func (c *Config) Save() error {
 	var buf bytes.Buffer
 	if err := toml.NewEncoder(&buf).Encode(&out); err != nil {
 		return err
+	}
+	file := map[string]any{}
+	if _, err := toml.DecodeFile(c.Path(), &file); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf(i18n.T("error_with_prefix"), c.Path(), err)
+	}
+	// A key goes to a field when it is its tag in any case, like the decoder
+	// matches it: that field writes it, never the file.
+	t := reflect.TypeFor[Config]()
+	for k := range file {
+		for i := range t.NumField() {
+			name, _, _ := strings.Cut(t.Field(i).Tag.Get("toml"), ",")
+			if name != "" && name != "-" && strings.EqualFold(name, k) {
+				delete(file, k)
+			}
+		}
+	}
+	// The keys left go with the ones of the struct, in one map.
+	// ponytail: comments are lost at every Save (no comment round trip in the
+	// TOML package); with keys of its own the file also comes out sorted, and
+	// a local date or time among them moves by the UTC offset (written in
+	// UTC). Edit the lines in place if that ever matters.
+	if len(file) > 0 {
+		var known map[string]any
+		if _, err := toml.Decode(buf.String(), &known); err != nil {
+			return err
+		}
+		maps.Copy(file, known)
+		buf.Reset()
+		if err := toml.NewEncoder(&buf).Encode(file); err != nil {
+			return err
+		}
 	}
 	return WriteAtomic(c.Path(), buf.Bytes(), 0o600)
 }

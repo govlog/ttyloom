@@ -251,13 +251,6 @@ func extOf(name, mime string) string {
 	return media.SafeExtension(name, mime)
 }
 
-func extOfMime(mime string) string {
-	if mime == "application/x-tgsticker" {
-		return ".tgs"
-	}
-	return media.Extension(mime)
-}
-
 func fmtDur(s float64) string {
 	t := int(s + 0.5)
 	return fmt.Sprintf("%d:%02d", t/60, t%60)

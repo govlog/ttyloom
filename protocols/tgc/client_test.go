@@ -211,7 +211,7 @@ func TestPartsIDs(t *testing.T) {
 // entities + lines : the members of a batch, named without a network lookup.
 func TestClientLines(t *testing.T) {
 	c := offline(nil)
-	c.me = &tg.User{ID: 3}
+	c.me.Store(&tg.User{ID: 3})
 	ent := c.entities([]tg.UserClass{
 		withName(1, "alice"),
 		&tg.User{ID: 2, FirstName: "Bob"},
@@ -226,9 +226,6 @@ func TestClientLines(t *testing.T) {
 	}
 	if !strings.Contains(got[2].Text, "moi") {
 		t.Fatalf("\"moi\" marker: %+v", got[2])
-	}
-	if pluralKey(1, "member_count") == pluralKey(3, "member_count") {
-		t.Fatal("singular and plural should differ")
 	}
 	if errNoParts() == nil || errFlood() == nil {
 		t.Fatal("errors built fresh on each read")

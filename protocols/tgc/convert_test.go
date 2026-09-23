@@ -141,7 +141,8 @@ func TestConvertNamesFromEntities(t *testing.T) {
 // Private chat: from_id missing on the MTProto side for incoming as well as
 // outgoing messages. The avatar must fall back to the peer (in) or to me (out).
 func TestAvatarPrivate(t *testing.T) {
-	c := &Client{peers: peers.Options{}.Build(nil), seen: map[int64]peers.Peer{}, me: &tg.User{ID: 7}}
+	c := &Client{peers: peers.Options{}.Build(nil), seen: map[int64]peers.Peer{}}
+	c.me.Store(&tg.User{ID: 7})
 	loc := &tg.InputFileLocation{}
 	chat := &model.Chat{ID: 42, Kind: model.ChatUser, Title: "Alice", PhotoLoc: loc}
 
@@ -153,7 +154,7 @@ func TestAvatarPrivate(t *testing.T) {
 
 	out := &tg.Message{ID: 2, PeerID: &tg.PeerUser{UserID: 42}, Date: 2, Message: "salut", Out: true}
 	m, _, ok = c.convert(context.Background(), out, peer.Entities{}, chat)
-	if !ok || m.FromID != c.me.ID {
+	if !ok || m.FromID != 7 {
 		t.Fatalf("outgoing private: %v %+v", ok, m)
 	}
 }
