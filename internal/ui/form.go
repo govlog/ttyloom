@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/govlog/ttyloom/internal/i18n"
+	"github.com/govlog/ttyloom/internal/module"
 	"github.com/govlog/ttyloom/internal/render"
 	"github.com/govlog/ttyloom/internal/term"
 	"github.com/govlog/ttyloom/internal/theme"
@@ -38,6 +39,28 @@ type formBox struct {
 	// pick : a preset chosen on field f (choice i) — the caller fills the
 	// other fields from it.
 	pick func(f, i int)
+}
+
+// newFormBox : the overlay of a module form. The box keeps its runes; the
+// module sees its Fields (Value, Sel) up to date in Pick, and Submit gets the
+// values.
+func newFormBox(mf *module.Form) *formBox {
+	f := &formBox{title: mf.Title, submit: mf.Submit}
+	for _, fd := range mf.Fields {
+		f.fields = append(f.fields, formField{label: fd.Label, val: []rune(fd.Value), secret: fd.Secret, choices: fd.Choices, sel: fd.Sel})
+	}
+	if mf.Pick != nil {
+		f.pick = func(field, i int) {
+			for j := range f.fields {
+				mf.Fields[j].Value, mf.Fields[j].Sel = string(f.fields[j].val), f.fields[j].sel
+			}
+			mf.Pick(mf, field, i)
+			for j := range f.fields {
+				f.fields[j].val, f.fields[j].sel = []rune(mf.Fields[j].Value), mf.Fields[j].Sel
+			}
+		}
+	}
+	return f
 }
 
 // values gives the text of every field, in order, trimmed.

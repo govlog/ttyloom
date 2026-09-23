@@ -20,6 +20,7 @@ import (
 	"github.com/govlog/ttyloom/internal/i18n"
 	"github.com/govlog/ttyloom/internal/media"
 	"github.com/govlog/ttyloom/internal/model"
+	"github.com/govlog/ttyloom/internal/module"
 	"github.com/govlog/ttyloom/internal/render"
 	"github.com/govlog/ttyloom/internal/spell"
 	"github.com/govlog/ttyloom/internal/term"
@@ -48,6 +49,8 @@ type UI struct {
 	nets      map[string]model.Backend      // network name → live backend (started, not stopped)
 	netList   []string                      // configured networks, sorted: the ones /<net> login can start
 	launch    model.Launcher                // builds and runs one of them, given by Run
+	mods      []module.Module               // the network modules
+	envs      chan model.Envelope           // the events of the backends, stamped with their network
 	netCancel map[string]context.CancelFunc // ends the Run of a live network (/<net> logout)
 	netCtx    map[string]context.Context
 	events    chan model.Event
@@ -205,8 +208,8 @@ type UI struct {
 // of them (at start here, then on /<net> login); caches are keyed by network
 // name and events carries the envelopes of every backend, fanned in by main.
 func Run(ctx context.Context, cancel context.CancelFunc, t *term.Term, cfg *config.Config, th theme.Theme,
-	netList []string, launch model.Launcher, events <-chan model.Envelope, caches map[string]*cache.Cache) error {
-	u := &UI{ctx: ctx, cancel: cancel, t: t, cfg: cfg, th: th, nets: map[string]model.Backend{}, netList: netList, launch: launch,
+	netList []string, launch model.Launcher, events chan model.Envelope, caches map[string]*cache.Cache, mods []module.Module) error {
+	u := &UI{ctx: ctx, cancel: cancel, t: t, cfg: cfg, th: th, nets: map[string]model.Backend{}, netList: netList, launch: launch, mods: mods, envs: events,
 		netCancel: map[string]context.CancelFunc{}, events: make(chan model.Event, 256), ws: NewWindows(),
 		agg: &Window{}, aggregate: cfg.Aggregate, debug: &Window{}, focused: true,
 		chats: map[model.ChatKey]*model.Chat{}, lookups: map[uint64]*lookup{}, typing: map[model.ChatKey]typing{}, lastTyping: map[model.ChatKey]time.Time{},
@@ -241,7 +244,21 @@ func Run(ctx context.Context, cancel context.CancelFunc, t *term.Term, cfg *conf
 	} else {
 		u.folded = f
 	}
-	for _, n := range netList {
+	// ponytail: two launchers until every network is a module (task 8).
+	legacy := launch
+	u.launch = func(ctx context.Context, net string) (model.Backend, error) {
+		if u.modOf(net) != nil {
+			return u.launchModule(ctx, net)
+		}
+		return legacy(ctx, net)
+	}
+	for _, m := range mods {
+		for _, net := range m.Networks() {
+			u.netList = append(u.netList, net)
+			u.addCache(m, net)
+		}
+	}
+	for _, n := range u.netList {
 		u.startNet(n)
 	}
 	u.loadCache() // no cache at all: the loop over u.caches has nothing to read
@@ -277,12 +294,12 @@ func Run(ctx context.Context, cancel context.CancelFunc, t *term.Term, cfg *conf
 				u.key(k)
 				u.mentionScan() // the @… box follows the input
 			}
-		case env := <-events:
+		case env := <-u.envs:
 			u.dispatch(env)
-			u.drain(events)
+			u.drain()
 		case ev := <-u.events:
 			u.event(ev)
-			u.drain(events)
+			u.drain()
 		case <-t.Resized():
 			t.Size()
 			// First size that carries the cell: the mode had fallen back to half
@@ -332,11 +349,11 @@ func (u *UI) dispatch(env model.Envelope) {
 // so nothing depends on it — but u.dispatchNet keeps the net of the last
 // envelope through an interleaved UI event, and is only to be read inside a
 // dispatch.
-func (u *UI) drain(events <-chan model.Envelope) {
+func (u *UI) drain() {
 	// Return to input and rendering even when network events keep arriving.
 	for range 256 {
 		select {
-		case env := <-events:
+		case env := <-u.envs:
 			u.dispatch(env)
 		case ev := <-u.events:
 			u.event(ev)
@@ -1075,6 +1092,8 @@ func (u *UI) event(ev model.Event) {
 		return
 	}
 	switch e := ev.(type) {
+	case evDo:
+		e.f()
 	case model.Envelope:
 		u.dispatch(e)
 	case model.EvIRCChannels:

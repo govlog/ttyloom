@@ -28,6 +28,13 @@ const NetIRC = "irc"
 // IRCNet gives the network key of the IRC network name.
 func IRCNet(name string) string { return NetIRC + ":" + name }
 
+// NetModule : the module of a network key, the part before ":" ("irc" for
+// "irc:libera"); a network of one account is its own module ("telegram").
+func NetModule(net string) string {
+	m, _, _ := strings.Cut(net, ":")
+	return m
+}
+
 // IRCName gives the name of an IRC network key, "" for any other network.
 func IRCName(net string) string {
 	if len(net) > len(NetIRC)+1 && net[:len(NetIRC)+1] == NetIRC+":" {

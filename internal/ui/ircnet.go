@@ -302,7 +302,7 @@ func (u *UI) dccCmd(w *Window, args []string, text string) {
 			w.AddSys(i18n.T("dcc_which_net"))
 			return
 		}
-		if c := u.chatByTitle(net, nick); c != nil {
+		if c := (host{u}).ChatByTitle(net, nick); c != nil {
 			u.sendFile(c, path, "")
 			return
 		}
@@ -313,7 +313,7 @@ func (u *UI) dccCmd(w *Window, args []string, text string) {
 		win := w
 		if len(args) > 1 {
 			net := u.ircNetFor(w)
-			c := u.chatByTitle(net, args[1])
+			c := host{u}.ChatByTitle(net, args[1])
 			if c == nil {
 				w.AddSys(i18n.T("dcc_no_offer", args[1]))
 				return
@@ -324,7 +324,7 @@ func (u *UI) dccCmd(w *Window, args []string, text string) {
 				win = nil
 			}
 		}
-		m := lastOffer(win)
+		m := host{u}.LastIncomingFile(u.win(win))
 		if m == nil {
 			w.AddSys(i18n.T("dcc_no_offer", strings.Join(args[1:], " ")))
 			return
@@ -333,32 +333,4 @@ func (u *UI) dccCmd(w *Window, args []string, text string) {
 	default:
 		w.AddSys(i18n.T("usage_dcc"))
 	}
-}
-
-// chatByTitle : the chat of net whose title is name, case apart.
-func (u *UI) chatByTitle(net, name string) *model.Chat {
-	if b, ok := u.nets[net].(interface{ ChatID(string) int64 }); ok {
-		return u.chats[model.ChatKey{Net: net, ID: b.ChatID(name)}]
-	}
-	for _, c := range u.chatList {
-		if c.Net == net && strings.EqualFold(c.Title, name) {
-			return c
-		}
-	}
-	return nil
-}
-
-// lastOffer : the last incoming file of w not fetched yet.
-func lastOffer(w *Window) *model.Msg {
-	if w == nil {
-		return nil
-	}
-	for i := len(w.Items) - 1; i >= 0; i-- {
-		m := w.Items[i].Msg
-		if m != nil && !m.Out && m.Media != nil && m.Media.Kind == model.MediaFile &&
-			m.Media.State != model.MediaReady && m.Media.State != model.MediaLoading {
-			return m
-		}
-	}
-	return nil
 }

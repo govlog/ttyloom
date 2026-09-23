@@ -268,5 +268,5 @@ func run() error {
 	}()
 	defer t.Close()
 
-	return ui.Run(ctx, cancel, t, cfg, th, nets, launch, events, caches)
+	return ui.Run(ctx, cancel, t, cfg, th, nets, launch, events, caches, nil)
 }
