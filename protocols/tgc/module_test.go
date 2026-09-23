@@ -11,6 +11,7 @@ import (
 	"github.com/govlog/ttyloom/internal/config"
 	"github.com/govlog/ttyloom/internal/i18n"
 	"github.com/govlog/ttyloom/internal/model"
+	"github.com/govlog/ttyloom/internal/module"
 )
 
 // loadTelegram : a config.toml written for the test, read with the Telegram
@@ -226,5 +227,69 @@ func TestModuleNoTelegram(t *testing.T) {
 	_, m, err := loadTelegram(t, "theme = \"x\"\n")
 	if err != nil || len(m.Networks()) != 0 {
 		t.Fatalf("networks %v, %v", m.Networks(), err)
+	}
+}
+
+// setupHost : the Host of the page tests — the form it opens, the config it
+// saves (for real, in the test directory), the networks it adds.
+type setupHost struct {
+	module.Host
+	cfg   *config.Config
+	form  *module.Form
+	added []string
+	fail  bool // SaveConfig fails
+}
+
+func (h *setupHost) OpenForm(f *module.Form) { h.form = f }
+func (h *setupHost) AddNetwork(net string)   { h.added = append(h.added, net) }
+func (h *setupHost) SaveConfig() bool        { return !h.fail && h.cfg.Save() == nil }
+
+// The Telegram page: a guide and a link, api_id and api_hash checked, then
+// the flat keys written and the network added; it cannot be added twice.
+func TestTelegramSetup(t *testing.T) {
+	clearTG(t)
+	cfg, m, err := loadTelegram(t, "theme = \"x\"\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m.Label() != "Telegram" || !m.CanAdd() {
+		t.Fatalf("label %q, can add %v", m.Label(), m.CanAdd())
+	}
+	h := &setupHost{cfg: cfg}
+	m.OpenSetup(h)
+	f := h.form
+	if f == nil || len(f.Intro) == 0 || f.Link != "https://my.telegram.org" || len(f.Fields) != 2 || !f.Fields[1].Secret {
+		t.Fatalf("form: %+v", f)
+	}
+	hash := "0123456789abcdef0123456789abcdef"
+	if e := f.Submit([]string{"abc", hash}); e != i18n.T("tg_bad_api_id") {
+		t.Fatalf("bad api_id: %q", e)
+	}
+	if e := f.Submit([]string{"42", "nothex"}); e != i18n.T("tg_bad_api_hash") {
+		t.Fatalf("bad api_hash: %q", e)
+	}
+	if e := f.Submit([]string{"42", hash}); e != "" {
+		t.Fatalf("submit: %q", e)
+	}
+	if !slices.Equal(h.added, []string{"telegram"}) || m.CanAdd() || m.Settings().APIID != 42 {
+		t.Fatalf("added %v, can add %v, settings %+v", h.added, m.CanAdd(), m.Settings())
+	}
+	m2 := NewModule()
+	if _, err := config.LoadFrom(filepath.Dir(cfg.Path()), m2); err != nil || m2.Settings().APIHash != hash {
+		t.Fatalf("written: %+v %v", m2.Settings(), err)
+	}
+}
+
+// A write that fails keeps the page open and the module as it was.
+func TestTelegramSetupNotSaved(t *testing.T) {
+	clearTG(t)
+	cfg, m, _ := loadTelegram(t, "theme = \"x\"\n")
+	h := &setupHost{cfg: cfg, fail: true}
+	m.OpenSetup(h)
+	if e := h.form.Submit([]string{"42", "0123456789abcdef0123456789abcdef"}); e != i18n.T("tg_not_saved") {
+		t.Fatalf("submit: %q", e)
+	}
+	if !m.CanAdd() || len(h.added) != 0 {
+		t.Fatalf("module changed: can add %v, added %v", m.CanAdd(), h.added)
 	}
 }

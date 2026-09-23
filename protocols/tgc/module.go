@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -151,6 +152,48 @@ func (m *Module) Launch(_ context.Context, _ module.Host, _ string, ev chan<- mo
 }
 
 func (m *Module) Claims(string) bool { return false }
+
+func (m *Module) Label() string { return "Telegram" }
+
+// CanAdd : no credentials yet, neither in the file nor in TG_*.
+func (m *Module) CanAdd() bool { return !m.configured() }
+
+// hexHash : an api_hash, 32 hexadecimal characters.
+var hexHash = regexp.MustCompile(`^[0-9a-fA-F]{32}$`)
+
+// OpenSetup : the page of the hub — how to get an application of one's own
+// on my.telegram.org, and its two values. A personal account only: a bot
+// token stays in config.toml.
+func (m *Module) OpenSetup(h module.Host) {
+	h.OpenForm(&module.Form{
+		Title:  m.Label(),
+		Intro:  []string{i18n.T("tg_setup_1"), i18n.T("tg_setup_2"), i18n.T("tg_setup_3")},
+		Link:   "https://my.telegram.org",
+		Fields: []module.Field{{Label: "api_id", Sel: -1}, {Label: "api_hash", Secret: true, Sel: -1}},
+		Submit: func(v []string) string { return m.setup(h, v) },
+	})
+}
+
+// setup checks the two values, writes them as the flat keys of the file and
+// adds the network; the login (QR or phone) follows as at every start.
+func (m *Module) setup(h module.Host, v []string) string {
+	id, err := strconv.Atoi(v[0])
+	if err != nil || id <= 0 {
+		return i18n.T("tg_bad_api_id")
+	}
+	if !hexHash.MatchString(v[1]) {
+		return i18n.T("tg_bad_api_hash")
+	}
+	file, eff := m.file, m.eff
+	m.file.APIID, m.file.APIHash = id, v[1]
+	m.eff.APIID, m.eff.APIHash = id, v[1]
+	if !h.SaveConfig() {
+		m.file, m.eff = file, eff
+		return i18n.T("tg_not_saved")
+	}
+	h.AddNetwork(Net)
+	return ""
+}
 
 func (m *Module) Commands() []module.Command {
 	return []module.Command{{Name: Net, Help: module.Topic{Key: "help_telegram", Section: "chats"},

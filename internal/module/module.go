@@ -79,7 +79,11 @@ type Field struct {
 
 // Form : a centred box of fields (Tab moves, Enter submits, Esc closes).
 type Form struct {
-	Title  string
+	Title string
+	// Intro : lines of guide drawn above the fields, folded to the width of
+	// the box; Link : a link drawn under them, opened with Ctrl+O.
+	Intro  []string
+	Link   string
 	Fields []Field
 	// Submit gets the values, trimmed, in field order; an error text keeps
 	// the box open, "" closes it.
