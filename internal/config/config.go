@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/govlog/ttyloom/internal/i18n"
+	"github.com/govlog/ttyloom/internal/module"
 
 	"github.com/BurntSushi/toml"
 )
@@ -94,7 +95,7 @@ func (n *IRCConfig) Password() (string, error) {
 	if strings.TrimSpace(n.NickServPasswordCmd) == "" {
 		return n.NickServPassword, nil
 	}
-	return secretCmd("irc:"+n.Name+": nickserv_password_cmd", n.NickServPasswordCmd)
+	return SecretCmd("irc:"+n.Name+": nickserv_password_cmd", n.NickServPasswordCmd)
 }
 
 // IRCByName gives the [[irc]] table of name, nil when there is none.
@@ -122,17 +123,17 @@ func (d *DiscordConfig) Token(file string) (string, error) {
 		}
 		return strings.TrimSpace(string(b)), nil
 	}
-	return secretCmd("discord: token_cmd", d.TokenCmd)
+	return SecretCmd("discord: token_cmd", d.TokenCmd)
 }
 
-// secretCmd runs cmd — split on blanks, no shell — and gives its trimmed
+// SecretCmd runs cmd — split on blanks, no shell — and gives its trimmed
 // stdout: a secret read from a password manager (the Discord token, a
-// NickServ password). label heads the errors.
+// NickServ password). Shared by the modules. label heads the errors.
 //
 // The timeout of the command is the one of a password prompt that nobody
 // answers: a pinentry waiting on a locked keyring would otherwise hold the
 // start of the whole client with an empty screen.
-func secretCmd(label, cmd string) (string, error) {
+func SecretCmd(label, cmd string) (string, error) {
 	f := strings.Fields(cmd)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -213,7 +214,39 @@ type Config struct {
 	fileHash     string
 	fileToken    string
 	fileTelegram *TelegramConfig
+
+	mods    []module.Module // the modules, for Save
+	claimed map[string]bool // top-level keys the modules asked for, lower case
 }
+
+// source : the ConfigSource given to the modules — config.toml as
+// primitives, and the top-level keys each one asked for.
+type source struct {
+	md      toml.MetaData
+	raw     map[string]toml.Primitive
+	claimed map[string]bool
+	unknown []string
+}
+
+func (s *source) Decode(key string, v any) (bool, error) {
+	s.claimed[strings.ToLower(key)] = true
+	for k, p := range s.raw {
+		if strings.EqualFold(k, key) {
+			if err := s.md.PrimitiveDecode(p, v); err != nil {
+				return true, fmt.Errorf(i18n.T("error_with_prefix"), key, err)
+			}
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func (s *source) Unknown(key string) { s.unknown = append(s.unknown, key) }
+
+// sink : the ConfigSink of Save — the table written to config.toml.
+type sink map[string]any
+
+func (s sink) Set(key string, v any) { s[key] = v }
 
 const defaultFile = `# ttyloom
 # api_id / api_hash / bot_token below are the telegram network. They can also
@@ -317,27 +350,58 @@ func (c *Config) SpellPath() string { return filepath.Join(c.dir, "spell.txt") }
 // int64(n)*1024 overflow, which made it unbounded.
 const MaxAutoMediaKB = 512 << 10
 
-func Load() (*Config, error) { return LoadFrom(Dir()) }
+func Load(mods ...module.Module) (*Config, error) { return LoadFrom(Dir(), mods...) }
 
-func LoadFrom(dir string) (*Config, error) {
+func LoadFrom(dir string, mods ...module.Module) (*Config, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, err
 	}
 	path := filepath.Join(dir, "config.toml")
 	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
-		if err := os.WriteFile(path, []byte(defaultFile), 0o600); err != nil {
+		body := defaultFile
+		for _, m := range mods {
+			body += "\n" + m.Template()
+		}
+		if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
 			return nil, err
 		}
 	}
-	c := &Config{dir: dir, DownloadDir: "~/Downloads/ttyloom", AutoMediaMaxKB: 5120, Images: "auto", Avatars: true, KittyImages: 48, VideoFrames: 300, Video: "show", GifPlay: "always", Timestamps: true, LinkPreviews: true, Hover: HoverMenu,
+	c := &Config{dir: dir, mods: mods, DownloadDir: "~/Downloads/ttyloom", AutoMediaMaxKB: 5120, Images: "auto", Avatars: true, KittyImages: 48, VideoFrames: 300, Video: "show", GifPlay: "always", Timestamps: true, LinkPreviews: true, Hover: HoverMenu,
 		Bell: true, Notify: "terminal", AutoOpenDays: 7, Cache: true, CacheMessages: 2000, LogDir: "~/.local/share/ttyloom/logs", Separator: true, Redline: true, SidebarSort: "recent", SidebarWidth: 26, Spell: "off", CycleMode: "next"}
 	md, err := toml.DecodeFile(path, c)
 	if err != nil {
 		return nil, fmt.Errorf(i18n.T("error_with_prefix"), path, err)
 	}
-	for _, k := range md.Undecoded() {
-		c.Unknown = append(c.Unknown, k.String())
+	var raw map[string]toml.Primitive
+	md2, err := toml.DecodeFile(path, &raw)
+	if err != nil {
+		return nil, fmt.Errorf(i18n.T("error_with_prefix"), path, err)
 	}
+	src := &source{md: md2, raw: raw, claimed: map[string]bool{}}
+	for _, m := range mods {
+		if err := m.Load(src); err != nil {
+			return nil, err
+		}
+	}
+	c.claimed = src.claimed
+	// A key is unknown when neither the client nor a module took it. For the
+	// modules, a top-level key is taken when one asked for it: a primitive
+	// counts as decoded at the top, only its sub-keys stay undecoded.
+	left := map[string]bool{}
+	for k := range raw {
+		if !src.claimed[strings.ToLower(k)] {
+			left[k] = true
+		}
+	}
+	for _, k := range md2.Undecoded() {
+		left[k.String()] = true
+	}
+	for _, k := range md.Undecoded() {
+		if left[k.String()] {
+			c.Unknown = append(c.Unknown, k.String())
+		}
+	}
+	c.Unknown = append(c.Unknown, src.unknown...)
 	// An [[irc]] table with no valid name, or the same name twice, is left
 	// out: the network would have no key, or two networks would share one.
 	seen := map[string]bool{}
@@ -399,14 +463,26 @@ func (c *Config) Save() error {
 	if err := toml.NewEncoder(&buf).Encode(&out); err != nil {
 		return err
 	}
+	var known map[string]any
+	if _, err := toml.Decode(buf.String(), &known); err != nil {
+		return err
+	}
+	for _, m := range c.mods {
+		m.Save(sink(known))
+	}
 	file := map[string]any{}
 	if _, err := toml.DecodeFile(c.Path(), &file); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf(i18n.T("error_with_prefix"), c.Path(), err)
 	}
-	// A key goes to a field when it is its tag in any case, like the decoder
-	// matches it: that field writes it, never the file.
+	// A key goes to a field, or to the module that asked for it, when it is
+	// its name in any case, like the decoder matches it: they write it, never
+	// the file.
 	t := reflect.TypeFor[Config]()
 	for k := range file {
+		if c.claimed[strings.ToLower(k)] {
+			delete(file, k)
+			continue
+		}
 		for i := range t.NumField() {
 			name, _, _ := strings.Cut(t.Field(i).Tag.Get("toml"), ",")
 			if name != "" && name != "-" && strings.EqualFold(name, k) {
@@ -414,21 +490,14 @@ func (c *Config) Save() error {
 			}
 		}
 	}
-	// The keys left go with the ones of the struct, in one map.
 	// ponytail: comments are lost at every Save (no comment round trip in the
-	// TOML package); with keys of its own the file also comes out sorted, and
-	// a local date or time among them moves by the UTC offset (written in
-	// UTC). Edit the lines in place if that ever matters.
-	if len(file) > 0 {
-		var known map[string]any
-		if _, err := toml.Decode(buf.String(), &known); err != nil {
-			return err
-		}
-		maps.Copy(file, known)
-		buf.Reset()
-		if err := toml.NewEncoder(&buf).Encode(file); err != nil {
-			return err
-		}
+	// TOML package), and the file comes out sorted; a local date or time
+	// among the unknown keys moves by the UTC offset (written in UTC). Edit
+	// the lines in place if that ever matters.
+	maps.Copy(file, known)
+	buf.Reset()
+	if err := toml.NewEncoder(&buf).Encode(file); err != nil {
+		return err
 	}
 	return WriteAtomic(c.Path(), buf.Bytes(), 0o600)
 }
