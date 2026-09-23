@@ -174,8 +174,9 @@ func (m *Module) OpenSetup(h module.Host) {
 	})
 }
 
-// setup checks the two values, writes them as the flat keys of the file and
-// adds the network; the login (QR or phone) follows as at every start.
+// setup checks the two values, writes them as the flat keys of the file (in
+// its [telegram] section when it has one: the section wins at the next start)
+// and adds the network; the login (QR or phone) follows as at every start.
 func (m *Module) setup(h module.Host, v []string) string {
 	id, err := strconv.Atoi(v[0])
 	if err != nil || id <= 0 {
@@ -184,11 +185,16 @@ func (m *Module) setup(h module.Host, v []string) string {
 	if !hexHash.MatchString(v[1]) {
 		return i18n.T("tg_bad_api_hash")
 	}
-	file, eff := m.file, m.eff
-	m.file.APIID, m.file.APIHash = id, v[1]
+	file, eff, section := m.file, m.eff, m.section
+	dst := &m.file
+	if m.section != nil {
+		s := *m.section
+		m.section, dst = &s, &s
+	}
+	dst.APIID, dst.APIHash = id, v[1]
 	m.eff.APIID, m.eff.APIHash = id, v[1]
 	if !h.SaveConfig() {
-		m.file, m.eff = file, eff
+		m.file, m.eff, m.section = file, eff, section
 		return i18n.T("tg_not_saved")
 	}
 	h.AddNetwork(Net)

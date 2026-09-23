@@ -293,3 +293,23 @@ func TestTelegramSetupNotSaved(t *testing.T) {
 		t.Fatalf("module changed: can add %v, added %v", m.CanAdd(), h.added)
 	}
 }
+
+// A [telegram] section still empty wins over the flat keys at the next start:
+// the page writes into it, so Telegram is still there after a restart.
+func TestTelegramSetupSection(t *testing.T) {
+	clearTG(t)
+	cfg, m, err := loadTelegram(t, "[telegram]\napi_id = 0\napi_hash = \"\"\n")
+	if err != nil || !m.CanAdd() {
+		t.Fatalf("load: %v, can add %v", err, m.CanAdd())
+	}
+	h := &setupHost{cfg: cfg}
+	m.OpenSetup(h)
+	hash := "0123456789abcdef0123456789abcdef"
+	if e := h.form.Submit([]string{"42", hash}); e != "" {
+		t.Fatalf("submit: %q", e)
+	}
+	m2 := NewModule()
+	if _, err := config.LoadFrom(filepath.Dir(cfg.Path()), m2); err != nil || m2.CanAdd() || m2.Settings().APIID != 42 || m2.Settings().APIHash != hash {
+		t.Fatalf("after a restart: %+v, can add %v, %v", m2.Settings(), m2.CanAdd(), err)
+	}
+}
