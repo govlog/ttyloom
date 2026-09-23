@@ -82,13 +82,6 @@ func run() error {
 		return err
 	}
 	cleanParts(config.Expand(cfg.DownloadDir))
-	n := 0
-	for _, m := range mods {
-		n += len(m.Networks())
-	}
-	if n == 0 {
-		return fmt.Errorf(i18n.T("main_no_networks"), cfg.Path())
-	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	name := cfg.Theme

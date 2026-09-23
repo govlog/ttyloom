@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/govlog/ttyloom/internal/config"
+	"github.com/govlog/ttyloom/internal/i18n"
 	"github.com/govlog/ttyloom/internal/module"
 	"github.com/govlog/ttyloom/internal/term"
 	"github.com/govlog/ttyloom/internal/theme"
@@ -69,5 +70,27 @@ func TestFakeNetEndToEnd(t *testing.T) {
 	m2 := &cfgFake{}
 	if _, err := config.LoadFrom(dir, m2); err != nil || !slices.Equal(m2.Networks(), []string{"fake:a", "fake:b"}) {
 		t.Fatalf("section written back: %v %v", m2.Networks(), err)
+	}
+}
+
+// With no network, the client starts on the hub, its welcome shown.
+func TestStartWithoutNetwork(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("TTYLOOM_DIR", dir)
+	m := &cfgFake{}
+	m.canAdd = true
+	cfg, err := config.LoadFrom(dir, m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	u := newUI(ctx, cancel, term.NewOffscreen(io.Discard, 80, 24), cfg, theme.Terminal(), []module.Module{m})
+	if u.hub == nil || !u.hub.welcome {
+		t.Fatalf("hub at start: %+v", u.hub)
+	}
+	u.hubKey(term.Key{Code: term.Esc})
+	if u.hub != nil || !strings.Contains(u.ws.List[0].Items[len(u.ws.List[0].Items)-1].Sys, i18n.T("hub_none")) {
+		t.Fatal("closing with no network must say /networks")
 	}
 }

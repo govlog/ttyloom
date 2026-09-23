@@ -567,7 +567,6 @@ window_not_bound = "cette fenêtre n'est liée à aucune conversation : /query <
 window_unbound = "fenêtre non liée"
 xdg_open_error = "xdg-open : %s"
 
-main_no_networks = "Aucun réseau configuré : complétez le bloc d'un réseau dans %s"
 
 # /telegram, /discord
 net_already_up = "%s : déjà démarré"

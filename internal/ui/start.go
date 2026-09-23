@@ -60,6 +60,9 @@ func newUI(ctx context.Context, cancel context.CancelFunc, t *term.Term, cfg *co
 	for _, n := range u.netList {
 		u.startNet(n)
 	}
+	if len(u.netList) == 0 { // first start: the hub says what to add
+		u.openHub()
+	}
 	u.loadCache() // no cache at all: the loop over u.caches has nothing to read
 	u.applySpell(cfg.Spell)
 	u.clear()
