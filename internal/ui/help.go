@@ -177,9 +177,9 @@ func (t topic) match(q string) bool {
 }
 
 // helpCandidates gives the topic names for the Tab completion of /help (no /).
-func helpCandidates() []string {
-	out := make([]string, 0, len(helpTopics))
-	for _, t := range helpTopics {
+func helpCandidates(topics []topic) []string {
+	out := make([]string, 0, len(topics))
+	for _, t := range topics {
 		out = append(out, strings.TrimPrefix(t.name, "/"))
 	}
 	return out
@@ -187,18 +187,18 @@ func helpCandidates() []string {
 
 // helpLines : /help with no argument — one line per entry, grouped by section,
 // column lined up on the longest name.
-func helpLines(width int) []render.Line {
+func helpLines(topics []topic, sections []string, width int) []render.Line {
 	col := 0
-	for _, t := range helpTopics {
+	for _, t := range topics {
 		if w := render.Width(t.display()); w > col {
 			col = w
 		}
 	}
 	col += 2
 	var lines []render.Line
-	for _, sec := range helpSections {
+	for _, sec := range sections {
 		lines = append(lines, render.Plain("── "+i18n.T("help_section_"+sec)+" ──", theme.Style{Bold: true}, width)...)
-		for _, t := range helpTopics {
+		for _, t := range topics {
 			if t.section != sec {
 				continue
 			}
@@ -214,9 +214,9 @@ func helpLines(width int) []render.Line {
 const suggestLimit = 5
 
 // helpTopic : /help <topic> — detailed help, or suggestions when unknown.
-func helpTopic(query string, width int) []render.Line {
+func helpTopic(topics []topic, query string, width int) []render.Line {
 	q := fold(query)
-	for _, t := range helpTopics {
+	for _, t := range topics {
 		if t.match(q) {
 			var lines []render.Line
 			lines = append(lines, render.Plain("*** "+t.display(), theme.Style{Bold: true}, width)...)
@@ -228,9 +228,9 @@ func helpTopic(query string, width int) []render.Line {
 			return lines
 		}
 	}
-	sug := suggest(q, func(k string) bool { return strings.HasPrefix(k, q) })
+	sug := suggest(topics, q, func(k string) bool { return strings.HasPrefix(k, q) })
 	if len(sug) == 0 {
-		sug = suggest(q, func(k string) bool { return strings.Contains(k, q) })
+		sug = suggest(topics, q, func(k string) bool { return strings.Contains(k, q) })
 	}
 	msg := i18n.T("help_no_topic", query)
 	if len(sug) > 0 {
@@ -240,9 +240,9 @@ func helpTopic(query string, width int) []render.Line {
 }
 
 // suggest gives up to suggestLimit topic names whose folded form satisfies match.
-func suggest(q string, match func(folded string) bool) []string {
+func suggest(topics []topic, q string, match func(folded string) bool) []string {
 	var out []string
-	for _, t := range helpTopics {
+	for _, t := range topics {
 		if match(fold(t.name)) {
 			out = append(out, t.name)
 			if len(out) == suggestLimit {

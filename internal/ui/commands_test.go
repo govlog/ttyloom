@@ -351,7 +351,7 @@ func TestDigitWindowCommand(t *testing.T) {
 	u.ws.New(true) // window 1
 	u.ws.New(true) // window 2
 	run := func(line string) {
-		name, args, text, ok := ParseCommand(line, commandNames)
+		name, args, text, ok := ParseCommand(line, cmdNames{general: commandNames})
 		if !ok {
 			t.Fatalf("%q: not read as a command", line)
 		}
@@ -693,7 +693,7 @@ func TestIRCCommandRouting(t *testing.T) {
 	if len(irc.cmds) != 1 || irc.cmds[0] != "kick|#go|77|bob flood" {
 		t.Fatalf("routed: %v", irc.cmds)
 	}
-	if !slices.Contains(u.commandNames(), "/kick") {
+	if !slices.Contains(u.commandNames().all(), "/kick") {
 		t.Fatal("completion: /kick missing in IRC context")
 	}
 	// The IRC names do not take the prefixes of the generic commands.
@@ -705,7 +705,7 @@ func TestIRCCommandRouting(t *testing.T) {
 	}
 	u.goTo(2) // Telegram window: no IRC context (two networks, none IRC in front)
 	u.netFilter = ""
-	if slices.Contains(u.commandNames(), "/kick") {
+	if slices.Contains(u.commandNames().all(), "/kick") {
 		t.Fatal("completion: /kick offered outside IRC context")
 	}
 	name, args, text, _ = ParseCommand("/kick bob", u.commandNames())

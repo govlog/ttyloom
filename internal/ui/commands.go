@@ -22,9 +22,20 @@ var commandNames = []string{"/window", "/close", "/query", "/join", "/new", "/ms
 	"/search", "/whois", "/rename", "/unrename", "/open", "/view", "/send", "/theme", "/set", "/clear", "/log", "/debug", "/emoji", "/gif", "/help", "/quit",
 	"/telegram", "/discord", "/irc", "/dcc"}
 
+// cmdNames : the commands valid now. general resolve first by prefix, then
+// context — the ones a network adds in its own windows (IRC's /kick), which
+// must not take /i from /irc nor /wh from /whois. module names the commands
+// a module runs, whatever their layer.
+type cmdNames struct {
+	general, context []string
+	module           map[string]bool // "/fk"
+}
+
+func (n cmdNames) all() []string { return append(slices.Clone(n.general), n.context...) }
+
 // ParseCommand : "/win new hide" → ("window", [new hide], "new hide", true).
 // "//x" → text "/x"; with no slash → text as it is, ok=false.
-func ParseCommand(line string, names []string) (name string, args []string, text string, ok bool) {
+func ParseCommand(line string, names cmdNames) (name string, args []string, text string, ok bool) {
 	if strings.HasPrefix(line, "//") {
 		return "", nil, line[1:], false
 	}
@@ -45,18 +56,17 @@ func ParseCommand(line string, names []string) (name string, args []string, text
 // The prefix is read in layers: the generic commands first, the IRC names an
 // IRC context adds to them second. Without that, entering a room would take
 // /i (irc) away to invite and ignore, and /wh (whois) to who and whowas.
-func resolveCommand(name string, names []string) string {
+func resolveCommand(name string, names cmdNames) string {
 	if a, ok := aliases[name]; ok {
 		return a
 	}
-	if slices.Contains(names, "/"+name) {
+	if slices.Contains(names.all(), "/"+name) {
 		return name
 	}
-	if m := uniquePrefix(name, commandNames); m != "" {
+	if m := uniquePrefix(name, names.general); m != "" {
 		return m
 	}
-	irc := slices.DeleteFunc(slices.Clone(names), func(n string) bool { return slices.Contains(commandNames, n) })
-	return cmp.Or(uniquePrefix(name, irc), name) // ambiguous: the original, for the error message
+	return cmp.Or(uniquePrefix(name, names.context), name) // ambiguous: the original, for the error message
 }
 
 // uniquePrefix : the only command of names that name starts, "" when none or
@@ -87,6 +97,9 @@ func (u *UI) command(name string, args []string, text string) {
 			return args[i]
 		}
 		return ""
+	}
+	if u.runModCommand(w, name, args, text) {
+		return
 	}
 	// The IRC commands need a network: the one of the window, of the tab, or
 	// the only one configured. With none configured at all they stay unknown.
@@ -344,9 +357,9 @@ func (u *UI) command(name string, args []string, text string) {
 		u.openGifs(text)
 	case "help":
 		if arg(0) == "" {
-			u.emit(w, helpLines(u.width()))
+			u.emit(w, helpLines(u.topics(), u.sections(), u.width()))
 		} else {
-			u.emit(w, helpTopic(arg(0), u.width()))
+			u.emit(w, helpTopic(u.topics(), arg(0), u.width()))
 		}
 	case "quit":
 		u.cancel()

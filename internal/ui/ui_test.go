@@ -79,17 +79,17 @@ func TestEditorComplete(t *testing.T) {
 }
 
 func TestParseCommand(t *testing.T) {
-	name, args, text, ok := ParseCommand("/win new hide", commandNames)
+	name, args, text, ok := ParseCommand("/win new hide", cmdNames{general: commandNames})
 	if !ok || name != "window" || !reflect.DeepEqual(args, []string{"new", "hide"}) || text != "new hide" {
 		t.Fatalf("%q %q %q %v", name, args, text, ok)
 	}
-	if _, _, text, ok := ParseCommand("//slash", commandNames); ok || text != "/slash" {
+	if _, _, text, ok := ParseCommand("//slash", cmdNames{general: commandNames}); ok || text != "/slash" {
 		t.Fatalf("escaped: %q %v", text, ok)
 	}
-	if _, _, text, ok := ParseCommand("plain", commandNames); ok || text != "plain" {
+	if _, _, text, ok := ParseCommand("plain", cmdNames{general: commandNames}); ok || text != "plain" {
 		t.Fatalf("plain: %q %v", text, ok)
 	}
-	if name, _, _, _ := ParseCommand("/Q bob", commandNames); name != "query" {
+	if name, _, _, _ := ParseCommand("/Q bob", cmdNames{general: commandNames}); name != "query" {
 		t.Fatalf("alias: %q", name)
 	}
 }

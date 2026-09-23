@@ -43,7 +43,7 @@ func TestComplContext(t *testing.T) {
 		{"/log o", complLog, "o", ""},
 	}
 	for _, c := range cases {
-		src, tail, key := complContext(c.line, len([]rune(c.line)), commandNames)
+		src, tail, key := complContext(c.line, len([]rune(c.line)), cmdNames{general: commandNames})
 		if src != c.src || tail != c.tail || key != c.key {
 			t.Errorf("%q: got %v %q %q", c.line, src, tail, key)
 		}
@@ -65,7 +65,7 @@ func TestComplContext(t *testing.T) {
 		{"/ignore sp", complIrcIgnore, "sp"},
 		{"/quote PRIV", complNone, ""},
 	}
-	names := append(slices.Clone(commandNames), ircCommandNames...)
+	names := cmdNames{general: commandNames, context: ircCommandNames}
 	for _, c := range irc {
 		src, tail, _ := complContext(c.line, len([]rune(c.line)), names)
 		if src != c.src || tail != c.tail {
@@ -91,7 +91,7 @@ func TestSetValueCandidates(t *testing.T) {
 
 // TestComplFold : Tab after /fold completes a section name.
 func TestComplFold(t *testing.T) {
-	src, tail, _ := complContext("/fold goph", len("/fold goph"), commandNames)
+	src, tail, _ := complContext("/fold goph", len("/fold goph"), cmdNames{general: commandNames})
 	if src != complFold || tail != "goph" {
 		t.Fatalf("got %v %q", src, tail)
 	}
@@ -254,13 +254,13 @@ func TestCommandPrefixesOnSubmit(t *testing.T) {
 		"/qu blop": "query", "/quer blop": "query", "/Q blop": "query", "/qui": "quit",
 		"/ne": "ne", "/se": "se", "/win 2": "window", "/42": "42", "/blah": "blah", "/": "",
 	} {
-		name, _, _, _ := ParseCommand(input, commandNames)
+		name, _, _, _ := ParseCommand(input, cmdNames{general: commandNames})
 		if name != want {
 			t.Errorf("%s resolved to %q, want %q", input, name, want)
 		}
 	}
 	for _, name := range commandNames {
-		if got, _, _, _ := ParseCommand(name, commandNames); got != name[1:] {
+		if got, _, _, _ := ParseCommand(name, cmdNames{general: commandNames}); got != name[1:] {
 			t.Errorf("exact command %s resolved to %s", name, got)
 		}
 	}

@@ -2513,7 +2513,9 @@ func (u *UI) candidates(word string, atStart bool) []string {
 	src, tail, setKey := complContext(u.ed.String(), u.ed.Cursor(), u.commandNames())
 	switch src {
 	case complCommands:
-		return u.commandNames()
+		return u.commandNames().all()
+	case complModule:
+		return u.modComplete(setKey, tail, word)
 	case complChats:
 		out := u.chatCandidates(word, tail)
 		nicks := slices.Clone(u.ircNicks())
@@ -2546,7 +2548,7 @@ func (u *UI) candidates(word string, atStart bool) []string {
 	case complTheme:
 		return multiWord(word, tail, theme.Names())
 	case complHelp:
-		return helpCandidates()
+		return helpCandidates(u.topics())
 	case complNet:
 		return append(u.netNames(), netAll)
 	case complNetCmd:

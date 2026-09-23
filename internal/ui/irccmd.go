@@ -24,12 +24,30 @@ type ircCommander interface {
 }
 
 // commandNames : the commands that resolve and complete right now — the
-// generic ones, plus the IRC ones from an IRC context.
-func (u *UI) commandNames() []string {
-	if u.ircNetFor(u.view()) == "" {
-		return commandNames
+// generic ones, the general commands of the modules, plus the context ones
+// (IRC, the modules') where a network of theirs is meant.
+func (u *UI) commandNames() cmdNames {
+	n := cmdNames{general: slices.Clone(commandNames), module: map[string]bool{}}
+	if u.ircNetFor(u.view()) != "" { // ponytail: IRC is not a module yet (task 6)
+		n.context = slices.Clone(ircCommandNames)
 	}
-	return append(slices.Clone(commandNames), ircCommandNames...)
+	win := u.win(u.view())
+	for _, m := range u.mods {
+		inCtx := host{u}.ContextNet(win, m.Name()) != ""
+		for _, c := range m.Commands() {
+			name := "/" + c.Name
+			switch {
+			case !c.Context:
+				n.general = append(n.general, name)
+			case inCtx:
+				n.context = append(n.context, name)
+			default:
+				continue
+			}
+			n.module[name] = true
+		}
+	}
+	return n
 }
 
 // isIRCCommand : name (without /) is one of ircCommandNames.

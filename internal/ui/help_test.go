@@ -43,7 +43,7 @@ func TestHelpTopics(t *testing.T) {
 		}
 	}
 
-	lines := helpLines(80)
+	lines := helpLines(helpTopics, helpSections, 80)
 	if len(lines) < len(helpTopics) {
 		t.Fatalf("helpLines: %d lines for %d topics", len(lines), len(helpTopics))
 	}
@@ -53,14 +53,14 @@ func TestHelpTopics(t *testing.T) {
 // the palette key (which names /open N, its command form), /help open gives the
 // command.
 func TestHelpKeyOAndOpen(t *testing.T) {
-	key := helpText(helpTopic("o", 200))
+	key := helpText(helpTopic(helpTopics, "o", 200))
 	if !strings.HasPrefix(key, "*** o\n") {
 		t.Fatalf("/help o: %q", key)
 	}
 	if !strings.Contains(key, "/open") {
 		t.Fatalf("/help o never names the command: %q", key)
 	}
-	if cmd := helpText(helpTopic("open", 200)); !strings.HasPrefix(cmd, "*** /open") {
+	if cmd := helpText(helpTopic(helpTopics, "open", 200)); !strings.HasPrefix(cmd, "*** /open") {
 		t.Fatalf("/help open: %q", cmd)
 	}
 }

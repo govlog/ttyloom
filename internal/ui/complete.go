@@ -37,6 +37,7 @@ const (
 	complCtcp                            // /ctcp <nick> <request>
 	complIrcIgnore                       // /ignore : the members of the room and the masks already set
 	complNone                            // /open /history …
+	complModule                          // a command of a module: its Complete
 )
 
 // ircArg : the argument of an IRC command being typed in rest (everything
@@ -53,7 +54,7 @@ func ircArg(rest string) (int, string) {
 // complContext gives the completion source and the line "tail" to complete
 // (everything after the command, for the candidates of several words). cursor
 // is a rune index; only the part of the line before the cursor is read.
-func complContext(line string, cursor int, names []string) (src complSource, tail string, setKey string) {
+func complContext(line string, cursor int, names cmdNames) (src complSource, tail string, setKey string) {
 	r := []rune(line)
 	if cursor < 0 {
 		cursor = 0
@@ -74,6 +75,9 @@ func complContext(line string, cursor int, names []string) (src complSource, tai
 		return complChats, s[strings.LastIndexAny(s, " \n")+1:], ""
 	}
 	name := resolveCommand(strings.ToLower(before[1:]), names)
+	if names.module["/"+name] {
+		return complModule, rest, name
+	}
 	switch name {
 	case "query", "msg", "join", "whois", "rename", "unrename":
 		// After the target, the rest is free text (message, new name).
@@ -277,7 +281,7 @@ func chatKinds(line string) func(*model.Chat) bool {
 		return nil
 	}
 	name, _, _ := strings.Cut(line[1:], " ")
-	switch resolveCommand(strings.ToLower(name), commandNames) {
+	switch resolveCommand(strings.ToLower(name), cmdNames{general: commandNames}) {
 	case "join":
 		return func(c *model.Chat) bool { return c.Kind != model.ChatUser }
 	case "query":
@@ -345,7 +349,7 @@ func (u *UI) completeTab() {
 	src, tail, _ := complContext(line, cursor, u.commandNames())
 	var list []string
 	if src == complCommands {
-		for _, name := range u.commandNames() {
+		for _, name := range u.commandNames().all() {
 			if strings.HasPrefix(name, strings.ToLower(tail)) {
 				list = append(list, name)
 			}
