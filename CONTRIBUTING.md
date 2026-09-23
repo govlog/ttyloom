@@ -21,7 +21,8 @@ conversations. Report vulnerabilities privately through [SECURITY.md](SECURITY.m
 
 Build using the [README instructions](README.md#build-from-source). The project
 uses one Go module; network adapters live under `protocols/`, and the shared
-model and UI live under `internal/`.
+model and UI live under `internal/`. [Writing a network module](docs/modules.md)
+explains how a network plugs into the client.
 
 Keep each pull request focused on one problem. Reuse existing helpers and the
 standard library. Add a regression test when it demonstrates the behavior being
