@@ -42,6 +42,7 @@ var helpTopics = []topic{
 	{"/chats", "help_chats", "chats"},
 	{"/net", "help_net", "chats"},
 	{"/networks", "help_networks", "chats"},
+	{"/hooks", "help_hooks", "chats"},
 	{"/history", "help_history", "chats"},
 	{"/search", "help_search", "chats"},
 	{"/whois", "help_whois", "chats"},

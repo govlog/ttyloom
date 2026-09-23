@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"cmp"
 	"errors"
 	"path/filepath"
 	"regexp"
@@ -12,6 +13,7 @@ import (
 	"github.com/govlog/ttyloom/internal/hook"
 	"github.com/govlog/ttyloom/internal/i18n"
 	"github.com/govlog/ttyloom/internal/model"
+	"github.com/govlog/ttyloom/internal/module"
 )
 
 // The guards of every hook. Constants: the spec leaves them out of /set.
@@ -36,6 +38,7 @@ type evHook struct {
 	name  string
 	reply hook.Reply    // as when the run started: a reload does not change it
 	key   model.ChatKey // the chat of the message
+	test  *Window       // /hooks test: the window that asked; nil for a message
 	out   string
 	err   error
 }
@@ -65,6 +68,16 @@ func (u *UI) loadHooks(say func(string), reload bool) {
 	if reload || len(hs)+len(rejected) > 0 {
 		say(i18n.T(i18n.Plural(len(hs), "hooks_loaded"), len(hs)))
 	}
+	for _, h := range hs {
+		if h.Reply != hook.ReplySend {
+			continue
+		}
+		for _, m := range u.mods {
+			if wr, ok := m.(module.AutoReplyWarner); ok && u.hookReaches(h, m.Name()) {
+				say(i18n.T("hook_note", h.Name, wr.AutoReplyWarning()))
+			}
+		}
+	}
 }
 
 // runHooks fires every hook that takes m, a message just come in live in c,
@@ -78,7 +91,7 @@ func (u *UI) runHooks(c *model.Chat, m *model.Msg) {
 	hm := u.hookMsg(c, m)
 	for _, h := range u.hooks {
 		if got, ok := hook.Match(h, hm); ok {
-			u.fireHook(h, hm, got, c.Key())
+			u.fireHook(h, hm, got, c.Key(), nil)
 		}
 	}
 }
@@ -105,20 +118,23 @@ func nameSaid(text, name string) bool {
 
 // fireHook starts h on m in a goroutine of its own; the end comes back as an
 // evHook. With hookMaxRuns runs in flight the message is skipped and counted.
-func (u *UI) fireHook(h hook.Hook, m hook.Msg, c hook.Captures, key model.ChatKey) {
-	st := u.hookStats[h.Name]
-	if st.running >= hookMaxRuns {
-		st.skipped++
-		u.event(model.EvLog{Level: "WARN", Msg: i18n.T("hook_busy", h.Name, hookMaxRuns)})
-		return
+// test is the window of /hooks test: no guard, no counter.
+func (u *UI) fireHook(h hook.Hook, m hook.Msg, c hook.Captures, key model.ChatKey, test *Window) {
+	if test == nil {
+		st := u.hookStats[h.Name]
+		if st.running >= hookMaxRuns {
+			st.skipped++
+			u.event(model.EvLog{Level: "WARN", Msg: i18n.T("hook_busy", h.Name, hookMaxRuns)})
+			return
+		}
+		st.running++
+		st.runs++
 	}
-	st.running++
-	st.runs++
 	env, ctx := hook.Env(h, m, c), u.ctx
 	u.hookWait.Add(1)
 	go func() {
 		defer u.hookWait.Done()
-		ev := evHook{name: h.Name, reply: h.Reply, key: key}
+		ev := evHook{name: h.Name, reply: h.Reply, key: key, test: test}
 		func() {
 			defer func() { // a panic here would take the terminal down
 				if r := recover(); r != nil {
@@ -136,6 +152,10 @@ func (u *UI) fireHook(h hook.Hook, m hook.Msg, c hook.Captures, key model.ChatKe
 
 // hookDone : the end of a run — its counters, then its reply.
 func (u *UI) hookDone(e evHook) {
+	if e.test != nil {
+		u.hookTested(e)
+		return
+	}
 	st := u.hookStats[e.name]
 	if st == nil {
 		return // the hook left hooks.toml meanwhile (/hooks reload)
@@ -220,4 +240,104 @@ func (u *UI) hookDisplay(w *Window, name, text string) {
 	if w != u.view() {
 		w.Act++
 	}
+}
+
+// hookReaches : h can fire on a configured network of module mod.
+func (u *UI) hookReaches(h hook.Hook, mod string) bool {
+	return slices.ContainsFunc(u.netList, func(n string) bool {
+		return model.NetModule(n) == mod && (h.Net == "" || h.Net == n || h.Net == mod)
+	})
+}
+
+// hooksCmd : /hooks, /hooks reload, /hooks test <name> <text>.
+func (u *UI) hooksCmd(w *Window, args []string, text string) {
+	switch {
+	case len(args) == 0:
+		u.hooksList(w)
+	case args[0] == "reload" && len(args) == 1:
+		u.loadHooks(w.AddSys, true)
+	case args[0] == "test" && len(args) >= 2:
+		_, rest, _ := strings.Cut(text, " ")                    // after "test"
+		_, body, _ := strings.Cut(strings.TrimSpace(rest), " ") // after the name
+		u.hookTest(w, args[1], strings.TrimSpace(body))
+	default:
+		w.AddSys(i18n.T("usage_hooks"))
+	}
+}
+
+// hooksList : one line per hook — name, filters, reply, counters, last result.
+func (u *UI) hooksList(w *Window) {
+	if len(u.hooks) == 0 {
+		w.AddSys(i18n.T("hooks_none", hookPath()))
+		return
+	}
+	for _, h := range u.hooks {
+		st := u.hookStats[h.Name]
+		w.AddSys(i18n.T("hook_row", h.Name, hookScope(h), h.Reply, st.runs, st.fails, st.skipped, st.dropped,
+			cmp.Or(st.last, i18n.T("hook_never"))))
+	}
+}
+
+// hookScope : the filters of h in a few words; "*" when it takes every message.
+func hookScope(h hook.Hook) string {
+	var s []string
+	if h.Net != "" {
+		s = append(s, h.Net)
+	}
+	if len(h.Chats) > 0 {
+		s = append(s, strings.Join(h.Chats, ","))
+	}
+	if len(h.Kinds) > 0 {
+		s = append(s, strings.Join(h.Kinds, ","))
+	}
+	if len(h.From) > 0 {
+		s = append(s, "from:"+strings.Join(h.From, ","))
+	}
+	if h.Mention {
+		s = append(s, "@me")
+	}
+	if h.Match != nil {
+		s = append(s, "/"+h.Match.String()+"/")
+	}
+	if len(s) == 0 {
+		return "*"
+	}
+	return strings.Join(s, " ")
+}
+
+// hookTest : /hooks test — h runs on text as if I wrote it in the chat of w
+// (none in window 0). Only match is checked; the end shows in w, never sent.
+func (u *UI) hookTest(w *Window, name, text string) {
+	i := slices.IndexFunc(u.hooks, func(h hook.Hook) bool { return h.Name == name })
+	if i < 0 {
+		w.AddSys(i18n.T("hook_unknown", name))
+		return
+	}
+	h, m, key := u.hooks[i], hook.Msg{Text: text}, model.ChatKey{}
+	if c := w.Chat; c != nil {
+		me := u.selfOf(c.Net)
+		m = hook.Msg{Net: c.Net, Chat: c.Title, ChatID: c.ID, Kind: hook.KindOf(c.Kind), From: me.Name, FromID: me.ID,
+			Text: text, NameIsID: backendCaps(u.netOf(c.Net)).NameIsID}
+		key = c.Key()
+	}
+	got, ok := hook.Match(hook.Hook{Match: h.Match}, m)
+	if !ok {
+		w.AddSys(i18n.T("hook_test_nomatch", name))
+		return
+	}
+	u.fireHook(h, m, got, key, w)
+}
+
+// hookTested : the end of a /hooks test, in the window that asked.
+func (u *UI) hookTested(e evHook) {
+	if e.err != nil {
+		e.test.AddSys(i18n.T("hook_test_failed", e.name, e.err))
+		return
+	}
+	out := hook.Clean(e.out)
+	if out == "" {
+		e.test.AddSys(i18n.T("hook_test_empty", e.name))
+		return
+	}
+	u.hookDisplay(e.test, e.name, out)
 }
