@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/govlog/ttyloom/internal/config"
+	"github.com/govlog/ttyloom/internal/i18n"
 	"github.com/govlog/ttyloom/internal/model"
 	"github.com/govlog/ttyloom/internal/module"
 )
@@ -99,6 +100,34 @@ func (m *Module) Networks() []string {
 
 func (m *Module) Cache(net string) (string, bool) { return net, false }
 func (m *Module) Claims(string) bool              { return false }
+
+func (m *Module) Label() string { return "Discord" }
+
+// CanAdd : no [discord] yet.
+func (m *Module) CanAdd() bool { return m.set == nil }
+
+// OpenSetup : the page of the hub — the warning of the terms, then the QR
+// login, or a token_cmd for a token kept in a password manager.
+func (m *Module) OpenSetup(h module.Host) {
+	h.OpenForm(&module.Form{
+		Title:  m.Label(),
+		Intro:  []string{i18n.T("dsc_setup_warn"), i18n.T("dsc_setup_qr")},
+		Fields: []module.Field{{Label: i18n.T("dsc_f_token_cmd"), Sel: -1}},
+		Submit: func(v []string) string { return m.setup(h, v[0]) },
+	})
+}
+
+// setup writes [discord] and adds the network. The first launch reads the
+// token (command or file); with none, the backend shows the QR code.
+func (m *Module) setup(h module.Host, cmd string) string {
+	m.set, m.first = &Settings{TokenCmd: cmd}, false
+	if !h.SaveConfig() {
+		m.set = nil
+		return i18n.T("dsc_not_saved")
+	}
+	h.AddNetwork(Net)
+	return ""
+}
 
 // Token gives the token as a launch would read it now, "" with no [discord]
 // — for the tools of the repository (scripts/gifshots.go), which must not

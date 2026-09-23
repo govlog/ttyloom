@@ -9,7 +9,9 @@ import (
 	"testing"
 
 	"github.com/govlog/ttyloom/internal/config"
+	"github.com/govlog/ttyloom/internal/i18n"
 	"github.com/govlog/ttyloom/internal/model"
+	"github.com/govlog/ttyloom/internal/module"
 )
 
 // loadDiscord : a config.toml written for the test, read with the Discord
@@ -143,5 +145,55 @@ func TestModuleTokenReadOnceAtLoad(t *testing.T) {
 		if runs() != want {
 			t.Fatalf("launch %d: %d runs", i+1, runs())
 		}
+	}
+}
+
+// setupHost : the Host of the page tests — the form it opens, the config it
+// saves (for real, in the test directory), the networks it adds.
+type setupHost struct {
+	module.Host
+	cfg   *config.Config
+	form  *module.Form
+	added []string
+	fail  bool // SaveConfig fails
+}
+
+func (h *setupHost) OpenForm(f *module.Form) { h.form = f }
+func (h *setupHost) AddNetwork(net string)   { h.added = append(h.added, net) }
+func (h *setupHost) SaveConfig() bool        { return !h.fail && h.cfg.Save() == nil }
+
+// The Discord page: the warning, token_cmd optional; [discord] written and
+// the network added, with or without a command.
+func TestDiscordSetup(t *testing.T) {
+	for _, cmd := range []string{"", "pass show discord"} {
+		cfg, m := loadDiscord(t, "theme = \"x\"\n")
+		if m.Label() != "Discord" || !m.CanAdd() {
+			t.Fatalf("label %q, can add %v", m.Label(), m.CanAdd())
+		}
+		h := &setupHost{cfg: cfg}
+		m.OpenSetup(h)
+		if h.form == nil || len(h.form.Intro) < 2 || len(h.form.Fields) != 1 {
+			t.Fatalf("form: %+v", h.form)
+		}
+		if e := h.form.Submit([]string{cmd}); e != "" {
+			t.Fatalf("submit %q: %q", cmd, e)
+		}
+		if !slices.Equal(h.added, []string{"discord"}) || m.CanAdd() {
+			t.Fatalf("added %v, can add %v", h.added, m.CanAdd())
+		}
+		m2 := NewModule()
+		if _, err := config.LoadFrom(filepath.Dir(cfg.Path()), m2); err != nil || len(m2.Networks()) != 1 || m2.set.TokenCmd != cmd {
+			t.Fatalf("written: %+v %v", m2.set, err)
+		}
+	}
+}
+
+// A write that fails keeps the page open and no [discord].
+func TestDiscordSetupNotSaved(t *testing.T) {
+	cfg, m := loadDiscord(t, "theme = \"x\"\n")
+	h := &setupHost{cfg: cfg, fail: true}
+	m.OpenSetup(h)
+	if e := h.form.Submit([]string{""}); e != i18n.T("dsc_not_saved") || !m.CanAdd() {
+		t.Fatalf("submit: %q, can add %v", e, m.CanAdd())
 	}
 }
