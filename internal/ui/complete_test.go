@@ -38,7 +38,6 @@ func TestComplContext(t *testing.T) {
 		{"/net tel", complNet, "tel", ""},
 		{"/open 2", complNone, "", ""},
 		{"salut al", complChats, "al", ""},
-		{"/discord l", complNetCmd, "l", ""},
 		{"/telegram ", complNetCmd, "", ""},
 		{"/log o", complLog, "o", ""},
 	}

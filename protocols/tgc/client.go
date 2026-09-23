@@ -191,7 +191,7 @@ func (c *Client) qrLogin(ctx context.Context) (string, error) {
 		// show is called again at each token renewal: the UI replaces the overlay.
 		// The URL is worth an open session, so it is never logged.
 		_, err = c.client.QR().Auth(qctx, c.loggedIn, func(_ context.Context, t qrlogin.Token) error {
-			c.Post(model.EvQR{URL: t.URL(), Expires: t.Expires()})
+			c.Post(model.EvQR{URL: t.URL(), Expires: t.Expires(), Hint: "qr_hint_telegram", Keys: "qr_keys_telegram"})
 			return nil
 		})
 	}()

@@ -222,9 +222,9 @@ func shotUI(t *testing.T, th theme.Theme, out *bytes.Buffer) *UI {
 	add(&model.Chat{Net: model.NetTelegram, ID: 8, Kind: model.ChatUser, Title: "Bob", Username: "bob", LastDate: now.Add(-3 * time.Hour)})
 	add(&model.Chat{Net: model.NetTelegram, ID: 101, Kind: model.ChatChannel, Title: "Go Announcements", Username: "golang_news", LastDate: now.Add(-26 * time.Hour), Channel: true})
 	add(&model.Chat{Net: model.NetDiscord, ID: 9, Kind: model.ChatUser, Title: "dave", Username: "dave", LastDate: now.Add(-40 * time.Minute), Unread: 3})
-	add(&model.Chat{Net: model.NetDiscord, ID: 201, Kind: model.ChatGroup, Title: "Gophers / #general", LastDate: now.Add(-20 * time.Minute)})
-	add(&model.Chat{Net: model.NetDiscord, ID: 202, Kind: model.ChatGroup, Title: "Gophers / #help", LastDate: now.Add(-2 * time.Hour), Unread: 12})
-	add(&model.Chat{Net: model.NetDiscord, ID: 203, Kind: model.ChatGroup, Title: "Gophers / #offtopic", LastDate: now.Add(-5 * time.Hour)})
+	add(&model.Chat{Net: model.NetDiscord, ID: 201, Kind: model.ChatGroup, Title: "Gophers / #general", Group: "Gophers", LastDate: now.Add(-20 * time.Minute)})
+	add(&model.Chat{Net: model.NetDiscord, ID: 202, Kind: model.ChatGroup, Title: "Gophers / #help", Group: "Gophers", LastDate: now.Add(-2 * time.Hour), Unread: 12})
+	add(&model.Chat{Net: model.NetDiscord, ID: 203, Kind: model.ChatGroup, Title: "Gophers / #offtopic", Group: "Gophers", LastDate: now.Add(-5 * time.Hour)})
 	goChan := add(&model.Chat{Net: libera, ID: 900, Kind: model.ChatGroup, Title: "#go", LastDate: now.Add(-3 * time.Minute)})
 	aliceIRC := add(&model.Chat{Net: libera, ID: 901, Kind: model.ChatUser, Title: "alice", LastDate: now.Add(-7 * time.Minute), Unread: 2})
 	u.presence[model.ChatKey{Net: model.NetTelegram, ID: 7}] = "online"

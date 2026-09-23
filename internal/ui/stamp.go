@@ -83,7 +83,7 @@ func stamp(net string, ev model.Event) model.Event {
 func stampChat(net string, c *model.Chat) {
 	if c != nil {
 		c.Net = net
-		c.Title, c.Username = render.CleanLine(c.Title), render.CleanLine(c.Username)
+		c.Title, c.Username, c.Group = render.CleanLine(c.Title), render.CleanLine(c.Username), render.CleanLine(c.Group)
 	}
 }
 

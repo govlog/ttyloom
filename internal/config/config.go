@@ -47,37 +47,13 @@ func (m *HoverMode) UnmarshalText(b []byte) error {
 	return nil
 }
 
-// TelegramConfig, DiscordConfig : one section per network. The historic flat
+// TelegramConfig : the [telegram] section. The historic flat
 // keys (api_id, api_hash, bot_token at the top level) keep working and mean
 // [telegram]; the section wins when both are there.
 type TelegramConfig struct {
 	APIID    int    `toml:"api_id"`
 	APIHash  string `toml:"api_hash"`
 	BotToken string `toml:"bot_token"`
-}
-
-type DiscordConfig struct {
-	// TokenCmd : command printing the token; never the token itself. Empty:
-	// the token file of the configuration directory, written by the QR login.
-	TokenCmd string `toml:"token_cmd"`
-}
-
-// Token gives the Discord token: the trimmed stdout of token_cmd when there
-// is one, the token file otherwise — "" with no error when that file does not
-// exist yet, and the backend then logs in by QR and writes it. The token
-// never lands in config.toml, the log or an event.
-func (d *DiscordConfig) Token(file string) (string, error) {
-	if strings.TrimSpace(d.TokenCmd) == "" {
-		b, err := os.ReadFile(file)
-		if errors.Is(err, os.ErrNotExist) {
-			return "", nil
-		}
-		if err != nil {
-			return "", fmt.Errorf("discord: %w", err)
-		}
-		return strings.TrimSpace(string(b)), nil
-	}
-	return SecretCmd("discord: token_cmd", d.TokenCmd)
 }
 
 // SecretCmd runs cmd — split on blanks, no shell — and gives its trimmed
@@ -151,7 +127,6 @@ type Config struct {
 
 	// Sections, after every scalar: the TOML encoder writes the tables last.
 	Telegram *TelegramConfig `toml:"telegram"`
-	Discord  *DiscordConfig  `toml:"discord"`
 
 	// Unknown : keys of the file no field takes (a typo, imagess = "off"). The
 	// UI says so at start, otherwise the user believes the option active.
@@ -208,13 +183,6 @@ const defaultFile = `# ttyloom
 #   api_id = 0
 #   api_hash = ""
 #   bot_token = ""
-# Discord is a second, optional network. Its token is never written here: the
-# command below prints it (a password manager), and it runs with no shell —
-# split on blanks, so a path with a space in it needs a wrapper script.
-# Third-party clients on a user account are against the Discord terms of
-# service: a secondary account is the safe way to try it.
-#   [discord]
-#   token_cmd = "pass show discord/token"   # or nothing: /discord login shows a QR code
 # Sections go at the END of the file: a plain key written after [discord]
 # would be read as one of its keys.
 api_id = 0            # https://my.telegram.org
@@ -459,10 +427,6 @@ func (c *Config) Path() string { return filepath.Join(c.dir, "config.toml") }
 
 // SessionPath : one session per identity; a bot and a user account never
 // share the same file.
-// DiscordTokenPath : the token file of the QR login (mode 0600, next to the
-// Telegram session), read when [discord] has no token_cmd.
-func (c *Config) DiscordTokenPath() string { return filepath.Join(c.dir, "discord.token") }
-
 func (c *Config) SessionPath() string {
 	if c.BotToken != "" {
 		return filepath.Join(c.dir, "session-bot.json")

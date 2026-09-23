@@ -216,7 +216,7 @@ func chatOf(ch *discord.Channel, guild string) *model.Chat {
 	default:
 		c.Title = "#" + ch.Name
 		if guild != "" {
-			c.Title = guild + " / " + c.Title
+			c.Title, c.Group = guild+" / "+c.Title, guild
 		}
 	}
 	// A DM whose recipients the state does not carry would land in the sidebar

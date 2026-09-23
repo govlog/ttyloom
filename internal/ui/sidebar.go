@@ -103,18 +103,10 @@ func sortChats(list []*model.Chat, mode string) []*model.Chat {
 	return groupGuilds(out)
 }
 
-// guildOf gives the guild of a Discord channel title ("Guild / #chan" ->
-// "Guild"), "" for anything else — a DM, a group DM, another network.
-func guildOf(c *model.Chat) string {
-	if c.Net != model.NetDiscord {
-		return ""
-	}
-	g, _, ok := strings.Cut(c.Title, " / #")
-	if !ok {
-		return ""
-	}
-	return g
-}
+// guildOf gives the group of a chat inside its network (a Discord guild),
+// set by its module; "" for anything else — a DM, a group DM, a chat read
+// from a cache written before groups, until the network sends it again.
+func guildOf(c *model.Chat) string { return c.Group }
 
 // groupGuilds keeps the channels of one Discord guild next to each other
 // whatever the primary sort: the guild takes the place of its best-ranked
@@ -717,10 +709,8 @@ func sideSecLine(r sideRow, th theme.Theme, width, gut int) []render.Span {
 // with no section (r.sec == "") the title is the one of before, untouched.
 func sideTitle(r sideRow, name func(*model.Chat) string) string {
 	t := render.CleanLine(chatTitle(r.chat, name))
-	if strings.Contains(r.sec, ":") { // guild section: its name is on the header
-		if _, chn, ok := strings.Cut(t, " / #"); ok {
-			return chn
-		}
+	if strings.Contains(r.sec, ":") && r.chat.Group != "" { // group section: its name is on the header
+		return bareTitle(r.chat, strings.TrimPrefix(t, r.chat.Group+" / "))
 	}
 	return t
 }

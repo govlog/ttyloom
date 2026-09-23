@@ -126,7 +126,9 @@ func (c *Client) qrLogin(parent context.Context) (string, error) {
 		}
 	}()
 	ra := remoteAuth{gateway: remoteAuthGateway, login: remoteAuthLogin,
-		show: func(url string, exp time.Time) { c.Post(model.EvQR{URL: url, Expires: exp}) },
+		show: func(url string, exp time.Time) {
+			c.Post(model.EvQR{URL: url, Expires: exp, Hint: "qr_hint_discord", Keys: "qr_keys_discord"})
+		},
 		scanned: func(user string) {
 			c.Post(model.EvAuthPrompt{Question: i18n.T("qr_scanned_discord", user), Reply: reply})
 		},

@@ -5,6 +5,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/govlog/ttyloom/internal/i18n"
+	"github.com/govlog/ttyloom/internal/model"
+	"github.com/govlog/ttyloom/internal/render"
 	"github.com/govlog/ttyloom/internal/theme"
 )
 
@@ -85,4 +88,19 @@ func TestQRLines(t *testing.T) {
 		t.Fatalf("narrow screen: %d lines", len(small))
 	}
 	checkBox(t, "qr narrow", small, q.width())
+}
+
+// The two help lines of the QR box are the ones the network sent with the
+// code (keys of its catalogue), translated at each drawing.
+func TestQRBoxLinesFromEvent(t *testing.T) {
+	u := listUI()
+	u.dispatchNet = "fake:a"
+	u.setQR(model.EvQR{URL: "https://example.org/x", Expires: time.Now().Add(time.Minute), Hint: "qr_hint_discord", Keys: "qr_keys_discord"})
+	var txt string
+	for _, l := range u.qr.Lines(u.th, 200, 200, false) {
+		txt += render.LineText(l) + "\n"
+	}
+	if !strings.Contains(txt, i18n.T("qr_hint_discord")) || !strings.Contains(txt, i18n.T("qr_keys_discord")) {
+		t.Fatalf("box:\n%s", txt)
+	}
 }

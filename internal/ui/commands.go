@@ -20,7 +20,7 @@ var aliases = map[string]string{
 
 var commandNames = []string{"/window", "/close", "/query", "/join", "/new", "/msg", "/me", "/away", "/chats", "/net", "/fold", "/history",
 	"/search", "/whois", "/rename", "/unrename", "/open", "/view", "/send", "/theme", "/set", "/clear", "/log", "/debug", "/emoji", "/gif", "/help", "/quit",
-	"/telegram", "/discord"}
+	"/telegram"}
 
 // cmdNames : the commands valid now. general resolve first by prefix, then
 // context — the ones a network adds in its own windows (IRC's /kick), which
@@ -183,7 +183,7 @@ func (u *UI) command(name string, args []string, text string) {
 		u.listChats()
 	case "net":
 		u.netCmd(w, arg(0))
-	case model.NetTelegram, model.NetDiscord:
+	case model.NetTelegram:
 		u.netAction(w, name, strings.ToLower(arg(0)))
 	case "fold":
 		u.foldCmd(w, text)

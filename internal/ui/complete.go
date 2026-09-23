@@ -90,7 +90,7 @@ func complContext(line string, cursor int, names cmdNames) (src complSource, tai
 		return complNet, rest, ""
 	case "fold":
 		return complFold, rest, ""
-	case model.NetTelegram, model.NetDiscord:
+	case model.NetTelegram:
 		return complNetCmd, rest, ""
 	case "log":
 		return complLog, rest, ""

@@ -58,10 +58,13 @@ type ChatKey struct {
 type Chat struct {
 	// Net : network that owns this chat; stamped by the UI dispatch, never
 	// empty afterwards.
-	Net      string
-	ID       int64 // TDLib id, unique across all kinds
-	Kind     ChatKind
-	Title    string
+	Net   string
+	ID    int64 // TDLib id, unique across all kinds
+	Kind  ChatKind
+	Title string
+	// Group : section of the sidebar inside the network (a Discord guild);
+	// the Title of a grouped chat starts with Group + " / ".
+	Group    string
 	Username string
 	Peer     any
 	// Channel : peer backed by a Telegram channel — broadcast AND megagroup
@@ -291,6 +294,10 @@ type EvAuthPrompt struct {
 type EvQR struct {
 	URL     string
 	Expires time.Time
+	// Hint, Keys : keys of the catalogue of the network for the two lines of
+	// the box — where the phone finds the scanner, what Enter does. Keys, not
+	// texts: the box translates them at each drawing (/set lang).
+	Hint, Keys string
 }
 
 // EvQRDone : the QR has no reason to stay (scanned, dropped, failed) —

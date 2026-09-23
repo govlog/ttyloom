@@ -27,24 +27,22 @@ const (
 	qrPID    = 1 << 22 // kitty placement: outside the line, hover (1<<23) and avatar (1<<24) ranges; customPID shares it, pids being per image
 )
 
-// qrHint, qrKeys : text lines of the box, per network (where the phone finds
-// the scanner, what Enter does), read at each drawing — a /set lang changes
-// them with no restart.
-func qrHint(net string) string { return i18n.T("qr_hint_" + net) }
-func qrKeys(net string) string { return i18n.T("qr_keys_" + net) }
-
 var (
 	qrFG = theme.Color{Kind: 2}                                            // black
 	qrBG = theme.Color{Kind: 2, RGB: theme.RGB{R: 0xff, G: 0xff, B: 0xff}} // white
 )
 
 type qrBox struct {
-	net     string // network that asked: its own hint and key lines
-	expires time.Time
-	bits    [][]bool     // modules, quiet zone included
-	png     []byte       // the same code, for kitty
-	md      *model.Media // carrier of the kitty id; it survives a token renewal
-	shown   int          // seconds shown at the last repaint (rate of the tick)
+	net string // network that asked: its QR closes with its login
+	// hint, keys : the keys of its two text lines, given by the network
+	// (EvQR), translated at each drawing — a /set lang changes them with no
+	// restart.
+	hint, keys string
+	expires    time.Time
+	bits       [][]bool     // modules, quiet zone included
+	png        []byte       // the same code, for kitty
+	md         *model.Media // carrier of the kitty id; it survives a token renewal
+	shown      int          // seconds shown at the last repaint (rate of the tick)
 }
 
 // newQRBox encodes the login URL. It is not kept: the token is worth an open
@@ -113,7 +111,7 @@ func (q *qrBox) cols() int {
 func (q *qrBox) rows() int { return (len(q.bits) + 1) / 2 }
 
 func (q *qrBox) inner() int {
-	return max(q.cols(), render.Width(qrHint(q.net)), render.Width(qrKeys(q.net)))
+	return max(q.cols(), render.Width(i18n.T(q.hint)), render.Width(i18n.T(q.keys)))
 }
 
 func (q *qrBox) width() int { return q.inner() + 2 }
@@ -148,7 +146,7 @@ func (q *qrBox) Lines(th theme.Theme, cols, rows int, kitty bool) []render.Line 
 	if !q.expires.After(time.Now()) {
 		title = i18n.T("qr_title_renew")
 	}
-	out := []render.Line{b.bar("┌", "┐"), b.text(title, acc), b.text(qrHint(q.net), box)}
+	out := []render.Line{b.bar("┌", "┐"), b.text(title, acc), b.text(i18n.T(q.hint), box)}
 	switch pad := (b.inner - q.cols()) / 2; {
 	case !q.fits(cols, rows):
 		out = append(out, b.text(i18n.T("qr_too_small"), box))
@@ -162,7 +160,7 @@ func (q *qrBox) Lines(th theme.Theme, cols, rows int, kitty bool) []render.Line 
 				l.Spans[0], render.Span{Text: strings.Repeat(" ", b.inner-pad-q.cols()), Style: white}))
 		}
 	}
-	return append(out, b.text(qrKeys(q.net), box), b.bar("└", "┘"))
+	return append(out, b.text(i18n.T(q.keys), box), b.bar("└", "┘"))
 }
 
 // centerRect : w x h rectangle centred in a cols x rows screen.
@@ -198,7 +196,7 @@ func (u *UI) setQR(e model.EvQR) {
 		u.status0(i18n.T("qr_encode_failed"))
 		return
 	}
-	q.net = u.dispatchNet
+	q.net, q.hint, q.keys = u.dispatchNet, e.Hint, e.Keys
 	if old := u.qr; old != nil {
 		q.md = old.md
 		u.retireKitty(q.md)

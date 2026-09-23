@@ -57,9 +57,8 @@ func main() {
 
 // backends : the configured networks, their caches, and the launcher that
 // builds and runs one of them — at start for each, and again on /<net> login.
-// A network is configured only when its credentials are; the Discord token
-// is read here once, then at every launch, and goes nowhere else: not in the
-// log, not in an event, not in config.toml. ctx is the one of the whole client: the last
+// A network is configured only when its credentials are. ctx is the one of
+// the whole client: the last
 // event of a network is delivered as long as the UI runs.
 func backends(ctx context.Context, cfg *config.Config, events chan<- model.Envelope, mods []module.Module) ([]string, map[string]*cache.Cache, model.Launcher, error) {
 	// [telegram], or the historic flat keys synthesized into it by config.
@@ -93,12 +92,6 @@ func backends(ctx context.Context, cfg *config.Config, events chan<- model.Envel
 			caches[model.NetTelegram] = cache.New(dir, cfg.CacheMessages)
 		}
 	}
-	if cfg.Discord != nil {
-		nets = append(nets, model.NetDiscord)
-		if cfg.Cache {
-			caches[model.NetDiscord] = cache.New(filepath.Join(root, model.NetDiscord), cfg.CacheMessages)
-		}
-	}
 	modNets := 0 // the networks of the modules: the UI lists and launches them
 	for _, m := range mods {
 		modNets += len(m.Networks())
@@ -107,22 +100,6 @@ func backends(ctx context.Context, cfg *config.Config, events chan<- model.Envel
 		return nil, nil, nil, fmt.Errorf(i18n.T("main_no_networks"), cfg.Path())
 	}
 
-	// The first Discord token is read now, before the terminal goes raw: a
-	// token command that prompts on the tty (pinentry-curses) works at start
-	// as it always did. The launches that follow (/discord login) read it
-	// again from inside the raw terminal — such a command needs a graphical
-	// pinentry or an unlocked agent by then. With no command the token file
-	// is the source, and the backend logs in by QR and writes it when it is
-	// missing.
-	var firstTok string
-	var firstErr error
-	first, tokenFile := cfg.Discord != nil, ""
-	if first {
-		if cfg.Discord.TokenCmd == "" {
-			tokenFile = cfg.DiscordTokenPath()
-		}
-		firstTok, firstErr = cfg.Discord.Token(cfg.DiscordTokenPath())
-	}
 	// build makes the backend of net on its own chan. A token command that
 	// fails is the error of the launch: the UI shows it and starts nothing.
 	build := func(nctx context.Context, net string, raw chan<- model.Event) (model.Backend, error) {
@@ -130,16 +107,6 @@ func backends(ctx context.Context, cfg *config.Config, events chan<- model.Envel
 		case model.NetTelegram:
 			return tgc.New(tgc.Config{AppID: tg.APIID, AppHash: tg.APIHash, BotToken: tg.BotToken,
 				SessionPath: cfg.SessionPath()}, raw), nil
-		case model.NetDiscord:
-			tok, err := firstTok, firstErr
-			if !first { // the first read is spent: the command or the file again
-				tok, err = cfg.Discord.Token(cfg.DiscordTokenPath())
-			}
-			first = false
-			if err != nil {
-				return nil, err
-			}
-			return dsc.New(dsc.Config{Token: tok, TokenFile: tokenFile}, raw), nil
 		}
 		return nil, fmt.Errorf("%s: unknown network", net)
 	}
@@ -192,8 +159,7 @@ func backends(ctx context.Context, cfg *config.Config, events chan<- model.Envel
 }
 
 func run() error {
-	ircMod := irc.NewModule()
-	mods := []module.Module{ircMod}
+	mods := []module.Module{dsc.NewModule(), irc.NewModule()}
 	cfg, err := config.Load(mods...)
 	if err != nil {
 		return err

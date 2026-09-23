@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"strings"
 	"testing"
 	"time"
 
@@ -46,91 +45,6 @@ func TestBackendsTelegramOnly(t *testing.T) {
 	}
 	if len(caches) != 1 || caches[model.NetTelegram] == nil {
 		t.Fatalf("caches %v", caches)
-	}
-}
-
-// [discord] with a token_cmd that works: two networks, two caches, and the
-// launch of Discord gives a backend whose stop reaches the UI chan.
-func TestBackendsWithDiscord(t *testing.T) {
-	cfg := loadCfg(t, tgOnly+"[discord]\ntoken_cmd = \"echo tok\"\n")
-	events := make(chan model.Envelope, 8)
-	nets, caches, launch, err := backends(context.Background(), cfg, events, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !slices.Equal(nets, []string{model.NetTelegram, model.NetDiscord}) {
-		t.Fatalf("networks: %v", nets)
-	}
-	if len(caches) != 2 || caches[model.NetDiscord] == nil {
-		t.Fatalf("caches %v", caches)
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel() // Run ends at once: no network is reached
-	b, err := launch(ctx, model.NetDiscord)
-	if err != nil || b == nil {
-		t.Fatalf("launch: %v %v", b, err)
-	}
-	select {
-	case env := <-events:
-		if _, ok := env.Ev.(model.EvStopped); !ok || env.Net != model.NetDiscord {
-			t.Fatalf("event after the stop: %+v", env)
-		}
-	case <-time.After(10 * time.Second):
-		t.Fatal("no EvStopped after the stop")
-	}
-}
-
-func TestBackendsDiscordOnly(t *testing.T) {
-	cfg := loadCfg(t, "[discord]\ntoken_cmd = \"echo tok\"\n")
-	nets, caches, _, err := backends(context.Background(), cfg, make(chan model.Envelope, 8), nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !slices.Equal(nets, []string{model.NetDiscord}) || len(caches) != 1 {
-		t.Fatalf("networks %v, caches %v", nets, caches)
-	}
-}
-
-// [discord] with no token_cmd: the token file of the configuration directory
-// is the source, and with no file either the launch still gives a backend —
-// the one that logs in by QR and writes the file.
-func TestBackendsDiscordTokenFile(t *testing.T) {
-	cfg := loadCfg(t, "[discord]\n")
-	nets, _, launch, err := backends(context.Background(), cfg, make(chan model.Envelope, 8), nil)
-	if err != nil || !slices.Equal(nets, []string{model.NetDiscord}) {
-		t.Fatalf("networks %v, %v", nets, err)
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-	if b, err := launch(ctx, model.NetDiscord); err != nil || b == nil {
-		t.Fatalf("launch with no token: %v %v", b, err)
-	}
-	os.WriteFile(cfg.DiscordTokenPath(), []byte("tok\n"), 0o600)
-	if b, err := launch(ctx, model.NetDiscord); err != nil || b == nil {
-		t.Fatalf("launch with the token file: %v %v", b, err)
-	}
-}
-
-// token_cmd that fails: the network is configured all the same (the client
-// starts, /discord login retries), its launch is the one that fails.
-func TestBackendsTokenError(t *testing.T) {
-	cfg := loadCfg(t, "[discord]\ntoken_cmd = \"false\"\n")
-	events := make(chan model.Envelope, 8)
-	nets, _, launch, err := backends(context.Background(), cfg, events, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !slices.Equal(nets, []string{model.NetDiscord}) {
-		t.Fatalf("networks: %v", nets)
-	}
-	b, err := launch(context.Background(), model.NetDiscord)
-	if b != nil || err == nil || !strings.Contains(err.Error(), "token_cmd") {
-		t.Fatalf("launch with a failing token_cmd: %v %v", b, err)
-	}
-	select {
-	case env := <-events:
-		t.Fatalf("event after a failed launch: %+v", env)
-	default:
 	}
 }
 

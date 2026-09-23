@@ -16,6 +16,7 @@ import (
 	"github.com/govlog/ttyloom/internal/render"
 	"github.com/govlog/ttyloom/internal/term"
 	"github.com/govlog/ttyloom/internal/theme"
+	"github.com/govlog/ttyloom/protocols/dsc"
 	"github.com/govlog/ttyloom/protocols/irc"
 )
 
@@ -245,7 +246,7 @@ func TestBotGateOrder(t *testing.T) {
 func foldUI() *UI {
 	u := netUI(model.NetTelegram, model.NetDiscord)
 	u.th, u.side, u.sideW, u.folded = theme.Terminal(), sideChats, testSideW, map[string]bool{}
-	u.chatList = append(u.chatList, &model.Chat{Net: model.NetDiscord, ID: 3, Title: "Gophers / #general", LastDate: time.Now()})
+	u.chatList = append(u.chatList, &model.Chat{Net: model.NetDiscord, ID: 3, Title: "Gophers / #general", Group: "Gophers", LastDate: time.Now()})
 	return u
 }
 
@@ -465,6 +466,7 @@ func launchUI(err error) (*UI, *int) {
 	u := netUI()
 	u.ctx = context.Background()
 	u.netList = []string{model.NetDiscord, model.NetTelegram}
+	u.mods = []module.Module{dsc.NewModule()} // /discord
 	u.netCancel = map[string]context.CancelFunc{}
 	u.self = map[string]selfInfo{}
 	n := new(int)
@@ -919,5 +921,14 @@ func TestAwayScope(t *testing.T) {
 	u.command("away", []string{"x"}, "x")
 	if got := lastSys(u.view()); got != i18n.T("net_unsupported", model.NetTelegram) {
 		t.Fatalf("telegram: %q", got)
+	}
+}
+
+// Tab after /discord gives its sub-commands, from the Discord module.
+func TestNetCommandCompletion(t *testing.T) {
+	u, _ := launchUI(nil)
+	u.ed.Set("/discord l")
+	if got := u.candidates("l", false); !slices.Equal(got, []string{"login", "logout"}) {
+		t.Fatalf("candidates: %v", got)
 	}
 }

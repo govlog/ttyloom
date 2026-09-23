@@ -325,9 +325,9 @@ func TestSortChats(t *testing.T) {
 // that looks like one ("notes / #general") is left alone.
 func TestSortChatsGuildGrouping(t *testing.T) {
 	now := time.Now()
-	gen := &model.Chat{Net: model.NetDiscord, ID: 1, Title: "Gophers / #general", LastDate: now}
+	gen := &model.Chat{Net: model.NetDiscord, ID: 1, Title: "Gophers / #general", Group: "Gophers", LastDate: now}
 	bob := &model.Chat{Net: model.NetTelegram, ID: 2, Title: "Bob", LastDate: now.Add(-time.Hour)}
-	ann := &model.Chat{Net: model.NetDiscord, ID: 3, Title: "Gophers / #annonces", LastDate: now.Add(-2 * time.Hour)}
+	ann := &model.Chat{Net: model.NetDiscord, ID: 3, Title: "Gophers / #annonces", Group: "Gophers", LastDate: now.Add(-2 * time.Hour)}
 	eve := &model.Chat{Net: model.NetDiscord, ID: 4, Title: "Eve", LastDate: now.Add(-3 * time.Hour)} // DM: no guild
 	list := []*model.Chat{gen, bob, ann, eve}
 
@@ -345,8 +345,8 @@ func TestSortChatsGuildGrouping(t *testing.T) {
 	ann.Unread = 0
 
 	// A pinned channel stays in the pinned block alone: grouping never crosses it.
-	pin := &model.Chat{Net: model.NetDiscord, ID: 5, Title: "Gophers / #annonces", Pinned: true, LastDate: now.Add(-9 * time.Hour)}
-	older := &model.Chat{Net: model.NetDiscord, ID: 6, Title: "Gophers / #general", LastDate: now.Add(-4 * time.Hour)}
+	pin := &model.Chat{Net: model.NetDiscord, ID: 5, Title: "Gophers / #annonces", Group: "Gophers", Pinned: true, LastDate: now.Add(-9 * time.Hour)}
+	older := &model.Chat{Net: model.NetDiscord, ID: 6, Title: "Gophers / #general", Group: "Gophers", LastDate: now.Add(-4 * time.Hour)}
 	want = []string{"Gophers / #annonces", "Bob", "Gophers / #general"}
 	if got := chatTitles(sortChats([]*model.Chat{pin, bob, older}, "recent")); !slices.Equal(got, want) {
 		t.Fatalf("pinned: %v, want %v", got, want)
@@ -386,7 +386,7 @@ func TestSectionOf(t *testing.T) {
 	}{
 		{&model.Chat{Net: model.NetTelegram, Title: "Bob"}, "telegram"},
 		{&model.Chat{Net: model.NetDiscord, Title: "Eve"}, "discord"},
-		{&model.Chat{Net: model.NetDiscord, Title: "Gophers / #general"}, "discord:Gophers"},
+		{&model.Chat{Net: model.NetDiscord, Title: "Gophers / #general", Group: "Gophers"}, "discord:Gophers"},
 		{&model.Chat{Net: model.NetTelegram, Title: "notes / #general"}, "telegram"},
 	} {
 		if got := sectionOf(c.chat); got != c.want {
@@ -413,8 +413,8 @@ func TestSectionRows(t *testing.T) {
 	}
 
 	eve := &model.Chat{Net: model.NetDiscord, ID: 3, Title: "Eve", LastDate: now.Add(-2 * time.Hour)}
-	gen := &model.Chat{Net: model.NetDiscord, ID: 4, Title: "Gophers / #general", LastDate: now.Add(-3 * time.Hour)}
-	ann := &model.Chat{Net: model.NetDiscord, ID: 5, Title: "Gophers / #annonces", LastDate: now.Add(-4 * time.Hour)}
+	gen := &model.Chat{Net: model.NetDiscord, ID: 4, Title: "Gophers / #general", Group: "Gophers", LastDate: now.Add(-3 * time.Hour)}
+	ann := &model.Chat{Net: model.NetDiscord, ID: 5, Title: "Gophers / #annonces", Group: "Gophers", LastDate: now.Add(-4 * time.Hour)}
 	sorted := sortChats([]*model.Chat{bob, alice, eve, gen, ann}, "recent")
 
 	want := []string{"=discord", "Eve", "=Gophers", "Gophers / #annonces", "Gophers / #general", "=telegram", "Bob", "Alice"}
@@ -588,7 +588,7 @@ func TestSidebarSections(t *testing.T) {
 	th := theme.Terminal()
 	now := time.Now()
 	bob := &model.Chat{Net: model.NetTelegram, ID: 1, Kind: model.ChatUser, Title: "Bob", LastDate: now}
-	gen := &model.Chat{Net: model.NetDiscord, ID: 2, Kind: model.ChatGroup, Title: "Gophers / #general", LastDate: now.Add(-time.Hour)}
+	gen := &model.Chat{Net: model.NetDiscord, ID: 2, Kind: model.ChatGroup, Title: "Gophers / #general", Group: "Gophers", LastDate: now.Add(-time.Hour)}
 	sorted := sortChats([]*model.Chat{bob, gen}, "recent")
 
 	// Sections on, nothing folded (sideBlock does this).
@@ -618,8 +618,8 @@ func TestSidebarSectionFolded(t *testing.T) {
 	th := theme.Terminal()
 	now := time.Now()
 	bob := &model.Chat{Net: model.NetTelegram, ID: 1, Kind: model.ChatUser, Title: "Bob", LastDate: now}
-	gen := &model.Chat{Net: model.NetDiscord, ID: 2, Kind: model.ChatGroup, Title: "Gophers / #general", Unread: 4, LastDate: now.Add(-time.Hour)}
-	ann := &model.Chat{Net: model.NetDiscord, ID: 3, Kind: model.ChatGroup, Title: "Gophers / #annonces", Unread: 3, LastDate: now.Add(-2 * time.Hour)}
+	gen := &model.Chat{Net: model.NetDiscord, ID: 2, Kind: model.ChatGroup, Title: "Gophers / #general", Group: "Gophers", Unread: 4, LastDate: now.Add(-time.Hour)}
+	ann := &model.Chat{Net: model.NetDiscord, ID: 3, Kind: model.ChatGroup, Title: "Gophers / #annonces", Group: "Gophers", Unread: 3, LastDate: now.Add(-2 * time.Hour)}
 	sorted := sortChats([]*model.Chat{bob, gen, ann}, "recent")
 
 	lines := sidebarLines(sideChats, sorted, []*Window{{Chat: gen}}, nil, -1, th, testSideW, 3, 0, false, true, 0, -1, false, nil,
@@ -1279,5 +1279,29 @@ func TestSideWinsSplit(t *testing.T) {
 	u.sideClick(sideIconCol(sideWindows, "alpha"), 0)
 	if u.cfg.SidebarSplit || u.cfg.SidebarSort != "alpha" {
 		t.Fatalf("icon click: split %v sort %q", u.cfg.SidebarSplit, u.cfg.SidebarSort)
+	}
+}
+
+// Sections of a guild come from Chat.Group; a chat read from an old cache,
+// with no Group yet, stays out of any guild section until the network sends it.
+func TestSidebarGuildFromGroup(t *testing.T) {
+	g := &model.Chat{Net: "discord", ID: 1, Kind: model.ChatGroup, Title: "Gophers / #general", Group: "Gophers"}
+	old := &model.Chat{Net: "discord", ID: 2, Kind: model.ChatGroup, Title: "Gophers / #random"}
+	dm := &model.Chat{Net: "telegram", ID: 3, Kind: model.ChatUser, Title: "bob"}
+	rows := sectionRows([]*model.Chat{g, old, dm}, nil, map[string]bool{})
+	var secs []string
+	for _, r := range rows {
+		if r.chat == nil {
+			secs = append(secs, r.sec)
+		}
+		if r.chat == old && r.sec != "discord" {
+			t.Fatalf("a chat with no Group in section %q", r.sec)
+		}
+	}
+	if !slices.Equal(secs, []string{"discord", "discord:Gophers", "telegram"}) {
+		t.Fatalf("sections: %v", secs)
+	}
+	if got := sideTitle(sideRow{chat: g, sec: "discord:Gophers"}, nil); got != "general" {
+		t.Fatalf("title under its guild: %q", got)
 	}
 }
