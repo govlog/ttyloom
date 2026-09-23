@@ -130,3 +130,33 @@ func TestModuleForm(t *testing.T) {
 		t.Fatalf("form %v, values %v", u.form, got)
 	}
 }
+
+// A module form draws its guide, folded to the box, and its link; Ctrl+O
+// opens the link. At 60 columns nothing goes past the borders.
+func TestFormIntroAndLink(t *testing.T) {
+	u, _, _ := cmdMod()
+	u.t.Cols, u.t.Rows = 60, 24
+	var opened string
+	host{u}.OpenForm(&module.Form{Title: "t",
+		Intro:  []string{strings.Repeat("word ", 30)},
+		Link:   "https://example.org",
+		Fields: []module.Field{{Label: "a", Sel: -1}},
+		Submit: func([]string) string { return "" }})
+	u.form.openLink = func(s string) { opened = s }
+	r := u.formRect()
+	lines := u.form.Lines(u.th, r.w)
+	var txt string
+	for _, l := range lines {
+		if w := render.Width(render.LineText(l)); w > r.w {
+			t.Fatalf("line of %d columns in a box of %d: %q", w, r.w, render.LineText(l))
+		}
+		txt += render.LineText(l) + "\n"
+	}
+	if strings.Count(txt, "word") != 30 || !strings.Contains(txt, "https://example.org") || len(lines) != r.h {
+		t.Fatalf("box (%d lines, rect %d):\n%s", len(lines), r.h, txt)
+	}
+	u.formKey(term.Key{Code: term.Ctrl, Rune: 'o'})
+	if opened != "https://example.org" || u.form == nil {
+		t.Fatalf("Ctrl+O: %q, form %v", opened, u.form)
+	}
+}

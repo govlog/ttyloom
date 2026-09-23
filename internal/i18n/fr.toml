@@ -590,3 +590,4 @@ query_waiting = "résolution de %s en cours ; attendre la cible ou /q pour annul
 
 # IRC networks and DCC (UI)
 form_help = "Tab/↑↓ : champ · ←→ : réseaux connus · Entrée : OK · Échap : annuler"
+form_link = "→ %s (Ctrl+O)"

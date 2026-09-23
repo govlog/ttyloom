@@ -168,7 +168,10 @@ func (h host) LastIncomingFile(w module.Win) *model.Msg {
 	return nil
 }
 
-func (h host) OpenForm(f *module.Form) { h.u.form = newFormBox(f) }
+func (h host) OpenForm(f *module.Form) {
+	h.u.form = newFormBox(f)
+	h.u.form.openLink = h.u.open // the link comes from the module, not from the network: no question
+}
 
 func (h host) Do(f func()) {
 	select {

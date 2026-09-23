@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/govlog/ttyloom/internal/i18n"
@@ -39,13 +40,18 @@ type formBox struct {
 	// pick : a preset chosen on field f (choice i) — the caller fills the
 	// other fields from it.
 	pick func(f, i int)
+	// intro : lines of guide above the fields; link : drawn under them,
+	// opened by openLink at Ctrl+O.
+	intro    []string
+	link     string
+	openLink func(string)
 }
 
 // newFormBox : the overlay of a module form. The box keeps its runes; the
 // module sees its Fields (Value, Sel) up to date in Pick, and Submit gets the
 // values.
 func newFormBox(mf *module.Form) *formBox {
-	f := &formBox{title: mf.Title, submit: mf.Submit}
+	f := &formBox{title: mf.Title, submit: mf.Submit, intro: mf.Intro, link: mf.Link}
 	for _, fd := range mf.Fields {
 		f.fields = append(f.fields, formField{label: fd.Label, val: []rune(fd.Value), secret: fd.Secret, choices: fd.Choices, sel: fd.Sel})
 	}
@@ -72,9 +78,22 @@ func (f *formBox) values() []string {
 	return out
 }
 
-// height : lines of the box, borders included — title, the fields, one line
-// of error or help.
-func (f *formBox) height() int { return len(f.fields) + 4 }
+// height : lines of the box, borders included — title, the guide folded to
+// inner columns, the fields, one line of error or help.
+func (f *formBox) height(inner int) int { return len(f.fields) + 4 + len(f.introLines(inner)) }
+
+// introLines : the guide folded to inner columns, then the link, as an OSC 8
+// link (a click opens it) that folds too.
+func (f *formBox) introLines(inner int) []render.Line {
+	var out []render.Line
+	for _, l := range f.intro {
+		out = append(out, render.Wrap([]render.Span{{Text: render.CleanLine(l)}}, inner)...)
+	}
+	if f.link != "" {
+		out = append(out, render.Wrap([]render.Span{{Text: i18n.T("form_link", f.link), Style: theme.Style{URL: f.link, Underline: true}}}, inner)...)
+	}
+	return out
+}
 
 // move : field cur+d, bounded.
 func (f *formBox) move(d int) { f.cur = min(max(f.cur+d, 0), len(f.fields)-1) }
@@ -87,6 +106,8 @@ func (f *formBox) key(k term.Key) bool {
 	case k.Code == term.Enter:
 		f.err = f.submit(f.values())
 		return f.err == ""
+	case k.Code == term.Ctrl && k.Rune == 'o' && f.link != "" && f.openLink != nil:
+		f.openLink(f.link)
 	case k.Code == term.Tab && k.Shift, k.Code == term.Up:
 		f.move(-1)
 	case k.Code == term.Tab, k.Code == term.Down:
@@ -140,8 +161,16 @@ func (f *formBox) Lines(th theme.Theme, w int) []render.Line {
 	dim.FG, errSt.FG = th.Color(theme.Dim), th.Color(theme.Error)
 	inner := max(1, w-2)
 	b := boxDraw{edge: edge, fill: box, inner: inner}
-	out := make([]render.Line, 0, f.height())
+	intro := f.introLines(inner)
+	out := make([]render.Line, 0, len(f.fields)+4+len(intro))
 	out = append(out, b.bar("┌", "┐"), b.text(f.title, box))
+	for _, l := range intro {
+		sp := slices.Clone(l.Spans)
+		for i := range sp { // the body of the box under the link style
+			sp[i].Style.FG, sp[i].Style.BG = box.FG, box.BG
+		}
+		out = append(out, b.row(sp...))
+	}
 	for i, fd := range f.fields {
 		v := string(fd.val)
 		if fd.secret {
@@ -175,7 +204,7 @@ func (f *formBox) Lines(th theme.Theme, w int) []render.Line {
 // formRect : box of the overlay, centred.
 func (u *UI) formRect() rect {
 	w := max(30, min(u.t.Cols-4, formW))
-	h := min(u.t.Rows, u.form.height())
+	h := min(u.t.Rows, u.form.height(w-2))
 	return centerRect(u.t.Cols, u.t.Rows, w, h)
 }
 
@@ -192,7 +221,7 @@ func (u *UI) formMouse(e term.MouseEvent) {
 	case !r.hits(e.Y, e.X, 1, 1):
 		u.form = nil
 	case e.Button == 0:
-		if i := e.Y - r.row - 2; i >= 0 && i < len(u.form.fields) {
+		if i := e.Y - r.row - 2 - len(u.form.introLines(r.w-2)); i >= 0 && i < len(u.form.fields) {
 			u.form.cur = i
 		}
 	}
