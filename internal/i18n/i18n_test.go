@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"testing/fstest"
 )
 
 // TestI18nComplete : fr.toml and en.toml carry the same keys, and every
@@ -142,4 +143,25 @@ func read(t *testing.T, path string) string {
 		t.Fatal(err)
 	}
 	return string(b)
+}
+
+// TestRegister : a catalogue registered by a module joins the tables of
+// every language, and the core texts stay.
+func TestRegister(t *testing.T) {
+	Register(fstest.MapFS{
+		"en.toml": {Data: []byte(`zz_register_test = "from a module"`)},
+		"fr.toml": {Data: []byte(`zz_register_test = "d'un module"`)},
+	})
+	defer Set("en")
+	Set("en")
+	if got := T("zz_register_test"); got != "from a module" {
+		t.Fatalf("en: %q", got)
+	}
+	Set("fr")
+	if got := T("zz_register_test"); got != "d'un module" {
+		t.Fatalf("fr: %q", got)
+	}
+	if got := T("main_prefix"); got == "main_prefix" {
+		t.Fatal("core table lost")
+	}
 }

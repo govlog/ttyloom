@@ -5,6 +5,9 @@ package i18n
 import (
 	"embed"
 	"fmt"
+	"io/fs"
+	"maps"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -16,22 +19,50 @@ import (
 //go:embed *.toml
 var files embed.FS
 
+// Core : the catalogue of this package.
+var Core fs.FS = files
+
 var (
 	mu     sync.RWMutex
 	cur    = "en"
+	extra  []fs.FS // catalogues of the modules (Register)
 	tables = []map[string]string{load("en")}
 )
 
-// load reads one embedded table. A broken file gives an empty table: T then
-// returns the keys themselves, which is still readable.
-func load(lang string) map[string]string {
-	b, err := files.ReadFile(lang + ".toml")
+// Register adds the catalogue of a module: fsys holds <lang>.toml files, like
+// this package. The module package calls it from its init, before any T; the
+// language in use is loaded again with it.
+func Register(fsys fs.FS) {
+	mu.Lock()
+	extra = append(extra, fsys)
+	lang := cur
+	mu.Unlock()
+	Set(lang)
+}
+
+// Table reads the <lang>.toml of one catalogue. A missing or broken file
+// gives an empty table: T then returns the keys themselves, still readable.
+func Table(fsys fs.FS, lang string) map[string]string {
+	b, err := fs.ReadFile(fsys, lang+".toml")
 	if err != nil {
 		return map[string]string{}
 	}
 	m := map[string]string{}
 	if err := toml.Unmarshal(b, &m); err != nil {
 		return map[string]string{}
+	}
+	return m
+}
+
+// load reads one language: the table of this package, then the one of each
+// module.
+func load(lang string) map[string]string {
+	mu.RLock()
+	fss := slices.Clone(extra)
+	mu.RUnlock()
+	m := Table(files, lang)
+	for _, f := range fss {
+		maps.Copy(m, Table(f, lang))
 	}
 	return m
 }
@@ -60,8 +91,9 @@ func Set(lang string) {
 	if len(kept) == 0 {
 		ts, kept = []map[string]string{load("en")}, []string{"en"}
 	}
+	ts = append(ts, load("en")) // load takes the lock: outside of it
 	mu.Lock()
-	cur, tables = strings.Join(kept, "+"), append(ts, load("en"))
+	cur, tables = strings.Join(kept, "+"), ts
 	mu.Unlock()
 }
 
