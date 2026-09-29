@@ -5,11 +5,13 @@
 ### Added
 
 - **Sidebar filter**: with the pointer over the sidebar, or after Shift+Tab, typing filters the list (case and accents apart) and underlines the text in each name; ↑/↓ move a cursor, Enter opens the line and gives the keyboard back to the input line, so the next message goes to that chat; Escape drops the filter. Both sidebar modes, conversations and windows.
+- **Back where you left**: the conversation shown when you quit, a room or a private chat, opens again at the next start, once its network has listed its chats (`last.toml`).
 - **`/shrug [text]`** (or `/shrugs`) sends the text followed by `¯\_(ツ)_/¯`; on Discord the shrug goes out escaped, so its arm stays.
 
 ### Changed
 
 - **F2 and F3 are kept across restarts**: `sidebar` (`hidden`, `chats`, `windows`) and `members` in `config.toml`, written by F2 and F3 like F4 to F7 write theirs.
+- **Closing the terminal** (SIGHUP) or a `kill` (SIGTERM) quits like `/quit`: the cache is written instead of being cut.
 
 ## v0.9-beta — 2026-09-24
 

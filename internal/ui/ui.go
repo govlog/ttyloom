@@ -184,6 +184,7 @@ type UI struct {
 	folded     map[string]bool // folded sidebar sections, by key (sidebar.toml); nil = no section
 	marquee    marqueeState    // scrolling title of the current sidebar line
 	find       sideFind        // typing in the sidebar: keyboard, filter, cursor
+	lastChat   model.ChatKey   // chat left at the last exit (last.toml), until its network lists its chats
 	// dialogsSeen : networks whose first chat list has come. It fires the
 	// once-per-session triggers (automatic opening, sync) per network, and not
 	// once for the whole session.
@@ -222,6 +223,7 @@ func Run(ctx context.Context, cancel context.CancelFunc, t *term.Term, cfg *conf
 	// Exit (/quit, Ctrl+C, end of the terminal): the cache goes to the disk
 	// before main gives the terminal back.
 	defer u.flushCache(true)
+	defer u.saveLast() // the chat shown comes back at the next start
 	tick := time.NewTicker(100 * time.Millisecond)
 	defer tick.Stop()
 	for {
@@ -1160,6 +1162,7 @@ func (u *UI) event(ev model.Event) {
 		u.dialogsSeen[net] = true
 		if first {
 			u.autoOpen(net)
+			u.restoreLast(net)
 		}
 		u.saveDialogs()
 		if first {

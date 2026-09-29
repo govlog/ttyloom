@@ -836,6 +836,11 @@ Each window keeps its own draft across window switches. `/me text` sends an
 italic action in IRC style. `/shrug text` (or `/shrugs`) sends the text followed
 by `¯\_(ツ)_/¯`, escaped on Discord so that the arm stays.
 
+The conversation shown when you quit comes back at the next start: its key is
+kept in `last.toml`, next to `config.toml`, and it opens again once its network
+has listed its chats, unless you already went to another window. Closing the
+terminal or a `kill` quits like `/quit`: the cache and `last.toml` are written.
+
 When the terminal loses focus for more than 1.5 s, the status bar shows an away
 marker, read acknowledgments pause and unread counts increase even in the
 current window; a quicker switch and back changes nothing.

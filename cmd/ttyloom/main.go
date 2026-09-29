@@ -7,7 +7,9 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/signal"
 	"path/filepath"
+	"syscall"
 	"time"
 
 	"github.com/govlog/ttyloom/internal/config"
@@ -84,6 +86,10 @@ func run() error {
 	cleanParts(config.Expand(cfg.DownloadDir))
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	// Closing the terminal (SIGHUP) or a kill (SIGTERM) quits like /quit: the
+	// cache and the chat shown are written before the process ends.
+	ctx, stop := signal.NotifyContext(ctx, syscall.SIGHUP, syscall.SIGTERM)
+	defer stop()
 	name := cfg.Theme
 	if name == "" {
 		name = theme.GhosttyDefault()

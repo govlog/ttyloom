@@ -52,6 +52,7 @@ func newUI(ctx context.Context, cancel context.CancelFunc, t *term.Term, cfg *co
 	} else {
 		u.folded = f
 	}
+	u.lastChat = loadLast(lastPath())
 	u.launch = u.launchModule
 	for _, m := range mods {
 		for _, net := range m.Networks() {

@@ -11,6 +11,7 @@ import (
 
 	"github.com/govlog/ttyloom/internal/config"
 	"github.com/govlog/ttyloom/internal/i18n"
+	"github.com/govlog/ttyloom/internal/model"
 	"github.com/govlog/ttyloom/internal/module"
 	"github.com/govlog/ttyloom/internal/term"
 	"github.com/govlog/ttyloom/internal/theme"
@@ -133,5 +134,44 @@ func TestPanelsKeptAcrossRestart(t *testing.T) {
 	u.key(term.Key{Code: term.F3})
 	if u = start(); u.side != sideHidden || u.partsOn {
 		t.Fatalf("after the second restart: side %d, member box %v", u.side, u.partsOn)
+	}
+}
+
+// The chat shown at exit comes back once its network lists its chats at the
+// next start — a room or a private chat alike; not when another window was
+// chosen in the meantime.
+func TestLastChatRestored(t *testing.T) {
+	start := restartable(t)
+	dialogs := func(u *UI) {
+		u.dispatch(model.Envelope{Net: "fake:a", Ev: model.EvDialogs{Chats: []*model.Chat{
+			{Net: "fake:a", ID: 1, Kind: model.ChatGroup, Title: "#go"},
+			{Net: "fake:a", ID: 2, Kind: model.ChatUser, Title: "alice"}}}})
+	}
+	shown := func(u *UI) string {
+		if c := u.ws.Current().Chat; c != nil {
+			return c.Title
+		}
+		return ""
+	}
+	for _, title := range []string{"alice", "#go"} {
+		u := start()
+		dialogs(u)
+		u.openChat(u.chatList[slices.IndexFunc(u.chatList, func(c *model.Chat) bool { return c.Title == title })])
+		u.saveLast() // exit
+		u = start()
+		if got := shown(u); got != "" {
+			t.Fatalf("%s: shown %q before its network listed its chats", title, got)
+		}
+		dialogs(u)
+		if got := shown(u); got != title {
+			t.Fatalf("after restart: %q, want %q", got, title)
+		}
+		u.saveLast()
+	}
+	u := start()
+	u.ws.New(false) // the user went elsewhere before the network came up
+	dialogs(u)
+	if got := shown(u); got != "" {
+		t.Fatalf("restore took the window the user chose: %q", got)
 	}
 }
