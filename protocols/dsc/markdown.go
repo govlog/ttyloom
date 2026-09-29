@@ -287,7 +287,7 @@ func render(segs []model.Seg) string {
 		switch {
 		case s.Kind == model.SegMention:
 			b.WriteString("<@" + strconv.FormatInt(s.UserID, 10) + ">")
-		case len(open) > 0:
+		case len(open) > 0 || s.Literal:
 			b.WriteString(mdEscape.Replace(s.Text))
 		default:
 			b.WriteString(s.Text)

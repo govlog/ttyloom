@@ -152,3 +152,28 @@ func TestStyleInputAndStatus(t *testing.T) {
 		t.Fatalf("status at the start of the line: %q", b.String())
 	}
 }
+
+// /shrug puts the shrug after the text, /shrugs is the same command. The
+// shrug goes out Literal, so that a network whose plain text is markup
+// (Discord) shows its arm; the window shows the whole line.
+func TestShrug(t *testing.T) {
+	u, _, _, _ := queryUI()
+	b := &styledBackend{}
+	b.caps = model.AllCaps()
+	u.nets[netTelegram] = b
+	u.ws.Cur = 1
+	shrug := model.Seg{Text: `¯\_(ツ)_/¯`, Literal: true}
+	u.ed.Set("/shrugs bof")
+	u.submit()
+	if want := []model.Seg{{Text: "bof "}, shrug}; !slices.Equal(b.segs, want) {
+		t.Fatalf("/shrugs bof: %+v", b.segs)
+	}
+	if items := u.view().Items; items[len(items)-1].Msg == nil || items[len(items)-1].Msg.Text != `bof ¯\_(ツ)_/¯` {
+		t.Fatalf("pending line: %+v", items[len(items)-1])
+	}
+	u.ed.Set("/shrug")
+	u.submit()
+	if want := []model.Seg{shrug}; !slices.Equal(b.segs, want) {
+		t.Fatalf("/shrug alone: %+v", b.segs)
+	}
+}

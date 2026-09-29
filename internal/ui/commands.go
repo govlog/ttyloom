@@ -16,9 +16,10 @@ import (
 var aliases = map[string]string{
 	"w": "window", "win": "window", "q": "query", "qu": "query", "j": "join", "m": "msg",
 	"hist": "history", "t": "theme", "o": "open", "c": "clear", "h": "help", "exit": "quit",
+	"shrugs": "shrug",
 }
 
-var commandNames = []string{"/window", "/close", "/query", "/join", "/new", "/msg", "/me", "/away", "/chats", "/networks", "/hooks", "/net", "/fold", "/history",
+var commandNames = []string{"/window", "/close", "/query", "/join", "/new", "/msg", "/me", "/shrug", "/away", "/chats", "/networks", "/hooks", "/net", "/fold", "/history",
 	"/search", "/whois", "/rename", "/unrename", "/open", "/view", "/send", "/theme", "/set", "/clear", "/log", "/debug", "/emoji", "/gif", "/help", "/quit"}
 
 // cmdNames : the commands valid now. general resolve first by prefix, then
@@ -148,6 +149,8 @@ func (u *UI) command(name string, args []string, text string) {
 			return
 		}
 		u.sendMe(u.sendWin(), text)
+	case "shrug":
+		u.sendSegs(u.sendWin(), func(string) []model.Seg { return shrugSegs(text) })
 	case "away":
 		nets := u.netNames()
 		if u.netFilter != "" {

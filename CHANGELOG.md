@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **`/shrug [text]`** (or `/shrugs`) sends the text followed by `¯\_(ツ)_/¯`; on Discord the shrug goes out escaped, so its arm stays.
+
 ## v0.9-beta — 2026-09-24
 
 ### Added

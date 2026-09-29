@@ -2440,8 +2440,27 @@ func meSegs(meName, arg string) []model.Seg {
 	return segs
 }
 
+// shrugSegs : /shrug [text] — the text, then ¯\_(ツ)_/¯ sent Literal.
+func shrugSegs(text string) []model.Seg {
+	shrug := model.Seg{Text: `¯\_(ツ)_/¯`, Literal: true}
+	if text == "" {
+		return []model.Seg{shrug}
+	}
+	segs := parseStyle(text + " ")
+	if segs == nil {
+		segs = []model.Seg{{Text: text + " "}}
+	}
+	return append(segs, shrug)
+}
+
 // sendMe : /me <text>.
 func (u *UI) sendMe(w *Window, arg string) {
+	u.sendSegs(w, func(me string) []model.Seg { return meSegs(me, arg) })
+}
+
+// sendSegs sends runs built by the caller (/me, /shrug), with no draft to
+// read; segs gets the name of the account on the network of the chat.
+func (u *UI) sendSegs(w *Window, segs func(me string) []model.Seg) {
 	if w == nil {
 		return
 	}
@@ -2455,11 +2474,11 @@ func (u *UI) sendMe(w *Window, arg string) {
 	}
 	u.tmpID++
 	me := u.selfOf(w.Chat.Net)
-	segs := meSegs(me.Name, arg)
+	runs := segs(me.Name)
 	m := &model.Msg{Net: w.Chat.Net, ChatID: w.Chat.ID, ChatLabel: w.Chat.Title, Date: time.Now(), From: me.Name, FromID: me.ID,
-		Out: true, Text: fenceText(segs), Entities: fenceEntities(segs), Pending: true, TmpID: u.tmpID}
+		Out: true, Text: fenceText(runs), Entities: fenceEntities(runs), Pending: true, TmpID: u.tmpID}
 	u.insertPending(w, m)
-	b.SendStyled(u.backendContext(b), w.Chat, segs, u.tmpID)
+	b.SendStyled(u.backendContext(b), w.Chat, runs, u.tmpID)
 }
 
 // memberNames : the members of the room of the shown window — its send

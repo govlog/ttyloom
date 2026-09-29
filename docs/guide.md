@@ -817,7 +817,8 @@ the conversation at the message. Ctrl+F returns to local search; Escape closes.
 ### Drafts, focus and logging
 
 Each window keeps its own draft across window switches. `/me text` sends an
-italic action in IRC style.
+italic action in IRC style. `/shrug text` (or `/shrugs`) sends the text followed
+by `¯\_(ツ)_/¯`, escaped on Discord so that the arm stays.
 
 When the terminal loses focus for more than 1.5 s, the status bar shows an away
 marker, read acknowledgments pause and unread counts increase even in the

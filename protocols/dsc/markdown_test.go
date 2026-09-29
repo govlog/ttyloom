@@ -114,6 +114,14 @@ func TestRenderEscapesItalicBody(t *testing.T) {
 	}
 }
 
+// A Literal segment shows as it is: its markers go out escaped, and the
+// shrug keeps its arm (Discord would read "\_" as an escaped underscore).
+func TestRenderLiteral(t *testing.T) {
+	if got := render([]model.Seg{{Text: "bof "}, {Text: `¯\_(ツ)_/¯`, Literal: true}}); got != `bof ¯\\\_(ツ)\_/¯` {
+		t.Fatalf("literal: %q", got)
+	}
+}
+
 // Styled runs of one line: no break between them, the markers nest and a
 // style kept from one run to the next is not closed then opened again
 // (**b****__c__** would break Discord's parser).

@@ -202,6 +202,9 @@ type Seg struct {
 	Lang                    string
 	Bold, Italic, Underline bool
 	UserID                  int64 // SegMention
+	// Literal : the text shows as it is — a network whose plain text is
+	// markup (Discord) escapes its markers (the arm of ¯\_(ツ)_/¯).
+	Literal bool
 }
 
 // SegBreak : a line break sits between two segments only around a fence;
