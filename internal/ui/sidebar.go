@@ -31,6 +31,17 @@ const (
 	sideWindows
 )
 
+// sideNames : the modes as config.toml writes them (sidebar = …), by sideMode.
+var sideNames = [...]string{sideHidden: "hidden", sideChats: "chats", sideWindows: "windows"}
+
+// sideModeOf gives the mode of a sidebar value; an unknown one hides the panel.
+func sideModeOf(s string) sideMode {
+	if i := slices.Index(sideNames[:], s); i >= 0 {
+		return sideMode(i)
+	}
+	return sideHidden
+}
+
 const (
 	sideMinW = 12 // floor of the drag: under that nothing can be read
 	sideKeep = 20 // columns left to the messages, otherwise the sidebar would eat them

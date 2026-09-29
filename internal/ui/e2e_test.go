@@ -94,3 +94,44 @@ func TestStartWithoutNetwork(t *testing.T) {
 		t.Fatal("closing with no network must say /networks")
 	}
 }
+
+// restartable gives a start function for a client with the fake network
+// fake:a, all its files in one directory: each call is a new session on them.
+func restartable(t *testing.T) func() *UI {
+	dir := t.TempDir()
+	t.Setenv("TTYLOOM_DIR", dir)
+	if err := os.WriteFile(filepath.Join(dir, "config.toml"), []byte("[fakenet]\nnets = [\"fake:a\"]\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return func() *UI {
+		m := &cfgFake{}
+		cfg, err := config.LoadFrom(dir, m)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ctx, cancel := context.WithCancel(context.Background())
+		t.Cleanup(cancel)
+		return newUI(ctx, cancel, term.NewOffscreen(io.Discard, 80, 24), cfg, theme.Terminal(), []module.Module{m})
+	}
+}
+
+// F2 and F3 are kept in config.toml: the next start opens the sidebar in the
+// mode it was left in, and the member box with it.
+func TestPanelsKeptAcrossRestart(t *testing.T) {
+	start := restartable(t)
+	u := start()
+	if u.side != sideHidden || u.partsOn {
+		t.Fatalf("first start: side %d, member box %v", u.side, u.partsOn)
+	}
+	u.key(term.Key{Code: term.F2})
+	u.key(term.Key{Code: term.F2}) // windows mode
+	u.key(term.Key{Code: term.F3})
+	if u = start(); u.side != sideWindows || !u.partsOn {
+		t.Fatalf("after restart: side %d, member box %v", u.side, u.partsOn)
+	}
+	u.key(term.Key{Code: term.F2}) // hidden again
+	u.key(term.Key{Code: term.F3})
+	if u = start(); u.side != sideHidden || u.partsOn {
+		t.Fatalf("after the second restart: side %d, member box %v", u.side, u.partsOn)
+	}
+}

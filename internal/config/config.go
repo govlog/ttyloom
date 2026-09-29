@@ -110,6 +110,8 @@ type Config struct {
 	Spell             string    `toml:"spell"`        // off | a hunspell code, chained with + (fr, us, en_GB, fr+us)
 	SpellQuotes       bool      `toml:"spell_quotes"` // check the > quotes and the ``` fences too
 	SidebarWidth      int       `toml:"sidebar_width"`
+	Sidebar           string    `toml:"sidebar"` // mode F2 left the sidebar in: hidden | chats | windows
+	Members           bool      `toml:"members"` // member box (F3) left open
 	Lang              string    `toml:"lang"`
 
 	// Unknown : keys of the file no field takes (a typo, imagess = "off"). The
@@ -245,7 +247,7 @@ func LoadFrom(dir string, mods ...module.Module) (*Config, error) {
 		}
 	}
 	c := &Config{dir: dir, mods: mods, DownloadDir: "~/Downloads/ttyloom", AutoMediaMaxKB: 5120, Images: "auto", Avatars: true, KittyImages: 48, VideoFrames: 300, Video: "show", GifPlay: "always", Timestamps: true, LinkPreviews: true, Hover: HoverMenu,
-		Bell: true, Notify: "terminal", AutoOpenDays: 7, Cache: true, CacheMessages: 2000, LogDir: "~/.local/share/ttyloom/logs", Separator: true, Redline: true, SidebarSort: "recent", SidebarWidth: 26, Spell: "off", CycleMode: "next"}
+		Bell: true, Notify: "terminal", AutoOpenDays: 7, Cache: true, CacheMessages: 2000, LogDir: "~/.local/share/ttyloom/logs", Separator: true, Redline: true, SidebarSort: "recent", SidebarWidth: 26, Sidebar: "hidden", Spell: "off", CycleMode: "next"}
 	md, err := toml.DecodeFile(path, c)
 	if err != nil {
 		return nil, fmt.Errorf(i18n.T("error_with_prefix"), path, err)

@@ -173,6 +173,8 @@ sidebar_split = false
 spell = "off"
 spell_quotes = false
 sidebar_width = 26
+sidebar = "hidden"
+members = false
 timestamps = true
 timestamps_seconds = false
 cycle_mode = "next"
@@ -211,6 +213,8 @@ log_dir = "~/.local/share/ttyloom/logs"
 | `sidebar_width` | Width in columns, from 12 to half the terminal width. Drag its vertical border to resize and save it. |
 | `sidebar_sort` | `recent`, `alpha` or `unread`. `F7` cycles these orders. |
 | `sidebar_split` | Windows list in two sections, channels then direct messages, each in `sidebar_sort` order. The `⊟` of the sidebar header toggles it. |
+| `sidebar` | `hidden`, `chats` or `windows`: the sidebar mode at start. `F2` writes it, so the panel comes back as you left it. |
+| `members` | The member box (F3) open at start. `F3` writes it. |
 | `spell` | `off`, or installed Hunspell dictionary codes joined with `+`, such as `fr+en_US`. Dictionaries are `.aff`/`.dic` pairs in `/usr/share/hunspell`. Two-letter prefixes resolve to installed dictionaries; `us` is an alias for `en_US`. Misspellings get a red underline. `Ctrl+R` cycles corrections; Enter applies, `i` ignores, `a` adds to `spell.txt`, Escape closes. Right-click a word to correct only that word. |
 | `spell_quotes` | Also check quoted lines and fenced code blocks; off by default. |
 | `timestamps` | Show a timestamp before each message. |

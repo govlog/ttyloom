@@ -2079,6 +2079,8 @@ func (u *UI) key(k term.Key) {
 		// The width of the message area changes: everything is wrapped again.
 		u.nextSide()
 		u.clear()
+		u.cfg.Sidebar = sideNames[u.side] // the next start opens the panel the same way
+		u.saveCfg()
 	case k.Code == term.F3: // members of the chat, on top
 		u.toggleParts()
 	case k.Code == term.F6, k.Alt && k.Rune == 'a': // aggregated view (Alt+A kept, taken by some window managers)

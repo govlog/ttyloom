@@ -57,6 +57,8 @@ func (u *UI) partsRect() (rect, bool) {
 // request, until a conversation is opened in it.
 func (u *UI) toggleParts() {
 	u.partsOn = !u.partsOn
+	u.cfg.Members = u.partsOn // the next start opens the box the same way
+	u.saveCfg()
 	if u.partsOn && u.view().Chat == nil {
 		u.sys(i18n.T("parts_window_not_bound"))
 	}

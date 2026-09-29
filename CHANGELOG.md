@@ -6,6 +6,10 @@
 
 - **`/shrug [text]`** (or `/shrugs`) sends the text followed by `¯\_(ツ)_/¯`; on Discord the shrug goes out escaped, so its arm stays.
 
+### Changed
+
+- **F2 and F3 are kept across restarts**: `sidebar` (`hidden`, `chats`, `windows`) and `members` in `config.toml`, written by F2 and F3 like F4 to F7 write theirs.
+
 ## v0.9-beta — 2026-09-24
 
 ### Added

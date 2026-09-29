@@ -3,6 +3,7 @@ package ui
 import (
 	"testing"
 
+	"github.com/govlog/ttyloom/internal/config"
 	"github.com/govlog/ttyloom/internal/model"
 	"github.com/govlog/ttyloom/internal/render"
 	"github.com/govlog/ttyloom/internal/term"
@@ -69,7 +70,7 @@ func TestPartsCloseHit(t *testing.T) {
 		t.Fatal("cross on a 5-cell box")
 	}
 	// Click on the cross: the box closes (partsOn follows).
-	u := &UI{ws: NewWindows(), agg: &Window{}, partsOn: true,
+	u := &UI{ws: NewWindows(), agg: &Window{}, cfg: &config.Config{}, partsOn: true,
 		parts: &partsBox{title: "titre", lines: []model.Participant{{Text: "alice"}}}}
 	r := rect{row: 2, col: 10, w: 20, h: 3}
 	c0, _ := partsCloseCol(r.w)
