@@ -270,6 +270,16 @@ func TestMessageChatLabel(t *testing.T) {
 	}
 }
 
+// An IRC /me line already names its author: no <nick> before it.
+func TestMessageAction(t *testing.T) {
+	o := Opts{Width: 60, Theme: theme.Terminal(), Timestamps: true, Images: "off"}
+	m := &model.Msg{ID: 1, Date: time.Date(2026, 8, 29, 12, 1, 0, 0, time.UTC),
+		From: "bob", FromID: 7, Text: "* bob waves", Action: true}
+	if got := texts(Message(m, o))[0]; got != "12:01 * bob waves" {
+		t.Fatalf("action: %q", got)
+	}
+}
+
 func TestMessageAvatarGutter(t *testing.T) {
 	o := Opts{Width: 40, Theme: theme.Terminal(), Timestamps: true, Images: "kitty", Avatars: true}
 	m := &model.Msg{ID: 1, Date: time.Date(2026, 8, 30, 12, 1, 0, 0, time.UTC), From: "alice", FromID: 7,

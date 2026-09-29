@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **IRC `/me` lines** read `* nick does` alone, without the `<nick>` that came before them.
+
 ## v0.10-beta — 2026-09-29
 
 ### Added

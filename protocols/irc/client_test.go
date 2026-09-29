@@ -261,7 +261,7 @@ func TestIncomingMessages(t *testing.T) {
 	}
 	s.send(":alice!a@h PRIVMSG #go :\x01ACTION waves\x01")
 	m = waitFor[model.EvNewMessage](t, events)
-	if m.Msg.Text != "* alice waves" || len(m.Msg.Entities) != 1 || m.Msg.Entities[0].Kind != model.SpanItalic {
+	if m.Msg.Text != "* alice waves" || !m.Msg.Action || len(m.Msg.Entities) != 1 || m.Msg.Entities[0].Kind != model.SpanItalic {
 		t.Fatalf("action: %+v", m.Msg)
 	}
 	s.send(":bob!b@h NOTICE #go :maintenance at noon")

@@ -449,6 +449,7 @@ func (c *Client) onAction(e ircmsg.Message, text string) {
 		m.Entities[i].End += len([]rune("* " + e.Nick() + " "))
 	}
 	m.Entities = append([]model.Span{{Start: 0, End: len([]rune(m.Text)), Kind: model.SpanItalic}}, m.Entities...)
+	m.Action = true
 	c.Post(model.EvNewMessage{Msg: m, Chat: chat})
 }
 

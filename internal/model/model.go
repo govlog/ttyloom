@@ -237,7 +237,9 @@ type Msg struct {
 	Reactions []Reaction
 	Service   string // service message ("alice joined"); Text is ignored
 	// Notice : a message no program answers (IRC NOTICE): it fires no hook.
-	Notice  bool
+	Notice bool
+	// Action : IRC /me line; Text already reads "* nick does", so no <nick>.
+	Action  bool
 	Pending bool
 	Err     string
 }

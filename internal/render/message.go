@@ -258,7 +258,9 @@ func msgPrefix(m *model.Msg, o Opts, fromID int64, own bool) (prefix []Span, ind
 		}
 		prefix = append(prefix, Span{"   ", theme.Style{}})
 	}
-	prefix = append(prefix, Span{"<", dim}, Span{Clean(from), nick}, Span{"> ", dim})
+	if !m.Action {
+		prefix = append(prefix, Span{"<", dim}, Span{Clean(from), nick}, Span{"> ", dim})
+	}
 	for _, s := range prefix {
 		indent += Width(s.Text)
 	}
