@@ -12,6 +12,7 @@
 
 - **F2 and F3 are kept across restarts**: `sidebar` (`hidden`, `chats`, `windows`) and `members` in `config.toml`, written by F2 and F3 like F4 to F7 write theirs.
 - **Closing the terminal** (SIGHUP) or a `kill` (SIGTERM) quits like `/quit`: the cache is written instead of being cut.
+- **Dependencies**: ningen follows the head of its v3 branch, which brings arikawa past v3.6.0 (the member of a guild message now carries its user, activity start times read in milliseconds; the gateway capabilities sent at login stay the same); x/crypto v0.57.0, x/net v0.59.0, x/time v0.16.0, klauspost/compress v1.20.1 and the other indirect modules move along; the license bundle under `licenses/` is regenerated to match.
 
 ## v0.9-beta — 2026-09-24
 
