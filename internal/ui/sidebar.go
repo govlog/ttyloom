@@ -297,15 +297,18 @@ func (u *UI) sortedChats() []*model.Chat {
 	return sortChats(u.chatList, u.cfg.SidebarSort)
 }
 
-// sideChats : list shown in the sidebar — sorted, then cut to the /net filter.
-// The "new chat" overlay keeps sortedChats: it reaches every network whatever
-// the filter.
+// sideChats : list shown in the sidebar — sorted, then cut to the /net filter
+// and to the filter typed in the panel. The "new chat" overlay keeps
+// sortedChats: it reaches every network whatever the filter.
 func (u *UI) sideChats() []*model.Chat {
 	sorted := u.sortedChats() // a fresh slice: DeleteFunc changes nothing shared
-	if u.netFilter == "" {
+	q := render.Fold(u.find.q)
+	if u.netFilter == "" && q == "" {
 		return sorted
 	}
-	return slices.DeleteFunc(sorted, func(c *model.Chat) bool { return c.Net != u.netFilter })
+	return slices.DeleteFunc(sorted, func(c *model.Chat) bool {
+		return (u.netFilter != "" && c.Net != u.netFilter) || !ncMatch(c, q, u.title)
+	})
 }
 
 // sideRowList : the rows of the chat sidebar — the one source of the click, of
@@ -313,7 +316,7 @@ func (u *UI) sideChats() []*model.Chat {
 // already sorted for the drawing.
 // ponytail: computed again at each call like sortedChats, no cache; fine below
 // 1000 chats, cache the rows of the frame if a profile ever says otherwise.
-func (u *UI) sideRowList() []sideRow { return sectionRows(u.sideChats(), u.ws.List, u.folded) }
+func (u *UI) sideRowList() []sideRow { return sectionRows(u.sideChats(), u.ws.List, u.foldState()) }
 
 // foldSections gives the header rows of the sidebar, in the order it draws
 // them — nothing at all when the panel carries no section (a single network
@@ -362,15 +365,17 @@ func matchSection(secs []sideRow, name string) (string, []string) {
 
 // sideWins : indices of the windows drawn in windows mode — the /net filter
 // cuts the ones bound to a chat of another network. A window bound to no chat
-// (window 0, unbound) stays whatever the filter: it belongs to no network.
+// (window 0, unbound) stays whatever that filter: it belongs to no network.
+// The filter typed in the panel cuts by name (winMatch).
 // The order follows the sort of the chat mode (F7, /set sidebar_sort) on the
 // chat of each window: window 0 first, then the bound windows in that order,
 // then the windows bound to nothing in index order. The numbers drawn stay the
 // real window indices — only their order moves.
 func (u *UI) sideWins() []int {
 	wins := make([]int, 0, len(u.ws.List))
+	q := render.Fold(u.find.q)
 	for i, w := range u.ws.List {
-		if u.winShown(w) {
+		if u.winShown(w) && u.winMatch(w, q) {
 			wins = append(wins, i)
 		}
 	}
@@ -658,6 +663,11 @@ type sideState struct {
 	// now : time of the frame, for the age colour of the windows mode; zero
 	// means no age colour.
 	now time.Time
+	q   string // filter typed in the panel: its hits are set apart (hitSpans)
+	// sel, selWin : cursor of the typing in the panel, chat mode and windows
+	// mode; nil = no cursor drawn.
+	sel    *model.Chat
+	selWin *Window
 }
 
 // ageFG : colour of a chat name in windows mode, from the text colour (last
@@ -749,6 +759,7 @@ func sidebarLines(mode sideMode, chats []*model.Chat, ws []*Window, wins []int, 
 	// Current line: one single style on every column, otherwise each span
 	// inverts on a different background and the bar looks patchy.
 	on := theme.Style{FG: th.FG, Reverse: true}
+	sel := theme.Style{FG: th.Color(theme.Accent), Reverse: true} // cursor of the typing in the panel: another colour
 
 	gut := 0
 	if avatars {
@@ -790,6 +801,10 @@ func sidebarLines(mode sideMode, chats []*model.Chat, ws []*Window, wins []int, 
 				m, u, t = on, on, on
 				u.Bold = true
 			}
+			if c == state.sel {
+				m, u, t = sel, sel, sel
+				u.Bold = true
+			}
 			var sp []render.Span
 			id := int64(0)
 			if avatars { // same style as the rest of the line: the bar stays in one piece
@@ -810,7 +825,7 @@ func sidebarLines(mode sideMode, chats []*model.Chat, ws []*Window, wins []int, 
 			if badge != "" {
 				sp = append(sp, render.Span{Text: badge, Style: m})
 			}
-			return append(sp, render.Span{Text: text, Style: t}), id
+			return append(sp, hitSpans(render.Span{Text: text, Style: t}, state.q, th)...), id
 		}
 	case sideWindows:
 		if wins == nil {
@@ -852,13 +867,20 @@ func sidebarLines(mode sideMode, chats []*model.Chat, ws []*Window, wins []int, 
 				a = theme.Style{FG: th.Color(theme.Mention), Bold: true, Reverse: state.pulse}
 			}
 			switch {
-			case i == cur: // one style on the whole line: the counter scrolls with the name
-				return []render.Span{{Text: num, Style: on}, {Text: marquee(pfx+s+act, textW, step), Style: on}}, 0
+			case i == cur, w == state.selWin: // one style on the whole line: the counter scrolls with the name
+				ls, k := on, step
+				if w == state.selWin {
+					ls = sel
+				}
+				if i != cur { // only the current line scrolls
+					k = 0
+				}
+				return append([]render.Span{{Text: num, Style: ls}}, hitSpans(render.Span{Text: marquee(pfx+s+act, textW, k), Style: ls}, state.q, th)...), 0
 			case w.Chat != nil && w.Chat == state.menuChat: // line of the open menu
 				st, p, a = on, on, on
 			}
 			name := render.Truncate(s, textW-render.Width(pfx)-render.Width(act), "")
-			sp := []render.Span{{Text: num, Style: st}, {Text: pfx, Style: p}, {Text: name, Style: st}}
+			sp := append([]render.Span{{Text: num, Style: st}, {Text: pfx, Style: p}}, hitSpans(render.Span{Text: name, Style: st}, state.q, th)...)
 			if act != "" {
 				sp = append(sp, render.Span{Text: act, Style: a})
 			}
@@ -892,21 +914,30 @@ func (u *UI) sideBlock(sepRow int) ([]render.Line, []sideRow) {
 	sorted := u.sideChats() // sorted and filtered once: one sort per frame
 	hot := u.sideHot()
 	side := sideHeader(u.side, u.cfg.SidebarSort, u.cfg.SidebarSplit, u.th, u.sideW, hot)
-	state := sideState{folded: u.folded, pulse: u.pulse, now: time.Now()}
+	state := sideState{folded: u.foldState(), pulse: u.pulse, now: time.Now(), q: u.find.q}
 	if m := u.menu; m != nil && m.member == "" {
 		state.menuChat = m.chat // menu of a sidebar line (nil for the menu of a message)
+	}
+	if u.sideHasKeys() {
+		state.sel, state.selWin = u.find.chat, u.find.win
+	}
+	if u.find.q != "" || u.sideHasKeys() { // the rule under the title gives way to the filter
+		text, _ := u.sideFindText()
+		acc := theme.Style{FG: u.th.Color(theme.Accent), Bold: true}
+		side[1].Spans = []render.Span{{Text: padTo(text, u.sideW), Style: acc}, side[1].Spans[len(side[1].Spans)-1]}
 	}
 	side = append(side, sidebarLines(u.side, sorted, u.ws.List, u.sideWins(), u.ws.Cur, u.th, u.sideW, u.sideRows(),
 		u.sideScroll, u.avatarsOn(), u.multiNet(), u.marquee.step, sepRow, hot, u.title, state)...)
 	if u.side == sideChats { // last line, outside the scroll
 		side = append(side, sideNewLine(u.th, u.sideW, hot))
 	}
-	return side, sectionRows(sorted, u.ws.List, u.folded)
+	return side, sectionRows(sorted, u.ws.List, u.foldState())
 }
 
 // sideHot : the │ bar of the panel goes to the accent colour — while it is
-// dragged to resize, and while the pointer sits over the panel (follow-mouse).
-func (u *UI) sideHot() bool { return u.drag == dragSide || u.zone == zoneSide }
+// dragged to resize, while the pointer sits over the panel (follow-mouse) and
+// while the panel has the keyboard.
+func (u *UI) sideHot() bool { return u.drag == dragSide || u.zone == zoneSide || u.sideHasKeys() }
 
 // marqueeClusters gives title cut into graphemes. Unit of the marquee shift
 // and cut: never a cluster (ZWJ emoji, vs16…) cut in two.
@@ -1220,9 +1251,13 @@ func (u *UI) sideReveal() {
 	case sideWindows:
 		i = slices.Index(u.sideWins(), u.ws.Cur) // filtered out: no line to bring back
 	}
-	if i < 0 {
-		return
+	if i >= 0 {
+		u.sideShow(i)
 	}
+}
+
+// sideShow scrolls the sidebar list so that its line i is in view.
+func (u *UI) sideShow(i int) {
 	if i < u.sideScroll {
 		u.sideScroll = i
 	}
@@ -1257,6 +1292,7 @@ func (u *UI) sideClick(x, y int) {
 		switch r, ok := u.sideRowIn(u.sideRowList(), y); {
 		case !ok:
 		case r.chat != nil:
+			u.sideDone() // a pick, like Enter: the keyboard goes back to the input line
 			u.openChat(r.chat)
 		default:
 			u.sideToggle(r.sec) // header line: it folds its section, it opens nothing
@@ -1264,6 +1300,7 @@ func (u *UI) sideClick(x, y int) {
 	case sideWindows:
 		wins := u.sideWins()
 		if i := sideOffset(len(wins), u.sideRows(), u.sideScroll) + y - sideHdr; i < len(wins) && wins[i] >= 0 {
+			u.sideDone()
 			u.goTo(wins[i])
 		}
 	}

@@ -182,6 +182,7 @@ Review `download_dir` and `log_dir` in that configuration. Caches written with e
 | Open a conversation | Ctrl+N or the sidebar |
 | Keep chatting privately from this window | `/q name`; `/q` alone returns to the usual target |
 | Sidebar / network filter | F2 / Shift+F2 or `/net discord`, `/net irc:libera` |
+| Filter the sidebar, then open a line | Type with the pointer over it (or after Shift+Tab), ↑/↓, Enter |
 | Tab per network / next tab | F9 (or click a tab) |
 | Aggregate conversations in window 0 | F6 |
 | Search here / search across networks | Ctrl+F / Ctrl+F again |

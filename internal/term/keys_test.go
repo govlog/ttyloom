@@ -21,6 +21,7 @@ func TestParse(t *testing.T) {
 		{"\x1b[1;2A", []Key{{Code: Up, Shift: true}}},
 		{"\x1b[1;2Q", []Key{{Code: F2, Shift: true}}},  // Shift+F2 (/net cycle)
 		{"\x1b[12;2~", []Key{{Code: F2, Shift: true}}}, // the other form of the same key
+		{"\x1b[Z", []Key{{Code: Tab, Shift: true}}},    // Shift+Tab outside the kitty protocol
 		{"\x1b[5~", []Key{{Code: PgUp}}},
 		{"\x1b[3~", []Key{{Code: Delete}}},
 		{"\x1bOH", []Key{{Code: Home}}},

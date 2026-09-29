@@ -551,6 +551,7 @@ Every open conversation has a numbered window.
 | `/window list`, `/window` | List windows and their activity. |
 | F2 | Sidebar: conversations, windows, hidden; window mode also cycles networks. |
 | Shift+F2 | Cycle the network filter. |
+| Shift+Tab | Give the keyboard to the sidebar, or back to the input line. |
 | F3 | Open the member box in the upper-right corner. |
 | F4 | Cycle kitty images, half blocks and images off. |
 | F5 | Toggle images on hover only. |
@@ -767,6 +768,17 @@ between already-open windows in sidebar order. It skips headers and unopened
 chats, does not wrap, and does not create new windows. Arriving in a hidden
 pre-opened window loads its history, marks it read and refreshes the member box
 just as a click or keyboard switch would.
+
+The keyboard follows the pointer: over the sidebar, typing filters its list
+instead of the draft; Shift+Tab gives the keyboard to the sidebar, or back to
+the input line, without the mouse. The filter ignores case and accents, keeps
+the lines whose name contains the text, underlines it in each name, and shows
+under the sidebar title as `filter: fa`; folded sections open while it runs. ↑
+and ↓ move a cursor, which starts on the first line left. Enter opens the line
+under the cursor, drops the filter and gives the keyboard back to the input
+line, so the next message goes straight to that chat. Escape drops the filter
+and gives the keyboard back too; a click on a line does the same as Enter. It
+works in both sidebar modes, conversations and windows.
 
 The `+ new message` row, `/new` or Ctrl+N opens a live-filtered conversation
 picker. Telegram contacts and local chats appear immediately; at least three

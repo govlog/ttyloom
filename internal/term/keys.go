@@ -295,6 +295,8 @@ func parseCSI(b []byte, final bool) (Key, int, bool) {
 		k.Code = Right
 	case 'D':
 		k.Code = Left
+	case 'Z': // back tab: Shift+Tab outside the kitty keyboard protocol
+		k.Code, k.Shift = Tab, true
 	case 'H':
 		k.Code = Home
 	case 'F':

@@ -4,6 +4,7 @@
 
 ### Added
 
+- **Sidebar filter**: with the pointer over the sidebar, or after Shift+Tab, typing filters the list (case and accents apart) and underlines the text in each name; ↑/↓ move a cursor, Enter opens the line and gives the keyboard back to the input line, so the next message goes to that chat; Escape drops the filter. Both sidebar modes, conversations and windows.
 - **`/shrug [text]`** (or `/shrugs`) sends the text followed by `¯\_(ツ)_/¯`; on Discord the shrug goes out escaped, so its arm stays.
 
 ### Changed

@@ -183,6 +183,7 @@ type UI struct {
 	sideScroll int             // first entry shown in the sidebar
 	folded     map[string]bool // folded sidebar sections, by key (sidebar.toml); nil = no section
 	marquee    marqueeState    // scrolling title of the current sidebar line
+	find       sideFind        // typing in the sidebar: keyboard, filter, cursor
 	// dialogsSeen : networks whose first chat list has come. It fires the
 	// once-per-session triggers (automatic opening, sync) per network, and not
 	// once for the whole session.
@@ -2069,6 +2070,9 @@ func (u *UI) key(k term.Key) {
 	if u.mention != nil && k.Code != term.Mouse && u.mentionKey(k) {
 		return
 	}
+	if u.sideHasKeys() && u.sideKey(k) {
+		return
+	}
 	w := u.view()
 	switch {
 	case k.Code == term.Mouse:
@@ -2081,6 +2085,8 @@ func (u *UI) key(k term.Key) {
 		u.clear()
 		u.cfg.Sidebar = sideNames[u.side] // the next start opens the panel the same way
 		u.saveCfg()
+	case k.Code == term.Tab && k.Shift: // keyboard to the sidebar (filter, arrows, Enter) and back
+		u.sideFocus()
 	case k.Code == term.F3: // members of the chat, on top
 		u.toggleParts()
 	case k.Code == term.F6, k.Alt && k.Rune == 'a': // aggregated view (Alt+A kept, taken by some window managers)

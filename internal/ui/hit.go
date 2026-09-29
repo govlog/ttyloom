@@ -325,13 +325,16 @@ func (u *UI) zoneOf(x, y int) zone {
 }
 
 // zoneAt stores the zone under the pointer. true when it changed — the only
-// case where a mouse move is worth a repaint, exactly like hoverAt.
+// case where a mouse move is worth a repaint, exactly like hoverAt. The
+// keyboard follows: into the sidebar when the pointer enters it, back to the
+// input line when it leaves; Shift+Tab can move it in between.
 func (u *UI) zoneAt(x, y int) bool {
 	z := u.zoneOf(x, y)
 	if u.zone == z {
 		return false
 	}
 	u.zone = z
+	u.find.keys = z == zoneSide
 	return true
 }
 

@@ -150,6 +150,11 @@ func (u *UI) draw() {
 	}
 	u.drawStatus(&b, rows-u.inputRows(), x0, cols)
 	curRow, curCol := u.drawInput(&b, rows, x0, cols)
+	curX := x0 + curCol
+	if x0 > 0 && u.sideHasKeys() { // the typing goes to the sidebar filter: the cursor goes with it
+		_, curX = u.sideFindText()
+		curRow = sideHdr
+	}
 	var cur map[kplace]bool
 	if u.images == "kitty" {
 		// The cap never goes under what is on the screen: an image that shows
@@ -201,7 +206,7 @@ func (u *UI) draw() {
 			u.writeLine(&b, l, u.t.Cols-box.col, nil)
 		}
 	}
-	fmt.Fprintf(&b, "\x1b[%d;%dH", curRow, x0+curCol+1)
+	fmt.Fprintf(&b, "\x1b[%d;%dH", curRow, curX+1)
 	if u.cursorShown() {
 		b.WriteString("\x1b[?25h")
 	}
