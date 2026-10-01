@@ -5,6 +5,7 @@
 ### Fixed
 
 - **IRC `/me` lines** read `* nick does` alone, without the `<nick>` that came before them.
+- **Sidebar filter**: the wheel over the sidebar drops the filter, then steps as usual; a filter typed unseen no longer blocks the wheel.
 
 ## v0.10-beta — 2026-09-29
 

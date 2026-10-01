@@ -1171,6 +1171,9 @@ func (u *UI) sideMouse(m term.MouseEvent) {
 		if m.Button == 64 {
 			d = -1
 		}
+		if u.find.q != "" {
+			u.sideDone() // a filter typed unseen must not block the wheel
+		}
 		// Zone read at the event, never u.zone: that one is what the last move
 		// painted and a clear() may have dropped it. Off the follow-mouse zone
 		// (hover off, overlay on top), the wheel scrolls the list as before.

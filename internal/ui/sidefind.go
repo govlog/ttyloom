@@ -36,7 +36,7 @@ func (u *UI) sideHasKeys() bool {
 }
 
 // sideFocus : Shift+Tab — the keyboard goes to the sidebar, or back to the
-// input line. The filter stays until Escape, Enter or a click.
+// input line. The filter stays until Escape, Enter, a click or the wheel.
 func (u *UI) sideFocus() {
 	if x0, _ := u.layout(); x0 == 0 {
 		return // no sidebar drawn: nothing to give the keyboard to
@@ -87,8 +87,8 @@ func (u *UI) sideFilter(q string) {
 }
 
 // sideDone : the typing in the sidebar is over — Escape, Enter, a click on a
-// line. Filter, cursor and keyboard go back to rest; the scroll bounds itself
-// to the whole list again.
+// line, the wheel. Filter, cursor and keyboard go back to rest; the scroll
+// bounds itself to the whole list again.
 func (u *UI) sideDone() {
 	u.find = sideFind{}
 	u.sideWheel(0)

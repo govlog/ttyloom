@@ -111,6 +111,25 @@ func TestSideFindEscape(t *testing.T) {
 	}
 }
 
+// TestSideFindWheel : a filter typed by mistake ("zz" leaves no line) does not
+// block the wheel over the panel: the notch drops the filter, steps in the
+// whole list and gives the keyboard back to the input line.
+func TestSideFindWheel(t *testing.T) {
+	u := findUI()
+	u.ws.New(false).Chat = u.chatList[0]
+	u.ws.New(false).Chat = u.chatList[1] // Fabien is the current line
+	overSide(u)
+	typeIn(u, "zz")
+	u.mouse(term.MouseEvent{X: 2, Y: sideHdr, Button: 64, Press: true}) // wheel up
+	if c := u.ws.Current().Chat; c == nil || c.Title != "christopher" || len(u.sideRowList()) != 3 {
+		t.Fatalf("wheel up: chat %v, %d rows", c, len(u.sideRowList()))
+	}
+	typeIn(u, "x")
+	if u.ed.String() != "x" {
+		t.Fatalf("after the wheel the keys must go to the input line: %q", u.ed.String())
+	}
+}
+
 // TestSideFindKeyboardFocus : the keyboard follows the pointer into the panel
 // and out of it, Shift+Tab moves it both ways, and a click on a line hands it
 // back to the input line. The filter stays until Escape, Enter or a click.
