@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"bytes"
 	"context"
 	"strings"
 	"testing"
@@ -110,6 +111,25 @@ func TestGifStaleAndClose(t *testing.T) {
 	}
 }
 
+// Closing the box while a preview decodes leaves nothing behind: the preview
+// was taken for a download still on its way, kept as such for the session,
+// and a later download of the same media was swallowed.
+func TestGifCloseDuringDecode(t *testing.T) {
+	u, _ := gifUI()
+	u.events = make(chan model.Event, 4) // the decoding reports there
+	u.ws.Cur = 1
+	u.openGifs("cat")
+	u.dispatch(model.Envelope{Net: netTelegram, Ev: model.EvGifs{Query: "cat", Gifs: gifList(1)}})
+	md := u.gifs.gifs[0].Preview
+	md.State = model.MediaLoading
+	u.downloaded(model.EvDownloaded{Media: md, Path: "/nonexistent.gif"}) // its decoding starts
+	u.gifKey(term.Key{Code: term.Esc})
+	u.downloaded(model.EvDownloaded{Media: md, Path: "/again.gif"})
+	if md.Path != "/again.gif" {
+		t.Fatal("a download after the close was swallowed as an orphan of the box")
+	}
+}
+
 // However large the screen, 3 x 2 previews at most, with a scrollbar when the
 // list is longer: a click at the foot of the bar shows the last rows, the
 // wheel moves a row, and the previews far from the view let their frames go.
@@ -144,6 +164,27 @@ func TestGifGridScroll(t *testing.T) {
 	u.gifMouse(term.MouseEvent{Button: 64, Press: true, X: r.col + 2, Y: r.row + 3})
 	if g.top != 7 {
 		t.Errorf("wheel up: top %d, want 7", g.top)
+	}
+}
+
+// A change of the cell size (font zoom) decodes a preview again for its
+// cell: the frames of a preview, never the box and the 100 frames of a GIF
+// of the messages.
+func TestGifPreviewZoomStaysInCell(t *testing.T) {
+	u, _ := gifUI()
+	u.t = term.NewOffscreen(&bytes.Buffer{}, 100, 30)
+	u.t.CellW, u.t.CellH, u.t.Kitty = 10, 20, true
+	u.events = make(chan model.Event, 4) // the decoding reports there
+	u.ws.Cur = 1
+	u.openGifs("cat")
+	u.dispatch(model.Envelope{Net: netTelegram, Ev: model.EvGifs{Query: "cat", Gifs: gifList(1)}})
+	md := u.gifs.gifs[0].Preview
+	md.State, md.Path, md.Frames, md.FrameW, md.FrameH = model.MediaReady, "/x.gif", [][]byte{{1}}, 160, 140
+	md.CellW, md.CellH = 10, 20
+	u.t.CellW, u.t.CellH = 15, 30
+	u.draw()
+	if md.Want != gifFrames {
+		t.Fatalf("after the zoom: %d frames asked, want the %d of a preview", md.Want, gifFrames)
 	}
 }
 

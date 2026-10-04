@@ -49,3 +49,13 @@ func TestPasteCap(t *testing.T) {
 		t.Fatalf("paste under the cap refused: %d", len(u.ed.String()))
 	}
 }
+
+// TestPasteKeepsIndent : a tab of a paste becomes four spaces. The draft
+// cannot hold a raw tab, and cleaned as a control character each one gave a
+// single space: pasted code lost its indentation.
+func TestPasteKeepsIndent(t *testing.T) {
+	got := normalizePaste("func f() {\r\n\tif x {\n\t\treturn\n\t}\n}")
+	if want := "func f() {\n    if x {\n        return\n    }\n}"; got != want {
+		t.Fatalf("%q, want %q", got, want)
+	}
+}

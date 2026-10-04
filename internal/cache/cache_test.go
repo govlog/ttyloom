@@ -174,28 +174,6 @@ func TestSaveLoadDialogsRoundTrip(t *testing.T) {
 	}
 }
 
-func TestWipe(t *testing.T) {
-	c := New(t.TempDir(), 2000)
-	if err := c.SaveDialogs([]model.Chat{{ID: 1}}, 7); err != nil {
-		t.Fatal(err)
-	}
-	if err := c.SaveHistory(1, []model.Msg{{ID: 2}}); err != nil {
-		t.Fatal(err)
-	}
-	if err := c.Wipe(); err != nil {
-		t.Fatal(err)
-	}
-	chats, selfID, _ := c.LoadDialogs()
-	msgs, _ := c.LoadHistory(1)
-	if chats != nil || selfID != 0 || msgs != nil {
-		t.Fatalf("after Wipe: %v %d %v", chats, selfID, msgs)
-	}
-	// The history directory is made again: a write must go through.
-	if err := c.SaveHistory(1, []model.Msg{{ID: 3}}); err != nil {
-		t.Fatal(err)
-	}
-}
-
 // The larger variant of a photo (Media.Full) is saved like the media of the
 // line: handle and path kept, runtime state reset, the caller's copy untouched.
 func TestSaveHistoryResetsFullVariant(t *testing.T) {

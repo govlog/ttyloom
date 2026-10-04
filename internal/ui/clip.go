@@ -127,17 +127,20 @@ func (u *UI) pasteClip() {
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
-				u.events <- evClipImage{Err: i18n.T("clip_panic", r)}
+				u.post(evClipImage{Err: i18n.T("clip_panic", r)})
 			}
 		}()
-		u.events <- readClip(ctx, bin, wl, dir)
+		u.post(readClip(ctx, bin, wl, dir))
 	}()
 }
 
+// errClipBig : the clipboard holds more than the read takes.
+var errClipBig = errors.New("clipboard content too big")
+
 // clipRead gives the output of a clipboard command, bounded in time and in
-// size. The pipe is read straight: nothing bigger than maxClip goes into
-// memory, and the producer is killed rather than waited for.
-func clipRead(ctx context.Context, wait time.Duration, bin string, args ...string) ([]byte, error) {
+// size. The pipe is read straight: nothing bigger than limit goes into
+// memory, and the producer is killed rather than waited for (errClipBig).
+func clipRead(ctx context.Context, wait time.Duration, limit int, bin string, args ...string) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(ctx, wait)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, bin, args...)
@@ -148,11 +151,11 @@ func clipRead(ctx context.Context, wait time.Duration, bin string, args ...strin
 	if err := cmd.Start(); err != nil {
 		return nil, err
 	}
-	data, rerr := io.ReadAll(io.LimitReader(out, maxClip+1))
-	if len(data) > maxClip {
+	data, rerr := io.ReadAll(io.LimitReader(out, int64(limit)+1))
+	if len(data) > limit {
 		cancel() // above the cap: the producer is killed, not waited for
 		cmd.Wait()
-		return nil, errors.New(i18n.T("clip_image_too_big"))
+		return nil, errClipBig
 	}
 	if err := cmd.Wait(); err != nil {
 		return nil, err
@@ -163,13 +166,18 @@ func clipRead(ctx context.Context, wait time.Duration, bin string, args ...strin
 // readClip : the real read, outside the UI goroutine. It gives evClipImage
 // (image written to disk, or an error status) or evClipText.
 func readClip(ctx context.Context, bin string, wl bool, dir string) model.Event {
-	fail := func(err error) model.Event { return evClipImage{Err: i18n.T("clip_error", err)} }
-	list, err := clipRead(ctx, clipListWait, bin, clipArgs(wl, "")...)
+	fail := func(err error) model.Event {
+		if errors.Is(err, errClipBig) {
+			err = errors.New(i18n.T("clip_image_too_big"))
+		}
+		return evClipImage{Err: i18n.T("clip_error", err)}
+	}
+	list, err := clipRead(ctx, clipListWait, maxClip, bin, clipArgs(wl, "")...)
 	if err != nil {
 		return fail(err)
 	}
 	if t := clipPick(string(list), "image/png", "image/jpeg"); t != "" {
-		data, err := clipRead(ctx, clipReadWait, bin, clipArgs(wl, t)...)
+		data, err := clipRead(ctx, clipReadWait, maxClip, bin, clipArgs(wl, t)...)
 		if err != nil {
 			return fail(err)
 		}
@@ -204,7 +212,12 @@ func readClip(ctx context.Context, bin string, wl bool, dir string) model.Event 
 		if wl {
 			args = append(args, "-n") // otherwise wl-paste adds a trailing line break
 		}
-		text, err := clipRead(ctx, clipReadWait, bin, args...)
+		// Twice the cap of a paste: \r\n becomes \n in normalizePaste, and
+		// pasteText makes the exact call.
+		text, err := clipRead(ctx, clipReadWait, 2*maxPasteBytes, bin, args...)
+		if errors.Is(err, errClipBig) {
+			return evClipImage{Err: i18n.T("paste_too_big", "> "+render.HumanSize(2*maxPasteBytes), render.HumanSize(maxPasteBytes))}
+		}
 		if err != nil {
 			return fail(err)
 		}
@@ -469,7 +482,7 @@ func (u *UI) copyImage(md *model.Media) {
 		if wl {
 			f, err := os.Open(path)
 			if err != nil {
-				u.events <- evFlash{Text: i18n.T("clip_error", err)}
+				u.post(evFlash{Text: i18n.T("clip_error", err)})
 				return
 			}
 			defer f.Close()
@@ -477,9 +490,9 @@ func (u *UI) copyImage(md *model.Media) {
 		}
 		// wl-copy and xclip fork to serve the clipboard, the parent returns at once.
 		if err := cmd.Run(); err != nil {
-			u.events <- evFlash{Text: i18n.T("clip_error", err)}
+			u.post(evFlash{Text: i18n.T("clip_error", err)})
 			return
 		}
-		u.events <- evFlash{Text: i18n.T("clip_copied")}
+		u.post(evFlash{Text: i18n.T("clip_copied")})
 	}()
 }

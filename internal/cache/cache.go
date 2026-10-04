@@ -124,15 +124,6 @@ func (c *Cache) SaveDialogs(chats []model.Chat, selfID int64) error {
 	return writeCache(c.dialogsPath(), dialogsFile{SelfID: selfID, Chats: chats})
 }
 
-// Wipe erases the cache (dialogs and all the history) and makes the directory again.
-func (c *Cache) Wipe() error {
-	_ = os.Remove(c.dialogsPath())
-	if err := os.RemoveAll(c.historyDir); err != nil {
-		return err
-	}
-	return os.MkdirAll(c.historyDir, 0o700)
-}
-
 // Archive sets the whole cache aside — the directory renamed to
 // <dir>.old-<time>, then made again empty — so that a history dropped for a
 // wrong reason (account change, list of the chats unreadable) can still be

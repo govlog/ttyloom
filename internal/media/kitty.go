@@ -56,20 +56,32 @@ func KittyDeletePlacement(id, pid uint32) string {
 // KittyFree drops the image and frees its data.
 func KittyFree(id uint32) string { return fmt.Sprintf("\x1b_Ga=d,d=I,i=%d,q=2\x1b\\", id) }
 
+// kittyChunks gives data in base64, chunk characters per sequence, ctrl on
+// the first. Animation sends every frame again at each tick: the encoding
+// goes chunk by chunk into one allocation of the final size. 3072 bytes give
+// exactly 4096 characters, so no padding comes before the last chunk.
 func kittyChunks(ctrl string, data []byte) string {
-	enc := base64.StdEncoding.EncodeToString(data)
+	const raw = chunk / 4 * 3
+	n := (len(data) + raw - 1) / raw
 	var b strings.Builder
-	for i := 0; i < len(enc); i += chunk {
-		end := min(i+chunk, len(enc))
-		more := 0
-		if end < len(enc) {
-			more = 1
-		}
+	b.Grow(len(ctrl) + base64.StdEncoding.EncodedLen(len(data)) + 10*n)
+	var enc [chunk]byte
+	for i := 0; i < len(data); i += raw {
+		part := data[i:min(i+raw, len(data))]
 		if i == 0 {
-			fmt.Fprintf(&b, "\x1b_G%s,m=%d;%s\x1b\\", ctrl, more, enc[i:end])
+			b.WriteString("\x1b_G" + ctrl + ",m=")
 		} else {
-			fmt.Fprintf(&b, "\x1b_Gm=%d;%s\x1b\\", more, enc[i:end])
+			b.WriteString("\x1b_Gm=")
 		}
+		if i+raw < len(data) {
+			b.WriteString("1;")
+		} else {
+			b.WriteString("0;")
+		}
+		m := base64.StdEncoding.EncodedLen(len(part))
+		base64.StdEncoding.Encode(enc[:m], part)
+		b.Write(enc[:m])
+		b.WriteString("\x1b\\")
 	}
 	return b.String()
 }

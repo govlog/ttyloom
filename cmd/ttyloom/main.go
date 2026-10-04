@@ -27,17 +27,27 @@ import (
 var version = "dev"
 var commit = "unknown"
 
-// cleanParts removes download temp files left by a killed session — at the
-// root, in maps/ and paste/, and in avatars/<net>/. Only the ones untouched
-// for an hour: a second instance on the same download_dir may be writing the
-// others.
-func cleanParts(dir string) {
-	for _, pat := range []string{"/.part-*", "/*/.part-*", "/*/*/.part-*"} {
-		if m, _ := filepath.Glob(dir + pat); m != nil {
-			for _, f := range m {
-				if st, err := os.Lstat(f); err == nil && time.Since(st.ModTime()) > time.Hour {
-					_ = os.Remove(f)
-				}
+// cleanFiles removes what earlier sessions left in download_dir (dl) and in
+// the cache, untouched for a while: download temp files of a killed session
+// — at the root, in maps/ and paste/, and in avatars/<net>/ — after an hour
+// (a second instance on the same download_dir may be writing the others);
+// pasted images never sent (a failed send keeps its file, a quit at the
+// prompt too) after a day; the pictures of the GIF box, the media browser and
+// the emoji picker after a week: they are fetched again when they show.
+func cleanFiles(dl, cache string) {
+	const day = 24 * time.Hour
+	for _, p := range []struct {
+		pat string
+		age time.Duration
+	}{
+		{dl + "/.part-*", time.Hour}, {dl + "/*/.part-*", time.Hour}, {dl + "/*/*/.part-*", time.Hour},
+		{dl + "/paste/*", day},
+		{cache + "/gifs/*/*", 7 * day}, {cache + "/thumbs/*/*", 7 * day}, {cache + "/emoji/*/*", 7 * day},
+	} {
+		m, _ := filepath.Glob(p.pat)
+		for _, f := range m {
+			if st, err := os.Lstat(f); err == nil && time.Since(st.ModTime()) > p.age {
+				_ = os.Remove(f)
 			}
 		}
 	}
@@ -85,7 +95,7 @@ func run(build update.Build) error {
 	if err != nil {
 		return err
 	}
-	cleanParts(config.Expand(cfg.DownloadDir))
+	cleanFiles(config.Expand(cfg.DownloadDir), config.CacheDir())
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	// Closing the terminal (SIGHUP) or a kill (SIGTERM) quits like /quit: the

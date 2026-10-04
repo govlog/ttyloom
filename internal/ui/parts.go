@@ -224,10 +224,7 @@ func (u *UI) partsMouse(m term.MouseEvent, r rect) {
 // current window — their window when they already have one, a new one
 // otherwise, bind doing the network lookup when needed.
 func (u *UI) openMember(net, q string) {
-	c, amb := u.memberChat(net, q)
-	if amb {
-		return // findChat has already listed the candidates: no orphan window
-	}
+	c := u.memberChat(net, q)
 	if c != nil {
 		if i := u.ws.ForChat(c.Key()); i >= 0 {
 			u.goTo(i)
@@ -253,18 +250,17 @@ func (u *UI) openMember(net, q string) {
 // memberChat gives the chat already known behind a member token — TDLib id (=
 // user id) for a member with no @username, exact match of the @username
 // otherwise. Never a title: the token comes from the network, and a title that
-// looks like it is not the right contact. It also gives ambiguous, which bind
-// would meet after the fact — we need to know before opening a window. net is
-// the network of the box the token comes from: a bare id means nothing outside it.
-func (u *UI) memberChat(net, q string) (*model.Chat, bool) {
+// looks like it is not the right contact. net is the network of the box the
+// token comes from: a bare id means nothing outside it.
+func (u *UI) memberChat(net, q string) *model.Chat {
 	if id, err := strconv.ParseInt(q, 10, 64); err == nil {
-		return u.chats[model.ChatKey{Net: net, ID: id}], false
+		return u.chats[model.ChatKey{Net: net, ID: id}]
 	}
 	name := strings.ToLower(strings.TrimPrefix(q, "@"))
 	for _, c := range u.chatList {
 		if c.Net == net && c.Username != "" && strings.ToLower(c.Username) == name {
-			return c, false
+			return c
 		}
 	}
-	return nil, false
+	return nil
 }

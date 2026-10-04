@@ -7,9 +7,11 @@ import (
 	"image/png"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
+	"weak"
 
 	"github.com/govlog/ttyloom/internal/config"
 	"github.com/govlog/ttyloom/internal/media"
@@ -124,6 +126,26 @@ func TestAutoplayGatedOnDisplay(t *testing.T) {
 	}
 }
 
+// TestGifDecodedWhenShown : a GIF downloaded off the screen — the last 100
+// messages of a window load when it opens — decodes when its line shows, not
+// at once: up to 100 frames for nobody, the two decode slots busy meanwhile.
+// A photo still decodes at once.
+func TestGifDecodedWhenShown(t *testing.T) {
+	u := &UI{ws: NewWindows(), agg: &Window{}, cfg: &config.Config{}, ctx: context.Background(),
+		events: make(chan model.Event, 4), images: "halfblock", t: &term.Term{Cols: 80, Rows: 24}}
+	gif := &model.Media{Kind: model.MediaGIF, Loc: 1, Mime: "image/gif", State: model.MediaLoading}
+	pic := &model.Media{Kind: model.MediaPhoto, Loc: 2, Mime: "image/png", State: model.MediaLoading}
+	u.downloaded(model.EvDownloaded{Media: gif, Path: "/nonexistent.gif"})
+	u.downloaded(model.EvDownloaded{Media: pic, Path: "/nonexistent.png"})
+	if gif.Want != 0 || pic.Want != 1 {
+		t.Fatalf("off the screen: GIF %d frames asked, photo %d; want 0 and 1", gif.Want, pic.Want)
+	}
+	u.showItem(&Item{Msg: &model.Msg{ID: 1, Media: gif}})
+	if gif.Want != 100 || gif.State != model.MediaLoading {
+		t.Fatalf("line shown: %d frames asked, state %v; want 100, loading", gif.Want, gif.State)
+	}
+}
+
 // TestDecodeCancelledOnStop : a decoding in flight ran to its end whatever
 // happened — "s" pressed, window closed, media freed — and its ffmpeg kept
 // going with it. Stopping now cancels it, and the result that comes back
@@ -213,6 +235,45 @@ func TestStopThenPlayRedecodes(t *testing.T) {
 	}
 }
 
+// TestFailedDownloadForgetsOpen : "o" on a media not on disk yet opens it on
+// arrival. When that download fails, a later one of the same media (F4, a
+// reconnection) must not open the file unasked, minutes or hours later.
+func TestFailedDownloadForgetsOpen(t *testing.T) {
+	u := &UI{ws: NewWindows(), agg: &Window{}, cfg: &config.Config{}, ctx: context.Background(), images: "off",
+		t: &term.Term{Cols: 80, Rows: 24}, nets: map[string]model.Backend{netTelegram: &fakeBackend{}},
+		openNext: map[*model.Media]bool{}, fulls: map[*model.Media]bool{}}
+	w := u.ws.New(false)
+	md := &model.Media{Kind: model.MediaFile, Loc: 1, Label: "[file]"}
+	it := &Item{Msg: &model.Msg{Net: netTelegram, ChatID: 1, ID: 1, Media: md}}
+	w.Items = append(w.Items, it)
+	u.openItemMedia(w, it)
+	u.downloaded(model.EvDownloaded{Media: md, Err: "timeout"})
+	n := len(w.Items)
+	u.downloaded(model.EvDownloaded{Media: md, Path: "/nonexistent/x.bin"}) // .bin: refused with a line, never xdg-open
+	if len(w.Items) != n {
+		t.Fatalf("a later download opened the file: %q", w.Items[len(w.Items)-1].Sys)
+	}
+}
+
+// TestStopReleasesPartialFrames : "s" during a play keeps the first frame
+// only; the frames decoded past it stayed reachable through the array of the
+// slice, out of sight of the budget, until the media was played again.
+func TestStopReleasesPartialFrames(t *testing.T) {
+	u := &UI{ws: NewWindows(), agg: &Window{}, cfg: &config.Config{VideoFrames: 8},
+		ctx: context.Background(), events: make(chan model.Event, 4), images: "halfblock",
+		t: &term.Term{Cols: 80, Rows: 24}}
+	md := &model.Media{Kind: model.MediaVideo, Path: "/nonexistent.mp4", Mime: "video/mp4", State: model.MediaReady}
+	u.loadFrames(md, 100, 100, 8, 0)                                                    // play running
+	md.Frames = [][]byte{make([]byte, 1<<16), make([]byte, 1<<16), make([]byte, 1<<16)} // partial batch landed
+	last := weak.Make(&md.Frames[2][0])
+	u.stopVideo(md) // key "s"
+	runtime.GC()
+	runtime.GC()
+	if len(md.Frames) != 1 || last.Value() != nil {
+		t.Fatalf("stopped: %d frames kept, a frame past the first still reachable: %v", len(md.Frames), last.Value() != nil)
+	}
+}
+
 // The avatar file lives under its network: ids collide between networks, and
 // "file already there" would otherwise hand one network the photo of another.
 func TestAvatarPathPerNet(t *testing.T) {
@@ -255,6 +316,20 @@ func TestFramesBudgetEvictsOldest(t *testing.T) {
 	}
 	if len(mds[1].Frames) != 1 || len(mds[2].Frames) != 1 {
 		t.Fatalf("recent media lost their frames under the budget: %d %d", len(mds[1].Frames), len(mds[2].Frames))
+	}
+}
+
+// TestFramesBudgetCountsHeldBytes : the budget counts what a frame holds,
+// spare capacity included — a PNG left in the buffer it was encoded into
+// held up to twice its length, out of sight of the budget.
+func TestFramesBudgetCountsHeldBytes(t *testing.T) {
+	defer func(n int) { framesBudget = n }(framesBudget)
+	framesBudget = 7
+	u, mds := framesUI(2)
+	u.framesLoaded(evFrames{Media: mds[0], Frames: &media.Frames{PNG: [][]byte{make([]byte, 3, 6)}, W: 1, H: 1}})
+	land(u, mds[1]) // 6 + 3 bytes held: over the budget
+	if mds[0].Frames != nil {
+		t.Fatal("a frame holding 6 bytes was counted as 3: kept over the budget")
 	}
 }
 
@@ -304,6 +379,28 @@ func TestShownItemLoadsAgain(t *testing.T) {
 	}
 }
 
+// TestImageModeReloadsShownWindow : F4 (and /set video, /set maps) starts the
+// media again from zero; it used to download or decode every media of every
+// window — up to cache_messages per chat — where the opening of a window
+// loads its last page and the rest loads as it shows.
+func TestImageModeReloadsShownWindow(t *testing.T) {
+	b := &fakeBackend{caps: model.AllCaps()}
+	u := &UI{ws: NewWindows(), agg: &Window{}, debug: &Window{}, cfg: &config.Config{AutoMediaMaxKB: 1},
+		ctx: context.Background(), images: "kitty", t: &term.Term{Cols: 80, Rows: 24},
+		nets: map[string]model.Backend{netTelegram: b}}
+	for c := range 3 {
+		w := u.ws.New(false)
+		for i := range 600 {
+			w.Upsert(&model.Msg{Net: netTelegram, ChatID: int64(c + 1), ID: i + 1,
+				Media: &model.Media{Kind: model.MediaPhoto, Loc: i, Size: 100, State: model.MediaReady}})
+		}
+	}
+	u.applyImages("halfblock")
+	if len(b.downloads) > autoMediaPage {
+		t.Fatalf("F4: %d downloads, want the last page of the shown window at most (%d)", len(b.downloads), autoMediaPage)
+	}
+}
+
 func TestMapIsNotPrefetchedOffscreen(t *testing.T) {
 	u := &UI{cfg: &config.Config{Maps: true, AutoMediaMaxKB: 5120}, images: "kitty"}
 	m := &model.Msg{Media: &model.Media{Kind: model.MediaMap}}
@@ -338,6 +435,30 @@ func TestGifPlay(t *testing.T) {
 	u.gifRewind()
 	if md.Frame != 0 || len(md.Frames) != 2 {
 		t.Fatalf("off: frame %d, %d frames kept", md.Frame, len(md.Frames))
+	}
+}
+
+// TestAnimateOffscreenGifHolds : in half blocks, a GIF far above the view no
+// longer moves at each tick — it was drawn again for nothing, and asked a
+// repaint of a screen that did not change.
+func TestAnimateOffscreenGifHolds(t *testing.T) {
+	u := hoverUI()
+	u.images = "halfblock"
+	u.t = term.NewOffscreen(&bytes.Buffer{}, 80, 10)
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, image.NewRGBA(image.Rect(0, 0, 4, 4))); err != nil {
+		t.Fatal(err)
+	}
+	md := &model.Media{Kind: model.MediaGIF, Loc: 1, State: model.MediaReady, Frames: [][]byte{buf.Bytes(), buf.Bytes()},
+		FrameW: 4, FrameH: 4, Delay: time.Millisecond}
+	w := u.ws.New(false)
+	w.Upsert(&model.Msg{ID: 1, Media: md})
+	for i := 2; i < 200; i++ {
+		w.Upsert(&model.Msg{ID: i, Text: "text"})
+	}
+	u.draw()
+	if u.animate(time.Now().Add(time.Second)) || md.Frame != 0 {
+		t.Fatalf("GIF above the view: frame %d, repaint asked", md.Frame)
 	}
 }
 

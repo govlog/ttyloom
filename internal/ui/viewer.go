@@ -200,11 +200,8 @@ func (u *UI) closeViewer() {
 	if u.drag == dragView {
 		u.drag = dragNone
 	}
-	u.cancelDecode(v.md)   // full screen decoding running: nobody will look at it
-	s := u.kittyFree(v.md) // ids and LRU cleaned even when the mode has changed
-	if u.t.Kitty {
-		u.t.WriteString(s)
-	}
+	u.cancelDecode(v.md) // full screen decoding running: nobody will look at it
+	u.dropImage(v.md)
 	v.md.Frames = nil // full screen frames given up
 	u.placed = u.placed[:0]
 	u.repaint() // the whole screen carried the preview
@@ -235,8 +232,9 @@ func (u *UI) viewerKey(k term.Key) {
 		ch := k.Code == term.None // plain character
 		switch {
 		case ch && k.Rune == 'o':
-			if render.SafeURL(v.md.URL) { // link preview: the page, not the thumbnail
-				u.open(v.md.URL)
+			if url := v.md.URL; render.SafeURL(url) { // link preview: the page, not the thumbnail
+				u.closeViewer() // the question shows on the input line, which the preview hides
+				u.openHidden(url)
 			} else {
 				u.open(v.md.Path)
 			}

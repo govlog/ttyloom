@@ -4,7 +4,9 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -72,6 +74,47 @@ func TestRepeatedImagePasteKeepsSeparateFiles(t *testing.T) {
 	}
 	if _, err := os.Stat(b.Path); err != nil {
 		t.Fatal("cancelling the first paste removed the second", err)
+	}
+}
+
+// TestClipTextCapped : Ctrl+V of a big text is refused while it is read. It
+// used to be read whole, up to 64 MB, then cleaned on the UI goroutine —
+// input frozen — to be refused there at 64 KB.
+func TestClipTextCapped(t *testing.T) {
+	dir := t.TempDir()
+	bin := filepath.Join(dir, "clipboard")
+	script := "#!/bin/sh\ncase \"$*\" in *--list-types*) printf 'text/plain\\n';; *) head -c 1000000 /dev/zero | tr '\\0' a;; esac\n"
+	if err := os.WriteFile(bin, []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if e, ok := readClip(context.Background(), bin, true, dir).(evClipImage); !ok || e.Err == "" {
+		t.Fatal("1 MB of text read whole, to be refused later")
+	}
+}
+
+// TestPasteClipAfterQuit : with the UI stopped (/quit), nobody reads the
+// events: the clipboard read gives its result up instead of blocking for ever.
+func TestPasteClipAfterQuit(t *testing.T) {
+	bin := filepath.Join(t.TempDir(), "clipboard")
+	if err := os.WriteFile(bin, []byte("#!/bin/sh\nprintf 'text/plain\\n'\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	defer func(b string, w bool) { clipBin, clipWayland = b, w }(clipBin, clipWayland)
+	clipBin, clipWayland = bin, true
+	u, _ := gifUI()
+	u.ws.Cur = 1
+	ctx, cancel := context.WithCancel(context.Background())
+	u.ctx, u.events = ctx, make(chan model.Event) // nobody reads it any more
+	cancel()
+	u.pasteClip()
+	for deadline := time.Now().Add(2 * time.Second); ; time.Sleep(10 * time.Millisecond) {
+		buf := make([]byte, 1<<20)
+		if !strings.Contains(string(buf[:runtime.Stack(buf, true)]), "pasteClip") {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the clipboard read still blocks on its result 2 s after /quit")
+		}
 	}
 }
 

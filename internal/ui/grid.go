@@ -379,18 +379,17 @@ func (u *UI) gridDecode(g *grid, md *model.Media) {
 }
 
 // gridFree drops what the pictures of t decoded and sent to the terminal. A
-// download still on its way is orphaned: dropped when it lands.
+// download still on its way is orphaned: dropped when it lands. A picture
+// that was decoding is loading too, but its download has landed already.
 func (u *UI) gridFree(t thumbs) {
 	for i := range t.grid().n {
 		md := t.thumb(i)
 		if md == nil {
 			continue
 		}
-		u.cancelDecode(md)
-		if s := u.kittyFree(md); s != "" && u.t.Kitty {
-			u.t.WriteString(s)
-		}
-		if md.State == model.MediaLoading {
+		decoding := u.cancelDecode(md)
+		u.dropImage(md)
+		if md.State == model.MediaLoading && !decoding {
 			if u.gridOrphan == nil {
 				u.gridOrphan = map[*model.Media]bool{}
 			}

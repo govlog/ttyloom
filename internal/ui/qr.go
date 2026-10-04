@@ -212,9 +212,6 @@ func (u *UI) closeQR() {
 		return
 	}
 	u.qr = nil
-	s := u.kittyFree(q.md) // ids and LRU cleaned even when the mode has changed
-	if u.t.Kitty {
-		u.t.WriteString(s)
-	}
+	u.dropImage(q.md)
 	u.repaint()
 }

@@ -198,6 +198,18 @@ func TestPickerCustoms(t *testing.T) {
 	}
 }
 
+// A custom emoji name comes from the network: one that is not a ":name:"
+// never reaches the grid, where it was drawn raw — escape sequence included.
+func TestPickerCustomsCleaned(t *testing.T) {
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	p := newPicker(31, 8, nil)
+	p.customs, p.recent = []string{":\x1b[2Jbad:", ":ok:"}, nil
+	p.filter()
+	if p.items[0].Char != ":ok:" || p.items[1].Group == customGroup {
+		t.Fatalf("head of the items: %+v", p.items[:2])
+	}
+}
+
 // openReactPicker : the list comes from the chat of the message; no reaction
 // allowed = no picker, just a status message.
 func TestOpenReactPicker(t *testing.T) {

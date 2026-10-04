@@ -193,12 +193,14 @@ func (p *picker) Key(k term.Key) bool {
 const customGroup = "custom"
 
 // customItems : the customs whose name holds q (case insensitive), as items.
+// The names come from the network: one that is not a ":name:" is left out,
+// never drawn raw in the grid.
 func (p *picker) customItems(q string) []emoji.Emoji {
 	q = strings.ToLower(q)
 	var out []emoji.Emoji
 	for _, c := range p.customs {
 		name := strings.Trim(c, ":")
-		if strings.Contains(strings.ToLower(name), q) {
+		if reCustomName.MatchString(c) && strings.Contains(strings.ToLower(name), q) {
 			out = append(out, emoji.Emoji{Char: c, Name: name, Group: customGroup})
 		}
 	}
@@ -312,11 +314,11 @@ func emojiCell(e string) string {
 }
 
 // isEmoji tells whether e is an emoji. Almost all of them live above U+2000
-// (symbols, dingbats, emoticons); the few parts under that (keyboard keys,
-// "1️⃣" say) are looked for in the Unicode table.
-// ponytail: linear scan over ~5000 entries, never fired in practice (every
-// useful wide emoji is already ≥ U+2000) — no cache until it shows up in a
-// profile.
+// (symbols, dingbats, emoticons); the few under it — ©, ®, the keycaps — are
+// looked for in the Unicode table, which still finds them when a network
+// sends them without their variation selector (Telegram reactions).
+// ponytail: linear scan over the table, for those few only; an index if it
+// ever shows up in a profile.
 func isEmoji(e string) bool {
 	if r, _ := utf8.DecodeRuneInString(e); r >= 0x2000 {
 		return true

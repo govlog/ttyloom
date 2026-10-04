@@ -71,9 +71,9 @@ func (u *UI) customVisible(f func(i int, md *model.Media)) {
 	}
 }
 
-// customLoad starts what the custom emojis on the screen still need: the
-// download of an image never asked, the decoding again of one whose frames
-// the budget dropped. Called at each drawing of the picker.
+// customLoad starts the download of the custom emojis on the screen with no
+// image: never asked, or frames dropped by the budget (MediaNone again; the
+// file on disk answers at once). Called at each drawing of the picker.
 func (u *UI) customLoad() {
 	p := u.picker
 	if u.images != "kitty" || p.chat == nil {
@@ -84,12 +84,9 @@ func (u *UI) customLoad() {
 		return
 	}
 	u.customVisible(func(_ int, md *model.Media) {
-		switch {
-		case md.State == model.MediaNone:
+		if md.State == model.MediaNone {
 			md.State = model.MediaLoading
 			b.Download(u.backendContext(b), md, filepath.Join(config.CacheDir(), "emoji", p.chat.Net, thumbName(md)))
-		case md.State == model.MediaReady && len(md.Frames) == 0 && md.Want == 0 && md.Path != "":
-			u.customDecode(md)
 		}
 	})
 }

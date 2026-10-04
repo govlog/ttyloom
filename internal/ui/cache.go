@@ -440,12 +440,7 @@ func (u *UI) syncHistory(e model.EvHistory) {
 		u.status0(i18n.T("sync_done", u.syncNew))
 		return
 	}
-	time.AfterFunc(syncPause, func() {
-		select {
-		case u.events <- evSyncTick{}:
-		case <-u.ctx.Done(): // /quit: nobody reads the events any more
-		}
-	})
+	time.AfterFunc(syncPause, func() { u.post(evSyncTick{}) })
 }
 
 // syncToCache : chat with no window. The new messages are merged with the
@@ -478,6 +473,15 @@ func mergeHistory(old, fresh []model.Msg) []model.Msg {
 		}
 	}
 	return out
+}
+
+// post hands ev to the UI loop from another goroutine. After /quit nobody
+// reads the events any more: it gives up instead of blocking for ever.
+func (u *UI) post(ev model.Event) {
+	select {
+	case u.events <- ev:
+	case <-u.ctx.Done():
+	}
 }
 
 // bg runs a cache write in the background. A panic there would take the whole

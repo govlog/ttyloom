@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -26,7 +27,7 @@ func TestCleanPartsAllDepths(t *testing.T) {
 	os.WriteFile(keep, nil, 0o600)
 	fresh := filepath.Join(dir, ".part-4")
 	os.WriteFile(fresh, nil, 0o600)
-	cleanParts(dir)
+	cleanFiles(dir, t.TempDir())
 	for _, p := range []string{filepath.Join(dir, ".part-1"), filepath.Join(dir, "maps", ".part-2"), filepath.Join(deep, ".part-3")} {
 		if _, err := os.Stat(p); err == nil {
 			t.Fatalf("left behind: %s", p)
@@ -37,5 +38,36 @@ func TestCleanPartsAllDepths(t *testing.T) {
 	}
 	if _, err := os.Stat(fresh); err != nil {
 		t.Fatal("the part file of a running download was removed")
+	}
+}
+
+// The pictures of the boxes — GIF previews, media thumbnails, custom emojis —
+// leave the cache after a week unused, and pasted images never sent leave
+// download_dir after a day: nothing else ever removed them. The history of a
+// network, beside them in the cache, stays.
+func TestCleanFilesOldPictures(t *testing.T) {
+	dl, cache := t.TempDir(), t.TempDir()
+	old := time.Now().Add(-8 * 24 * time.Hour)
+	gone := []string{filepath.Join(cache, "gifs", "telegram", "a.mp4"), filepath.Join(cache, "thumbs", "discord", "b.jpg"),
+		filepath.Join(cache, "emoji", "discord", "c.png"), filepath.Join(dl, "paste", "20260901-120000-1.png")}
+	kept := []string{filepath.Join(cache, "telegram", "history", "1.gob"), filepath.Join(cache, "gifs", "telegram", "fresh.mp4"),
+		filepath.Join(dl, "20260901-120000_telegram_1_x_7.jpg")}
+	for _, p := range append(gone, kept...) {
+		os.MkdirAll(filepath.Dir(p), 0o700)
+		os.WriteFile(p, nil, 0o600)
+		if !strings.Contains(p, "fresh") {
+			os.Chtimes(p, old, old)
+		}
+	}
+	cleanFiles(dl, cache)
+	for _, p := range gone {
+		if _, err := os.Stat(p); err == nil {
+			t.Errorf("left behind: %s", p)
+		}
+	}
+	for _, p := range kept {
+		if _, err := os.Stat(p); err != nil {
+			t.Errorf("removed: %s", p)
+		}
 	}
 }

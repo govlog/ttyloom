@@ -85,10 +85,7 @@ func avatarPath(dir string, k model.ChatKey) string {
 func (u *UI) resetAvatars() {
 	for _, md := range u.avatars {
 		u.cancelDecode(md)
-		s := u.kittyFree(md) // ids and LRU cleaned even when the mode has changed
-		if u.t.Kitty {
-			u.t.WriteString(s)
-		}
+		u.dropImage(md)
 		md.State, md.Frames = model.MediaNone, nil
 	}
 }
@@ -218,6 +215,7 @@ func (u *UI) downloaded(e model.EvDownloaded) {
 	isFull := u.fulls[md]
 	delete(u.fulls, md)
 	if e.Err != "" {
+		delete(u.openNext, md) // the next download of md, whatever starts it, opens nothing
 		md.State, md.Err = model.MediaFailed, e.Err
 		if v := u.viewer; v != nil && v.src == md {
 			v.md.State, v.md.Err = model.MediaFailed, e.Err
@@ -237,21 +235,45 @@ func (u *UI) downloaded(e model.EvDownloaded) {
 		md.State = model.MediaReady
 		return
 	}
-	if t := u.thumbBox(); t != nil && ownsThumb(t, md) { // picture of the GIF box or of the media browser: its cell
-		u.gridDecode(t.grid(), md)
-		return
-	}
-	if u.customOwns(md) { // image of a custom emoji: the cell of the picker
-		u.customDecode(md)
-		return
-	}
 	if !md.Previewable() || u.images == "off" {
 		md.State = model.MediaReady
 		u.invalidateMedia(md)
 		return
 	}
-	maxW, maxH := u.imageBox(md)
-	u.loadFrames(md, maxW, maxH, u.frameCount(md), 0)
+	// A GIF off the screen: up to 100 frames that nobody may scroll back to
+	// see. The file is there, the line decodes it when it shows (showItem).
+	if md.Kind == model.MediaGIF && !u.mediaShown(md) {
+		md.State = model.MediaReady
+		u.invalidateMedia(md)
+		return
+	}
+	u.decodeFor(md)
+}
+
+// mediaShown tells whether md shows: on a line of the last frame, or in a cell
+// of the picture box or of the picker.
+func (u *UI) mediaShown(md *model.Media) bool {
+	for _, h := range u.hits {
+		if h.item != nil && h.item.Msg != nil && h.item.Msg.Media == md {
+			return true
+		}
+	}
+	t := u.thumbBox()
+	return t != nil && ownsThumb(t, md) || u.customOwns(md)
+}
+
+// decodeFor decodes md in the box of what shows it: a cell of the GIF box
+// or of the media browser, an emoji of the picker, else the line of a message.
+func (u *UI) decodeFor(md *model.Media) {
+	switch t := u.thumbBox(); {
+	case t != nil && ownsThumb(t, md):
+		u.gridDecode(t.grid(), md)
+	case u.customOwns(md):
+		u.customDecode(md)
+	default:
+		maxW, maxH := u.imageBox(md)
+		u.loadFrames(md, maxW, maxH, u.frameCount(md), 0)
+	}
 }
 
 // frameCount gives the frames to decode for md — 1 for a still image as well
@@ -289,13 +311,19 @@ func (u *UI) autoplay(it *Item) {
 
 // showItem : the line of it is on the screen. Its media starts its download
 // when nothing holds it — never asked, or frames dropped by framesBudget: the
-// file on disk gives the lead back at once — and an autoplay video takes its
-// frames. it is nil on a separator line.
+// file on disk gives the lead back at once —, its decoding when it was
+// downloaded off the screen, and an autoplay video takes its frames. it is
+// nil on a separator line.
 func (u *UI) showItem(it *Item) {
 	if it == nil || it.Msg == nil {
 		return
 	}
 	u.autoMedia(it.Msg, true)
+	if md := it.Msg.Media; md != nil && md.State == model.MediaReady && len(md.Frames) == 0 && md.Want == 0 &&
+		md.Path != "" && md.Previewable() && u.images != "off" {
+		md.State = model.MediaLoading // the label says so for the time of the decoding
+		u.decodeFor(md)
+	}
 	u.autoplay(it)
 }
 
@@ -337,8 +365,9 @@ func (u *UI) stopVideo(md *model.Media) {
 		// The decoding stopped in the middle: what it had already given is a
 		// truncated clip. Kept whole, render.Playing would stay true and "l"
 		// would only flip the pause, looping that stump for ever. One frame
-		// left, and "l" goes back through loadFrames.
-		md.Frames = md.Frames[:min(1, len(md.Frames))]
+		// left, and "l" goes back through loadFrames. A new array: the old one
+		// would keep every frame past the first alive, out of sight of the budget.
+		md.Frames = slices.Clone(md.Frames[:min(1, len(md.Frames))])
 	}
 	md.Paused, md.Frame = true, 0
 	u.retireKitty(md) // the screen carries the last animated frame
@@ -541,7 +570,7 @@ func (u *UI) animate(now time.Time) bool {
 			// out for a good part of every frame.
 			u.t.WriteString(media.KittyTransmit(md.KittyAlt, md.Frames[md.Frame]))
 			u.t.WriteString("\x1b[?25l\x1b[s")
-			u.t.WriteString("\x1b[" + itoa(p.row+1) + ";" + itoa(x0+p.img.Col+1) + "H")
+			u.t.WriteString("\x1b[" + strconv.Itoa(p.row+1) + ";" + strconv.Itoa(x0+p.img.Col+1) + "H")
 			// p.crop : the zoomed preview keeps its sub-rectangle from one frame to the next.
 			u.t.WriteString(media.KittyPlace(md.KittyAlt, pid, p.img.Cols, p.img.Rows, p.crop))
 			if old != 0 {
@@ -578,7 +607,13 @@ func (u *UI) animate(now time.Time) bool {
 				redraw = true
 			}
 		} else {
-			for _, it := range u.view().Items {
+			// The rows of the last frame only: a GIF off the screen holds. A block
+			// takes several rows; past the first, md.Next makes them no-ops.
+			for _, h := range u.hits {
+				it := h.item
+				if it == nil {
+					continue
+				}
 				if md := mediaOfItem(it); md != nil && len(md.Frames) > 1 && !md.Paused && !now.Before(md.Next) && !u.gifStill(md) {
 					md.Frame = (md.Frame + 1) % len(md.Frames)
 					md.Next = now.Add(md.Delay)
@@ -641,8 +676,6 @@ func mediaOfItem(it *Item) *model.Media {
 	return it.Msg.Media
 }
 
-func itoa(n int) string { return strconv.Itoa(n) }
-
 // openMedia opens the nth media (from the end) of the window with xdg-open.
 func (u *UI) openMedia(w *Window, n int) {
 	for i := len(w.Items) - 1; i >= 0; i-- {
@@ -668,7 +701,7 @@ func (u *UI) openItemMedia(w *Window, it *Item) {
 	}
 	md := it.Msg.Media
 	if render.SafeURL(md.URL) { // link preview: the page, never the thumbnail
-		u.open(md.URL)
+		u.openHidden(md.URL)
 		return
 	}
 	md = full(it.Msg)
@@ -676,13 +709,18 @@ func (u *UI) openItemMedia(w *Window, it *Item) {
 		u.open(md.Path)
 		return
 	}
+	u.openNext[md] = true
 	if md.State == model.MediaLoading { // already running: we will open it on arrival
-		u.openNext[md] = true
 		return
 	}
-	u.openNext[md] = true
 	w.AddSys(i18n.T("downloading", md.Label))
 	u.downloadFull(it.Msg)
+}
+
+// openHidden asks before opening a URL the screen does not show: a link
+// preview names its page by a title the network chose (A07).
+func (u *UI) openHidden(url string) {
+	u.confirm(i18n.T("confirm_open_link", render.CleanLine(url)), func() { u.open(url) })
 }
 
 // openable : last net before xdg-open. The URLs from the network are already
@@ -713,25 +751,26 @@ func (u *UI) open(path string) {
 	go cmd.Wait()
 }
 
-// reloadMedia starts again from zero for every shown media (image mode change).
+// reloadMedia starts again from zero for every media (image mode change).
+// Only the last page of the shown window loads at once, as at its opening;
+// the rest loads when its line shows or its window opens. Backend.Download
+// gives the lead back at once when the file is already there.
 func (u *UI) reloadMedia() {
 	u.dropKitty() // first of all: otherwise draw would place the old images again
 	u.resetAvatars()
 	for _, w := range u.ws.List {
 		u.freeImages(w)
 		for _, it := range w.Items {
-			// No filter on State: freeImages has just set the kitty images back to
-			// MediaNone. autoMedia filters again (Previewable, size, off mode) and
-			// Backend.Download gives the lead back at once when the file is already there.
+			// No filter on State: freeImages has just set the kitty images back to MediaNone.
 			if it.Msg != nil && it.Msg.Media != nil {
 				u.cancelDecode(it.Msg.Media)
 				it.Msg.Media.State, it.Msg.Media.Frames, it.Msg.Media.Err = model.MediaNone, nil, ""
 				it.Msg.Media.Want, it.Msg.Media.Frame = 0, 0
 				it.lines = nil
-				u.autoMedia(it.Msg, false)
 			}
 		}
 	}
+	u.autoMediaWin(u.view())
 }
 
 // lru : media whose image lives in the terminal, from the oldest to the
@@ -778,10 +817,11 @@ func (l *lru) drop(md *model.Media) {
 // ponytail: a constant — a config key if 256 MB proves wrong on some machine.
 var framesBudget = 256 << 20
 
+// framesBytes : what the frames of md hold, spare capacity included.
 func framesBytes(md *model.Media) int {
 	n := 0
 	for _, f := range md.Frames {
-		n += len(f)
+		n += cap(f)
 	}
 	return n
 }
@@ -852,9 +892,7 @@ func (u *UI) dropFrames(md *model.Media) {
 	if md.KittyID == 0 && md.Frames == nil {
 		return
 	}
-	if s := u.kittyFree(md); s != "" && u.t.Kitty {
-		u.t.WriteString(s)
-	}
+	u.dropImage(md)
 	md.State, md.Frames = model.MediaNone, nil
 	md.Want, md.Frame, md.Paused = 0, 0, false // a video being played goes with the rest
 	u.invalidateMedia(md)                      // the aggregate and the search windows share the media
@@ -874,6 +912,14 @@ func (u *UI) kittyFree(md *model.Media) string {
 	md.KittyID, md.KittyAlt = 0, 0
 	u.kittyLRU.drop(md)
 	return s
+}
+
+// dropImage frees the images of md in the terminal: ids and LRU cleaned even
+// when the mode has changed, the sequences written when it speaks kitty.
+func (u *UI) dropImage(md *model.Media) {
+	if s := u.kittyFree(md); s != "" && u.t.Kitty {
+		u.t.WriteString(s)
+	}
 }
 
 // retireKitty : the image sent is stale (frames decoded again). The media
@@ -913,8 +959,7 @@ func (u *UI) redecode(md *model.Media) {
 	if md.Path == "" || (md.CellW == cellW && md.CellH == cellH) {
 		return
 	}
-	maxW, maxH := u.imageBox(md)
-	u.loadFrames(md, maxW, maxH, u.frameCount(md), 0)
+	u.decodeFor(md)
 }
 
 // dropKitty : display mode change; we free everything, the next placement
@@ -924,9 +969,6 @@ func (u *UI) dropKitty() {
 	list := u.kittyLRU.list
 	u.kittyLRU.list = nil
 	for _, md := range list {
-		s := u.kittyFree(md)
-		if u.t.Kitty {
-			u.t.WriteString(s)
-		}
+		u.dropImage(md)
 	}
 }

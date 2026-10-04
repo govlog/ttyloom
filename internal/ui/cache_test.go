@@ -425,3 +425,16 @@ func TestMergeFillsHole(t *testing.T) {
 		}
 	}
 }
+
+// TestCacheSnapshotOwnsFull : the snapshot handed to the cache writer shares
+// nothing with the window — the larger variant of a photo included, which a
+// download fills on the UI goroutine while the writer reads it.
+func TestCacheSnapshotOwnsFull(t *testing.T) {
+	full := &model.Media{Kind: model.MediaPhoto, Loc: 2}
+	w := &Window{Items: []*Item{{Msg: &model.Msg{ID: 1, Media: &model.Media{Kind: model.MediaPhoto, Loc: 1, Full: full}}}}}
+	snap := w.Msgs()
+	full.Path, full.State = "/x_full.jpg", model.MediaReady // downloadFull lands
+	if got := snap[0].Media.Full; got.Path != "" || got.State != model.MediaNone {
+		t.Fatalf("the snapshot follows the window: %+v", got)
+	}
+}

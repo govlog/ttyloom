@@ -3,6 +3,7 @@ package media
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/binary"
 	"hash/crc32"
 	"image"
@@ -36,10 +37,33 @@ func TestFileName(t *testing.T) {
 }
 
 func TestKittyChunks(t *testing.T) {
-	data := bytes.Repeat([]byte{1}, 5000) // base64 → 6668 bytes → 2 chunks
-	s := KittyDisplay(7, 3, data, 10, 5)
-	if strings.Count(s, "\x1b_G") != 2 || !strings.HasPrefix(s, "\x1b_Ga=T,f=100,i=7,p=3,c=10,r=5,q=2,m=1;") || !strings.Contains(s, "\x1b_Gm=0;") {
-		t.Fatalf("%.60q", s)
+	// The data goes as base64 in chunks of 4096 characters at most, the keys
+	// on the first, m=1 on every chunk but the last; joined, they give it back.
+	for _, n := range []int{1, 2, 3, 3071, 3072, 3073, 6144, 6145, 22 << 10} {
+		data := make([]byte, n)
+		for i := range data {
+			data[i] = byte(i * 7)
+		}
+		s := KittyDisplay(7, 3, data, 10, 5)
+		parts := strings.Split(strings.TrimSuffix(s, "\x1b\\"), "\x1b\\")
+		var enc strings.Builder
+		for i, p := range parts {
+			head, payload, ok := strings.Cut(strings.TrimPrefix(p, "\x1b_G"), ";")
+			want := "m=1"
+			if i == len(parts)-1 {
+				want = "m=0"
+			}
+			if i == 0 {
+				want = "a=T,f=100,i=7,p=3,c=10,r=5,q=2," + want
+			}
+			if !ok || head != want || len(payload) > chunk {
+				t.Fatalf("%d bytes, chunk %d: %q, %d characters", n, i, head, len(payload))
+			}
+			enc.WriteString(payload)
+		}
+		if got, err := base64.StdEncoding.DecodeString(enc.String()); err != nil || !bytes.Equal(got, data) {
+			t.Fatalf("%d bytes: the chunks do not give the data back (%v)", n, err)
+		}
 	}
 	if got := KittyPlace(7, 3, 10, 5); got != "\x1b_Ga=p,i=7,p=3,c=10,r=5,q=2\x1b\\" {
 		t.Fatal(got)
@@ -89,7 +113,7 @@ func TestLoadGIFFrames(t *testing.T) {
 	f2 := image.NewPaletted(image.Rect(2, 2, 4, 4), color.Palette{color.RGBA{0, 0, 255, 255}})
 	g := &gif.GIF{
 		Image:  []*image.Paletted{f1, f2},
-		Delay:  []int{5, 5},
+		Delay:  []int{10, 10},
 		Config: image.Config{Width: 4, Height: 4},
 	}
 	p := filepath.Join(t.TempDir(), "a.gif")
@@ -103,7 +127,7 @@ func TestLoadGIFFrames(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(fr.PNG) != 2 || fr.W != 4 || fr.H != 4 || fr.Delay != 50*time.Millisecond {
+	if len(fr.PNG) != 2 || fr.W != 4 || fr.H != 4 || fr.Delay != 100*time.Millisecond {
 		t.Fatalf("%d %dx%d %s", len(fr.PNG), fr.W, fr.H, fr.Delay)
 	}
 	img, err := png.Decode(bytes.NewReader(fr.PNG[1]))
@@ -128,12 +152,59 @@ func TestLoadGIFFrames(t *testing.T) {
 	}
 }
 
+// writeGIF : a GIF of n 8x8 frames, delay in hundredths of a second each.
+func writeGIF(t *testing.T, n, delay int) string {
+	t.Helper()
+	g := &gif.GIF{Config: image.Config{Width: 8, Height: 8}}
+	for i := range n {
+		g.Image = append(g.Image, image.NewPaletted(image.Rect(0, 0, 8, 8), color.Palette{color.Gray{Y: uint8(i)}}))
+		g.Delay = append(g.Delay, delay)
+	}
+	p := filepath.Join(t.TempDir(), "a.gif")
+	f, err := os.Create(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	if err := gif.EncodeAll(f, g); err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
+// TestLoadGIFFrameCount : a GIF keeps the frames asked, no more — the GIF
+// box asks 40 per preview, and a 60-frame GIF used to keep all of them.
+func TestLoadGIFFrameCount(t *testing.T) {
+	fr, err := Load(context.Background(), writeGIF(t, 60, 10), "image/gif", 100, 100, 40)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(fr.PNG) != 40 {
+		t.Fatalf("%d frames, want the 40 asked", len(fr.PNG))
+	}
+}
+
+// TestLoadGIFRealSpeed : the animation moves one frame per 100 ms tick at
+// most, so a GIF made of 30 ms frames used to play 3.3 times too slowly. It
+// keeps a frame per 100 ms of its timeline now: the loop lasts what it
+// lasts in a browser.
+func TestLoadGIFRealSpeed(t *testing.T) {
+	fr, err := Load(context.Background(), writeGIF(t, 30, 3), "image/gif", 100, 100, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	loop := time.Duration(len(fr.PNG)) * max(fr.Delay, 100*time.Millisecond)
+	if loop < 800*time.Millisecond || loop > 1200*time.Millisecond {
+		t.Fatalf("%d frames at %v: the 0.9 s loop plays in %v", len(fr.PNG), fr.Delay, loop)
+	}
+}
+
 func TestGIFStopsReadingAtFrameLimit(t *testing.T) {
 	frame := image.NewPaletted(image.Rect(0, 0, 2, 2), color.Palette{color.Black, color.White})
 	g := &gif.GIF{Config: image.Config{Width: 2, Height: 2}}
 	for range maxFrames {
 		g.Image = append(g.Image, frame)
-		g.Delay = append(g.Delay, 5)
+		g.Delay = append(g.Delay, 10)
 	}
 	var data bytes.Buffer
 	if err := gif.EncodeAll(&data, g); err != nil {
@@ -191,13 +262,14 @@ func TestLoadVideoFramesCap(t *testing.T) {
 }
 
 // pngHeader builds a PNG with an IHDR only (no pixel data): enough for
-// DecodeConfig, which is what the guard reads.
-func pngHeader(w, h uint32) []byte {
+// DecodeConfig, which is what the guard reads. depth: bits per channel,
+// kind: PNG colour type (0 greyscale, 6 RGBA).
+func pngHeader(w, h uint32, depth, kind byte) []byte {
 	var ihdr bytes.Buffer
 	ihdr.WriteString("IHDR")
 	binary.Write(&ihdr, binary.BigEndian, w)
 	binary.Write(&ihdr, binary.BigEndian, h)
-	ihdr.Write([]byte{8, 0, 0, 0, 0}) // 8 bits, greyscale, no interlace
+	ihdr.Write([]byte{depth, kind, 0, 0, 0}) // no interlace
 	var out bytes.Buffer
 	out.WriteString("\x89PNG\r\n\x1a\n")
 	binary.Write(&out, binary.BigEndian, uint32(ihdr.Len()-4))
@@ -210,7 +282,7 @@ func pngHeader(w, h uint32) []byte {
 // decoded) is refused on the announced size, before any allocation.
 func TestLoadRefusesPixelBomb(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "bomb.png")
-	if err := os.WriteFile(p, pngHeader(65535, 65535), 0o600); err != nil {
+	if err := os.WriteFile(p, pngHeader(65535, 65535, 8, 0), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := Load(context.Background(), p, "image/png", 800, 600, 1); err == nil {
@@ -225,6 +297,19 @@ func TestLoadRefusesPixelBomb(t *testing.T) {
 	f.Close()
 	if _, err := Load(context.Background(), ok, "image/png", 800, 600, 1); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// TestLoadRefuses16BitBomb : the cap counts 4 bytes a pixel, and a 16-bit
+// image decodes to 8. A 25 Mpx 16-bit PNG, a few hundred KB when uniform,
+// took 200 MB once decoded plus the scaler temporary.
+func TestLoadRefuses16BitBomb(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "deep.png")
+	if err := os.WriteFile(p, pngHeader(5000, 5000, 16, 6), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Load(context.Background(), p, "image/png", 800, 600, 1); err == nil || !strings.Contains(err.Error(), "5000") {
+		t.Fatalf("16-bit image of 25 Mpx not refused on its size: %v", err)
 	}
 }
 

@@ -408,6 +408,11 @@ func (w *Window) Msgs() []model.Msg {
 		if m.Media != nil {
 			md := *m.Media
 			md.Frames = nil
+			if md.Full != nil { // the larger variant too: a download fills it meanwhile
+				f := *md.Full
+				f.Frames = nil
+				md.Full = &f
+			}
 			m.Media = &md
 		}
 		out = append(out, m)

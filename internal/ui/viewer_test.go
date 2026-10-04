@@ -3,6 +3,7 @@ package ui
 import (
 	"image"
 	"math"
+	"strings"
 	"testing"
 	"time"
 
@@ -152,5 +153,26 @@ func TestViewerDragPans(t *testing.T) {
 	mouse(10, 10, false, false)
 	if u.viewer != nil {
 		t.Fatal("click with no move: preview still open")
+	}
+}
+
+// TestOpenHiddenLinkAsks : a link preview hides its page behind a title the
+// network chose. A click on it asks first (A07); "o" on the message and "o"
+// in its preview opened the page at once.
+func TestOpenHiddenLinkAsks(t *testing.T) {
+	t.Setenv("PATH", "") // never a real xdg-open, whatever happens
+	u, _, w := msgUI(t)
+	md := &model.Media{Kind: model.MediaWebPage, Loc: 1, URL: "https://evil.example/login", Label: "[link · My Bank]", Path: "/x.jpg"}
+	w.Upsert(&model.Msg{Net: netTelegram, ChatID: 5, ID: 4, From: "bot", Text: "news", Media: md})
+	w.Sel = w.Items[len(w.Items)-1]
+	u.key(term.Key{Rune: 'o'})
+	if u.ask == nil || !strings.Contains(u.ask.q, md.URL) {
+		t.Fatalf("o on a link preview: no question naming the page (%+v)", u.ask)
+	}
+	u.ask = nil
+	u.viewer = &viewer{src: md, md: viewCopy(md), zoom: 1}
+	u.key(term.Key{Rune: 'o'})
+	if u.viewer != nil || u.ask == nil || !strings.Contains(u.ask.q, md.URL) {
+		t.Fatalf("o in the preview: viewer open %v, question %+v", u.viewer != nil, u.ask)
 	}
 }

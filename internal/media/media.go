@@ -10,6 +10,7 @@ import (
 	"github.com/govlog/ttyloom/internal/i18n"
 	"github.com/govlog/ttyloom/internal/model"
 	"image"
+	"image/color"
 	"image/draw"
 	"image/gif"
 	_ "image/jpeg"
@@ -23,6 +24,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	xdraw "golang.org/x/image/draw"
@@ -47,9 +49,11 @@ const (
 	videoBudget  = 200 << 20 // bytes of decoded PNG at most
 	progressStep = 30        // frames between two partial reports
 	// maxPixels : pixel budget of one decoded image (40 Mpx ≈ 160 MB in
-	// RGBA). The header announces the size before the decoder allocates for
-	// it, so it is read first — a 4 MB PNG can claim 65535x65535. Same guard
-	// as fetchTile (osm.go) on the OSM side.
+	// RGBA; half the pixels for 16 bits a channel, which take 8 bytes),
+	// plus the temporary of the scaler (dstW × srcH × 32 bytes). The header
+	// announces the size before the decoder allocates for it, so it is read
+	// first — a 4 MB PNG can claim 65535x65535. Same guard as fetchTile
+	// (osm.go) on the OSM side.
 	maxPixels = 40 << 20
 	// Limit the canvas and the input frame count before gif.DecodeAll.
 	// Paletted frames use one byte per pixel.
@@ -95,7 +99,7 @@ func Load(ctx context.Context, path, mime string, maxW, maxH, frames int, progre
 		// The Go decoder reads still WebP only; ffmpeg plays an animated one.
 		return loadVideo(ctx, path, maxW, maxH, frames, p)
 	case mime == "image/gif" && frames > 1:
-		return loadGIF(ctx, path, maxW, maxH)
+		return loadGIF(ctx, path, maxW, maxH, min(frames, maxFrames))
 	}
 	f, err := os.Open(path)
 	if err != nil {
@@ -106,7 +110,11 @@ func Load(ctx context.Context, path, mime string, maxW, maxH, frames int, progre
 	if err != nil {
 		return nil, err
 	}
-	if err := checkPixels(cfg.Width, cfg.Height, maxPixels); err != nil {
+	limit := maxPixels
+	if cfg.ColorModel == color.RGBA64Model || cfg.ColorModel == color.NRGBA64Model {
+		limit /= 2 // 16 bits a channel: 8 bytes a pixel
+	}
+	if err := checkPixels(cfg.Width, cfg.Height, limit); err != nil {
 		return nil, err
 	}
 	if _, err := f.Seek(0, io.SeekStart); err != nil {
@@ -182,14 +190,39 @@ func fit(img image.Image, maxW, maxH int) image.Image {
 	return dst
 }
 
-func encode(img image.Image) ([]byte, error) {
-	var buf bytes.Buffer
-	err := (&png.Encoder{CompressionLevel: png.BestSpeed}).Encode(&buf, img)
-	return buf.Bytes(), err
+// pngEnc encodes every frame. Its pool hands the zlib state of one frame to
+// the next instead of making it again; each decode slot gets its own.
+var pngEnc = png.Encoder{CompressionLevel: png.BestSpeed, BufferPool: &pngPool{}}
+
+type pngPool struct{ p sync.Pool }
+
+func (q *pngPool) Get() *png.EncoderBuffer {
+	b, _ := q.p.Get().(*png.EncoderBuffer)
+	return b
 }
 
+func (q *pngPool) Put(b *png.EncoderBuffer) { q.p.Put(b) }
+
+// encode gives img as a PNG, copied out of the buffer it was written into: a
+// frame kept for the session must not hold the spare capacity of a buffer
+// grown by doubling.
+func encode(img image.Image) ([]byte, error) {
+	var buf bytes.Buffer
+	err := pngEnc.Encode(&buf, img)
+	return bytes.Clone(buf.Bytes()), err
+}
+
+// gifSlot : the period of the animation tick (ui.animate), which moves one
+// frame at a time. A GIF keeps one frame per slot of its timeline at most,
+// as the fps filter of loadVideo does: faster frames would play in slow
+// motion, and weigh for nothing.
+const gifSlot = 100 * time.Millisecond
+
+// loadGIF keeps n frames at most.
 // ponytail: no GIF "disposal" handling, each frame is drawn on top of the one before.
-func loadGIF(ctx context.Context, path string, maxW, maxH int) (*Frames, error) {
+// ponytail: one delay for the clip, the median of its frames — a pause on one
+// frame is lost; a delay per frame in Frames and Media, read by animate, would keep it.
+func loadGIF(ctx context.Context, path string, maxW, maxH, n int) (*Frames, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
@@ -216,31 +249,50 @@ func loadGIF(ctx context.Context, path string, maxW, maxH int) (*Frames, error) 
 	if len(g.Image) == 0 {
 		return nil, errors.New(i18n.T("gif_empty"))
 	}
-	w, h := g.Config.Width, g.Config.Height
-	if w == 0 || h == 0 {
-		w, h = g.Image[0].Bounds().Dx(), g.Image[0].Bounds().Dy()
-	}
+	w, h := g.Config.Width, g.Config.Height // checkPixels refused a zero size
 	canvas := image.NewRGBA(image.Rect(0, 0, w, h))
-	out := &Frames{Delay: 100 * time.Millisecond}
-	if len(g.Delay) > 0 && g.Delay[0] > 0 {
-		out.Delay = max(time.Duration(g.Delay[0])*10*time.Millisecond, 20*time.Millisecond)
+	// One scaler and one destination for every frame: the package-level
+	// Scale makes both again at each call.
+	dst := canvas
+	var sc xdraw.Scaler
+	if dw, dh := Fit(w, h, maxW, maxH); dw != w || dh != h {
+		dst, sc = image.NewRGBA(image.Rect(0, 0, dw, dh)), xdraw.CatmullRom.NewScaler(dw, dh, w, h)
 	}
+	out := &Frames{W: dst.Bounds().Dx(), H: dst.Bounds().Dy()}
+	var delays []time.Duration
+	var at, next time.Duration // start of the frame in the clip, start of the next slot
 	for i, fr := range g.Image {
-		if i >= maxFrames || ctx.Err() != nil {
+		if len(out.PNG) >= n || ctx.Err() != nil {
 			break
 		}
-		draw.Draw(canvas, fr.Bounds(), fr, fr.Bounds().Min, draw.Over)
-		img := fit(canvas, maxW, maxH)
-		b, err := encode(img)
-		if err != nil {
-			return nil, err
+		draw.Draw(canvas, fr.Bounds(), fr, fr.Bounds().Min, draw.Over) // every frame builds the canvas
+		d := 100 * time.Millisecond
+		if i < len(g.Delay) && g.Delay[i] > 0 {
+			d = max(time.Duration(g.Delay[i])*10*time.Millisecond, 20*time.Millisecond)
 		}
-		out.PNG = append(out.PNG, b)
-		out.W, out.H = img.Bounds().Dx(), img.Bounds().Dy()
+		delays = append(delays, d)
+		if at >= next {
+			if sc != nil {
+				sc.Scale(dst, dst.Bounds(), canvas, canvas.Bounds(), xdraw.Src, nil)
+			}
+			b, err := encode(dst)
+			if err != nil {
+				return nil, err
+			}
+			out.PNG = append(out.PNG, b)
+			if next += gifSlot; next <= at {
+				// After a frame longer than a slot, the grid starts again from
+				// it: no burst of kept frames to catch up.
+				next = at + gifSlot
+			}
+		}
+		at += d
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err // cancelled: same answer as a video, never half a GIF
 	}
+	slices.Sort(delays)
+	out.Delay = max(delays[len(delays)/2], gifSlot)
 	return out, nil
 }
 
@@ -365,8 +417,8 @@ func loadVideo(ctx context.Context, path string, maxW, maxH, frames int, progres
 		if _, err := io.ReadFull(stdout, buf); err != nil {
 			break
 		}
-		img := &image.RGBA{Pix: append([]byte(nil), buf...), Stride: w * 4, Rect: image.Rect(0, 0, w, h)}
-		b, err := encode(img)
+		// The PNG is made before buf is read again: the encoder keeps nothing of it.
+		b, err := encode(&image.RGBA{Pix: buf, Stride: w * 4, Rect: image.Rect(0, 0, w, h)})
 		if err != nil {
 			return nil, err
 		}

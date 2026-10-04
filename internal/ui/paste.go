@@ -9,8 +9,10 @@ import (
 )
 
 // normalizePaste : the clipboard is untrusted input, drawn again by drawInput.
+// A tab becomes four spaces: the draft holds no raw tab, and Clean would make
+// it one space.
 func normalizePaste(raw string) string {
-	return render.Clean(strings.ReplaceAll(strings.ReplaceAll(raw, "\r\n", "\n"), "\r", "\n"))
+	return render.Clean(strings.NewReplacer("\r\n", "\n", "\r", "\n", "\t", "    ").Replace(raw))
 }
 
 // pasteNeedsPrompt tells whether a multiline paste needs a decision (as is /
@@ -20,7 +22,7 @@ func pasteNeedsPrompt(s string) bool {
 }
 
 // maxPasteBytes : hard cap of a paste into the input line. Telegram sends
-// 4096 characters at most anyway; the clipboard is read up to 64 MB
+// 4096 characters at most anyway; a clipboard text is read up to twice that
 // (clip.go), and every repaint has to walk what sits on the line.
 const maxPasteBytes = 64 << 10
 
