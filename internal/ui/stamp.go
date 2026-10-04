@@ -72,6 +72,12 @@ func stamp(net string, ev model.Event) model.Event {
 	case model.EvGifs:
 		e.Err = render.CleanLine(e.Err)
 		return e
+	case model.EvMedia:
+		for i := range e.Items {
+			stampMsg(net, &e.Items[i].Msg)
+		}
+		e.Err = render.CleanLine(e.Err)
+		return e
 	case model.EvDownloaded:
 		e.Err = render.CleanLine(e.Err) // becomes Media.Err
 		return e

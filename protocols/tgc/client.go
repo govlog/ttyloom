@@ -827,12 +827,11 @@ func (c *Client) finishPage(ctx context.Context, chat *model.Chat, msgs []model.
 	return msgs
 }
 
-// page reads it up to limit messages, down to the first id at or below minID
-// (0: no floor), and gives them finished (finishPage).
-func (c *Client) page(ctx context.Context, chat *model.Chat, it *messages.Iterator, limit, minID int) ([]model.Msg, error) {
-	var msgs []model.Msg
+// each walks it from the newest message to the oldest and gives each one to
+// f with the entities of its batch, until f says false.
+func (c *Client) each(ctx context.Context, it *messages.Iterator, f func(mc tg.MessageClass, ents peer.Entities) bool) error {
 	var last peer.Entities
-	for len(msgs) < limit && it.Next(ctx) {
+	for it.Next(ctx) {
 		e := it.Value()
 		// Every message of a batch carries the entities of the whole batch:
 		// applied once per batch, not once per message.
@@ -842,19 +841,29 @@ func (c *Client) page(ctx context.Context, chat *model.Chat, it *messages.Iterat
 			last = e.Entities
 		}
 		mc, ok := e.Msg.(tg.MessageClass) // Elem.Msg: NotEmptyMessage subset
-		if !ok {
-			continue
+		if ok && !f(mc, e.Entities) {
+			break
 		}
+	}
+	return it.Err()
+}
+
+// page reads it up to limit messages, down to the first id at or below minID
+// (0: no floor), and gives them finished (finishPage).
+func (c *Client) page(ctx context.Context, chat *model.Chat, it *messages.Iterator, limit, minID int) ([]model.Msg, error) {
+	var msgs []model.Msg
+	err := c.each(ctx, it, func(mc tg.MessageClass, ents peer.Entities) bool {
 		// GetHistory does not expose min_id: the read goes from the newest to the
 		// oldest, the first message already known stops everything.
 		if mc.GetID() <= minID {
-			break
+			return false
 		}
-		if m, _, ok := c.convert(ctx, mc, e.Entities, chat); ok {
+		if m, _, ok := c.convert(ctx, mc, ents, chat); ok {
 			msgs = append(msgs, m)
 		}
-	}
-	if err := it.Err(); err != nil {
+		return len(msgs) < limit
+	})
+	if err != nil {
 		return nil, err
 	}
 	return c.finishPage(ctx, chat, msgs), nil

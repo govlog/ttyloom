@@ -44,6 +44,8 @@ var helpTopics = []topic{
 	{"/net", "help_net", "chats"},
 	{"/networks", "help_networks", "chats"},
 	{"/hooks", "help_hooks", "chats"},
+	{"/mute", "help_mute", "chats"},
+	{"/unmute", "help_unmute", "chats"},
 	{"/history", "help_history", "chats"},
 	{"/search", "help_search", "chats"},
 	{"/whois", "help_whois", "chats"},
@@ -79,6 +81,8 @@ var helpTopics = []topic{
 	{"Ctrl+V", "help_ctrl_v", "media"},
 	{"/gif", "help_gif", "media"},
 	{"Ctrl+G", "help_ctrl_g", "media"},
+	{"/media", "help_media", "media"},
+	{"Ctrl+M", "help_ctrl_m", "media"},
 
 	// Sidebar
 	{"F2", "help_f2", "sidebar"},
@@ -134,6 +138,7 @@ var helpTopics = []topic{
 	{"kitty_images", "help_kitty_images", "options"},
 	{"cache_messages", "help_cache_messages", "options"},
 	{"lang", "help_lang", "options"},
+	{"update_check", "help_update_check", "options"},
 }
 
 // display gives the shown name of a topic, with its argument placeholders.

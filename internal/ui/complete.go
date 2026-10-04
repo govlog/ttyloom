@@ -28,10 +28,13 @@ const (
 	complNet                             // /net <network>
 	complFold                            // /fold <section>
 	complPath                            // /send <path>: files of the disk
-	complLog                             // /log <on|off>
+	complWords                           // a closed list: /log <on|off>, /media <tab> (argWords)
 	complNone                            // /open /history …
 	complModule                          // a command of a module: its Complete
 )
+
+// argWords : the arguments of the commands that take a closed list.
+var argWords = map[string][]string{"log": {"on", "off"}, "media": {"media", "gifs", "files"}}
 
 // complContext gives the completion source and the line "tail" to complete
 // (everything after the command, for the candidates of several words). cursor
@@ -61,7 +64,7 @@ func complContext(line string, cursor int, names cmdNames) (src complSource, tai
 		return complModule, rest, name
 	}
 	switch name {
-	case "query", "msg", "join", "whois", "rename", "unrename":
+	case "query", "msg", "join", "whois", "rename", "unrename", "mute", "unmute":
 		// After the target, the rest is free text (message, new name).
 		if (name == "msg" || name == "rename") && strings.Contains(rest, " ") {
 			return complNone, "", ""
@@ -89,8 +92,8 @@ func complContext(line string, cursor int, names cmdNames) (src complSource, tai
 		return complNet, rest, ""
 	case "fold":
 		return complFold, rest, ""
-	case "log":
-		return complLog, rest, ""
+	case "log", "media":
+		return complWords, rest, name
 	case "send":
 		// The whole tail: a path may hold spaces (splitSendArgs allows it);
 		// once it names a file, the rest is the caption.

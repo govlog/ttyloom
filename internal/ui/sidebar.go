@@ -668,6 +668,7 @@ type sideState struct {
 	// mode; nil = no cursor drawn.
 	sel    *model.Chat
 	selWin *Window
+	muted  map[model.ChatKey]bool // their unread counts are dimmed
 }
 
 // ageFG : colour of a chat name in windows mode, from the text colour (last
@@ -796,6 +797,9 @@ func sidebarLines(mode sideMode, chats []*model.Chat, ws []*Window, wins []int, 
 			pfx := kindPrefix(c.Kind)
 			label := " " + sideTitle(r, title)
 			m, u, t := dim, red, theme.Style{}
+			if state.muted[c.Key()] {
+				u = dim
+			}
 			isCur := c == curChat
 			if isCur || c == state.menuChat { // current line, or line of the open menu
 				m, u, t = on, on, on
@@ -860,6 +864,9 @@ func sidebarLines(mode sideMode, chats []*model.Chat, ws []*Window, wins []int, 
 			}
 			textW := width - render.Width(num)
 			st, p, a := theme.Style{}, dim, red
+			if w.Chat != nil && state.muted[w.Chat.Key()] {
+				a = dim
+			}
 			if !state.now.IsZero() && w.Chat != nil && w.Search == "" {
 				st.FG = ageFG(th, w.Chat.LastDate, state.now)
 			}
@@ -914,7 +921,7 @@ func (u *UI) sideBlock(sepRow int) ([]render.Line, []sideRow) {
 	sorted := u.sideChats() // sorted and filtered once: one sort per frame
 	hot := u.sideHot()
 	side := sideHeader(u.side, u.cfg.SidebarSort, u.cfg.SidebarSplit, u.th, u.sideW, hot)
-	state := sideState{folded: u.foldState(), pulse: u.pulse, now: time.Now(), q: u.find.q}
+	state := sideState{folded: u.foldState(), pulse: u.pulse, now: time.Now(), q: u.find.q, muted: u.muted}
 	if m := u.menu; m != nil && m.member == "" {
 		state.menuChat = m.chat // menu of a sidebar line (nil for the menu of a message)
 	}

@@ -2,10 +2,13 @@ package ui
 
 import (
 	"context"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/govlog/ttyloom/internal/config"
 	"github.com/govlog/ttyloom/internal/model"
+	"github.com/govlog/ttyloom/internal/render"
 	"github.com/govlog/ttyloom/internal/term"
 	"github.com/govlog/ttyloom/internal/theme"
 )
@@ -66,11 +69,11 @@ func TestGifSend(t *testing.T) {
 	u.openGifs("cat")
 	u.dispatch(model.Envelope{Net: netTelegram, Ev: model.EvGifs{Query: "cat", Gifs: gifList(12)}})
 	g := u.gifs
-	if len(g.gifs) != 12 || g.perRow < 2 || g.rows < 2 {
-		t.Fatalf("grid: %d gifs, %dx%d", len(g.gifs), g.perRow, g.rows)
+	if len(g.gifs) != 12 || g.g.perRow != gridCols || g.g.rows != gridRows {
+		t.Fatalf("grid: %d gifs, %dx%d", len(g.gifs), g.g.perRow, g.g.rows)
 	}
 	u.overlay() // a frame: the visible cells ask for their file
-	if want := min(g.perRow*g.rows, 12); len(b.downloads) != want {
+	if want := gridCols * gridRows; len(b.downloads) != want {
 		t.Fatalf("downloads: %d, want the %d cells on the screen", len(b.downloads), want)
 	}
 	u.gifKey(term.Key{Code: term.Right})
@@ -104,5 +107,74 @@ func TestGifStaleAndClose(t *testing.T) {
 	u.gifKey(term.Key{Code: term.Esc})
 	if u.gifs != nil || md.Frames != nil || md.State != model.MediaNone {
 		t.Fatalf("close: box %v, frames %v, state %v", u.gifs != nil, md.Frames, md.State)
+	}
+}
+
+// However large the screen, 3 x 2 previews at most, with a scrollbar when the
+// list is longer: a click at the foot of the bar shows the last rows, the
+// wheel moves a row, and the previews far from the view let their frames go.
+func TestGifGridScroll(t *testing.T) {
+	u, _ := gifUI()
+	u.t.Cols, u.t.Rows = 200, 60
+	u.ws.Cur = 1
+	u.openGifs("cat")
+	u.dispatch(model.Envelope{Net: netTelegram, Ev: model.EvGifs{Query: "cat", Gifs: gifList(30)}})
+	g := &u.gifs.g
+	r := u.gifRect()
+	if g.perRow != 3 || g.rows != 2 {
+		t.Fatalf("grid %dx%d on a 200x60 screen, want 3x2", g.perRow, g.rows)
+	}
+	var bar strings.Builder
+	for _, l := range u.gifLines(r) {
+		bar.WriteString(render.LineText(l))
+	}
+	if !strings.Contains(bar.String(), "┃") {
+		t.Fatal("no scrollbar thumb for 30 previews")
+	}
+	first := u.gifs.gifs[0].Preview
+	first.State, first.Frames = model.MediaReady, [][]byte{{1}}
+	u.gifMouse(term.MouseEvent{Press: true, X: r.col + 1 + g.width() - 1, Y: r.row + 2 + g.height() - 1})
+	if g.top != 8 || g.cur < 24 {
+		t.Fatalf("click at the foot of the bar: top %d, cur %d; want top 8 (rows 9 and 10), cur on the screen", g.top, g.cur)
+	}
+	u.overlay()
+	if first.Frames != nil {
+		t.Error("the frames of a preview 4 pages away are kept")
+	}
+	u.gifMouse(term.MouseEvent{Button: 64, Press: true, X: r.col + 2, Y: r.row + 3})
+	if g.top != 7 {
+		t.Errorf("wheel up: top %d, want 7", g.top)
+	}
+}
+
+// Only the preview under the pointer plays, or the one the arrows reached;
+// the others hold their frame — in kitty (gifStill) and in half blocks.
+func TestGifLivePreview(t *testing.T) {
+	u, _ := gifUI()
+	u.ws.Cur = 1
+	u.openGifs("cat")
+	u.dispatch(model.Envelope{Net: netTelegram, Ev: model.EvGifs{Query: "cat", Gifs: gifList(6)}})
+	for _, x := range u.gifs.gifs {
+		x.Preview.State, x.Preview.Frames, x.Preview.Delay = model.MediaReady, [][]byte{{1}, {2}}, time.Millisecond
+	}
+	a, b := u.gifs.gifs[0].Preview, u.gifs.gifs[1].Preview
+	if !u.gifStill(a) || !u.gifStill(b) {
+		t.Fatal("a preview plays before any hover")
+	}
+	row, col := u.gridOrigin()
+	if !u.gridHover(col+1, row+1) || u.gifStill(a) || !u.gifStill(b) {
+		t.Fatal("the preview under the pointer must play, alone")
+	}
+	u.gifKey(term.Key{Code: term.Right})
+	if !u.gifStill(a) || u.gifStill(b) {
+		t.Fatal("the arrows must move the play to the cell reached")
+	}
+	u.images = "halfblock"
+	u.animate(time.Now().Add(time.Second))
+	if a.Frame != 0 || b.Frame != 1 {
+		t.Errorf("half blocks: frames %d and %d, want 0 (held) and 1 (live)", a.Frame, b.Frame)
+	}
+	if u.gridHover(0, 0); !u.gifStill(b) {
+		t.Error("the pointer off the grid must stop the play")
 	}
 }

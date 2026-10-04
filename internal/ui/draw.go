@@ -108,7 +108,7 @@ func (u *UI) draw() {
 	}
 	// The previews of the GIF box go with the images of the messages: same
 	// placement, same animation, same end-of-frame diff.
-	u.placed = append(u.placed, u.gifPlacements(x0)...)
+	u.placed = append(u.placed, u.thumbPlacements(x0)...)
 	u.placed = append(u.placed, u.customPlacements(x0)...)
 	if u.cfg.Separator { // separator line, column of the bar included
 		dim := theme.Style{FG: u.th.Color(theme.Dim), BG: u.th.BG}.SGR()
@@ -217,7 +217,7 @@ func (u *UI) draw() {
 
 // cursorShown : the input cursor is drawn; an open overlay keeps it hidden.
 func (u *UI) cursorShown() bool {
-	return u.picker == nil && u.menu == nil && u.themePick == nil && u.gsearch == nil && u.newChat == nil && u.gifs == nil && u.form == nil && u.hub == nil
+	return u.picker == nil && u.menu == nil && u.themePick == nil && u.gsearch == nil && u.newChat == nil && u.gifs == nil && u.mbox == nil && u.form == nil && u.hub == nil
 }
 
 // drawScrollbar : column kept free at the right of the message area. Always
@@ -522,6 +522,10 @@ func (u *UI) overlay() overlays {
 	if u.gifs != nil { // GIF box: it takes everything too
 		r := u.gifRect()
 		out = append(out, overlayBox{rect: r, lines: u.gifLines(r)})
+	}
+	if u.mbox != nil { // media browser: it takes everything too
+		r := u.gridRect(&u.mbox.g)
+		out = append(out, overlayBox{rect: r, lines: u.mboxLines(r)})
 	}
 	if u.qr != nil { // login running: nothing else counts
 		r := u.qrRect()

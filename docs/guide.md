@@ -188,6 +188,7 @@ cache_messages = 2000
 notify = "terminal"
 log = false
 log_dir = "~/.local/share/ttyloom/logs"
+update_check = false
 ```
 
 | Key | Purpose |
@@ -229,6 +230,7 @@ log_dir = "~/.local/share/ttyloom/logs"
 | `cache_messages` | Recent messages kept per conversation on disk; window memory follows the same message-count setting. |
 | `notify` | `terminal` for native terminal notifications, `desktop` for `notify-send`, or `off`. Notification delivery also depends on focus. A `desktop` notification escapes `&`, `<` and `>` in its body, so markup from a remote sender shows as plain text. |
 | `log`, `log_dir` | Plain-text conversation logs. `/log` toggles one window; `log = true` enables logging for new windows. |
+| `update_check` | Off by default: no request. On, each start asks the GitHub API (`api.github.com`), in the background, for the newest release, and window 0 names it when it is newer than the running build. A release build compares versions; a build from source compares the date of its commit with the release. `/set update_check on` checks at once. Window 0 shows the version and build id at start; the build id is the first 8 hex digits of the source commit, also printed by `ttyloom --version`. |
 | `[discord] token_cmd` | Command printing the Discord user token. Omit the section to disable Discord; a section without the command logs in by QR code and keeps the token in `discord.token`. |
 
 `[telegram]` accepts `api_id`, `api_hash` and `bot_token` and takes precedence
@@ -609,6 +611,7 @@ global again. A single network has no tabs.
 | `/net [network]` | Filter the sidebar and aggregate view; `telegram`, `discord`, `irc:libera`, `all`, or no argument to cycle. |
 | `/telegram [status\|login\|logout\|disconnect]`, `/discord [status\|login\|logout\|disconnect]` | One network: its status, a new login (Discord runs `token_cmd` again), a logout (Telegram ends the session on the server) or a `disconnect`, which cuts the connection and keeps the session. |
 | `/fold [section]` | Toggle a sidebar section by key, such as `telegram` or `discord:Gophers`, or a displayed-name prefix. No argument lists sections and their collapsed/expanded state. |
+| `/mute [name]`, `/unmute [name]` | Mute the conversation of the window, or the one named (exact name or prefix): no bell, no notification and no pulse in the sidebar, even on a mention; its unread count stays, dimmed. `/mute` alone in a window with no conversation lists the muted ones. Saved in `muted.toml`; the network is not told. |
 | `/history N`, `/hist N` | Load N older messages; PgUp at the top also loads older history. |
 | `/clear`, `/c` | Clear the current window. Ctrl+L only clears the screen: the lines stay in the history. `/clear` keeps the disk history too: the next write merges the window into the file instead of replacing it. |
 | `/rename [target] name`, `/unrename [target]` | Set or remove a local chat/contact alias, saved in `aliases.toml`. It applies to the sidebar, status bar, aggregate view, completion and the DM contact’s displayed name. It is not sent to the network. |
@@ -657,7 +660,8 @@ because `/quit` shares that prefix. Exact aliases take precedence when executing
 | `/set video hidden` | Keep only video labels in the conversation; `show` previews one frame and `autoplay` loops visible downloaded videos. |
 | `/send path [caption]` | Send a local file: PNG/JPEG as a photo, MP4 as a video with ffprobe metadata, other formats as documents. Tab completes the path: `~`, relative paths and spaces work, a directory gets its `/` and the next Tab goes on inside it. |
 | Ctrl+V | Paste an image through `wl-paste` or `xclip`, then choose send, caption or cancel using the displayed prompt keys. Plain text goes into the editor. |
-| Ctrl+G, `/gif [query]` | Search animated GIF previews: Telegram’s `@gif` bot or Discord’s GIF provider (currently KLIPY). Trends appear immediately; typing searches. Arrows or the wheel move; Enter or a click sends; Escape closes. |
+| Ctrl+G, `/gif [query]` | Search animated GIF previews: Telegram’s `@gif` bot or Discord’s GIF provider (currently KLIPY). Trends appear immediately; typing searches. Six previews show at a time, with a scrollbar for the others; only the preview under the mouse, or the one the arrows reached, plays. Arrows, the wheel or a click on the scrollbar move; Enter or a click sends; Escape closes. |
+| Ctrl+M, `/media [media\|gifs\|files]` | Browse the media of the conversation of the window, sent by anyone, newest first: photos and videos, GIFs, or files (Telegram, Discord). Six at a time with a scrollbar; older ones load as you scroll. Tab changes tab, Enter or a click shows the media (a file opens with its program), `j` goes to its message, `o` opens it, Escape closes. Only the GIF under the mouse plays. Small media download to `download_dir` like the ones of the conversation; larger ones show their name and size. Ctrl+M needs the kitty keyboard protocol (Ghostty, kitty, WezTerm, foot); elsewhere it is Enter, so use `/media`. |
 | `/set auto_media_max_kb 20480` | Raise the automatic download threshold to 20 MiB. |
 
 <a id="viewer"></a>

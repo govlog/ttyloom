@@ -9,7 +9,8 @@ builds. FFmpeg, clipboard tools and dictionaries are installed separately.
 Each version contains two binary archives, a source archive from the same
 commit, and `SHA256SUMS`. Binary archives include the README, documentation,
 dependency notices and license texts. `BUILD.txt` records the version, commit,
-Go toolchain and build flags; `ttyloom --version` prints the version and commit.
+Go toolchain and build flags; `ttyloom --version` prints the version, the build
+id (the first 8 hex digits of the commit) and the commit.
 
 While TTYloom is in beta, versions are numbered `v0.N-beta` (`v0.10-beta`, then `v0.11-beta`) and every GitHub release is marked as a pre-release.
 

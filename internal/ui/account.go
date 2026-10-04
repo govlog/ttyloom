@@ -38,6 +38,9 @@ func (u *UI) clearNetWork(net string) {
 	if u.gifs != nil && u.gifs.chat.Net == net {
 		u.gifClose()
 	}
+	if u.mbox != nil && u.mbox.chat.Net == net {
+		u.mboxClose()
+	}
 	for k := range u.partsCache {
 		if k.Net == net {
 			delete(u.partsCache, k)

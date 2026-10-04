@@ -18,6 +18,7 @@ import (
 	"github.com/govlog/ttyloom/internal/term"
 	"github.com/govlog/ttyloom/internal/theme"
 	"github.com/govlog/ttyloom/internal/ui"
+	"github.com/govlog/ttyloom/internal/update"
 	"github.com/govlog/ttyloom/protocols/dsc"
 	"github.com/govlog/ttyloom/protocols/irc"
 	"github.com/govlog/ttyloom/protocols/tgc"
@@ -43,13 +44,14 @@ func cleanParts(dir string) {
 }
 
 func main() {
-	showVersion := flag.Bool("version", false, "print the version and source commit")
+	showVersion := flag.Bool("version", false, "print the version, the build id and the source commit")
 	flag.Parse()
+	build := update.Current(version, commit)
 	if *showVersion {
-		fmt.Printf("ttyloom %s (%s)\n", version, commit)
+		fmt.Printf("ttyloom %s (build %s, commit %s)\n", build.Version, build.ID(), cmp.Or(build.Commit, "unknown"))
 		return
 	}
-	if err := run(); err != nil {
+	if err := run(build); err != nil {
 		fmt.Fprintln(os.Stderr, i18n.T("main_prefix"), err)
 		os.Exit(1)
 	}
@@ -77,7 +79,7 @@ func load(mods []module.Module) (*config.Config, error) {
 	return cfg, err
 }
 
-func run() error {
+func run(build update.Build) error {
 	mods := modules()
 	cfg, err := load(mods)
 	if err != nil {
@@ -117,5 +119,5 @@ func run() error {
 	}()
 	defer t.Close()
 
-	return ui.Run(ctx, cancel, t, cfg, th, mods...)
+	return ui.Run(ctx, cancel, t, cfg, th, build, mods...)
 }

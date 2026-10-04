@@ -107,6 +107,13 @@ type ChatIDer interface{ ChatID(title string) int64 }
 // completion of the names in a message.
 type MemberLister interface{ Members(chat *Chat) []string }
 
+// MediaSearcher : a backend that lists the media of a chat (Ctrl+M).
+// SearchMedia posts one EvMedia: a page of the media of tab f older than the
+// message before (0: from the newest).
+type MediaSearcher interface {
+	SearchMedia(ctx context.Context, chat *Chat, f MediaFilter, before int)
+}
+
 // AllCaps : every capability on — Telegram, and the tests that draw a message
 // with nothing gated off.
 func AllCaps() Caps {

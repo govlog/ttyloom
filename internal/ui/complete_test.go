@@ -38,7 +38,8 @@ func TestComplContext(t *testing.T) {
 		{"/net tel", complNet, "tel", ""},
 		{"/open 2", complNone, "", ""},
 		{"salut al", complChats, "al", ""},
-		{"/log o", complLog, "o", ""},
+		{"/log o", complWords, "o", "log"},
+		{"/media g", complWords, "g", "media"},
 	}
 	for _, c := range cases {
 		src, tail, key := complContext(c.line, len([]rune(c.line)), cmdNames{general: commandNames})

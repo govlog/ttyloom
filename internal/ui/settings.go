@@ -130,6 +130,11 @@ var settings = []setting{
 		func(u *UI) string { return "download_dir = " + u.cfg.DownloadDir },
 		func(u *UI, _ *Window, v string) bool { u.cfg.DownloadDir = v; return true }},
 	boolSetting("bell", func(c *config.Config) *bool { return &c.Bell }, nil),
+	boolSetting("update_check", func(c *config.Config) *bool { return &c.UpdateCheck }, func(u *UI) {
+		if u.cfg.UpdateCheck {
+			u.checkUpdate(true) // the answer comes at once, not at the next start
+		}
+	}),
 	choiceSetting("notify", []string{"terminal", "desktop", "off"}, func() string { return i18n.T("set_notify_values") },
 		func(u *UI) string { return "notify = " + u.cfg.Notify },
 		func(u *UI, v string) { u.cfg.Notify = v }),

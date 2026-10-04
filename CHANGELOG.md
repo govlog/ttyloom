@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### Added
+
+- **Media browser**: Ctrl+M (with the kitty keyboard protocol) or `/media [media|gifs|files]` lists the photos and videos, the GIFs or the files of the conversation, sent by anyone, newest first, on Telegram and Discord. Six at a time with a scrollbar, older pages load as you scroll; Enter or a click shows the media, `j` goes to its message, `o` opens it.
+- **`/mute` and `/unmute`**: a muted conversation rings no bell, sends no notification and never pulses in the sidebar, even on a mention; its unread count stays, dimmed. `/mute` alone in a window with no conversation lists them. Saved in `muted.toml`, local to ttyloom.
+- **Update check**: `update_check = true` (or `/set update_check on`) asks GitHub at start, in the background, whether a newer release exists, and window 0 names it with its build id. Off by default: no request is made unless you turn it on. Each build has an id, the first 8 hex digits of its source commit, shown in window 0 at start and by `ttyloom --version`.
+
+### Changed
+
+- **GIF picker**: six previews at a time with a scrollbar (the wheel or a click on it moves the rows), and only the preview under the mouse, or the one the arrows reached, plays; the others hold their frame. Previews far from the view let their decoded frames go.
+
 ### Fixed
 
 - **IRC `/me` lines** read `* nick does` alone, without the `<nick>` that came before them.

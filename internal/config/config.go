@@ -113,6 +113,7 @@ type Config struct {
 	Sidebar           string    `toml:"sidebar"` // mode F2 left the sidebar in: hidden | chats | windows
 	Members           bool      `toml:"members"` // member box (F3) left open
 	Lang              string    `toml:"lang"`
+	UpdateCheck       bool      `toml:"update_check"` // asks GitHub at start whether a newer release exists
 
 	// Unknown : keys of the file no field takes (a typo, imagess = "off"). The
 	// UI says so at start, otherwise the user believes the option active.
@@ -187,6 +188,7 @@ sidebar_sort = "recent" # sort of the F2 sidebar (F7 cycles it): recent | alpha 
 sidebar_width = 26      # width of the F2 sidebar; the vertical bar drags with the mouse
 sidebar_split = false   # windows list in two sections, channels then direct messages (⊟ of the header)
 lang = ""               # interface language: empty = $LANG, otherwise fr | en
+update_check = false    # at start, asks GitHub whether a newer release exists (off: no request)
 `
 
 func Dir() string {

@@ -26,6 +26,7 @@ import (
 	"github.com/govlog/ttyloom/internal/spell"
 	"github.com/govlog/ttyloom/internal/term"
 	"github.com/govlog/ttyloom/internal/theme"
+	"github.com/govlog/ttyloom/internal/update"
 )
 
 type typing struct {
@@ -47,6 +48,7 @@ type UI struct {
 	t         *term.Term
 	cfg       *config.Config
 	th        theme.Theme
+	build     update.Build                  // what this binary was built from (banner, update check)
 	nets      map[string]model.Backend      // network name → live backend (started, not stopped)
 	netList   []string                      // configured networks, sorted: the ones /<net> login can start
 	launch    model.Launcher                // builds and runs one of them, given by Run
@@ -163,8 +165,9 @@ type UI struct {
 	hub         *hubBox                 // hub "Networks" open: it takes everything but its page (form)
 	hubReturn   map[string]bool         // networks started from the hub: it comes back at their EvReady or EvStopped
 	gifs        *gifBox                 // GIF box (Ctrl+G): it takes everything
+	mbox        *mediaBox               // media browser (Ctrl+M): it takes everything
 	customs     map[string]*model.Media // images of the custom emojis, by URL, kept for the session (customs.go)
-	gifOrphan   map[*model.Media]bool   // previews of a closed GIF box whose download still comes
+	gridOrphan  map[*model.Media]bool   // pictures of a closed GIF box or media browser whose download still comes
 	contacts    []*model.Chat           // contacts of the account (contacts.getContacts), source of the overlay
 	gotContacts bool                    // contacts already asked for: once per session
 	jump        struct {                // message to join at the next history (global result)
@@ -178,13 +181,14 @@ type UI struct {
 	tabLast map[string]*Window
 	// tabHits : column range of each tab of the bar, made again at each repaint.
 	tabHits    []tabHit
-	side       sideMode        // sidebar (F2)
-	sideW      int             // width of its content (sidebar_width, drag of the bar)
-	sideScroll int             // first entry shown in the sidebar
-	folded     map[string]bool // folded sidebar sections, by key (sidebar.toml); nil = no section
-	marquee    marqueeState    // scrolling title of the current sidebar line
-	find       sideFind        // typing in the sidebar: keyboard, filter, cursor
-	lastChat   model.ChatKey   // chat left at the last exit (last.toml), until its network lists its chats
+	side       sideMode               // sidebar (F2)
+	sideW      int                    // width of its content (sidebar_width, drag of the bar)
+	sideScroll int                    // first entry shown in the sidebar
+	folded     map[string]bool        // folded sidebar sections, by key (sidebar.toml); nil = no section
+	muted      map[model.ChatKey]bool // chats with no bell nor notification (muted.toml)
+	marquee    marqueeState           // scrolling title of the current sidebar line
+	find       sideFind               // typing in the sidebar: keyboard, filter, cursor
+	lastChat   model.ChatKey          // chat left at the last exit (last.toml), until its network lists its chats
 	// dialogsSeen : networks whose first chat list has come. It fires the
 	// once-per-session triggers (automatic opening, sync) per network, and not
 	// once for the whole session.
@@ -218,8 +222,13 @@ type UI struct {
 // Run drives the UI. netList names the configured networks, launch starts one
 // of them (at start here, then on /<net> login); caches are keyed by network
 // name and events carries the envelopes of every backend, fanned in by main.
-func Run(ctx context.Context, cancel context.CancelFunc, t *term.Term, cfg *config.Config, th theme.Theme, mods ...module.Module) error {
+func Run(ctx context.Context, cancel context.CancelFunc, t *term.Term, cfg *config.Config, th theme.Theme, build update.Build, mods ...module.Module) error {
 	u := newUI(ctx, cancel, t, cfg, th, mods)
+	u.build = build
+	u.status0(i18n.T("banner_build", build.Version, build.ID()))
+	if cfg.UpdateCheck {
+		u.checkUpdate(false)
+	}
 	// Exit (/quit, Ctrl+C, end of the terminal): the cache goes to the disk
 	// before main gives the terminal back.
 	defer u.flushCache(true)
@@ -240,7 +249,8 @@ func Run(ctx context.Context, cancel context.CancelFunc, t *term.Term, cfg *conf
 				// repaint (?1003 sends dozens of moves per second).
 				hov, who := u.hoverAt(k.Mouse.X, k.Mouse.Y), u.whoAt(k.Mouse.X, k.Mouse.Y)
 				menu := u.menu != nil && u.menuHover(k.Mouse.X, k.Mouse.Y) // the entry follows the pointer
-				if zon := u.zoneAt(k.Mouse.X, k.Mouse.Y); !k.Mouse.Motion || (!hov && !who && !zon && !menu) {
+				grid := u.gridHover(k.Mouse.X, k.Mouse.Y)                  // the picture under the pointer plays
+				if zon := u.zoneAt(k.Mouse.X, k.Mouse.Y); !k.Mouse.Motion || (!hov && !who && !zon && !menu && !grid) {
 					continue
 				}
 			case k.Code == term.Mouse && k.Mouse.Motion && k.Mouse.Button == 0 && u.drag == dragText:
@@ -1180,6 +1190,8 @@ func (u *UI) event(ev model.Event) {
 		u.contactsFound(e)
 	case model.EvGifs:
 		u.gifsResult(e)
+	case model.EvMedia:
+		u.mediaResult(e)
 	case model.EvEditMessage:
 		if i := u.ws.ForChat(e.Msg.Key()); i >= 0 {
 			m := e.Msg
@@ -1276,6 +1288,8 @@ func (u *UI) event(ev model.Event) {
 		u.flash(e.Text)
 	case evHook:
 		u.hookDone(e)
+	case evUpdate:
+		u.updateDone(e)
 	}
 }
 
@@ -1341,7 +1355,8 @@ func (u *UI) newMessage(e model.EvNewMessage) {
 	seen := u.focused && (u.view() == w || (u.view() == u.agg && u.netShown(&m)))
 	if added && !m.Out {
 		me := u.selfOf(m.Net)
-		hot := chat.Kind == model.ChatUser || mentionsMe(&m, me.ID, me.Name)
+		// A muted chat counts its unread messages and nothing more.
+		hot := (chat.Kind == model.ChatUser || mentionsMe(&m, me.ID, me.Name)) && !u.muted[chat.Key()]
 		if !seen {
 			w.Act++
 			chat.Unread++
@@ -2039,6 +2054,7 @@ func (u *UI) key(k term.Key) {
 		{u.form != nil, u.formKey, u.formMouse},        // form (/irc add, a page of the hub)
 		{u.hub != nil, u.hubKey, u.hubMouse},           // hub "Networks", under its page
 		{u.gifs != nil, u.gifKey, u.gifMouse},          // GIF box
+		{u.mbox != nil, u.mboxKey, u.mboxMouse},        // media browser
 		{u.gsearch != nil, u.gsKey, u.gsMouse},         // global search
 		{u.menu != nil, u.menuKey, u.menuMouse},        // context menu, until the choice
 	} {
@@ -2128,6 +2144,8 @@ func (u *UI) key(k term.Key) {
 			u.openNewChat()
 		case 'g':
 			u.openGifs("")
+		case 'm': // kitty keyboard protocol only: Ctrl+M is Enter elsewhere (/media)
+			u.openMediaBox("")
 		case 'k':
 			u.ed.KillToEnd()
 		case 'b', 'i', 'u': // style toggles of the draft (Ctrl+I needs the kitty keyboard protocol: Tab elsewhere)
@@ -2552,8 +2570,8 @@ func (u *UI) candidates(word string, atStart bool) []string {
 		return helpCandidates(u.topics())
 	case complNet:
 		return append(u.netNames(), netAll)
-	case complLog:
-		return []string{"on", "off"}
+	case complWords:
+		return argWords[setKey]
 	case complPath:
 		// The editor completes its last word; a path with a space is longer
 		// than that word, so the candidates are cut to the part after the

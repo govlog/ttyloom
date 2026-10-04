@@ -52,6 +52,11 @@ func newUI(ctx context.Context, cancel context.CancelFunc, t *term.Term, cfg *co
 	} else {
 		u.folded = f
 	}
+	if m, err := loadMuted(mutedPath()); err != nil {
+		u.status0(i18n.T("mute_error", err)) // unreadable file: nothing muted, the bell rings as before
+	} else {
+		u.muted = m
+	}
 	u.lastChat = loadLast(lastPath())
 	u.launch = u.launchModule
 	for _, m := range mods {

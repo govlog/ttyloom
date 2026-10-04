@@ -499,6 +499,52 @@ type EvGifs struct {
 	Err   string
 }
 
+// MediaFilter : a tab of the media browser (Ctrl+M).
+type MediaFilter int
+
+const (
+	TabMedia MediaFilter = iota // photos and videos
+	TabGIFs
+	TabFiles // files, audio, voice
+)
+
+// Keeps tells whether md belongs to tab f. The networks filter on their
+// server as close as they can, then keep what this says.
+func (f MediaFilter) Keeps(md *Media) bool {
+	if md == nil || md.Loc == nil {
+		return false
+	}
+	switch f {
+	case TabMedia:
+		return md.Kind == MediaPhoto || md.Kind == MediaVideo
+	case TabGIFs:
+		return md.Kind == MediaGIF
+	case TabFiles:
+		return md.Kind == MediaFile || md.Kind == MediaAudio || md.Kind == MediaVoice
+	}
+	return false
+}
+
+// MediaItem : one entry of the media browser — the message, and a small
+// picture for its cell when the network has one (nil: the media of the
+// message itself, or a label).
+type MediaItem struct {
+	Msg   Msg
+	Thumb *Media
+}
+
+// EvMedia : a page of SearchMedia, newest first. Before is the page asked (a
+// stale answer is dropped); Next the message to ask the next page before, 0
+// once the list is over.
+type EvMedia struct {
+	ChatID int64
+	Filter MediaFilter
+	Before int
+	Items  []MediaItem
+	Next   int
+	Err    string
+}
+
 // EvChatGone : chat left or blocked — the UI drops the entry from the
 // sidebar and closes the bound windows. The cached history goes with them
 // only on a network with server history (Caps.History); on IRC the file is

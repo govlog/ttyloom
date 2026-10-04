@@ -19,8 +19,8 @@ var aliases = map[string]string{
 	"shrugs": "shrug",
 }
 
-var commandNames = []string{"/window", "/close", "/query", "/join", "/new", "/msg", "/me", "/shrug", "/away", "/chats", "/networks", "/hooks", "/net", "/fold", "/history",
-	"/search", "/whois", "/rename", "/unrename", "/open", "/view", "/send", "/theme", "/set", "/clear", "/log", "/debug", "/emoji", "/gif", "/help", "/quit"}
+var commandNames = []string{"/window", "/close", "/query", "/join", "/new", "/msg", "/me", "/shrug", "/away", "/chats", "/networks", "/hooks", "/net", "/fold", "/mute", "/unmute", "/history",
+	"/search", "/whois", "/rename", "/unrename", "/open", "/view", "/send", "/theme", "/set", "/clear", "/log", "/debug", "/emoji", "/gif", "/media", "/help", "/quit"}
 
 // cmdNames : the commands valid now. general resolve first by prefix, then
 // context — the ones a network adds in its own windows (IRC's /kick), which
@@ -187,6 +187,8 @@ func (u *UI) command(name string, args []string, text string) {
 		u.netCmd(w, arg(0))
 	case "fold":
 		u.foldCmd(w, text)
+	case "mute", "unmute":
+		u.muteCmd(w, text, name == "mute")
 	case "history":
 		if u.botOnly() {
 			w.AddSys(i18n.T("bot_unavailable"))
@@ -343,6 +345,8 @@ func (u *UI) command(name string, args []string, text string) {
 		u.openPicker(u.view().Chat, func(s string) { u.ed.Insert(s) })
 	case "gif":
 		u.openGifs(text)
+	case "media":
+		u.openMediaBox(arg(0))
 	case "help":
 		if arg(0) == "" {
 			u.emit(w, helpLines(u.topics(), u.sections(), u.width()))

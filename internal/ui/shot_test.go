@@ -285,7 +285,7 @@ func shotSearch(_ *testing.T, u *UI) {
 }
 
 func shotGifs(t *testing.T, u *UI) {
-	u.gifs = &gifBox{chat: u.chatList[0], query: []rune("landscape"), sent: "landscape", asked: true}
+	u.gifs = &gifBox{chat: u.chatList[0], query: []rune("landscape"), sent: "landscape", asked: true, g: grid{live: -1}}
 	// The frames answered by the two GIF searches for that query, as
 	// docs/screenshots/fixtures/SOURCES.md lists them.
 	for i, name := range []string{"gif-discord-2.png", "gif-discord-4.png", "gif-discord-6.png",
@@ -294,8 +294,9 @@ func shotGifs(t *testing.T, u *UI) {
 		md.Label, md.Loc = "[gif]", i
 		u.gifs.gifs = append(u.gifs.gifs, model.Gif{Preview: md, Send: i})
 	}
-	u.gifLayout()
-	u.gifs.cur = 1
+	u.gifs.g.n = len(u.gifs.gifs)
+	u.gifRect()
+	u.gifs.g.cur = 1
 }
 
 func shotMembers(_ *testing.T, u *UI) {

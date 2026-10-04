@@ -211,8 +211,8 @@ func (u *UI) invalidateMedia(md *model.Media) {
 
 func (u *UI) downloaded(e model.EvDownloaded) {
 	md := e.Media
-	if u.gifOrphan[md] { // preview of a GIF box closed meanwhile: nobody waits for it
-		delete(u.gifOrphan, md)
+	if u.gridOrphan[md] { // picture of a box closed meanwhile: nobody waits for it
+		delete(u.gridOrphan, md)
 		return
 	}
 	isFull := u.fulls[md]
@@ -237,8 +237,8 @@ func (u *UI) downloaded(e model.EvDownloaded) {
 		md.State = model.MediaReady
 		return
 	}
-	if g := u.gifs; g != nil && g.owns(md) { // preview of the GIF box: its cell, a few frames
-		u.gifDecode(md)
+	if t := u.thumbBox(); t != nil && ownsThumb(t, md) { // picture of the GIF box or of the media browser: its cell
+		u.gridDecode(t.grid(), md)
 		return
 	}
 	if u.customOwns(md) { // image of a custom emoji: the cell of the picker
@@ -560,10 +560,10 @@ func (u *UI) animate(now time.Time) bool {
 		}
 	}
 	if u.images == "halfblock" {
-		if g := u.gifs; g != nil { // GIF box: its previews on the screen
-			lo, hi := g.visible()
-			for i := lo; i < hi; i++ {
-				if md := g.gifs[i].Preview; len(md.Frames) > 1 && !now.Before(md.Next) {
+		if t := u.thumbBox(); t != nil { // picture box: its live cell alone plays
+			g := t.grid()
+			if lo, hi := g.visible(); g.live >= lo && g.live < hi {
+				if md := t.thumb(g.live); md != nil && len(md.Frames) > 1 && !now.Before(md.Next) {
 					md.Frame = (md.Frame + 1) % len(md.Frames)
 					md.Next = now.Add(md.Delay)
 					redraw = true
@@ -598,10 +598,14 @@ func (u *UI) animate(now time.Time) bool {
 }
 
 // gifStill : /set gifplay — a GIF of the messages holds its frame: off, or
-// hover with the pointer on another message. The GIF box and the preview
-// play whatever the setting; videos have /set video.
+// hover with the pointer on another message. The preview plays whatever the
+// setting, a picture box its live cell alone (grid.go); videos have /set
+// video.
 func (u *UI) gifStill(md *model.Media) bool {
-	if u.cfg == nil || md.Kind != model.MediaGIF || (u.viewer != nil && u.viewer.md == md) || (u.gifs != nil && u.gifs.owns(md)) {
+	if still, ok := u.gridStill(md); ok {
+		return still
+	}
+	if u.cfg == nil || md.Kind != model.MediaGIF || (u.viewer != nil && u.viewer.md == md) {
 		return false
 	}
 	switch u.cfg.GifPlay {
@@ -821,6 +825,12 @@ func (u *UI) evictFrames(keep *model.Media) {
 	}
 	if v := u.viewer; v != nil {
 		shown[v.md], shown[v.src] = true, true
+	}
+	if t := u.thumbBox(); t != nil { // half blocks place nothing: the cells on the screen count here
+		lo, hi := t.grid().visible()
+		for i := lo; i < hi; i++ {
+			shown[t.thumb(i)] = true
+		}
 	}
 	for i := 0; i < len(l.list) && total > framesBudget; {
 		md := l.list[i]
