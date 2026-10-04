@@ -174,18 +174,22 @@ func mergeDialogs(cached, fresh []*model.Chat) []*model.Chat {
 
 // pruneChats drops the chats of net that its dialog list no longer holds.
 // Only ever called on a list that is the whole account (EvDialogs.Complete):
-// a Telegram list is paged, and a chat missing from one page is not a chat
-// that is gone. mergeDialogs alone would keep it, from the cache, for ever —
+// a list a backend could not read whole misses chats that are not gone.
+// mergeDialogs alone would keep it, from the cache, for ever —
 // a Discord server one leaves used to stay in the sidebar, live and at the
 // next start.
-func (u *UI) pruneChats(net string, fresh []*model.Chat) {
+func (u *UI) pruneChats(net string, fresh []*model.Chat, started time.Time) {
 	seen := make(map[model.ChatKey]bool, len(fresh))
 	for _, c := range fresh {
 		seen[c.Key()] = true
 	}
+	// A message that came while the pages were read moves its chat above the
+	// page already read: that chat is missing from the list, not gone. A
+	// minute of margin for the clock of the server.
+	recent := func(c *model.Chat) bool { return !started.IsZero() && c.LastDate.After(started.Add(-time.Minute)) }
 	n := 0
 	for _, c := range slices.Clone(u.chatList) { // dropChat edits u.chatList
-		if c.Net == net && !seen[c.Key()] && u.dropChat(c.Key()) {
+		if c.Net == net && !seen[c.Key()] && !recent(c) && u.dropChat(c.Key()) {
 			n++
 		}
 	}
@@ -226,6 +230,9 @@ func (u *UI) saveDialogs() {
 	for _, c := range u.chatList {
 		cp := *c
 		cp.Reactions = nil // read again at each F3: a stale restriction does not survive
+		// The custom emojis of a Discord guild, one list per chat of it: read
+		// again by every start (LoadDialogs), never worth the disk.
+		cp.Customs, cp.CustomLocs = nil, nil
 		byNet[c.Net] = append(byNet[c.Net], cp)
 	}
 	// Every cache known to us writes, even with nothing for its network: a list

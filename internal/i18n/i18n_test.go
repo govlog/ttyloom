@@ -1,50 +1,15 @@
 package i18n
 
 import (
-	"io/fs"
 	"os"
-	"path/filepath"
 	"regexp"
-	"strings"
 	"testing"
 	"testing/fstest"
 )
 
-// TestI18nComplete : fr.toml and en.toml carry the same keys, and every
-// literal key given to i18n.T is in both.
-func TestI18nComplete(t *testing.T) {
-	fr, en := load("fr"), load("en")
-	if len(fr) == 0 || len(en) == 0 {
-		t.Fatalf("empty table: fr=%d en=%d", len(fr), len(en))
-	}
-	for k := range fr {
-		if _, ok := en[k]; !ok {
-			t.Errorf("key %q missing from en.toml", k)
-		}
-	}
-	for k := range en {
-		if _, ok := fr[k]; !ok {
-			t.Errorf("key %q missing from fr.toml", k)
-		}
-	}
-	callT := regexp.MustCompile(`i18n\.T\("([a-z0-9_]+)"[,)]`)
-	n := 0
-	for _, f := range GoFiles(t, "..", "../../cmd") {
-		for _, m := range callT.FindAllStringSubmatch(read(t, f), -1) {
-			n++
-			if _, ok := fr[m[1]]; !ok {
-				t.Errorf("%s: key %q missing from tables", f, m[1])
-			}
-		}
-	}
-	if n < 100 {
-		t.Fatalf("%d i18n.T calls found: the scan missed files", n)
-	}
-}
-
 // TestHelpKeys : each help topic has its three texts in both tables. The test
-// lives here because help.go builds these keys by concatenation:
-// TestI18nComplete cannot see them.
+// lives here because help.go builds these keys by concatenation: TestCatalogs
+// (cmd/ttyloom), which checks the literal keys, cannot see them.
 func TestHelpKeys(t *testing.T) {
 	fr := load("fr")
 	keys := regexp.MustCompile(`"(help_[a-z0-9_]+)", "`).FindAllStringSubmatch(read(t, "../ui/help.go"), -1)
@@ -115,25 +80,6 @@ func TestLangChain(t *testing.T) {
 	if Plural(0, "res") != "res_many" { // the plural follows the first language
 		t.Fatalf("plural: %q", Plural(0, "res"))
 	}
-}
-
-// GoFiles gives the .go files, tests apart, of the given trees.
-func GoFiles(t *testing.T, roots ...string) []string {
-	t.Helper()
-	var out []string
-	for _, root := range roots {
-		err := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
-			if err != nil || d.IsDir() || !strings.HasSuffix(p, ".go") || strings.HasSuffix(p, "_test.go") {
-				return err
-			}
-			out = append(out, p)
-			return nil
-		})
-		if err != nil {
-			t.Fatal(err)
-		}
-	}
-	return out
 }
 
 func read(t *testing.T, path string) string {

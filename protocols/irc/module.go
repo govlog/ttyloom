@@ -82,36 +82,60 @@ func ValidName(name string) bool {
 }
 
 // Module : the IRC networks, one [[irc]] table each.
-type Module struct{ nets []*NetConfig }
+type Module struct {
+	nets []*NetConfig
+	// refused : the tables Load left out (a bad name, a name taken), written
+	// back by Save as they were — a Save must not erase what the user wrote.
+	refused []*NetConfig
+	// first : the password of each table with a command, read at Load and
+	// spent by the first launch of its network (see Load).
+	first map[string]secret
+}
+
+// secret : what a password command gave, its error included.
+type secret struct {
+	pw  string
+	err error
+}
 
 func NewModule() *Module { return &Module{} }
 
 func (m *Module) Name() string { return Prefix }
 
 // Load keeps the [[irc]] tables with a valid name, the first of each name;
-// the others are unknown keys ("irc.<name>"), as before.
+// the others are unknown keys ("irc.<name>"), as before. The password
+// commands run here, like the token_cmd of Discord: before the terminal goes
+// raw, so a pinentry on the tty works. The launches after the first one run
+// the command again from inside the raw terminal — it needs a graphical
+// pinentry or an unlocked agent by then.
 func (m *Module) Load(src module.ConfigSource) error {
 	var list []*NetConfig
 	if _, err := src.Decode("irc", &list); err != nil {
 		return err
 	}
 	seen := map[string]bool{}
-	m.nets = nil
+	m.nets, m.refused, m.first = nil, nil, map[string]secret{}
 	for _, n := range list {
 		if !ValidName(n.Name) || seen[n.Name] {
 			src.Unknown("irc." + n.Name)
+			m.refused = append(m.refused, n)
 			continue
 		}
 		seen[n.Name] = true
 		m.nets = append(m.nets, n)
+		if strings.TrimSpace(n.NickServPasswordCmd) != "" {
+			pw, err := n.Password()
+			m.first[n.Name] = secret{pw, err}
+		}
 	}
 	return nil
 }
 
-// Save writes the tables; none left, no key at all.
+// Save writes the tables, the refused ones after the others; none left, no
+// key at all.
 func (m *Module) Save(dst module.ConfigSink) {
-	if len(m.nets) > 0 {
-		dst.Set("irc", m.nets)
+	if all := append(slices.Clone(m.nets), m.refused...); len(all) > 0 {
+		dst.Set("irc", all)
 	}
 }
 
@@ -138,12 +162,15 @@ func (m *Module) ByName(name string) *NetConfig {
 
 func (m *Module) Add(n *NetConfig) { m.nets = append(m.nets, n) }
 
-// removeTable takes the table of name out; restore puts the list back as it
-// was (the write of config.toml failed).
+// removeTable takes the table of name out, and the refused copies of that
+// name with it: kept, the next start would take one as the network again.
+// restore puts both lists back as they were (the write of config.toml failed).
 func (m *Module) removeTable(name string) (restore func()) {
-	was := m.nets
-	m.nets = slices.DeleteFunc(slices.Clone(was), func(n *NetConfig) bool { return n.Name == name })
-	return func() { m.nets = was }
+	nets, refused := m.nets, m.refused
+	named := func(n *NetConfig) bool { return n.Name == name }
+	m.nets = slices.DeleteFunc(slices.Clone(nets), named)
+	m.refused = slices.DeleteFunc(slices.Clone(refused), named)
+	return func() { m.nets, m.refused = nets, refused }
 }
 
 func (m *Module) Claims(name string) bool { return IsChannel(name) }
@@ -160,15 +187,21 @@ func (m *Module) OpenSetup(h module.Host) { m.openForm(h) }
 func (m *Module) Remove(h module.Host, w module.Win, net string) { m.delete(h, w, net) }
 
 // Launch reads the table of net now: /irc add writes one while the client
-// runs. The password command runs at each launch; a failing one is the
-// error of the launch.
+// runs. The first launch takes the password read at Load, the next ones run
+// the command again (a password renewed in the manager is taken without a
+// restart); a failing one is the error of the launch.
 func (m *Module) Launch(ctx context.Context, h module.Host, net string, ev chan<- model.Event) (model.Backend, error) {
 	name := Name(net)
 	n := m.ByName(name)
 	if n == nil {
 		return nil, fmt.Errorf("%s: unknown network", net)
 	}
-	pw, err := n.Password()
+	s, ok := m.first[name]
+	delete(m.first, name)
+	if !ok {
+		s.pw, s.err = n.Password()
+	}
+	pw, err := s.pw, s.err
 	if err != nil {
 		return nil, err
 	}
@@ -183,17 +216,15 @@ func (m *Module) Launch(ctx context.Context, h module.Host, net string, ev chan<
 			}
 		})
 	}
-	return New(Config{Name: n.Name, Host: n.Host, Port: n.Port, TLS: n.TLS, Nick: n.Nick, User: n.User,
+	// The lists are read on the goroutine of the UI, when it writes: the
+	// latest one goes to the file whatever the order the saves came in.
+	var c *Client
+	c = New(Config{Name: n.Name, Host: n.Host, Port: n.Port, TLS: n.TLS, Nick: n.Nick, User: n.User,
 		RealName: n.RealName, Password: pw, PasswordWithoutTLS: n.PasswordWithoutTLS,
 		Channels: n.Channels, DCCIP: n.DCCIP, DCCPorts: n.DCCPorts, Ignores: n.Ignores,
-		SaveChannels: func(list []string) error {
-			save(func(n *NetConfig) { n.Channels = slices.Clone(list) })
-			return nil
-		},
-		SaveIgnores: func(list []string) error {
-			save(func(n *NetConfig) { n.Ignores = slices.Clone(list) })
-			return nil
-		}}, ev), nil
+		SaveChannels: func() { save(func(n *NetConfig) { n.Channels = c.Channels() }) },
+		SaveIgnores:  func() { save(func(n *NetConfig) { n.Ignores = c.Ignores() }) }}, ev)
+	return c, nil
 }
 
 // Template : the IRC block of a new config.toml.

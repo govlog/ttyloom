@@ -114,17 +114,16 @@ func (s *fakeServer) register() {
 	}
 }
 
-// savedLists : the channel lists SaveChannels was given, in order.
+// savedLists : the channel lists of the SaveChannels calls, in order.
 type savedLists struct {
 	mu    sync.Mutex
 	lists []string
 }
 
-func (s *savedLists) add(l []string) error {
+func (s *savedLists) add(l []string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.lists = append(s.lists, strings.Join(l, ","))
-	return nil
 }
 
 func (s *savedLists) get() []string {
@@ -136,6 +135,16 @@ func (s *savedLists) get() []string {
 // start builds a client on a pipe to a fake server, runs it, and waits for
 // the registration. SaveChannels records its calls in saved.
 func start(t *testing.T, cfg Config, sasl bool, mapping ...string) (*Client, *fakeServer, chan model.Event, *savedLists) {
+	t.Helper()
+	c, s, events, saved := connect(t, cfg, sasl, mapping...)
+	waitFor[model.EvReady](t, events)
+	waitFor[model.EvConnected](t, events)
+	return c, s, events, saved
+}
+
+// connect is start up to the handshake, the events of the registration left
+// in the channel.
+func connect(t *testing.T, cfg Config, sasl bool, mapping ...string) (*Client, *fakeServer, chan model.Event, *savedLists) {
 	t.Helper()
 	cs, ss := net.Pipe()
 	s := &fakeServer{t: t, conn: ss, lines: make(chan string, 64), sasl: sasl}
@@ -154,11 +163,12 @@ func start(t *testing.T, cfg Config, sasl bool, mapping ...string) (*Client, *fa
 		close(s.lines)
 	}()
 	var saved savedLists
+	var c *Client
 	cfg.Name, cfg.Host, cfg.Port, cfg.Nick = "test", "irc.example", 6667, "me"
 	cfg.Dial = func(context.Context, string, string) (net.Conn, error) { return cs, nil }
-	cfg.SaveChannels = saved.add
+	cfg.SaveChannels = func() { saved.add(c.Channels()) }
 	events := make(chan model.Event, 256)
-	c := New(cfg, events)
+	c = New(cfg, events)
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() { done <- c.Run(ctx) }()
@@ -173,8 +183,6 @@ func start(t *testing.T, cfg Config, sasl bool, mapping ...string) (*Client, *fa
 		cs.Close()
 		ss.Close()
 	})
-	waitFor[model.EvReady](t, events)
-	waitFor[model.EvConnected](t, events)
 	return c, s, events, &saved
 }
 
@@ -219,6 +227,57 @@ func TestCaps(t *testing.T) {
 	}
 }
 
+// The UI may call the backend as soon as Launch gives it back, before Run has
+// set anything up: the connection is there for it, never a nil one.
+func TestCallBeforeRun(t *testing.T) {
+	cs, ss := net.Pipe()
+	events := make(chan model.Event, 16)
+	c := New(Config{Name: "test", Host: "irc.example", Port: 6667, Nick: "me",
+		Dial: func(context.Context, string, string) (net.Conn, error) { return cs, nil }}, events)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- c.Run(ctx) }()
+	c.Participants(context.Background(), chatOf("bob"))
+	if p := waitFor[model.EvParticipants](t, events); len(p.Lines) != 2 || p.Lines[1].Query != "bob" {
+		t.Fatalf("participants of a private chat: %+v", p)
+	}
+	cancel()
+	ss.Close() // the server goes: the handshake ends
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Run did not end")
+	}
+}
+
+// A stop while the first connection waits for a server that never answers
+// ends Run at once: the handshake alone would wait a minute, the network
+// looking up all along (/irc connect answered "already up").
+func TestStopDuringConnect(t *testing.T) {
+	cs, ss := net.Pipe()
+	defer ss.Close()
+	go func() { // a server that reads and never answers
+		sc := bufio.NewScanner(ss)
+		for sc.Scan() {
+		}
+	}()
+	c := New(Config{Name: "test", Host: "irc.example", Port: 6667, Nick: "me",
+		Dial: func(context.Context, string, string) (net.Conn, error) { return cs, nil }}, make(chan model.Event, 16))
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- c.Run(ctx) }()
+	time.Sleep(300 * time.Millisecond)
+	cancel()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("a stop asked for ended Run with %v", err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("Run still waits for the handshake")
+	}
+}
+
 // SASL PLAIN with the password, no NickServ line, and the rooms of the list
 // joined once registered; the JOIN echo becomes a service line of the room.
 // The pipe of the tests has no TLS: PasswordWithoutTLS lets the password out.
@@ -240,6 +299,111 @@ func TestNickServWithoutSASL(t *testing.T) {
 	_, s, _, _ := start(t, Config{Password: "secret", PasswordWithoutTLS: true}, false)
 	if l := s.expect("PRIVMSG NickServ"); l != "PRIVMSG NickServ :IDENTIFY secret" {
 		t.Fatalf("identify: %q", l)
+	}
+}
+
+// lineWithin : the first line from the client starting with one of the
+// prefixes within d, "" when none came.
+func (s *fakeServer) lineWithin(d time.Duration, prefixes ...string) string {
+	deadline := time.After(d)
+	for {
+		select {
+		case l := <-s.lines:
+			for _, p := range prefixes {
+				if strings.HasPrefix(l, p) {
+					return l
+				}
+			}
+		case <-deadline:
+			return ""
+		}
+	}
+}
+
+// The rooms of the list go in one JOIN line as long as it fits, not one line
+// each in a burst: servers kill a client for "Excess Flood".
+func TestRejoinGrouped(t *testing.T) {
+	var rooms []string
+	for i := range 30 {
+		rooms = append(rooms, fmt.Sprintf("#room%d", i))
+	}
+	_, s, _, _ := start(t, Config{Channels: append(rooms, "#priv secret")}, false)
+	if l := s.expect("JOIN"); l != "JOIN #priv secret" {
+		t.Fatalf("keyed room: %q, want a line of its own", l)
+	}
+	if l := s.expect("JOIN"); l != "JOIN "+strings.Join(rooms, ",") {
+		t.Fatalf("rooms: %q, want one line", l)
+	}
+	if l := s.lineWithin(200*time.Millisecond, "JOIN"); l != "" {
+		t.Fatalf("another JOIN: %q", l)
+	}
+}
+
+// A nick change of ours reaches the UI: mentions, hooks and /me use the nick
+// of the moment. Somebody else's changes nothing there.
+func TestOwnNickReported(t *testing.T) {
+	_, s, events, _ := start(t, Config{}, false)
+	s.send(":alice!a@h NICK alicia")
+	s.send(":me!u@h NICK chris_")
+	if e := waitFor[model.EvSelfName](t, events); e.Name != "chris_" {
+		t.Fatalf("self name: %+v, want chris_ and not alice's change", e)
+	}
+}
+
+// /motd ends with 376, like the registration: the work of a new connection
+// (IDENTIFY, the rooms joined again, EvConnected) is not done a second time.
+func TestMotdDoesNotRedoConnect(t *testing.T) {
+	_, s, events, _ := start(t, Config{Password: "secret", PasswordWithoutTLS: true, Channels: []string{"#go"}}, false)
+	s.expect("PRIVMSG NickServ")
+	s.expect("JOIN #go")
+	s.send(":srv 375 me :- srv Message of the Day -")
+	s.send(":srv 372 me :- hello")
+	s.send(":srv 376 me :End of MOTD")
+	if l := s.lineWithin(300*time.Millisecond, "PRIVMSG NickServ", "JOIN"); l != "" {
+		t.Fatalf("after /motd: %q sent again", l)
+	}
+	for len(events) > 0 {
+		if _, ok := (<-events).(model.EvConnected); ok {
+			t.Fatal("a second EvConnected: every window of the network reloads")
+		}
+	}
+}
+
+// Kicked from a room: /join sends the JOIN again — the room was still taken
+// for joined, and the completion still offered its members.
+func TestJoinAfterKick(t *testing.T) {
+	c, s, events, _ := start(t, Config{}, false)
+	s.send(":me!u@h JOIN #go")
+	waitMsg(t, events, func(m model.EvNewMessage) bool { return m.Msg.Service != "" })
+	s.send(":op!o@h KICK #go me :out")
+	waitMsg(t, events, func(m model.EvNewMessage) bool { return m.Msg.Service != "" })
+	if m := c.Members(chatOf("#go")); len(m) != 0 {
+		t.Fatalf("members after the kick: %v", m)
+	}
+	c.Resolve(context.Background(), "#go", true, 1)
+	if l := s.lineWithin(time.Second, "JOIN"); l != "JOIN #go" {
+		t.Fatalf("join after a kick: %q", l)
+	}
+}
+
+// A dropped connection takes what it owned along: the member lists (a member
+// seen there is not one of the next connection), and the requests waiting
+// for its answer get an error instead of waiting for ever.
+func TestDropForgetsConnection(t *testing.T) {
+	c, s, events, _ := start(t, Config{}, false)
+	s.send(":me!u@h JOIN #go")
+	s.send(":srv 353 me = #go :me alice")
+	s.send(":srv 366 me #go :End of NAMES")
+	waitMsg(t, events, func(m model.EvNewMessage) bool { return m.Msg.Service != "" })
+	c.Resolve(context.Background(), "#slow", true, 7)
+	s.expect("JOIN #slow")
+	s.conn.Close() // the server drops the connection
+	if e := waitFor[model.EvChat](t, events); e.Request != 7 || e.Err == "" {
+		t.Fatalf("pending /join after the drop: %+v", e)
+	}
+	waitFor[model.EvDisconnected](t, events)
+	if m := c.Members(chatOf("#go")); len(m) != 0 {
+		t.Fatalf("members of the old connection: %v", m)
 	}
 }
 
@@ -269,9 +433,31 @@ func TestIncomingMessages(t *testing.T) {
 	if !m.Msg.Notice || m.Msg.Text != "-bob- maintenance at noon" || m.Chat.Title != "#go" {
 		t.Fatalf("room notice: %+v", m.Msg)
 	}
+	// A notice to us and an invite land in window 0: /debug alone hid them.
 	s.send(":NickServ!s@h NOTICE me :You are now identified")
-	if l := waitFor[model.EvLog](t, events); !strings.Contains(l.Msg, "-NickServ- You are now identified") {
+	if l := waitFor[model.EvLines](t, events); l.ChatID != 0 || len(l.Lines) != 1 || !strings.Contains(l.Lines[0], "-NickServ- You are now identified") {
 		t.Fatalf("notice: %+v", l)
+	}
+	s.send(":carol!c@h INVITE me #secret")
+	if l := waitFor[model.EvLines](t, events); l.ChatID != 0 || len(l.Lines) != 1 || !strings.Contains(l.Lines[0], "#secret") {
+		t.Fatalf("invite: %+v", l)
+	}
+}
+
+// A message or a notice to the ops of a room (@#room, STATUSMSG) belongs to
+// the room, marked with its audience — not to a private chat with its sender,
+// where an answer would go to that person alone.
+func TestStatusMessageInRoom(t *testing.T) {
+	_, s, events, _ := start(t, Config{}, false)
+	s.send(":bob!b@h PRIVMSG @#go :ops: \x02check\x02 the spam")
+	m := waitFor[model.EvNewMessage](t, events)
+	if m.Chat.Title != "#go" || m.Msg.Text != "[@#go] ops: check the spam" ||
+		len(m.Msg.Entities) != 1 || m.Msg.Entities[0] != (model.Span{Start: 12, End: 17, Kind: model.SpanBold}) {
+		t.Fatalf("to the ops: chat %q, %+v", m.Chat.Title, m.Msg)
+	}
+	s.send(":bob!b@h NOTICE +#go :voices only")
+	if m = waitFor[model.EvNewMessage](t, events); m.Chat.Title != "#go" || m.Msg.Text != "[+#go] -bob- voices only" || !m.Msg.Notice {
+		t.Fatalf("notice to the voices: chat %q, %+v", m.Chat.Title, m.Msg)
 	}
 }
 
@@ -292,6 +478,19 @@ func TestSendSplitsAndAcks(t *testing.T) {
 	c.SendStyled(context.Background(), chatOf("bob"), []model.Seg{{Text: "b", Bold: true}, {Text: " plain"}}, 8)
 	if l := s.expect("PRIVMSG bob :"); l != "PRIVMSG bob :\x02b\x0f plain" {
 		t.Fatalf("styled: %q", l)
+	}
+}
+
+// /me is a CTCP ACTION: the other clients show "* me waves", bots and
+// loggers see an action — not a message in italics from <me>.
+func TestSendAction(t *testing.T) {
+	c, s, events, _ := start(t, Config{}, false)
+	c.SendAction(context.Background(), chatOf("#go"), []model.Seg{{Text: "waves "}, {Text: "hard", Bold: true}}, 9)
+	if l := s.expect("PRIVMSG #go"); l != "PRIVMSG #go :\x01ACTION waves \x02hard\x0f\x01" {
+		t.Fatalf("action on the wire: %q", l)
+	}
+	if e := waitFor[model.EvSent](t, events); e.TmpID != 9 || e.ID == 0 || e.Err != "" {
+		t.Fatalf("receipt: %+v", e)
 	}
 }
 
@@ -325,6 +524,24 @@ func TestResolveJoinAndLeave(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 	if got := saved.get(); strings.Join(got, " ") != "#go,#new #new" {
 		t.Fatalf("saved lists: %v", got)
+	}
+}
+
+// A JOIN forwarded elsewhere (470) or refused during a split (437) answers
+// the /join waiting for it: "resolving #room…" stayed for the session.
+func TestJoinForwardedOrUnavailable(t *testing.T) {
+	c, s, events, _ := start(t, Config{}, false)
+	c.Resolve(context.Background(), "#full", true, 1)
+	s.expect("JOIN #full")
+	s.send(":srv 470 me #full ##full-overflow :Forwarding to another channel")
+	if e := waitFor[model.EvChat](t, events); e.Request != 1 || !strings.Contains(e.Err, "##full-overflow") {
+		t.Fatalf("forward: %+v, want an error naming the target", e)
+	}
+	c.Resolve(context.Background(), "#split", true, 2)
+	s.expect("JOIN #split")
+	s.send(":srv 437 me #split :Channel is temporarily unavailable")
+	if e := waitFor[model.EvChat](t, events); e.Request != 2 || e.Err == "" {
+		t.Fatalf("unavailable: %+v", e)
 	}
 }
 
@@ -617,5 +834,25 @@ func TestRegressionNickChangeKeepsQuery(t *testing.T) {
 	}
 	if !slices.Equal(titles, []string{"alice_away"}) {
 		t.Fatalf("open queries after the rename: %v, want [alice_away]", titles)
+	}
+}
+
+// A stop while the TCP dial waits for a server that never answers ends Run at
+// once, not at the end of the dial timeout.
+func TestStopDuringDial(t *testing.T) {
+	c := New(Config{Name: "test", Host: "irc.example", Port: 6667, Nick: "me",
+		Dial: func(ctx context.Context, _, _ string) (net.Conn, error) { <-ctx.Done(); return nil, ctx.Err() }}, make(chan model.Event, 16))
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- c.Run(ctx) }()
+	time.Sleep(100 * time.Millisecond)
+	cancel()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("a stop asked for ended Run with %v", err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("Run still waits for the dial")
 	}
 }

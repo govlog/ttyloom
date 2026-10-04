@@ -23,7 +23,7 @@ func (c *Client) LoadDialogs(context.Context) {
 	c.mu.Lock()
 	var chats []*model.Chat
 	for _, ch := range c.channels {
-		chats = append(chats, c.chatOf(ch))
+		chats = append(chats, c.chatOf(roomName(ch)))
 	}
 	for _, n := range c.queries {
 		chats = append(chats, c.chatOf(n))
@@ -48,14 +48,30 @@ func (c *Client) LoadHistorySince(_ context.Context, chat *model.Chat, _, _ int)
 
 // --- sends ---
 
-// sendText : text to the chat, one PRIVMSG per line piece, paced (a pasted
-// text is many lines); the receipt unpends the local line (no server echo
-// on IRC: the UI keeps what it has).
+// sendText : text to the chat, one PRIVMSG per line piece.
 func (c *Client) sendText(ctx context.Context, name string, chat *model.Chat, text string, tmpID int64) {
+	c.sendLines(ctx, name, chat, splitLines(text, maxLine), tmpID)
+}
+
+// SendAction : /me as a CTCP ACTION, the "* nick" left to the clients that
+// show it; an action as long as a paste goes out as several.
+func (c *Client) SendAction(ctx context.Context, chat *model.Chat, segs []model.Seg, tmpID int64) {
+	const open, end = "\x01ACTION ", "\x01"
+	lines := splitLines(styled(segs), maxLine-len(open+end))
+	for i := range lines {
+		lines[i] = open + lines[i] + end
+	}
+	c.sendLines(ctx, "SendAction", chat, lines, tmpID)
+}
+
+// sendLines : one PRIVMSG per line, paced (a pasted text is many lines); the
+// receipt unpends the local line (no server echo on IRC: the UI keeps what
+// it has).
+func (c *Client) sendLines(ctx context.Context, name string, chat *model.Chat, lines []string, tmpID int64) {
 	go func() {
 		defer c.Guard(name, func(err string) { c.Post(model.EvSent{ChatID: chat.ID, TmpID: tmpID, Err: err}) })
 		to := nameOf(chat)
-		for _, line := range splitLines(text, maxLine) {
+		for _, line := range lines {
 			err := c.pace(ctx)
 			if err == nil {
 				err = c.send("PRIVMSG", to, line)
@@ -280,10 +296,10 @@ func (c *Client) Leave(_ context.Context, chat *model.Chat) {
 // UI drops the window on EvChatGone.
 func (c *Client) part(name, reason string) {
 	c.mu.Lock()
-	c.channels = slices.DeleteFunc(c.channels, func(x string) bool { return c.casefold(x) == c.casefold(name) })
+	c.channels = slices.DeleteFunc(c.channels, func(x string) bool { return c.casefold(roomName(x)) == c.casefold(name) })
 	delete(c.members, c.casefold(name))
-	c.saveChannelsLocked()
 	c.mu.Unlock()
+	c.saveChannels()
 	params := []string{name}
 	if reason != "" {
 		params = append(params, reason)

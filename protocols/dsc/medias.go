@@ -51,7 +51,10 @@ func (c *Client) SearchMedia(ctx context.Context, chat *model.Chat, f model.Medi
 			return
 		}
 		for i := range ms {
-			if m := c.msgOf(&ms[i]); f.Keeps(m.Media) {
+			// A GIF upload plays (MediaGIF) but is a file: it stays with the
+			// pictures, the GIFs tab asks for the embeds of the providers.
+			m := c.msgOf(&ms[i])
+			if f.Keeps(m.Media) || f == model.TabMedia && m.Media != nil && m.Media.Mime == "image/gif" {
 				ev.Items = append(ev.Items, model.MediaItem{Msg: m, Thumb: thumbOf(&ms[i])})
 			}
 		}

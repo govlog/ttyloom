@@ -10,12 +10,86 @@
 
 ### Changed
 
+- **No more blinking**: every frame goes to the terminal as one synchronized update (DEC mode 2026: Ghostty, kitty, WezTerm, foot and most recent terminals), so the screen never shows a half-drawn frame, and a repaint that changes nothing is not sent at all. An idle client no longer repaints three times a second: the long title of the current sidebar line scrolls once after it changes, then rests.
 - **GIF picker**: six previews at a time with a scrollbar (the wheel or a click on it moves the rows), and only the preview under the mouse, or the one the arrows reached, plays; the others hold their frame. Previews far from the view let their decoded frames go.
+- **Bell and notifications** of a burst merge: one at once, then one for the last message after 2 seconds, instead of one per message.
+- **IRC highlights**: your nick as a word in a room ("chris: are you there?") rings, notifies and marks the window hot like a private message; a muted room stays quiet.
+- **A pasted tab** becomes four spaces instead of one, so pasted code keeps its indentation.
+- **Cache and download folders**: at start, GIF previews, media thumbnails and custom emoji images unused for a week are removed, and so are pasted images never sent after a day.
+- **Release workflow**: the tests and the build run without write or signing rights, and a separate job attests and publishes; CI checks that `licenses/` follows `go.mod`.
+- **Faster frames**: style sequences are built once, the lines of a window are drawn into reused buffers, sorting the sidebar by name costs a millisecond a frame instead of ten with a thousand chats, and a long word wraps in linear time.
 
 ### Fixed
 
 - **IRC `/me` lines** read `* nick does` alone, without the `<nick>` that came before them.
 - **Sidebar filter**: the wheel over the sidebar drops the filter, then steps as usual; a filter typed unseen no longer blocks the wheel.
+- **IRC times**: lines received from the server show local time; they showed UTC, with UTC day separators.
+- **F1** in a terminal without the kitty keyboard protocol (xterm, GNOME Terminal, Konsole) no longer cancels the input and types "OP".
+- **Separator line**: its last cell is no longer erased in some terminals.
+- **Security**: an IRC nick carrying terminal escape sequences no longer reaches the terminal through the @mention box or Tab completion; the input line is drawn with control characters blanked.
+- **Crash**: with `/set spell` on, a login prompt or a cancelled edit while the correction box (Ctrl+R) was open no longer crashes the client.
+- **`/msg`, `/rename`, `/whois` with a name of several words**: a whole chat title, as Tab puts it, is the target and the rest of the line is the message or the new name — no more "room hello" sent, nor a message to the chat named like the first word.
+- **Names typed without their accents** (`/query`, `/msg`, `/whois`, `/rename`, `/window`, Tab) find "Stéfany" from "stef" as the sidebar filter does, instead of asking the network to resolve "stef" as a public username.
+- **No bell nor notification** for a message you are reading in the aggregate view.
+- **Drafts stay with their window**: opening a chat that had no window, closing the window shown (`/close`, the menu, a chat gone from the account) and Up/Down in the input history no longer carry a draft into another chat nor wipe the one of the window you land on.
+- **A login prompt** that comes during an edit or a reply ends it (its text no longer comes back as a draft that Enter would send), and gives back the theme in use when it closes the theme picker.
+- **`/join &room key` and `/join !room key`** hide the key like `#room key`.
+- **`/history N`** asks at most what a window keeps (2000 messages, or `cache_messages`), one page at a time.
+- **@mention box**: a click picks the member under the pointer instead of going through to the message under the box (and its link); IRC nicks show and filter whole.
+- **Two boxes at once** (the Networks box coming back while another box is open): the one drawn on top is the one that takes the keys.
+- **Tab and Ctrl+W in the expanded editor** stop at a line break; repeated Tab shows the long list once instead of filling the window.
+- **Paste** goes into the query of the global search and of the new chat box, as in the GIF box.
+- **Sidebar**: leaving the terminal with the pointer over the sidebar gives the keyboard back to the input line; folding a section while a filter is typed ends the filter, so the fold shows at once.
+- **"o" on a link preview** (the key, the palette entry, `/open`, and inside the preview) asks before it opens the page, as a click on it already did.
+- **GIFs play at their real speed**: a GIF made of frames shorter than 100 ms played up to three times too slowly. It now keeps one frame per 100 ms and loops in the time it takes in a browser, with less memory.
+- **Memory of images and GIFs**: decoded frames no longer hold up to twice their size in spare buffer, and the frames budget counts what they really hold. A stopped video releases its decoded frames. A GIF off the screen is decoded only when its line shows; font zoom with the GIF box or the emoji picker open no longer decodes their previews again at message size.
+- **F4, `/set video` and `/set maps`** no longer download and decode again every media of every window: the last page of the shown window loads at once, the rest when it shows.
+- **Half-block GIFs above the view** no longer animate and repaint the screen at every tick.
+- **A failed download** no longer opens its file later, without a key press, when a new download of it succeeds.
+- **16-bit PNG images** of more than 20 Mpx are refused before decoding (one took up to 390 MB).
+- **Ctrl+V of a large text** is refused while it is read, instead of freezing the input while it is cleaned.
+- **Custom emoji names** that are not `:name:` no longer show in the emoji picker.
+- **The cache write** no longer reads the state of a photo while its larger variant downloads (a rare data race).
+- **Muted IRC rooms** stay muted when the server's case mapping renames the chats at connection.
+- **Telegram FLOOD_WAIT**: once Telegram asks to wait, the history sync, `/search` and the media browser stop asking until the wait is over, instead of one refused request and one error line per chat; read marks and typing hints pause too.
+- **Typing line on Telegram**: a cleared draft, a voice-chat speaker or an emoji tap no longer shows as "typing".
+- **Telegram replies to another chat** (a channel post) quote that chat and its text, instead of an unrelated message of the current chat.
+- **Deleting a long Telegram chat** deletes its whole history, not only the first part.
+- **Telegram replies** show at once; their quote fills in a moment later, and the messages after them no longer wait.
+- **Telegram mentions**: a member picked in the member box without a @username is mentioned for real (link and notification).
+- **Telegram chats left or deleted on another device** leave the sidebar at the next start.
+- **Discord forwards** show the forwarded text and file, with the channel they come from, instead of an empty line.
+- **Discord quotes** of a multi-line message stay on one line instead of reading as the text of the reply.
+- **Older Discord messages**: dropping your reaction and `i` work beyond the newest hundred messages of a channel.
+- **Discord search** on a server or a DM whose index is still being built says so (after one retry) instead of "no result"; the media browser too.
+- **Discord downloads** no longer fail after 60 s on a slow link; only a download that stops moving is cut.
+- **Discord custom emojis** are no longer saved with every channel: `dialogs.gob` of a big account stays small.
+- **Revoked Discord token** (password change, "log out of all devices"): the network stops and says why, and `/discord login` shows a new QR code.
+- **Library messages** (Discord gateway errors, failed read acks) no longer print over the screen.
+- **Discord global search** asks the ten most recently active servers, paced, instead of every server at once.
+- **Old Discord attachments**: a file read days later downloads again (its link is signed anew) instead of failing with 404.
+- **Discord GIFs** play from any provider, through Discord's media proxy: the provider no longer sees who reads them.
+- **Discord reactions cleared by a moderator** disappear at once.
+- **Discord custom emojis in a code block** stay as typed.
+- **GIFs uploaded on Discord** play in the chat, and stay in the Media tab of the browser.
+- **IRC notices, invites and SASL answers** (NickServ, a refused password, "you are now logged in") show in window 0, and so does the warning of a password withheld without TLS.
+- **IRC `/me`** goes out as a real action: the other clients show `* you waves`, not an italic message from you.
+- **IRC `/motd`** no longer identifies to NickServ again nor rejoins every room.
+- **IRC after a kick or a disconnection**: the room no longer counts as joined and its members leave the nick completion; a `/join`, `/whois` or member list waiting when the connection drops gets an error instead of waiting for ever.
+- **IRC rooms with a key** are saved with it and joined with it at the next start.
+- **IRC reconnection** joins the rooms in a few grouped lines, not one line per room in a burst.
+- **IRC nick changes** are followed: mentions, hooks and `/me` use your current nick.
+- **IRC `/topic #other`** no longer opens a window for a room you are not in.
+- **IRC `/join` forwarded (470) or refused during a split (437)** answers at once instead of "resolving…" for ever.
+- **IRC stop during a connection**: `/irc disconnect` while a server never answers ends at once.
+- **IRC on Ergo**: two nicks that differ by a bracket are no longer one chat.
+- **IRC `/mode` and `/whowas` answers** are translated.
+- **IRC messages to the ops of a room** (`@#room`) show in the room, marked, instead of in a private chat with the sender.
+- **IRC room and ignore lists** are saved in the right order (two `/ignore` in a row keep the latest list), and a save can no longer freeze the client.
+- **`nickserv_password_cmd`** runs at start before the screen is taken, so a terminal pinentry works, like Discord's `token_cmd`.
+- **config.toml**: an `[[irc]]` table with a refused name is reported and kept, never erased by the next save; a symlinked `config.toml` stays a link; files are on the disk before they replace the old ones.
+- **Secret commands** (`token_cmd`, `nickserv_password_cmd`) give up after 30 s even when a child process keeps their output open.
+- **Language**: `LC_MESSAGES` is followed before `LANG`.
 
 ## v0.10-beta — 2026-09-29
 

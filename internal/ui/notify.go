@@ -89,7 +89,7 @@ func (u *UI) flushAlert(now time.Time) bool {
 		return false
 	}
 	u.alertNext, u.alertAt = nil, now
-	if u.muted[a.chat.Key()] { // muted while it waited
+	if u.muted[a.chat.Key()] || u.seenNow(a.chat, &a.msg) { // muted, or read, while it waited
 		return false
 	}
 	if u.cfg.Bell {
@@ -97,6 +97,13 @@ func (u *UI) flushAlert(now time.Time) bool {
 	}
 	u.notify(a.chat, &a.msg)
 	return true
+}
+
+// seenNow tells whether m of chat is on the screen of a focused terminal —
+// its window, or the aggregate showing its network.
+func (u *UI) seenNow(chat *model.Chat, m *model.Msg) bool {
+	i := u.ws.ForChat(chat.Key())
+	return u.focused && i >= 0 && (u.view() == u.ws.List[i] || (u.view() == u.agg && u.netShown(m)))
 }
 
 // notify sends a desktop notification on a new message (same conditions as

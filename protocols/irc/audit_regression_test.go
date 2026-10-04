@@ -105,13 +105,15 @@ func TestRegressionIRCCaseMapping(t *testing.T) {
 }
 
 func TestNegotiatedCaseMapping(t *testing.T) {
-	for _, mode := range []string{"ascii", "rfc1459", "strict-rfc1459"} {
+	// rfc8265 (Ergo, PRECIS) folds no bracket: two people bob[m] and bob{m}.
+	for _, mode := range []string{"ascii", "rfc1459", "strict-rfc1459", "rfc8265"} {
 		t.Run(mode, func(t *testing.T) {
 			c, _, _, _ := start(t, Config{}, false, mode)
 			if c.chatID("Alice") != c.chatID("alice") {
 				t.Fatal("ASCII case differs")
 			}
-			if got := c.chatID("alice[") == c.chatID("alice{"); got != (mode != "ascii") {
+			ascii := mode == "ascii" || mode == "rfc8265"
+			if got := c.chatID("alice[") == c.chatID("alice{"); got != !ascii {
 				t.Fatal("bracket mapping differs from advertisement")
 			}
 			if got := c.chatID("alice~") == c.chatID("alice^"); got != (mode == "rfc1459") {
@@ -192,10 +194,21 @@ func TestRegressionCTCPThrottled(t *testing.T) {
 }
 
 // SASL offered and refused (904): the password is not sent again to
-// NickServ, who may be anyone on a network without services.
+// NickServ, who may be anyone on a network without services — and the
+// refusal shows in window 0, the one trace of a wrong password.
 func TestRegressionNoNickServAfterSASLFailure(t *testing.T) {
-	_, s, _, _ := start(t, Config{Password: "wrong", PasswordWithoutTLS: true}, true)
+	_, s, events, _ := connect(t, Config{Password: "wrong", PasswordWithoutTLS: true}, true)
 	s.never("PRIVMSG NickServ", 300*time.Millisecond)
+	for {
+		select {
+		case ev := <-events:
+			if l, ok := ev.(model.EvLines); ok && l.ChatID == 0 && strings.Contains(strings.Join(l.Lines, " "), "SASL authentication failed") {
+				return
+			}
+		default:
+			t.Fatal("no window 0 line for the refused password")
+		}
+	}
 }
 
 // Without TLS the password stays home unless the configuration says so: no
@@ -223,9 +236,9 @@ func TestRegressionPasswordWithheldWithoutTLS(t *testing.T) {
 	for {
 		select {
 		case ev := <-events:
-			if l, ok := ev.(model.EvLog); ok && l.Level == "WARN" {
-				if l.Msg != i18n.T("irc_password_withheld", "irc:plain") {
-					t.Fatalf("warning: %q", l.Msg)
+			if l, ok := ev.(model.EvLines); ok && l.ChatID == 0 { // window 0, not /debug
+				if len(l.Lines) != 1 || l.Lines[0] != i18n.T("irc_password_withheld", "irc:plain") {
+					t.Fatalf("warning: %q", l.Lines)
 				}
 				return
 			}

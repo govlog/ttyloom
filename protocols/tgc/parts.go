@@ -76,7 +76,7 @@ func (c *Client) parts(ctx context.Context, chat *model.Chat, kind model.ChatKin
 		ids, admins := chatParts(ps.Participants)
 		return c.lines(ids, admins, ent), nil
 	case *tg.InputPeerChannel:
-		ch := &tg.InputChannel{ChannelID: p.ChannelID, AccessHash: p.AccessHash}
+		ch := inputChannel(p)
 		if kind == model.ChatChannel {
 			return c.channelParts(ctx, chat.ID, ch)
 		}

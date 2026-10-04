@@ -47,3 +47,22 @@ func TestNetModule(t *testing.T) {
 		t.Fatal("NetModule")
 	}
 }
+
+// Summary : the service line wins (it has no text of its own), then the text,
+// then the label of a media with no caption.
+func TestMsgSummary(t *testing.T) {
+	media := &Media{Label: "[photo]"}
+	for _, c := range []struct {
+		m    Msg
+		want string
+	}{
+		{Msg{Service: "alice joined", Text: "x", Media: media}, "alice joined"},
+		{Msg{Text: "look", Media: media}, "look"},
+		{Msg{Media: media}, "[photo]"},
+		{Msg{}, ""},
+	} {
+		if got := c.m.Summary(); got != c.want {
+			t.Errorf("Summary(%+v) = %q, want %q", c.m, got, c.want)
+		}
+	}
+}

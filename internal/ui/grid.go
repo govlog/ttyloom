@@ -92,7 +92,7 @@ func (u *UI) gridOrigin() (row, col int) {
 // that plays changed.
 func (u *UI) gridHover(x, y int) bool {
 	t := u.thumbBox()
-	if t == nil {
+	if t == nil || u.viewer != nil { // the preview covers the box
 		return false
 	}
 	row, col := u.gridOrigin()

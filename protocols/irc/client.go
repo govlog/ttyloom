@@ -18,6 +18,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"unicode/utf8"
 
 	"github.com/ergochat/irc-go/ircevent"
 	"github.com/ergochat/irc-go/ircmsg"
@@ -43,12 +44,15 @@ type Config struct {
 	DCCIP              string
 	DCCPorts           string
 	Ignores            []string // nick!user@host masks whose lines are dropped (/ignore)
-	// SaveChannels writes the channel list back to the configuration — after
-	// a join or a part, so that the next start finds the same rooms.
-	SaveChannels func([]string) error
-	// SaveIgnores writes the ignore masks back to the configuration after a
-	// /ignore, so that the next start drops the same lines.
-	SaveIgnores func([]string) error
+	// SaveChannels asks for the room list (Channels) to be written back to
+	// the configuration — after a join or a part, so that the next start
+	// finds the same rooms. It may wait for the UI: never called with c.mu
+	// held. The list is read when it is written, so two calls in either order
+	// leave the latest one.
+	SaveChannels func()
+	// SaveIgnores : the same for the ignore masks (Ignores), after a /ignore,
+	// so that the next start drops the same lines.
+	SaveIgnores func()
 	// Dial : the tests plug a pipe here; nil = net.Dialer.
 	Dial func(ctx context.Context, network, addr string) (net.Conn, error)
 }
@@ -64,7 +68,7 @@ type Client struct {
 	ctcp *pacer // CTCP answers: burst 3, one every 2 s
 
 	mu       sync.Mutex
-	channels []string                     // rooms to be in: the config list, joined at each connection
+	channels []string                     // rooms to be in, "#room" or "#room key": the config list, joined at each connection
 	members  map[string]map[string]string // folded channel -> folded nick -> nick as seen (NAMES, JOIN, PART…)
 	names    map[string][]string          // NAMES in progress, folded channel -> nicks
 	queries  map[string]string            // folded nick -> nick, private chats open
@@ -79,7 +83,10 @@ type Client struct {
 	ignores  []string             // /ignore masks, nick!user@host with * and ?
 	pings    map[string]time.Time // folded nick -> CTCP PING sent at
 	ready    bool                 // EvReady posted (once per Run)
+	up       bool                 // connected() ran on this connection: a /motd ends with 376 too
 	sock     net.Conn
+	stopped  bool            // Run asked to end during the first connection: a socket dialed after is closed at once
+	runCtx   context.Context // the context of Run: a dial still running when it ends gives up
 }
 
 // whoisReq : one WHOIS in flight, the numerics gathered until 318.
@@ -88,7 +95,9 @@ type whoisReq struct {
 	raw    []ircmsg.Message
 }
 
-// New builds the client; nothing connects before Run.
+// New builds the client and its connection, callbacks wired; nothing
+// connects before Run. The UI may call a method as soon as New returns: the
+// connection is there for it, never a nil one Run has not set yet.
 func New(cfg Config, events chan<- model.Event) *Client {
 	c := &Client{Poster: model.Poster{Events: events}, cfg: cfg,
 		out: newPacer(outBurst, outFill), ctcp: newPacer(3, 2*time.Second),
@@ -99,10 +108,12 @@ func New(cfg Config, events chan<- model.Event) *Client {
 		c.ignores = append(c.ignores, ignoreMask(m))
 	}
 	for _, ch := range cfg.Channels {
-		if IsChannel(ch) && !slices.Contains(c.channels, ch) {
+		if IsChannel(ch) && !slices.ContainsFunc(c.channels, func(x string) bool { return roomName(x) == roomName(ch) }) {
 			c.channels = append(c.channels, ch)
 		}
 	}
+	c.conn = c.build()
+	c.wire(c.conn)
 	return c
 }
 
@@ -154,10 +165,23 @@ func (c *Client) build() *ircevent.Connection {
 		ReconnectFreq: 20 * time.Second,
 		Log:           log.New(logWriter{c}, "", 0),
 		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			c.mu.Lock()
+			run := c.runCtx
+			c.mu.Unlock()
+			if run != nil { // a stop of Run ends the dial too, not its timeout
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithCancel(ctx)
+				defer cancel()
+				stop := context.AfterFunc(run, cancel)
+				defer stop()
+			}
 			s, err := dial(ctx, network, addr)
 			if err == nil {
 				c.mu.Lock()
 				c.sock = s
+				if c.stopped {
+					s.Close()
+				}
 				c.mu.Unlock()
 			}
 			return s, err
@@ -185,11 +209,27 @@ func (c *Client) Run(ctx context.Context) error {
 		return nil // a launch already given up (a logout during the token read)
 	}
 	if c.cfg.Password != "" && c.password() == "" {
-		c.Post(model.EvLog{Level: "WARN", Msg: i18n.T("irc_password_withheld", c.net())})
+		c.status(i18n.T("irc_password_withheld", c.net()))
 	}
-	c.conn = c.build()
-	c.wire(c.conn)
-	if err := c.conn.Connect(); err != nil {
+	c.mu.Lock()
+	c.runCtx = ctx
+	c.mu.Unlock()
+	// A stop while the first connection waits for a silent server: the
+	// socket goes at once — the handshake would wait a minute, and the
+	// network would look up meanwhile.
+	stop := context.AfterFunc(ctx, func() {
+		c.mu.Lock()
+		c.stopped = true
+		c.mu.Unlock()
+		c.conn.Quit()
+		c.closeSock()
+	})
+	err := c.conn.Connect()
+	stop()
+	if err != nil {
+		if ctx.Err() != nil {
+			return nil // the stop asked for, not a failure
+		}
 		return fmt.Errorf("%s: %w", c.net(), err)
 	}
 	done := make(chan struct{})
@@ -206,12 +246,8 @@ func (c *Client) Run(ctx context.Context) error {
 		select {
 		case <-done:
 		case <-time.After(2 * time.Second):
-			c.mu.Lock()
-			s := c.sock
-			c.mu.Unlock()
-			if s != nil {
-				s.Close()
-			}
+			c.closeSock()
+			c.conn.Reconnect() // wakes Loop when it waits between two connections
 			<-done
 		}
 	case <-done:
@@ -219,12 +255,23 @@ func (c *Client) Run(ctx context.Context) error {
 	return nil
 }
 
+// closeSock closes the socket by hand: a server that does not close on QUIT,
+// or one that never answers.
+func (c *Client) closeSock() {
+	c.mu.Lock()
+	s := c.sock
+	c.mu.Unlock()
+	if s != nil {
+		s.Close()
+	}
+}
+
 // wire hangs the callbacks of the protocol on conn. Every callback runs on
 // the read goroutine of ircevent, one at a time: the maps are locked all the
 // same, the Backend methods reach them from other goroutines.
 func (c *Client) wire(conn *ircevent.Connection) {
 	conn.AddConnectCallback(func(ircmsg.Message) { c.connected() })
-	conn.AddDisconnectCallback(func(ircmsg.Message) { c.Post(model.EvDisconnected{}) })
+	conn.AddDisconnectCallback(func(ircmsg.Message) { c.resetConn() })
 	conn.AddCallback("PRIVMSG", c.onPrivmsg)
 	conn.AddCallback("NOTICE", c.onNotice)
 	conn.AddCallback("JOIN", c.onJoin)
@@ -236,18 +283,30 @@ func (c *Client) wire(conn *ircevent.Connection) {
 	conn.AddCallback("MODE", c.onMode)
 	conn.AddCallback("INVITE", func(e ircmsg.Message) {
 		if len(e.Params) > 1 {
-			c.Post(model.EvLog{Level: "INFO", Msg: i18n.T("irc_invited", c.net(), e.Nick(), e.Params[1])})
+			c.status(i18n.T("irc_invited", c.net(), e.Nick(), e.Params[1]))
 		}
 	})
+	// The answers of SASL: a refused password must show (no IDENTIFY follows
+	// it), and the success names the account.
+	for _, code := range []string{ircevent.RPL_LOGGEDIN, ircevent.ERR_NICKLOCKED, ircevent.ERR_SASLFAIL} {
+		conn.AddCallback(code, func(e ircmsg.Message) {
+			if len(e.Params) > 1 {
+				c.status(c.net() + ": " + e.Params[len(e.Params)-1])
+			}
+		})
+	}
 	conn.AddCallback(ircevent.RPL_TOPIC, func(e ircmsg.Message) { // 332 on join, and answer of /topic
 		if len(e.Params) < 3 {
 			return
 		}
-		c.service(e.Params[1], i18n.T("irc_topic_is", e.Params[2]), e)
 		c.mu.Lock()
+		_, joined := c.members[c.casefold(e.Params[1])]
 		reply, pending := c.asked["topic"]
 		delete(c.asked, "topic")
 		c.mu.Unlock()
+		if joined { // the line of a room we are not in (/topic #other) would make a chat of it
+			c.service(e.Params[1], i18n.T("irc_topic_is", e.Params[2]), e)
+		}
 		if pending { // the room line alone would not show in the asking window
 			c.Post(model.EvLines{ChatID: reply, Lines: []string{i18n.T("irc_topic_is", e.Params[2]) + " (" + e.Params[1] + ")"}})
 		}
@@ -261,9 +320,12 @@ func (c *Client) wire(conn *ircevent.Connection) {
 	}
 	conn.AddCallback(ircevent.RPL_ENDOFWHOIS, c.onEndOfWhois)
 	conn.AddCallback(ircevent.ERR_NOSUCHNICK, c.onNoSuchNick)
+	// 470 is a forward (+f, a ban to ##fix_your_connection): its text names
+	// the room the server sends us to. 437 is a room held during a split
+	// (and a nick refused, which no /join waits for).
 	for _, code := range []string{ircevent.ERR_NOSUCHCHANNEL, ircevent.ERR_TOOMANYCHANNELS, ircevent.ERR_CHANNELISFULL,
 		ircevent.ERR_INVITEONLYCHAN, ircevent.ERR_BANNEDFROMCHAN, ircevent.ERR_BADCHANNELKEY, ircevent.ERR_BADCHANMASK,
-		ircevent.ERR_NEEDREGGEDNICK, ircevent.ERR_CANNOTSENDTOCHAN} {
+		ircevent.ERR_NEEDREGGEDNICK, ircevent.ERR_CANNOTSENDTOCHAN, ircevent.ERR_LINKCHANNEL, ircevent.ERR_UNAVAILRESOURCE} {
 		conn.AddCallback(code, c.onChannelError)
 	}
 	conn.AddCallback("ERROR", func(e ircmsg.Message) {
@@ -314,9 +376,20 @@ func (c *Client) isMe(nick string) bool { return c.casefold(nick) == c.casefold(
 // told a second time, and on a network without services (EFnet, IRCnet)
 // anyone may sit on the nick NickServ.
 func (c *Client) connected() {
+	c.mu.Lock()
+	again := c.up // a /motd after registration: nothing is sent twice
+	c.up = true
+	c.mu.Unlock()
+	if again {
+		return
+	}
 	mode := c.conn.ISupport()["CASEMAPPING"]
 	switch mode {
 	case "ascii", "rfc1459", "rfc1459-strict", "strict-rfc1459":
+	case "rfc8265", "rfc7613": // Ergo: [ ] \ ~ are letters of their own there
+		// ponytail: PRECIS also folds non-ASCII letters (Éva = éva), which
+		// casefold does not; ascii is the closest mapping it has.
+		mode = "ascii"
 	default:
 		mode = "rfc1459"
 	}
@@ -328,14 +401,68 @@ func (c *Client) connected() {
 	c.mu.Unlock()
 	if first {
 		c.Post(model.EvReady{SelfID: chatID(c.me(), "ascii"), SelfName: c.me()})
+	} else {
+		c.Post(model.EvSelfName{Name: c.me()}) // a reconnection, maybe under another nick
 	}
 	c.Post(model.EvConnected{})
 	if _, sasl := c.conn.AcknowledgedCaps()["sasl"]; !sasl && c.password() != "" {
 		c.conn.Send("PRIVMSG", "NickServ", "IDENTIFY "+c.password())
 	}
+	// The rooms in as few lines as fit (JOIN #a,#b,…): a line per room in a
+	// burst is what an "Excess Flood" kill counts.
+	var line string
 	for _, ch := range chans {
-		c.conn.Join(ch)
+		switch {
+		case strings.Contains(ch, " "): // "#room key": a line of its own
+			c.conn.Send("JOIN", strings.Fields(ch)...)
+		case line == "":
+			line = ch
+		case len(line)+1+len(ch) > maxLine:
+			c.conn.Send("JOIN", line)
+			line = ch
+		default:
+			line += "," + ch
+		}
 	}
+	if line != "" {
+		c.conn.Send("JOIN", line)
+	}
+}
+
+// roomName : the room of an entry of the list, its key left out.
+func roomName(entry string) string {
+	n, _, _ := strings.Cut(entry, " ")
+	return n
+}
+
+// resetConn forgets what the connection that dropped owned — the member
+// lists, the answers being gathered — and answers the requests that wait for
+// it with an error: the next connection rebuilds the lists (its JOINs and
+// NAMES), and its answers must not be taken for the ones of the old requests.
+func (c *Client) resetConn() {
+	c.mu.Lock()
+	c.up = false
+	c.members, c.names = map[string]map[string]string{}, map[string][]string{}
+	c.motd, c.bans = nil, nil
+	clear(c.asked)
+	clear(c.pings)
+	joining, whois, naming := c.joining, c.whois, c.naming
+	c.joining, c.whois, c.naming = map[string][]model.EvChat{}, map[string]*whoisReq{}, map[string]*model.Chat{}
+	c.mu.Unlock()
+	err := i18n.T("irc_not_connected", c.net())
+	for _, q := range joining {
+		for _, ev := range q {
+			ev.Err = err
+			c.Post(ev)
+		}
+	}
+	for _, r := range whois {
+		c.Post(model.EvWhois{ChatID: r.chatID, Err: err})
+	}
+	for _, chat := range naming {
+		c.Post(model.EvParticipants{ChatID: chat.ID, Err: err})
+	}
+	c.Post(model.EvDisconnected{})
 }
 
 // msgOf : the message of a PRIVMSG or NOTICE line in chat.
@@ -349,7 +476,7 @@ func (c *Client) msgOf(e ircmsg.Message, chat *model.Chat, text string) model.Ms
 // target : the chat a message to target from nick lands in — the channel, or
 // the private chat of the sender (of the recipient for our own echo).
 func (c *Client) target(e ircmsg.Message) *model.Chat {
-	to := e.Params[0]
+	to, _ := c.statusRoom(e.Params[0])
 	if IsChannel(to) {
 		return c.chatOf(to)
 	}
@@ -363,6 +490,30 @@ func (c *Client) target(e ircmsg.Message) *model.Chat {
 	return c.chatOf(nick)
 }
 
+// statusRoom : for a message to the ops or the voices of a room (@#room,
+// +#room: the prefixes of ISUPPORT STATUSMSG), the room and the prefix;
+// otherwise to itself and "".
+func (c *Client) statusRoom(to string) (string, string) {
+	pre := c.conn.ISupport()["STATUSMSG"]
+	if pre == "" {
+		pre = "@+"
+	}
+	if room := strings.TrimLeft(to, pre); room != to && IsChannel(room) {
+		return room, to[:len(to)-len(room)]
+	}
+	return to, ""
+}
+
+// prefix puts p before the text of m, its spans moved along.
+func prefix(m *model.Msg, p string) {
+	n := utf8.RuneCountInString(p)
+	m.Text = p + m.Text
+	for i := range m.Entities {
+		m.Entities[i].Start += n
+		m.Entities[i].End += n
+	}
+}
+
 func (c *Client) onPrivmsg(e ircmsg.Message) {
 	if c.ignored(e) || len(e.Params) < 2 {
 		return
@@ -372,43 +523,11 @@ func (c *Client) onPrivmsg(e ircmsg.Message) {
 		return
 	}
 	chat := c.target(e)
-	c.Post(model.EvNewMessage{Msg: c.msgOf(e, chat, e.Params[1]), Chat: chat})
-}
-
-// onCTCP : a PRIVMSG wrapped in \x01, parsed here rather than by the library,
-// which answered every VERSION or TIME on its own — ignore list or not, at
-// any rate (an easy "Excess Flood"). ACTION and DCC SEND are messages;
-// VERSION, PING, TIME and CLIENTINFO get an answer when asked directly (not
-// through a room), from someone not ignored, and while the bucket has a
-// token. Everything else, USERINFO included, is dropped.
-func (c *Client) onCTCP(e ircmsg.Message, body string) {
-	verb, arg, _ := strings.Cut(body, " ")
-	switch verb = strings.ToUpper(verb); verb {
-	case "ACTION":
-		c.onAction(e, arg)
-	case "DCC":
-		c.onDCC(e, arg)
-	case "VERSION", "PING", "TIME", "CLIENTINFO":
-		if e.Nick() == "" || !c.isMe(e.Params[0]) || !c.ctcp.allow() {
-			return
-		}
-		reply := verb
-		switch verb {
-		case "VERSION":
-			reply += " ttyloom"
-		case "PING":
-			if arg != "" {
-				reply += " " + arg
-			}
-		case "TIME":
-			reply += " " + time.Now().UTC().Format(time.RFC1123)
-		case "CLIENTINFO":
-			reply += " ACTION CLIENTINFO DCC PING TIME VERSION"
-		}
-		// Straight out, past the output pacer: a callback never waits, and
-		// the bucket above is the limit of these lines.
-		c.conn.Send("NOTICE", e.Nick(), "\x01"+reply+"\x01")
+	m := c.msgOf(e, chat, e.Params[1])
+	if room, pre := c.statusRoom(e.Params[0]); pre != "" { // the room line says who it went to
+		prefix(&m, "["+pre+room+"] ")
 	}
+	c.Post(model.EvNewMessage{Msg: m, Chat: chat})
 }
 
 // onNotice : a notice to a channel shows there as "-nick- text"; one to us
@@ -423,10 +542,13 @@ func (c *Client) onNotice(e ircmsg.Message) {
 		c.onCTCPReply(e.Nick(), t[1:len(t)-1])
 		return
 	}
-	if IsChannel(e.Params[0]) {
-		chat := c.chatOf(e.Params[0])
+	if room, pre := c.statusRoom(e.Params[0]); IsChannel(room) {
+		chat := c.chatOf(room)
 		m := c.msgOf(e, chat, e.Params[1])
-		m.Text = "-" + e.Nick() + "- " + m.Text
+		prefix(&m, "-"+e.Nick()+"- ")
+		if pre != "" {
+			prefix(&m, "["+pre+room+"] ")
+		}
 		m.Notice = true // no hook answers a notice (IRC convention)
 		c.Post(model.EvNewMessage{Msg: m, Chat: chat})
 		return
@@ -436,18 +558,18 @@ func (c *Client) onNotice(e ircmsg.Message) {
 		from = e.Source
 	}
 	clean, _ := spansOf(e.Params[1])
-	c.Post(model.EvLog{Level: "INFO", Msg: c.net() + ": -" + from + "- " + clean})
+	c.status(c.net() + ": -" + from + "- " + clean)
 }
+
+// status : a line of window 0, one the user has to see (a notice, an invite,
+// a refused password) — an EvLog under ERROR stays in /debug.
+func (c *Client) status(text string) { c.Post(model.EvLines{Lines: []string{text}}) }
 
 // onAction : CTCP ACTION, "* nick does" in italics.
 func (c *Client) onAction(e ircmsg.Message, text string) {
 	chat := c.target(e)
 	m := c.msgOf(e, chat, text)
-	m.Text = "* " + e.Nick() + " " + m.Text
-	for i := range m.Entities {
-		m.Entities[i].Start += len([]rune("* " + e.Nick() + " "))
-		m.Entities[i].End += len([]rune("* " + e.Nick() + " "))
-	}
+	prefix(&m, "* "+e.Nick()+" ")
 	m.Entities = append([]model.Span{{Start: 0, End: len([]rune(m.Text)), Kind: model.SpanItalic}}, m.Entities...)
 	m.Action = true
 	c.Post(model.EvNewMessage{Msg: m, Chat: chat})
@@ -483,40 +605,6 @@ func (c *Client) service(channel, text string, e ircmsg.Message) {
 	c.Post(model.EvNewMessage{Msg: m, Chat: chat})
 }
 
-// member bookkeeping: NAMES fills the list, JOIN/PART/KICK/QUIT/NICK keep it
-// right. QUIT and NICK carry no channel: the lists say where the person was.
-// Folded keys: a netsplit is a burst of QUITs, one lookup each.
-func (c *Client) addMember(channel, nick string) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	k := c.casefold(channel)
-	if c.members[k] == nil {
-		c.members[k] = map[string]string{}
-	}
-	c.members[k][c.casefold(nick)] = nick
-}
-
-func (c *Client) dropMember(channel, nick string) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	delete(c.members[c.casefold(channel)], c.casefold(nick))
-}
-
-// channelsOf : the channels nick is seen in.
-func (c *Client) channelsOf(nick string) []string {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	var out []string
-	f := c.casefold(nick)
-	for ch, ns := range c.members {
-		if _, in := ns[f]; in {
-			out = append(out, ch)
-		}
-	}
-	slices.Sort(out)
-	return out
-}
-
 func (c *Client) onJoin(e ircmsg.Message) {
 	if len(e.Params) < 1 {
 		return
@@ -524,14 +612,28 @@ func (c *Client) onJoin(e ircmsg.Message) {
 	ch, nick := e.Params[0], e.Nick()
 	if c.isMe(nick) {
 		c.mu.Lock()
-		if !slices.ContainsFunc(c.channels, func(x string) bool { return c.casefold(x) == c.casefold(ch) }) {
-			c.channels = append(c.channels, ch)
-			c.saveChannelsLocked()
-		}
-		c.members[c.casefold(ch)] = map[string]string{}
 		q, waiting := c.joining[c.casefold(ch)]
 		delete(c.joining, c.casefold(ch))
+		// A room joined with a key keeps it, a new key replaces the old one:
+		// every later connection needs it, or the server answers 475.
+		entry := ch
+		for _, ev := range q {
+			if _, key, _ := strings.Cut(ev.Query, " "); strings.TrimSpace(key) != "" {
+				entry = ch + " " + strings.TrimSpace(key)
+			}
+		}
+		changed := false
+		switch i := slices.IndexFunc(c.channels, func(x string) bool { return c.casefold(roomName(x)) == c.casefold(ch) }); {
+		case i < 0:
+			c.channels, changed = append(c.channels, entry), true
+		case entry != ch && c.channels[i] != entry:
+			c.channels[i], changed = entry, true
+		}
+		c.members[c.casefold(ch)] = map[string]string{}
 		c.mu.Unlock()
+		if changed {
+			c.saveChannels()
+		}
 		chat := c.chatOf(ch)
 		if waiting {
 			for _, ev := range q {
@@ -582,13 +684,17 @@ func (c *Client) onKick(e ircmsg.Message) {
 	if len(e.Params) > 2 {
 		reason = " (" + e.Params[2] + ")"
 	}
-	c.dropMember(ch, victim)
 	if c.isMe(victim) {
-		// Kicked: the room stays in the list, the next connection tries it
-		// again — the line says so.
+		// Kicked: out of the room, so /join sends the JOIN again; the room
+		// stays in the list, the next connection tries it again — the line
+		// says so.
+		c.mu.Lock()
+		delete(c.members, c.casefold(ch))
+		c.mu.Unlock()
 		c.service(ch, i18n.T("irc_you_kicked", e.Nick())+reason, e)
 		return
 	}
+	c.dropMember(ch, victim)
 	c.service(ch, i18n.T("irc_kicked", victim, e.Nick())+reason, e)
 }
 
@@ -612,6 +718,9 @@ func (c *Client) onNick(e ircmsg.Message) {
 		return
 	}
 	old, now := e.Nick(), e.Params[0]
+	if c.isMe(now) { // ours: the library has switched to the new nick already
+		c.Post(model.EvSelfName{Name: now})
+	}
 	quiet := c.ignored(e)
 	for _, ch := range c.channelsOf(old) {
 		c.dropMember(ch, old)
@@ -655,58 +764,6 @@ func (c *Client) onMode(e ircmsg.Message) {
 // maxGather : lines kept of a NAMES, WHOIS or MOTD answer. A server that
 // never sends the end numeric must not grow the heap without bound.
 const maxGather = 10000
-
-// onNames : 353 "<me> <=|*|@> <channel> :nick nick…", gathered until 366.
-func (c *Client) onNames(e ircmsg.Message) {
-	if len(e.Params) < 4 {
-		return
-	}
-	k := c.casefold(e.Params[2])
-	c.mu.Lock()
-	if len(c.names[k]) < maxGather {
-		c.names[k] = append(c.names[k], strings.Fields(e.Params[3])...)
-	}
-	c.mu.Unlock()
-}
-
-// onEndOfNames : the list is whole — it becomes the member list, and answers
-// the Participants call waiting for it.
-func (c *Client) onEndOfNames(e ircmsg.Message) {
-	if len(e.Params) < 2 {
-		return
-	}
-	k := c.casefold(e.Params[1])
-	c.mu.Lock()
-	names := c.names[k]
-	delete(c.names, k)
-	// Only a room we are in has a member list: the key is set by the self
-	// JOIN. A 366 for any other room (/names #other) must not create one, or
-	// Resolve would read it as "already joined" and skip the JOIN.
-	if _, joined := c.members[k]; joined {
-		c.members[k] = make(map[string]string, len(names))
-		for _, n := range names {
-			bare := strings.TrimLeft(n, "~&@%+")
-			c.members[k][c.casefold(bare)] = bare
-		}
-	}
-	chat := c.naming[k]
-	delete(c.naming, k)
-	reply, asked := c.asked["names:"+k]
-	delete(c.asked, "names:"+k)
-	c.mu.Unlock()
-	if asked { // /names: the list as it comes, prefixes and all
-		c.Post(model.EvLines{ChatID: reply, Lines: []string{i18n.T("irc_names", e.Params[1], strings.Join(names, " "))}})
-	}
-	if chat == nil {
-		return
-	}
-	ev := model.EvParticipants{ChatID: chat.ID}
-	for _, n := range names {
-		bare := strings.TrimLeft(n, "~&@%+")
-		ev.Lines = append(ev.Lines, model.Participant{Text: n, Name: bare, Query: bare})
-	}
-	c.Post(ev)
-}
 
 // onWhoisLine : one numeric of a WHOIS, kept raw — formatWhois lays the whole
 // lot out on 318.
@@ -780,20 +837,31 @@ func (c *Client) onChannelError(e ircmsg.Message) {
 	c.Post(model.EvLog{Level: "ERROR", Msg: c.net() + ": " + ch + ": " + reason})
 }
 
-// saveChannelsLocked writes the room list back; c.mu held by the caller.
-func (c *Client) saveChannelsLocked() {
-	if c.cfg.SaveChannels == nil {
-		return
+// saveChannels asks for the room list to be written back; c.mu not held.
+func (c *Client) saveChannels() {
+	if c.cfg.SaveChannels != nil {
+		c.cfg.SaveChannels()
 	}
-	list := slices.Clone(c.channels)
-	if err := c.cfg.SaveChannels(list); err != nil {
-		c.Post(model.EvLog{Level: "ERROR", Msg: c.net() + ": " + err.Error()})
-	}
+}
+
+// Channels : the rooms to be in, as the configuration keeps them ("#room",
+// "#room key").
+func (c *Client) Channels() []string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return slices.Clone(c.channels)
+}
+
+// Ignores : the /ignore masks.
+func (c *Client) Ignores() []string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return slices.Clone(c.ignores)
 }
 
 // send writes one raw command; a connection that is down is the error.
 func (c *Client) send(cmd string, params ...string) error {
-	if c.conn == nil || !c.conn.Connected() {
+	if !c.conn.Connected() {
 		return errors.New(i18n.T("irc_not_connected", c.net()))
 	}
 	return c.conn.Send(cmd, params...)
@@ -806,7 +874,7 @@ func (c *Client) sendRaw(line string) error {
 	if strings.ContainsAny(line, "\r\n\x00") {
 		return errors.New(i18n.T("irc_usage", usages["quote"]))
 	}
-	if c.conn == nil || !c.conn.Connected() {
+	if !c.conn.Connected() {
 		return errors.New(i18n.T("irc_not_connected", c.net()))
 	}
 	return c.conn.SendRaw(line)
@@ -834,75 +902,4 @@ func (c *Client) sockIP() string {
 		return a.IP.String()
 	}
 	return ""
-}
-
-// Output pacing: what the user sends (a pasted text, a run of commands, DCC
-// offers) goes out at outBurst lines, then one every outFill — under the
-// "Excess Flood" limit of the servers. The callbacks of the read goroutine
-// never wait on it: their lines go straight to send.
-const outBurst = 4
-
-var outFill = time.Second // a variable: the pacing test shortens it
-
-// pacer : a token bucket, burst tokens at rest and one more every fill.
-type pacer struct {
-	mu     sync.Mutex
-	burst  float64
-	fill   time.Duration
-	tokens float64
-	last   time.Time
-}
-
-func newPacer(burst int, fill time.Duration) *pacer {
-	return &pacer{burst: float64(burst), fill: fill, tokens: float64(burst), last: time.Now()}
-}
-
-// refill credits the time gone by; mu held.
-func (p *pacer) refill() {
-	now := time.Now()
-	p.tokens = min(p.burst, p.tokens+float64(now.Sub(p.last))/float64(p.fill))
-	p.last = now
-}
-
-// take reserves a token and gives the time to wait for it. The count may go
-// below zero — tokens owed — so the callers queue in the order they came.
-func (p *pacer) take() time.Duration {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	p.refill()
-	p.tokens--
-	if p.tokens >= 0 {
-		return 0
-	}
-	return time.Duration(-p.tokens * float64(p.fill))
-}
-
-// allow takes a token when one is there, false otherwise; never waits.
-func (p *pacer) allow() bool {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	p.refill()
-	if p.tokens < 1 {
-		return false
-	}
-	p.tokens--
-	return true
-}
-
-// pace holds a user-initiated line until the output bucket has a token for
-// it; ctx (the network: a logout, a disconnect) cuts the wait. Never called
-// from a callback.
-func (c *Client) pace(ctx context.Context) error {
-	d := c.out.take()
-	if d <= 0 {
-		return nil
-	}
-	t := time.NewTimer(d)
-	defer t.Stop()
-	select {
-	case <-t.C:
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	}
 }

@@ -23,15 +23,28 @@ import (
 // message itself — Discord ships every mentioned user with it — and the
 // nickname of the author from the member cache: never a call per message.
 func (c *Client) msgOf(m *discord.Message) model.Msg {
+	// A forward is an empty message with the one it forwards in a snapshot:
+	// its text and files are what shows, with no author of their own — the
+	// channel they come from is all there is to name.
+	body, fwd := m, ""
+	if r := m.Reference; r != nil && r.Type == discord.MessageReferenceTypeForward && len(m.MessageSnapshots) > 0 {
+		s := m.MessageSnapshots[0].Message
+		body = &discord.Message{Content: s.Content, Mentions: s.Mentions, Attachments: s.Attachments, Embeds: s.Embeds}
+		fwd = "#" + r.ChannelID.String()
+		if ch, err := c.state().Cabinet.Channel(r.ChannelID); err == nil {
+			fwd = chatOf(ch, c.guildName(ch.GuildID)).Title
+		}
+	}
 	msg := model.Msg{
-		ID:     int(m.ID),
-		ChatID: int64(m.ChannelID),
-		Date:   m.ID.Time(), // the snowflake is the send date, to the millisecond
-		From:   c.nameOf(m.GuildID, m.Author),
-		FromID: int64(m.Author.ID),
-		Out:    int64(m.Author.ID) == c.self.Load(),
-		Edited: m.EditedTimestamp.IsValid(),
-		Media:  mediaOf(m),
+		ID:      int(m.ID),
+		ChatID:  int64(m.ChannelID),
+		Date:    m.ID.Time(), // the snowflake is the send date, to the millisecond
+		From:    c.nameOf(m.GuildID, m.Author),
+		FromID:  int64(m.Author.ID),
+		Out:     int64(m.Author.ID) == c.self.Load(),
+		Edited:  m.EditedTimestamp.IsValid(),
+		Media:   mediaOf(body),
+		FwdFrom: fwd,
 	}
 	if u := m.Author.AvatarURL(); u != "" {
 		msg.FromPhoto = fileURL(u)
@@ -40,15 +53,17 @@ func (c *Client) msgOf(m *discord.Message) model.Msg {
 		msg.Service = s
 		return msg // no text, no reaction, no quote: the line is the whole message
 	}
-	msg.Text, msg.Entities = parse(m.Content, mentionNames(m.Mentions))
+	msg.Text, msg.Entities = parse(body.Content, mentionNames(body.Mentions))
 	msg.Reactions = reactionsOf(m.Reactions)
 	if r := m.ReferencedMessage; r != nil {
-		text, _ := parse(r.Content, nil) // the quote is one line: the markers only get in the way
+		// The quote is one line: the markers only get in the way, and a line
+		// break would show the quoted lines as the text of the reply.
+		text, _ := parse(r.Content, nil)
 		// The quoted message often carries no guild of its own; it lives in the
 		// same channel, so the guild of the message that quotes it is the right
 		// one to read the nickname with.
 		msg.Reply = &model.Quote{ID: int(r.ID),
-			From: c.nameOf(cmp.Or(r.GuildID, m.GuildID), r.Author), Text: text}
+			From: c.nameOf(cmp.Or(r.GuildID, m.GuildID), r.Author), Text: rend.CleanLine(text)}
 	}
 	return msg
 }
@@ -151,14 +166,20 @@ func mediaOf(m *discord.Message) *model.Media {
 // gifvMedia : a Tenor or Giphy link unfurled by Discord (what SendGif posts)
 // carries the clip as a "gifv" embed — an animated GIF of the message, the
 // page kept as its URL, rather than a link label nobody can play. nil for any
-// other embed, or one whose URLs are not http(s).
+// other embed, or one whose URLs are not http(s). The clip comes through the
+// media proxy of Discord when the embed names it, like the official client:
+// any provider then loads, and none sees who reads the message.
 func gifvMedia(e discord.Embed) *model.Media {
-	if e.Type != discord.GIFVEmbed || e.Video == nil || !rend.SafeURL(string(e.Video.URL)) || !rend.SafeURL(e.URL) {
+	if e.Type != discord.GIFVEmbed || e.Video == nil {
+		return nil
+	}
+	src := cmp.Or(string(e.Video.Proxy), string(e.Video.URL))
+	if !rend.SafeURL(src) || !rend.SafeURL(e.URL) {
 		return nil
 	}
 	w, h := int(e.Video.Width), int(e.Video.Height)
 	return &model.Media{Kind: model.MediaGIF, W: w, H: h, Mime: "video/mp4", Ext: ".mp4",
-		Loc: fileURL(e.Video.URL), URL: e.URL, Label: fmt.Sprintf("[gif %dx%d]", w, h)}
+		Loc: fileURL(src), URL: e.URL, Label: fmt.Sprintf("[gif %dx%d]", w, h)}
 }
 
 func attachMedia(a discord.Attachment) *model.Media {
@@ -170,6 +191,9 @@ func attachMedia(a discord.Attachment) *model.Media {
 		Size: int64(a.Size), Name: a.Filename, Mime: mime,
 		Ext: ext, Loc: fileURL(a.URL)}
 	switch {
+	case mime == "image/gif": // it plays, like the clip of a GIF provider
+		m.Kind = model.MediaGIF
+		m.Label = fmt.Sprintf("[gif %dx%d · %s]", m.W, m.H, rend.HumanSize(m.Size))
 	case strings.HasPrefix(mime, "image/"):
 		m.Kind = model.MediaPhoto
 		m.Label = fmt.Sprintf("[photo %dx%d · %s]", m.W, m.H, rend.HumanSize(m.Size))

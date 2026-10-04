@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -13,6 +14,7 @@ import (
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/utils/httputil"
 
+	"github.com/govlog/ttyloom/internal/i18n"
 	"github.com/govlog/ttyloom/internal/model"
 )
 
@@ -21,21 +23,33 @@ import (
 // channel. The answer comes newest first, each hit in a group with the
 // messages around it.
 
-// globalDMs : direct message channels asked by a global search, the most
-// recent first — each one is a request of its own, and an account carries
-// hundreds. globalBudget bounds the whole sweep: the search route is rate
-// limited on the Discord side, and the overlay shows the answers of every
-// network only once the slowest is in.
+// globalGuilds, globalDMs : guilds and direct message channels asked by a
+// global search, the most recently active first — each one is a request of
+// its own, and an account carries dozens of guilds and hundreds of DMs:
+// dozens of searches at each query look like a self-bot. globalBudget bounds
+// the whole sweep: the search route is rate limited on the Discord side, and
+// the overlay shows the answers of every network only once the slowest is in.
 const (
+	globalGuilds = 10
 	globalDMs    = 10
 	globalBudget = 15 * time.Second
 )
 
+// globalPace : the wait between two searches of a sweep. A variable: the
+// test shortens it.
+var globalPace = 250 * time.Millisecond
+
 // searchResponse : the groups as raw JSON — the "hit" mark that names the
-// message of a group is not in the arikawa type.
+// message of a group is not in the arikawa type. Code indexing comes with an
+// HTTP 202 and no message: the index of the guild or DM is still being built
+// (a first search, a long idle one), RetryAfter seconds to wait.
 type searchResponse struct {
-	Messages [][]json.RawMessage `json:"messages"`
+	Messages   [][]json.RawMessage `json:"messages"`
+	Code       int                 `json:"code"`
+	RetryAfter float64             `json:"retry_after"`
 }
+
+const indexing = 110000
 
 // hitsOf keeps one message per group: the one flagged hit, else the first.
 func hitsOf(groups [][]json.RawMessage) []discord.Message {
@@ -71,8 +85,27 @@ func (c *Client) search(ctx context.Context, guild discord.GuildID, data api.Sea
 		url = api.EndpointGuilds + guild.String() + "/messages/search"
 	}
 	var res searchResponse
-	if err := rest.RequestJSON(&res, "GET", url, httputil.WithSchema(rest, data)); err != nil {
+	get := func() error {
+		res = searchResponse{}
+		return rest.RequestJSON(&res, "GET", url, httputil.WithSchema(rest, data))
+	}
+	if err := get(); err != nil {
 		return nil, err
+	}
+	// An index being built answers with no message: that is no "no result".
+	// The delay it gives is waited once (5 s at most), then it says so.
+	if res.Code == indexing {
+		select {
+		case <-time.After(min(time.Duration(res.RetryAfter*float64(time.Second)), 5*time.Second)):
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+		if err := get(); err != nil {
+			return nil, err
+		}
+		if res.Code == indexing {
+			return nil, errors.New(i18n.T("dsc_search_indexing"))
+		}
 	}
 	ms := hitsOf(res.Messages)
 	for i := range ms { // a REST message carries no guild: the nickname needs it
@@ -123,11 +156,20 @@ func (c *Client) SearchGlobal(ctx context.Context, q string, limit int) {
 			c.Post(ev)
 			return
 		}
+		// A guild is as recent as the last message of its channels (the cache
+		// alone: nothing is asked for the order).
+		last := map[discord.GuildID]discord.MessageID{}
+		for _, g := range guilds {
+			chs, _ := c.state().Cabinet.Channels(g.ID)
+			for _, ch := range chs {
+				last[g.ID] = max(last[g.ID], ch.LastMessageID)
+			}
+		}
+		slices.SortFunc(guilds, func(a, b discord.Guild) int { return cmp.Compare(last[b.ID], last[a.ID]) })
+		guilds = guilds[:min(len(guilds), globalGuilds)]
 		dms, _ := c.state().PrivateChannels()
 		slices.SortFunc(dms, func(a, b discord.Channel) int { return cmp.Compare(b.LastMessageID, a.LastMessageID) })
-		if len(dms) > globalDMs {
-			dms = dms[:globalDMs]
-		}
+		dms = dms[:min(len(dms), globalDMs)]
 		var errs []string
 		var hits []model.SearchHit
 		add := func(ms []discord.Message, err error) {
@@ -139,17 +181,28 @@ func (c *Client) SearchGlobal(ctx context.Context, q string, limit int) {
 				hits = append(hits, c.hitOf(&ms[i]))
 			}
 		}
+		type target struct {
+			guild discord.GuildID
+			ch    discord.ChannelID
+		}
+		var ts []target
 		for _, g := range guilds {
-			if ctx.Err() != nil {
-				break
-			}
-			add(c.search(ctx, g.ID, api.SearchData{Content: q}))
+			ts = append(ts, target{guild: g.ID})
 		}
 		for _, d := range dms {
+			ts = append(ts, target{ch: d.ID})
+		}
+		for i, t := range ts {
+			if i > 0 { // paced, not back to back
+				select {
+				case <-time.After(globalPace):
+				case <-ctx.Done():
+				}
+			}
 			if ctx.Err() != nil {
 				break
 			}
-			add(c.search(ctx, 0, api.SearchData{Content: q, ChannelID: d.ID}))
+			add(c.search(ctx, t.guild, api.SearchData{Content: q, ChannelID: t.ch}))
 		}
 		slices.SortStableFunc(hits, func(a, b model.SearchHit) int { return b.Date.Compare(a.Date) })
 		if len(hits) > limit {
@@ -169,12 +222,5 @@ func (c *Client) SearchGlobal(ctx context.Context, q string, limit int) {
 // cache, with its id for a title when it is not there.
 func (c *Client) hitOf(m *discord.Message) model.SearchHit {
 	msg := c.msgOf(m)
-	text := msg.Text
-	if text == "" && msg.Media != nil {
-		text = msg.Media.Label
-	}
-	if msg.Service != "" {
-		text = msg.Service
-	}
-	return model.SearchHit{Chat: c.chatFor(m.ChannelID), MsgID: msg.ID, Date: msg.Date, From: msg.From, Text: text}
+	return model.SearchHit{Chat: c.chatFor(m.ChannelID), MsgID: msg.ID, Date: msg.Date, From: msg.From, Text: msg.Summary()}
 }

@@ -1098,6 +1098,10 @@ func (u *UI) event(ev model.Event) {
 			b.LoadDialogs(u.backendContext(b))
 		}
 		u.hubBack(net)
+	case model.EvSelfName:
+		s := u.self[u.dispatchNet]
+		s.Name = render.CleanLine(e.Name)
+		u.self[u.dispatchNet] = s
 	case model.EvConnected:
 		u.conn[u.dispatchNet] = true
 		// Nothing promises the gateway replays what came while it was down
@@ -1157,7 +1161,7 @@ func (u *UI) event(ev model.Event) {
 		u.chatList = mergeDialogs(u.chatList, fresh)
 		net := u.dispatchNet
 		if e.Complete {
-			u.pruneChats(net, fresh)
+			u.pruneChats(net, fresh, e.Started)
 		}
 		u.status0(i18n.T("chats_count", len(u.chatList)))
 		// Automatic opening and sync fire once per network, at ITS first chat
@@ -1198,6 +1202,8 @@ func (u *UI) event(ev model.Event) {
 			u.autoMedia(&m, false)
 			u.markDirty(m.Key())
 		}
+	case model.EvQuote:
+		u.quoted(e)
 	case model.EvDeleted:
 		for _, w := range u.ws.List {
 			// Net first: a global delete (ChatID 0) sweeps every window, and the
@@ -1345,7 +1351,7 @@ func (u *UI) newMessage(e model.EvNewMessage) {
 	u.agg.Upsert(&m) // same pointer: edits, deletes and reactions follow
 	// Read on the screen: current window or aggregated view, and only when
 	// the terminal has the focus — away, nobody reads.
-	seen := u.focused && (u.view() == w || (u.view() == u.agg && u.netShown(&m)))
+	seen := u.seenNow(chat, &m)
 	if added && !m.Out {
 		// A muted chat counts its unread messages and nothing more.
 		hot := (chat.Kind == model.ChatUser || u.mentioned(chat, &m)) && !u.muted[chat.Key()]
@@ -1365,6 +1371,24 @@ func (u *UI) newMessage(e model.EvNewMessage) {
 	u.markDirty(m.Key())
 	if added {
 		u.runHooks(chat, &m)
+	}
+}
+
+// quoted : the quote of a reply, read after it (EvQuote). Only the quote
+// changes: what came since — a delete, reactions — stays.
+func (u *UI) quoted(e model.EvQuote) {
+	key := u.evKey(e.ChatID)
+	found := false
+	for _, w := range u.viewsOf(key) {
+		for _, it := range w.Items {
+			if it.Msg != nil && it.Msg.ID == e.ID && it.Msg.Key() == key && it.Msg.Reply != nil {
+				q := e.Quote
+				it.Msg.Reply, it.lines, found = &q, nil, true
+			}
+		}
+	}
+	if found {
+		u.markDirty(key)
 	}
 }
 
@@ -2468,14 +2492,21 @@ func shrugSegs(text string) []model.Seg {
 	return append(segs, shrug)
 }
 
-// sendMe : /me <text>.
+// sendMe : /me <text>. A network with an action message of its own (IRC)
+// gets the text alone, its Ctrl+B/U styles kept; the others the italic runs
+// of meSegs.
 func (u *UI) sendMe(w *Window, arg string) {
-	u.sendSegs(w, func(me string) []model.Seg { return meSegs(me, arg) })
+	act := parseStyle(arg)
+	if act == nil {
+		act = []model.Seg{{Text: arg}}
+	}
+	u.sendSegs(w, func(me string) []model.Seg { return meSegs(me, arg) }, act)
 }
 
 // sendSegs sends runs built by the caller (/me, /shrug), with no draft to
-// read; segs gets the name of the account on the network of the chat.
-func (u *UI) sendSegs(w *Window, segs func(me string) []model.Seg) {
+// read; segs gets the name of the account on the network of the chat. act,
+// for /me only, is what a network with actions sends instead.
+func (u *UI) sendSegs(w *Window, segs func(me string) []model.Seg, act []model.Seg) {
 	if w == nil {
 		return
 	}
@@ -2490,8 +2521,14 @@ func (u *UI) sendSegs(w *Window, segs func(me string) []model.Seg) {
 	m := u.pendingMsg(w.Chat, "")
 	runs := segs(m.From)
 	m.Text, m.Entities = fenceText(runs), fenceEntities(runs)
+	a, ok := b.(model.Actioner)
+	m.Action = ok && act != nil // an action line, like the ones received: no <nick> before it
 	u.insertPending(w, m)
-	b.SendStyled(u.backendContext(b), w.Chat, runs, u.tmpID)
+	if m.Action {
+		a.SendAction(u.backendContext(b), w.Chat, act, m.TmpID)
+		return
+	}
+	b.SendStyled(u.backendContext(b), w.Chat, runs, m.TmpID)
 }
 
 // memberNames : the members of the room of the shown window — its send

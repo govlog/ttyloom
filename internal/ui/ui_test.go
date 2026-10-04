@@ -985,3 +985,36 @@ func TestHotWindow(t *testing.T) {
 		t.Fatalf("after visit: act=%d hot=%v", dmWin.Act, dmWin.Hot)
 	}
 }
+
+// The quote of a reply that comes after it fills the quote alone: a delete
+// that came in between stays (it once came back undeleted with its whole
+// first copy).
+func TestQuoteAfterDelete(t *testing.T) {
+	u := &UI{ws: NewWindows(), agg: &Window{}, debug: &Window{}, cfg: &config.Config{}, t: &term.Term{Cols: 80, Rows: 24},
+		nets: map[string]model.Backend{netTelegram: &fakeBackend{}}, conn: map[string]bool{}, focused: true,
+		chats: map[model.ChatKey]*model.Chat{}, dirty: map[model.ChatKey]bool{}, self: map[string]selfInfo{}}
+	room := &model.Chat{Net: netTelegram, ID: 2, Kind: model.ChatGroup, Title: "room"}
+	u.dispatch(model.Envelope{Net: netTelegram, Ev: model.EvNewMessage{Chat: room,
+		Msg: model.Msg{ID: 10, ChatID: 2, Text: "spam", From: "bot", Reply: &model.Quote{ID: 5}}}})
+	u.dispatch(model.Envelope{Net: netTelegram, Ev: model.EvDeleted{ChatID: 2, IDs: []int{10}}})
+	u.dispatch(model.Envelope{Net: netTelegram, Ev: model.EvQuote{ChatID: 2, ID: 10, Quote: model.Quote{ID: 5, From: "alice", Text: "hi"}}})
+	m := itemByID(u.ws.List[u.ws.ForChat(room.Key())], 10).Msg
+	if !m.Deleted || m.Reply.Text != "hi" {
+		t.Fatalf("deleted %v, quote %q: want still deleted, quote filled", m.Deleted, m.Reply.Text)
+	}
+}
+
+// A chat that got a message while a paged list was read can be on no page:
+// a complete list that misses it does not drop it.
+func TestDialogsKeepChatActiveDuringRead(t *testing.T) {
+	u := &UI{ws: NewWindows(), agg: &Window{}, debug: &Window{}, cfg: &config.Config{},
+		chats: map[model.ChatKey]*model.Chat{}, dialogsSeen: map[string]bool{},
+		nets: map[string]model.Backend{netTelegram: &fakeBackend{}}}
+	started := time.Now()
+	u.dispatch(model.Envelope{Net: netTelegram, Ev: model.EvDialogs{Chats: []*model.Chat{{ID: 1}, {ID: 2}}}})
+	u.chats[model.ChatKey{Net: netTelegram, ID: 2}].LastDate = started.Add(time.Second) // its message came during the read
+	u.dispatch(model.Envelope{Net: netTelegram, Ev: model.EvDialogs{Chats: []*model.Chat{{ID: 1}}, Complete: true, Started: started}})
+	if u.chats[model.ChatKey{Net: netTelegram, ID: 2}] == nil {
+		t.Fatal("a chat active during the read was dropped as gone")
+	}
+}

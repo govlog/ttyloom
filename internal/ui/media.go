@@ -589,7 +589,7 @@ func (u *UI) animate(now time.Time) bool {
 		}
 	}
 	if u.images == "halfblock" {
-		if t := u.thumbBox(); t != nil { // picture box: its live cell alone plays
+		if t := u.thumbBox(); t != nil && u.viewer == nil { // picture box: its live cell alone plays
 			g := t.grid()
 			if lo, hi := g.visible(); g.live >= lo && g.live < hi {
 				if md := t.thumb(g.live); md != nil && len(md.Frames) > 1 && !now.Before(md.Next) {

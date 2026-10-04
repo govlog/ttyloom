@@ -22,6 +22,8 @@ jobs:
       - run: go test -tags nospell ./...
       - run: go vet ./...
       - run: go mod tidy -diff
+      - name: License notices follow go.mod
+        run: python3 scripts/licenses.py --check
       - name: Build without C dependencies
         run: CGO_ENABLED=0 go build -trimpath -tags nospell -o /tmp/ttyloom ./cmd/ttyloom
       - name: govulncheck

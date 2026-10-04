@@ -16,6 +16,8 @@ import (
 // A config.toml as v0.7 wrote it — flat Telegram keys, [discord], two
 // [[irc]], a key of a newer version — goes through Load and Save with every
 // value kept, and the TG_* secrets of the environment stay out of the file.
+// So does an [[irc]] table the module refuses (a capital in its name): it is
+// reported, never erased.
 func TestConfigCompatV07(t *testing.T) {
 	body := `api_id = 7
 api_hash = "FILEHASH"
@@ -38,6 +40,11 @@ host = "irc.oftc.net"
 port = 6697
 tls = true
 nick = "me"
+[[irc]]
+name = "Libera"
+host = "irc.libera.chat"
+nickserv_password = "pw"
+channels = ["#mine"]
 `
 	dir := t.TempDir()
 	t.Setenv("TTYLOOM_DIR", dir)

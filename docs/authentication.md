@@ -95,6 +95,13 @@ Discord says that using a user token in another application can result in
 suspension or termination. This is an unofficial integration, not an approved
 Discord client. See [Discord’s account safety guidance](https://discord.com/safety/360044104071-Tips-against-spam-and-hacking)
 and [self-bot policy](https://support.discord.com/hc/en-us/articles/115002192352-Automated-User-Accounts-Self-Bots).
+Every Discord request names itself as the arikawa library (REST User-Agent
+`DiscordBot (…arikawa…)`, gateway `browser: Arikawa`): Discord can tell that
+TTYloom is a third-party client.
+
+ningen keeps the conversation summaries Discord sends under
+`~/.cache/ningen/summary/`, outside TTYloom’s directories; `/discord logout`
+does not remove them.
 
 ### Log in with a QR code (recommended)
 
@@ -157,7 +164,9 @@ spaces. TTYloom trims surrounding whitespace and does not save the returned
 token to `config.toml` or intentionally log its value.
 
 An authentication failure normally means a revoked token, an incorrect manager
-entry or a command that failed. Check the manager privately, sign in again in
+entry or a command that failed. A token revoked during a session (a password
+change, “log out of all devices”) stops the Discord network with a message in
+window 0. Check the manager privately, sign in again in
 the official client, and replace the saved token if needed; `/discord login`
 then runs the command again without leaving TTYloom. If exposed, secure the
 account using Discord’s account settings and replace the credential.

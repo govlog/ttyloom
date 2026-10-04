@@ -61,6 +61,16 @@ func TestModuleNetworks(t *testing.T) {
 	}
 }
 
+// saveRooms : the backend is in the rooms of list, and asks for its list to
+// be saved.
+func saveRooms(b model.Backend, list ...string) {
+	c := b.(*Client)
+	c.mu.Lock()
+	c.channels = list
+	c.mu.Unlock()
+	c.cfg.SaveChannels()
+}
+
 // The channels a backend saves go through Do, into the table, into the file.
 func TestModuleSaveChannels(t *testing.T) {
 	cfg, m := loadIRC(t, "[[irc]]\nname = \"oftc\"\nhost = \"irc.oftc.net\"\nnick = \"me\"\n")
@@ -69,9 +79,7 @@ func TestModuleSaveChannels(t *testing.T) {
 	if err != nil || b == nil {
 		t.Fatalf("launch: %v", err)
 	}
-	if err := b.(*Client).cfg.SaveChannels([]string{"#debian"}); err != nil {
-		t.Fatal(err)
-	}
+	saveRooms(b, "#debian")
 	again := NewModule()
 	if _, err := config.LoadFrom(filepath.Dir(cfg.Path()), again); err != nil || h.saves != 1 {
 		t.Fatalf("saves %d, %v", h.saves, err)
@@ -100,6 +108,34 @@ func TestIRCPasswordCmd(t *testing.T) {
 	n.NickServPasswordCmd = "true"
 	if pw, err := n.Password(); err == nil {
 		t.Fatalf("empty output taken as a password: %q", pw)
+	}
+}
+
+// The password command runs at Load, before the terminal goes raw (a
+// pinentry on the tty), and the first launch takes that result; a later
+// launch (/irc connect) runs it again.
+func TestIRCPasswordCmdAtLoad(t *testing.T) {
+	dir := t.TempDir()
+	runs := filepath.Join(dir, "runs")
+	script := filepath.Join(dir, "pw.sh")
+	if err := os.WriteFile(script, []byte("#!/bin/sh\necho run >> "+runs+"\necho s3cret\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	count := func() int {
+		b, _ := os.ReadFile(runs)
+		return strings.Count(string(b), "run")
+	}
+	cfg, m := loadIRC(t, "[[irc]]\nname = \"libera\"\nhost = \"127.0.0.1\"\nnick = \"me\"\nnickserv_password_cmd = \""+script+"\"\n")
+	if n := count(); n != 1 {
+		t.Fatalf("%d runs at Load, want 1", n)
+	}
+	h := &fakeHost{cfg: cfg}
+	b, err := m.Launch(context.Background(), h, "irc:libera", make(chan model.Event, 8))
+	if err != nil || b.(*Client).cfg.Password != "s3cret" || count() != 1 {
+		t.Fatalf("first launch: %v, %d runs; want the password read at Load", err, count())
+	}
+	if _, err := m.Launch(context.Background(), h, "irc:libera", make(chan model.Event, 8)); err != nil || count() != 2 {
+		t.Fatalf("second launch: %v, %d runs; want the command run again", err, count())
 	}
 }
 
@@ -146,10 +182,11 @@ func TestValidName(t *testing.T) {
 	}
 }
 
-// A network deleted stays deleted through a Save, and the keys of the file
-// no one takes stay.
+// A network deleted stays deleted through a Save — a refused duplicate of its
+// name goes with it, or the next start would take it as the network again —
+// and the keys of the file no one takes stay.
 func TestModuleDeleteKeepsUnknown(t *testing.T) {
-	c, m := loadIRC(t, "future = \"kept\"\n[[irc]]\nname = \"libera\"\nhost = \"irc.libera.chat\"\n")
+	c, m := loadIRC(t, "future = \"kept\"\n[[irc]]\nname = \"libera\"\nhost = \"irc.libera.chat\"\n[[irc]]\nname = \"libera\"\nhost = \"irc.other.example\"\n")
 	m.removeTable("libera")
 	if err := c.Save(); err != nil {
 		t.Fatal(err)
@@ -179,9 +216,7 @@ func TestModuleLaunch(t *testing.T) {
 	if _, err := m.Launch(ctx, queued, "irc:nope", make(chan model.Event, 8)); err == nil {
 		t.Fatal("an unknown IRC network must not launch")
 	}
-	if err := b.(*Client).cfg.SaveChannels([]string{"#debian"}); err != nil {
-		t.Fatal(err)
-	}
+	saveRooms(b, "#debian")
 	if len(m.ByName("oftc").Channels) != 0 || len(queued.fns) != 1 {
 		t.Fatalf("backend mutated the configuration: %v, %d queued", m.ByName("oftc").Channels, len(queued.fns))
 	}
@@ -199,22 +234,26 @@ type queueHost struct {
 
 func (h *queueHost) Do(f func()) { h.fns = append(h.fns, f) }
 
-// Two channel saves in a row: the file keeps the last one.
+// Two channel saves, run by the UI in the other order (the backend no longer
+// holds its lock while it waits for the UI, so nothing orders them): the file
+// keeps the latest list all the same.
 func TestIRCChannelsPersistInOrder(t *testing.T) {
 	cfg, m := loadIRC(t, "[[irc]]\nname = \"test\"\nhost = \"irc.example\"\nnick = \"me\"\n")
-	b, err := m.Launch(context.Background(), &fakeHost{cfg: cfg}, "irc:test", make(chan model.Event, 8))
+	queued := &queueHost{fakeHost: fakeHost{cfg: cfg}}
+	b, err := m.Launch(context.Background(), queued, "irc:test", make(chan model.Event, 8))
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, channels := range [][]string{{"#first"}, {"#second"}} {
-		b.(*Client).cfg.SaveChannels(channels)
-	}
+	saveRooms(b, "#first")
+	saveRooms(b, "#first", "#second")
+	queued.fns[1]()
+	queued.fns[0]()
 	saved := NewModule()
 	if _, err := config.LoadFrom(filepath.Dir(cfg.Path()), saved); err != nil {
 		t.Fatal(err)
 	}
-	if got := saved.ByName("test").Channels; len(got) != 1 || got[0] != "#second" {
-		t.Fatalf("saved channels: %v", got)
+	if got := saved.ByName("test").Channels; !slices.Equal(got, []string{"#first", "#second"}) {
+		t.Fatalf("saved channels: %v, want the latest list", got)
 	}
 }
 
@@ -226,7 +265,9 @@ func TestIRCIgnoresPersist(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	b.(*Client).cfg.SaveIgnores([]string{"spammer!*@*"})
+	cl := b.(*Client)
+	cl.ignores = []string{"spammer!*@*"} // /ignore spammer
+	cl.cfg.SaveIgnores()
 	saved := NewModule()
 	if _, err := config.LoadFrom(filepath.Dir(cfg.Path()), saved); err != nil {
 		t.Fatal(err)
@@ -246,19 +287,18 @@ func TestIRCConfigCallbackRace(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	save := b.(*Client).cfg.SaveChannels
 	var wg sync.WaitGroup
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
 		for i := 0; i < 30; i++ {
-			save([]string{"#one"})
+			saveRooms(b, "#one")
 		}
 	}()
 	go func() {
 		defer wg.Done()
 		for i := 0; i < 30; i++ {
-			save([]string{"#two"})
+			saveRooms(b, "#two")
 		}
 	}()
 	done := make(chan struct{})

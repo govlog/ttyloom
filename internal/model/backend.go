@@ -107,6 +107,13 @@ type ChatIDer interface{ ChatID(title string) int64 }
 // completion of the names in a message.
 type MemberLister interface{ Members(chat *Chat) []string }
 
+// Actioner : a backend with an action message of its own (IRC CTCP ACTION).
+// /me gives it segs, the text after "* nick", sent as one; EvSent back like a
+// text send.
+type Actioner interface {
+	SendAction(ctx context.Context, chat *Chat, segs []Seg, tmpID int64)
+}
+
 // MediaSearcher : a backend that lists the media of a chat (Ctrl+M).
 // SearchMedia posts one EvMedia: a page of the media of tab f older than the
 // message before (0: from the newest).

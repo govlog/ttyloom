@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -35,8 +36,8 @@ type Client struct {
 	// the atomic: the UI goroutine reads it meanwhile (a chat replayed from
 	// the cache calls c.state() before Run has connected).
 	st atomic.Pointer[ningen.State]
-	// dlSem : three transfers at a time, downloads and uploads together —
-	// same cap as tgc, so two backends at work stay civil with the network.
+	// dlSem : three downloads at a time — same cap as tgc, so two backends at
+	// work stay civil with the network.
 	dlSem chan struct{}
 	// ulSem : uploads apart from the downloads — a send must never wait for
 	// three files being fetched.
@@ -44,6 +45,11 @@ type Client struct {
 	// self : id of the account, known only from READY. The gateway handlers
 	// read it to tell our own messages apart, hence the atomic.
 	self atomic.Int64
+	// revoked : the gateway closed with 4004, authentication failed.
+	revoked atomic.Bool
+	// emojis : the custom emojis of each guild (customsOf), by guild id —
+	// one read-only copy shared by all its chats, dropped when they change.
+	emojis sync.Map
 }
 
 // New builds the state at once (ningen.New opens nothing): a chat replayed
@@ -88,6 +94,7 @@ func (c *Client) Run(ctx context.Context) error {
 	// The network is named in every error: main turns it into an EvStopped, and
 	// with two backends the bare arikawa message says nothing about which one died.
 	if err := st.Open(ctx); err != nil { // gives the hand back on READY
+		c.forgetRevoked() // revoked while ttyloom was closed
 		return fmt.Errorf("discord: %w", err)
 	}
 	defer st.Close()
@@ -103,9 +110,24 @@ func (c *Client) Run(ctx context.Context) error {
 	// the UI (/chats, global search…) are a Telegram matter.
 	c.Post(model.EvReady{SelfID: int64(me.ID), SelfName: cmp.Or(me.DisplayName, me.Username), Bot: false})
 	// EvConnected is posted by the ConnectedEvent handler, on this connection
-	// and on every one that follows it.
-	<-ctx.Done()
-	return nil
+	// and on every one that follows it. The gateway reconnects on its own and
+	// gives up only on a fatal close: then Run ends with its error, and the
+	// network stops and says why instead of staying disconnected for ever.
+	err = st.Wait(ctx)
+	if ctx.Err() != nil {
+		return nil // logout or quit
+	}
+	c.forgetRevoked()
+	return fmt.Errorf("discord: %w", cmp.Or(err, errors.New("gateway closed")))
+}
+
+// forgetRevoked : after a 4004 the token is dead (a password change, "log out
+// of all devices"). The one of the QR login goes, so that /discord login
+// shows a new QR.
+func (c *Client) forgetRevoked() {
+	if c.revoked.Load() && c.cfg.TokenFile != "" {
+		os.Remove(c.cfg.TokenFile)
+	}
 }
 
 // qrLogin : the remote-auth QR (remoteauth.go) shown by the UI with a prompt

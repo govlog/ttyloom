@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestLoadFromDefaultsAndSave(t *testing.T) {
@@ -196,5 +197,56 @@ func TestTabs(t *testing.T) {
 	}
 	if !c.Tabs {
 		t.Fatal("tabs not read")
+	}
+}
+
+// The timeout of a secret command holds even when a child of the command
+// keeps its output open (gpg behind pass waiting for a pinentry): the client
+// waited for that child, on the goroutine of the UI, with no end.
+func TestSecretCmdTimeoutHolds(t *testing.T) {
+	old := secretTimeout
+	secretTimeout = 200 * time.Millisecond
+	t.Cleanup(func() { secretTimeout = old })
+	script := filepath.Join(t.TempDir(), "slow.sh")
+	if err := os.WriteFile(script, []byte("#!/bin/sh\nsleep 10\necho pw\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	start := time.Now()
+	if _, err := SecretCmd("test", script); err == nil {
+		t.Fatal("a command past its timeout gave a secret")
+	}
+	if d := time.Since(start); d > 5*time.Second {
+		t.Fatalf("the timeout ended the wait after %v", d)
+	}
+}
+
+// config.toml kept as a link into a dotfiles repository stays a link: a save
+// writes the file it points to, instead of a private copy beside it that the
+// repository never sees.
+func TestWriteAtomicKeepsLink(t *testing.T) {
+	dir := t.TempDir()
+	repo := filepath.Join(dir, "repo", "config.toml")
+	if err := os.MkdirAll(filepath.Dir(repo), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(repo, []byte("theme = \"x\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(dir, "config.toml")
+	if err := os.Symlink(repo, link); err != nil {
+		t.Fatal(err)
+	}
+	if err := WriteAtomic(link, []byte("theme = \"y\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	st, err := os.Lstat(link)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Mode()&os.ModeSymlink == 0 {
+		t.Fatalf("config.toml became a plain file (%v): the repository no longer sees the saves", st.Mode())
+	}
+	if b, _ := os.ReadFile(repo); string(b) != "theme = \"y\"\n" {
+		t.Fatalf("the file of the repository: %q", b)
 	}
 }

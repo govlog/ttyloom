@@ -222,7 +222,7 @@ update_check = false
 | `timestamps_seconds` | Include seconds: `15:04:05` instead of `15:04`. |
 | `cycle_mode` | `next`: Ctrl+X selects the next window. `last_unread`: visit unread windows in number order, then return to the window you left; use the normal cycle when nothing is unread. |
 | `multiline` | Shift+Enter opens an expanded editor. Enter sends and collapses it; Escape collapses it but keeps the draft. Editing a multiline message reopens it. |
-| `bell` | Terminal bell for a private message or mention outside the active window. |
+| `bell` | Terminal bell for a private message or mention outside the active window, or while the terminal is not focused. A burst rings once, then once more for the last message after 2 seconds; a muted conversation (`/mute`) never rings. |
 | `auto_open_days` | Create hidden windows for conversations active within N days on startup; 0 disables this. |
 | `aggregate` | Combine open conversations in window 0; `F6` toggles it. |
 | `tabs` | One tab per network at the right of the status line, clickable; `F9` turns them on and walks the tabs. Nothing with a single network. |
@@ -806,8 +806,10 @@ The message scrollbar supports clicking to jump and dragging to scroll. Its
 track highlights under the pointer, and its thumb becomes a solid block during
 mouse interaction. The status bar lists background activity as
 `[Act: 2(3),5(1)]`: window number and unread count. Private messages and mentions
-can trigger the bell; `/set bell off` disables it. Desktop or terminal
-notifications are controlled by `notify` and focus.
+(on IRC, your nick as a word: `chris: hello`) can trigger the bell; `/set bell
+off` disables it. Desktop or terminal notifications are controlled by `notify`
+and focus. A burst merges: one alert at once, then one for the last message
+after 2 seconds. `/mute` silences one conversation.
 
 A window holding an unread private message or a mention of you is hot: its
 `(N)` counter takes the mention color, in bold, and pulses once a second, in

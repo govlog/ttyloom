@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"sync"
 	"testing"
 	"time"
 
@@ -21,16 +22,17 @@ import (
 // type drives the whole network layer of the package with no connection.
 type fakeInvoker struct {
 	answer func(req bin.Encoder) (any, error) // canned answer, by request type
-	calls  []bin.Encoder                      // requests sent, in order
+	mu     sync.Mutex                         // two reads of quotes run at once
+	calls  []bin.Encoder                      // requests sent, in order; read back after the event
 }
 
 func (f *fakeInvoker) Invoke(ctx context.Context, in bin.Encoder, out bin.Decoder) error {
 	if f.answer == nil { // no answer set: the test expects no RPC at all
 		return fmt.Errorf("fake invoker: unexpected %T", in)
 	}
-	// ponytail: unsynchronised append, one RPC at a time (Parallel threads=1,
-	// read back after the event); add a mutex if a tested path ever fans out.
+	f.mu.Lock()
 	f.calls = append(f.calls, in)
+	f.mu.Unlock()
 	v, err := f.answer(in)
 	if err != nil {
 		return err
@@ -62,8 +64,8 @@ func fill(out bin.Decoder, v any) error {
 func fakeClient(inv tg.Invoker, events chan<- model.Event) *Client {
 	api := tg.NewClient(inv)
 	return &Client{api: api, peers: peers.Options{}.Build(api), sender: message.NewSender(api),
-		dl: downloader.NewDownloader(), dlSem: make(chan struct{}, 3), ulSem: make(chan struct{}, 2),
-		seen: map[int64]peers.Peer{}, Poster: model.Poster{Events: events}}
+		dl: downloader.NewDownloader(), dlSem: make(chan struct{}, 3), ulSem: make(chan struct{}, 2), fillSem: make(chan struct{}, 2),
+		seen: map[int64]peers.Peer{}, fills: map[[2]int64]uint64{}, Poster: model.Poster{Events: events}}
 }
 
 // next : the event the method under test posts. Every network method of the

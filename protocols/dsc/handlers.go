@@ -33,7 +33,12 @@ func (c *Client) wire() {
 		// Held before any message of this connection: msgOf tells our own
 		// messages apart by this id.
 		c.self.Store(int64(e.User.ID))
+		c.emojis.Clear() // a new session: the emojis may have changed meanwhile
 	})
+	// A guild that comes (back) or changes its emojis is read again by the
+	// next customsOf: the state has applied the event before these handlers.
+	st.AddSyncHandler(func(e *gateway.GuildCreateEvent) { c.emojis.Delete(e.ID) })
+	st.AddSyncHandler(func(e *gateway.GuildEmojisUpdateEvent) { c.emojis.Delete(e.GuildID) })
 	st.AddSyncHandler(func(e *gateway.MessageCreateEvent) {
 		defer c.Guard("MessageCreate", nil)
 		// Chat never nil: the UI lists the chat of a message it does not know.
@@ -88,6 +93,16 @@ func (c *Client) wire() {
 		defer c.Guard("MessageReactionRemove", nil)
 		c.reactions(e.ChannelID, e.MessageID)
 	})
+	// A moderator clears the reactions of a message, all of them or those of
+	// one emoji: the state has dropped them already.
+	st.AddSyncHandler(func(e *gateway.MessageReactionRemoveAllEvent) {
+		defer c.Guard("MessageReactionRemoveAll", nil)
+		c.reactions(e.ChannelID, e.MessageID)
+	})
+	st.AddSyncHandler(func(e *gateway.MessageReactionRemoveEmojiEvent) {
+		defer c.Guard("MessageReactionRemoveEmoji", nil)
+		c.reactions(e.ChannelID, e.MessageID)
+	})
 	st.AddSyncHandler(func(e *gateway.MessageAckEvent) {
 		defer c.Guard("MessageAck", nil)
 		// An ack, ours or from another device, means read up to there: the
@@ -111,8 +126,9 @@ func (c *Client) wire() {
 		defer c.Guard("Connected", nil)
 		c.Post(model.EvConnected{})
 	})
-	st.AddSyncHandler(func(*ningen.DisconnectedEvent) {
+	st.AddSyncHandler(func(e *ningen.DisconnectedEvent) {
 		defer c.Guard("Disconnected", nil)
+		c.revoked.Store(e.Code == 4004)
 		c.Post(model.EvDisconnected{})
 	})
 }
@@ -155,24 +171,35 @@ func (c *Client) chatFor(id discord.ChannelID) *model.Chat {
 	return chat
 }
 
+// guildCustoms : what customsOf gives for one guild.
+type guildCustoms struct {
+	names []string
+	locs  map[string]any
+}
+
 // customsOf : the custom emojis of a guild as ":name:", and the image of each
 // one (".gif" when animated) as a download handle; none for a DM or a guild
-// not cached.
+// not cached. Built once per guild and shared, read-only, by every chat of it
+// and every message: a copy per chat grew the dialog list two hundred times.
 func (c *Client) customsOf(guild discord.GuildID) ([]string, map[string]any) {
 	if !guild.IsValid() {
 		return nil, nil
 	}
+	if v, ok := c.emojis.Load(guild); ok {
+		g := v.(guildCustoms)
+		return g.names, g.locs
+	}
 	es, err := c.state().Cabinet.Emojis(guild)
 	if err != nil {
-		return nil, nil
+		return nil, nil // not cached yet: read again next time
 	}
-	out := make([]string, 0, len(es))
-	locs := make(map[string]any, len(es))
+	g := guildCustoms{make([]string, 0, len(es)), make(map[string]any, len(es))}
 	for _, e := range es {
-		out = append(out, ":"+e.Name+":")
-		locs[":"+e.Name+":"] = fileURL(e.EmojiURL())
+		g.names = append(g.names, ":"+e.Name+":")
+		g.locs[":"+e.Name+":"] = fileURL(e.EmojiURL())
 	}
-	return out, locs
+	c.emojis.Store(guild, g)
+	return g.names, g.locs
 }
 
 // guildName : name of a guild from the cache, "" when it is not known — the
@@ -216,7 +243,8 @@ func (c *Client) typist(e *gateway.TypingStartEvent) string {
 // cache and posted here, in the handler: the state applied the change just
 // before it was called, so the list is the right one, and an add followed by a
 // remove cannot land in the wrong order. A message the cache does not hold is
-// left alone — a REST read per reaction would be neither sober nor ordered.
+// left alone — a REST read per reaction would be neither sober nor ordered,
+// and the event alone cannot make the list (EvReactions replaces it whole).
 func (c *Client) reactions(chID discord.ChannelID, id discord.MessageID) {
 	m, err := c.state().Cabinet.Message(chID, id)
 	if err != nil {

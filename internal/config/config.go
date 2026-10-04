@@ -46,18 +46,29 @@ func (m *HoverMode) UnmarshalText(b []byte) error {
 	return nil
 }
 
+// secretTimeout : the wait for a password prompt that nobody answers. A
+// variable: the test shortens it.
+var secretTimeout = 30 * time.Second
+
 // SecretCmd runs cmd — split on blanks, no shell — and gives its trimmed
 // stdout: a secret read from a password manager (the Discord token, a
 // NickServ password). Shared by the modules. label heads the errors.
 //
 // The timeout of the command is the one of a password prompt that nobody
 // answers: a pinentry waiting on a locked keyring would otherwise hold the
-// start of the whole client with an empty screen.
+// start of the whole client with an empty screen. It kills the command; a
+// child of it that keeps its pipes (gpg behind pass) is given up a second
+// later, or the wait would last as long as that child.
 func SecretCmd(label, cmd string) (string, error) {
 	f := strings.Fields(cmd)
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), secretTimeout)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, f[0], f[1:]...).Output()
+	c := exec.CommandContext(ctx, f[0], f[1:]...)
+	c.WaitDelay = time.Second
+	out, err := c.Output()
+	if errors.Is(err, exec.ErrWaitDelay) {
+		err = nil // the command itself ended well: its output is whole
+	}
 	if err != nil {
 		// The first line the command wrote on stderr names the cause ("cat:
 		// …: No such file"); "exit status 1" alone says nothing.
@@ -179,7 +190,7 @@ auto_open_days = 7     # opens at start the chats active for N days (0 = off)
 aggregate = false      # window 0: stream of every message received (Alt+A)
 tabs = false           # tabs per network at the right of the status line, F9 switches (several networks only)
 cache = true           # local cache (dialogs, history) for a fast start
-cache_messages = 2000  # messages kept per chat in the disk cache; scrolling up loads the rest from the network
+cache_messages = 2000  # messages kept per chat in the disk cache; scrolling up loads the rest from the network — not on IRC, where the cache is the only copy (/log keeps everything)
 log_dir = "~/.local/share/ttyloom/logs"
 log = false            # /log: logs every window created afterwards
 separator = true       # separator line above the status bar
@@ -350,14 +361,27 @@ func (c *Config) Save() error {
 // the middle by a crash. Shared by the config, the local names, the folded
 // sections, the cache and the map tiles. os.CreateTemp gives 0600; perm is
 // applied after, and the temporary file never survives a failure.
+//
+// A path that is a symbolic link (config.toml kept in a dotfiles repository)
+// stays one: the file it points to is the one written. The data is on the
+// disk before the rename — with delayed allocation (XFS, ext4) a crash just
+// after it could leave the name on an empty file, and an IRC history has no
+// other copy.
 func WriteAtomic(path string, data []byte, perm os.FileMode) error {
+	if p, err := filepath.EvalSymlinks(path); err == nil {
+		path = p
+	}
 	f, err := os.CreateTemp(filepath.Dir(path), ".tmp-*")
 	if err != nil {
 		return err
 	}
 	tmp := f.Name()
 	defer os.Remove(tmp) // no-op once the rename went through
-	if _, err := f.Write(data); err != nil {
+	_, err = f.Write(data)
+	if err == nil {
+		err = f.Sync()
+	}
+	if err != nil {
 		f.Close()
 		return err
 	}

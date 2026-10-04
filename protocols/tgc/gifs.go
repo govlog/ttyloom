@@ -2,11 +2,8 @@ package tgc
 
 import (
 	"context"
-	crand "crypto/rand"
-	"encoding/binary"
 	"errors"
 
-	"github.com/gotd/td/telegram/message/unpack"
 	"github.com/gotd/td/telegram/peers"
 	"github.com/gotd/td/tg"
 
@@ -108,32 +105,12 @@ func gifsOf(res *tg.MessagesBotResults) []model.Gif {
 // SendGif posts an inline result in chat. EvSent like a text send: the UI
 // unpends its line, and the echo comes back through the updates of the RPC.
 func (c *Client) SendGif(ctx context.Context, chat *model.Chat, g model.Gif, tmpID int64) {
-	go func() {
-		defer c.Guard("SendGif", func(err string) { c.Post(model.EvSent{ChatID: chat.ID, TmpID: tmpID, Err: err}) })
-		ev := model.EvSent{ChatID: chat.ID, TmpID: tmpID}
-		ref, ok := g.Send.(inlineRef)
-		if !ok { // handle of another network: nothing to post here
-			ev.Err = i18n.T("media_foreign")
-			c.Post(ev)
-			return
-		}
-		id, err := unpack.MessageID(c.api.MessagesSendInlineBotResult(ctx, &tg.MessagesSendInlineBotResultRequest{
-			Peer: c.peer(chat), RandomID: randomID(), QueryID: ref.QueryID, ID: ref.ID}))
-		ev.ID = id
-		if err != nil {
-			ev.Err = err.Error()
-		}
-		c.Post(ev)
-	}()
-}
-
-// randomID : the random_id of a send, from the system generator like the
-// sender of gotd — a repeat would make the server drop the message as a
-// duplicate.
-func randomID() int64 {
-	var b [8]byte
-	if _, err := crand.Read(b[:]); err != nil {
-		panic(err) // the system generator never fails on Linux
+	ref, ok := g.Send.(inlineRef)
+	if !ok { // handle of another network: nothing to post here
+		c.Refuse("SendGif", model.EvSent{ChatID: chat.ID, TmpID: tmpID, Err: i18n.T("media_foreign")})
+		return
 	}
-	return int64(binary.LittleEndian.Uint64(b[:]))
+	c.sent("SendGif", chat, tmpID, func() (tg.UpdatesClass, error) {
+		return c.sender.To(c.peer(chat)).InlineResult(ctx, ref.ID, ref.QueryID, false)
+	})
 }

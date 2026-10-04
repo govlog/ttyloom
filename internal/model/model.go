@@ -1,4 +1,4 @@
-// Package model holds the types shared by tgc (Telegram) and ui.
+// Package model holds the types shared by the backends (tgc, dsc, irc) and the UI.
 package model
 
 import (
@@ -247,7 +247,21 @@ type Msg struct {
 // Key : the chat the message belongs to, not the message itself.
 func (m *Msg) Key() ChatKey { return ChatKey{Net: m.Net, ID: m.ChatID} }
 
-// Event : events posted by tgc (and by the UI for its own goroutines).
+// Summary : what a one-line view shows of m (a quote, a search hit) — its
+// service line, else its text, else the label of its media.
+func (m *Msg) Summary() string {
+	switch {
+	case m.Service != "":
+		return m.Service
+	case m.Text != "":
+		return m.Text
+	case m.Media != nil:
+		return m.Media.Label
+	}
+	return ""
+}
+
+// Event : events posted by the backends (and by the UI for its own goroutines).
 type Event any
 
 // Envelope tags a backend event with the network it came from. Backends
@@ -292,6 +306,11 @@ type EvReady struct {
 	SelfName string
 	Bot      bool
 }
+
+// EvSelfName : the account goes by a new name on its network (IRC: a NICK of
+// ours, a nick taken back after a 433) — the one of mentions, hooks and /me.
+type EvSelfName struct{ Name string }
+
 type EvConnected struct{}
 type EvDisconnected struct{}
 
@@ -306,6 +325,9 @@ type EvDialogs struct {
 	// Complete : the list is the whole account; chats of this network missing
 	// from it are gone.
 	Complete bool
+	// Started : when a list read page by page began (zero: a snapshot). A chat
+	// active since then may have moved past the pages: it is not gone.
+	Started time.Time
 }
 type EvNewMessage struct {
 	Msg  Msg
@@ -497,6 +519,15 @@ type EvGifs struct {
 	Query string
 	Gifs  []Gif
 	Err   string
+}
+
+// EvQuote : the quote of a reply, read after the reply was posted (Telegram
+// reads it off the update loop). Only the quote changes: a delete or
+// reactions that came meanwhile stay.
+type EvQuote struct {
+	ChatID int64
+	ID     int
+	Quote  Quote
 }
 
 // MediaFilter : a tab of the media browser (Ctrl+M).

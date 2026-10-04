@@ -13,7 +13,7 @@ import (
 )
 
 func TestPickerGrid(t *testing.T) {
-	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	t.Setenv("TTYLOOM_DIR", t.TempDir()) // the recent emojis of this test only: CacheDir follows TTYLOOM_DIR first
 	var picked string
 	p := newPicker(31, 8, func(s string) { picked = s })
 	if p.cols != 10 || p.rows != 4 { // 29 inner cells / 3, 8 - borders - search - name
@@ -71,7 +71,7 @@ func TestPickerGrid(t *testing.T) {
 }
 
 func TestPickerLines(t *testing.T) {
-	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	t.Setenv("TTYLOOM_DIR", t.TempDir()) // the recent emojis of this test only: CacheDir follows TTYLOOM_DIR first
 	p := newPicker(31, 8, nil)
 	lines := p.Lines(theme.Terminal())
 	if len(lines) != 8 {
@@ -102,7 +102,7 @@ func TestPickerLines(t *testing.T) {
 // Click : the grid starts 2 lines under the top of the box, columns of 3
 // cells from x=1 on.
 func TestPickerClick(t *testing.T) {
-	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	t.Setenv("TTYLOOM_DIR", t.TempDir()) // the recent emojis of this test only: CacheDir follows TTYLOOM_DIR first
 	var picked string
 	p := newPicker(31, 8, func(s string) { picked = s })
 	want := p.items[1].Char
@@ -122,7 +122,7 @@ func TestPickerClick(t *testing.T) {
 // Reaction picker: nothing but the allowed list, in Telegram order, deaf to
 // the search; header "reaction".
 func TestPickerReactions(t *testing.T) {
-	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	t.Setenv("TTYLOOM_DIR", t.TempDir()) // the recent emojis of this test only: CacheDir follows TTYLOOM_DIR first
 	list := []string{"🔥", "👍", "❤"}
 	var picked string
 	p := newReactPicker(31, 8, list, func(s string) { picked = s })
@@ -150,7 +150,7 @@ func TestPickerReactions(t *testing.T) {
 // A network that takes any reaction (Discord) gets the whole table with the
 // search, and a ":name:" typed is a custom emoji of the room, sent as it is.
 func TestOpenReactPickerAny(t *testing.T) {
-	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	t.Setenv("TTYLOOM_DIR", t.TempDir()) // the recent emojis of this test only: CacheDir follows TTYLOOM_DIR first
 	c := &model.Chat{Net: "discord", ID: 5}
 	b := &fakeBackend{caps: model.Caps{Reactions: true, AnyReaction: true}}
 	u := &UI{ws: NewWindows(), agg: &Window{}, t: &term.Term{Cols: 80, Rows: 24},
@@ -175,7 +175,7 @@ func TestOpenReactPickerAny(t *testing.T) {
 // The custom emojis of the room come first, answer the search by name and
 // are drawn by the start of their name; the choice is the ":name:" itself.
 func TestPickerCustoms(t *testing.T) {
-	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	t.Setenv("TTYLOOM_DIR", t.TempDir()) // the recent emojis of this test only: CacheDir follows TTYLOOM_DIR first
 	var picked string
 	p := newPicker(31, 8, func(s string) { picked = s })
 	p.customs, p.recent = []string{":emoji_7:", ":profil:"}, nil // the recents stay first when there are some
@@ -201,7 +201,7 @@ func TestPickerCustoms(t *testing.T) {
 // A custom emoji name comes from the network: one that is not a ":name:"
 // never reaches the grid, where it was drawn raw — escape sequence included.
 func TestPickerCustomsCleaned(t *testing.T) {
-	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	t.Setenv("TTYLOOM_DIR", t.TempDir()) // the recent emojis of this test only: CacheDir follows TTYLOOM_DIR first
 	p := newPicker(31, 8, nil)
 	p.customs, p.recent = []string{":\x1b[2Jbad:", ":ok:"}, nil
 	p.filter()
@@ -213,7 +213,7 @@ func TestPickerCustomsCleaned(t *testing.T) {
 // openReactPicker : the list comes from the chat of the message; no reaction
 // allowed = no picker, just a status message.
 func TestOpenReactPicker(t *testing.T) {
-	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	t.Setenv("TTYLOOM_DIR", t.TempDir()) // the recent emojis of this test only: CacheDir follows TTYLOOM_DIR first
 	c := &model.Chat{Net: netTelegram, ID: 5, Reactions: []string{"🔥"}}
 	u := &UI{ws: NewWindows(), agg: &Window{}, t: &term.Term{Cols: 80, Rows: 24},
 		chats:     map[model.ChatKey]*model.Chat{c.Key(): c},

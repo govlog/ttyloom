@@ -116,7 +116,7 @@ func (c *Client) command(reply int64, room, name string, args []string, text str
 		if len(args) != 1 {
 			return usage
 		}
-		if c.conn == nil || !c.conn.Connected() {
+		if !c.conn.Connected() {
 			return errors.New(i18n.T("irc_not_connected", c.net()))
 		}
 		// SetNick, not a raw NICK: the library sends its preferred nick again
@@ -354,7 +354,7 @@ func (c *Client) onModeReply(e ircmsg.Message) {
 	case ircevent.RPL_CREATIONTIME: // me #chan <unix>
 		if len(e.Params) >= 3 {
 			if s, err := strconv.ParseInt(e.Params[2], 10, 64); err == nil {
-				text = e.Params[1] + ": created " + i18n.LocalTime(time.Unix(s, 0))
+				text = i18n.T("irc_channel_created", e.Params[1], i18n.LocalTime(time.Unix(s, 0)))
 			}
 		}
 	case ircevent.RPL_UMODEIS: // me +modes
@@ -406,7 +406,7 @@ func (c *Client) onWhowas(e ircmsg.Message) {
 	if len(e.Params) < 6 {
 		return
 	}
-	c.lines("whowas", fmt.Sprintf("%s was %s@%s (%s)", e.Params[1], e.Params[2], e.Params[3], e.Params[5]))
+	c.lines("whowas", i18n.T("irc_whowas", e.Params[1], e.Params[2], e.Params[3], e.Params[5]))
 }
 
 func (c *Client) onWhowasEnd(e ircmsg.Message) {
@@ -438,23 +438,6 @@ func (c *Client) onMotdEnd(e ircmsg.Message) {
 		lines = append(lines, e.Params[len(e.Params)-1])
 	}
 	c.Post(model.EvLines{ChatID: c.replyTo("motd"), Lines: lines})
-}
-
-// onCTCPReply : a NOTICE "\x01CMD text\x01" from nick — the answer of /ctcp.
-func (c *Client) onCTCPReply(nick, body string) {
-	verb, text, _ := strings.Cut(body, " ")
-	if strings.EqualFold(verb, "PING") {
-		c.mu.Lock()
-		at, ok := c.pings[c.casefold(nick)]
-		delete(c.pings, c.casefold(nick))
-		c.mu.Unlock()
-		if ok {
-			text = fmt.Sprintf("%.3f s", time.Since(at).Seconds())
-		}
-	}
-	clean, _ := spansOf(text)
-	c.Post(model.EvLines{ChatID: c.replyTo("ctcp:" + c.casefold(nick)),
-		Lines: []string{"[ctcp(" + nick + ")] " + strings.ToUpper(verb) + " " + clean}})
 }
 
 // whoisLabels : the numerics of a WHOIS and the label of their line.
@@ -594,13 +577,10 @@ func (c *Client) ignore(reply int64, arg string) error {
 		c.ignores = append(c.ignores, mask)
 		text = i18n.T("irc_ignore_added", mask)
 	}
-	list := slices.Clone(c.ignores)
 	c.mu.Unlock()
 	c.Post(model.EvLines{ChatID: reply, Lines: []string{text}})
 	if c.cfg.SaveIgnores != nil {
-		if err := c.cfg.SaveIgnores(list); err != nil {
-			c.PostNB(model.EvLog{Level: "ERROR", Msg: err.Error()})
-		}
+		c.cfg.SaveIgnores()
 	}
 	return nil
 }

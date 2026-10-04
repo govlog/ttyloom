@@ -40,11 +40,6 @@ func (c *Client) SearchMedia(ctx context.Context, chat *model.Chat, f model.Medi
 			ev.Err = err
 			c.Post(ev)
 		})
-		if !c.floodOK() {
-			ev.Err = errFlood().Error()
-			c.Post(ev)
-			return
-		}
 		q := query.Messages(c.api).Search(c.peer(chat)).Filter(mediaFilter(f)).BatchSize(mediaPage)
 		if before > 0 {
 			q = q.OffsetID(before)

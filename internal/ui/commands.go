@@ -153,7 +153,7 @@ func (u *UI) command(name string, args []string, text string) {
 		}
 		u.sendMe(u.sendWin(), text)
 	case "shrug":
-		u.sendSegs(u.sendWin(), func(string) []model.Seg { return shrugSegs(text) })
+		u.sendSegs(u.sendWin(), func(string) []model.Seg { return shrugSegs(text) }, nil)
 	case "away":
 		nets := u.netNames()
 		if u.netFilter != "" {

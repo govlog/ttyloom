@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
-"""Collect original notices for declared and imported Go modules; run at repo root."""
+"""Collect original notices for declared and imported Go modules; run at repo root.
+
+--check only compares licenses/go/manifest.json with go.mod (CI): a dependency
+update merged without a new run of this script would ship stale notices."""
 import hashlib
 import json
 import pathlib
 import re
 import shutil
 import subprocess
+import sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 OUT = ROOT / "licenses" / "go"
@@ -24,6 +28,14 @@ subprocess.run(["go", "mod", "download"], cwd=ROOT, check=True)
 modules = {m["Path"]: m for m in objects(go("list", "-m", "-json", "all")) if not m.get("Main")}
 declared = {m["Path"] for m in json.loads(go("mod", "edit", "-json"))["Require"]}
 used = set(go("list", "-deps", "-test", "-f", "{{if .Module}}{{.Module.Path}}{{end}}", "./...").splitlines()) & modules.keys()
+if sys.argv[1:] == ["--check"]:
+    want = {name + "@" + modules[name]["Version"] for name in declared | used}
+    have = {m["module"] + "@" + m["version"] for m in json.loads((OUT / "manifest.json").read_text())}
+    if want != have:
+        diff = ["missing " + x for x in sorted(want - have)] + ["stale " + x for x in sorted(have - want)]
+        raise SystemExit("\n".join(["licenses/go does not follow go.mod: run python3 scripts/licenses.py", *diff]))
+    print(f"licenses/go follows go.mod ({len(want)} modules).")
+    sys.exit()
 manifest = []
 for name in sorted(declared | used):
     module = modules[name]

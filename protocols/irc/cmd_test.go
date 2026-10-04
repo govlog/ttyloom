@@ -30,12 +30,32 @@ func waitLines(t *testing.T, events chan model.Event, sub string) model.EvLines 
 	}
 }
 
-// /join #room key: the key goes on the JOIN line.
+// /join #room key: the key goes on the JOIN line, and stays with the room in
+// the saved list — every later connection needs it, or the server says 475.
 func TestJoinWithKey(t *testing.T) {
-	c, s, _, _ := start(t, Config{}, false)
+	c, s, events, saved := start(t, Config{}, false)
 	c.Resolve(context.Background(), "#priv secret", true, 1)
 	if l := s.expect("JOIN"); l != "JOIN #priv secret" {
 		t.Fatalf("join: %q", l)
+	}
+	s.send(":me!u@h JOIN #priv")
+	waitFor[model.EvChat](t, events)
+	if got := saved.get(); len(got) != 1 || got[0] != "#priv secret" {
+		t.Fatalf("saved lists %q, want the room with its key", got)
+	}
+	_, s2, _, _ := start(t, Config{Channels: []string{"#priv secret"}}, false) // the next start
+	if l := s2.expect("JOIN"); l != "JOIN #priv secret" {
+		t.Fatalf("join at the next connection: %q", l)
+	}
+	s.send(":me!u@h PART #priv") // left, then joined again: the key changed meanwhile
+	s.send("PING :sync")
+	s.expect("PONG") // the PART is read before the next /join
+	c.Resolve(context.Background(), "#priv newkey", true, 2)
+	s.expect("JOIN")
+	s.send(":me!u@h JOIN #priv")
+	waitFor[model.EvChat](t, events)
+	if got := saved.get(); len(got) != 2 || got[1] != "#priv newkey" {
+		t.Fatalf("saved lists %q, want a second save with the new key", got)
 	}
 }
 
@@ -229,7 +249,8 @@ func TestNamesOutsideRoom(t *testing.T) {
 // /ignore drops the lines of a matching source and saves the list.
 func TestIgnore(t *testing.T) {
 	saved := make(chan []string, 2)
-	c, s, events, _ := start(t, Config{SaveIgnores: func(l []string) error { saved <- l; return nil }}, false)
+	var c *Client
+	c, s, events, _ := start(t, Config{SaveIgnores: func() { saved <- c.Ignores() }}, false)
 	next := func() []string {
 		select {
 		case l := <-saved:
@@ -316,4 +337,42 @@ func TestBanMaskAndGlob(t *testing.T) {
 			t.Errorf("globMatch(%q, %q) = %v", tc.pat, tc.s, got)
 		}
 	}
+}
+
+// /topic of a room we are not in answers in the asking window and makes no
+// chat of that room: its window would then stop /join from sending a JOIN.
+func TestTopicOtherRoom(t *testing.T) {
+	c, s, events, _ := start(t, Config{}, false)
+	cmd(c, 5, "#go", "topic", "#other")
+	s.expect("TOPIC #other")
+	s.send(":srv 332 me #other :hello there")
+	for {
+		switch e := waitFor[model.Event](t, events).(type) {
+		case model.EvNewMessage:
+			t.Fatalf("line in %q: a chat made of a room we are not in", e.Chat.Title)
+		case model.EvLines:
+			if strings.Contains(strings.Join(e.Lines, " "), "hello there") {
+				if e.ChatID != 5 {
+					t.Fatalf("answer in chat %d, want the asking window", e.ChatID)
+				}
+				return
+			}
+		}
+	}
+}
+
+// The answers of /mode (329, the date of the room) and /whowas (314) speak
+// the language of the client, like the lines around them.
+func TestAnswersTranslated(t *testing.T) {
+	i18n.Set("fr")
+	t.Cleanup(func() { i18n.Set("en") })
+	c, s, events, _ := start(t, Config{}, false)
+	cmd(c, 5, "#go", "mode", "")
+	s.expect("MODE #go")
+	s.send(":srv 329 me #go 1700000000")
+	waitLines(t, events, "#go : créé le")
+	cmd(c, 5, "", "whowas", "ghost")
+	s.expect("WHOWAS ghost")
+	s.send(":srv 314 me ghost g old.example * :Ghost")
+	waitLines(t, events, "ghost était g@old.example (Ghost)")
 }

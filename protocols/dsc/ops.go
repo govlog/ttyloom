@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -17,6 +18,7 @@ import (
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/gateway"
+	"github.com/diamondburned/arikawa/v3/utils/httputil"
 	"github.com/diamondburned/arikawa/v3/utils/json/option"
 	"github.com/diamondburned/arikawa/v3/utils/sendpart"
 
@@ -191,7 +193,8 @@ var reCustom = regexp.MustCompile(`:([A-Za-z0-9_~]+):`)
 
 // customs turns every ":name:" the guild knows as a custom emoji into the
 // <:name:id> Discord shows as the image — the mirror of parse. An unknown
-// name stays text, and outside a guild nothing changes.
+// name stays text, and outside a guild nothing changes. Inside a ``` block
+// Discord shows <:name:id> as it is: the text there stays as typed.
 // ponytail: the emojis of the other guilds are not looked at; add them when
 // somebody with Nitro asks.
 func (c *Client) customs(text string, guild discord.GuildID) string {
@@ -202,15 +205,19 @@ func (c *Client) customs(text string, guild discord.GuildID) string {
 	if err != nil || len(es) == 0 {
 		return text
 	}
-	return reCustom.ReplaceAllStringFunc(text, func(m string) string {
-		name := m[1 : len(m)-1]
-		for _, e := range es {
-			if e.Name == name {
-				return e.String() // <:name:id>, <a:name:id> when animated
+	parts := strings.Split(text, "```") // the odd ones are inside a block
+	for i := 0; i < len(parts); i += 2 {
+		parts[i] = reCustom.ReplaceAllStringFunc(parts[i], func(m string) string {
+			name := m[1 : len(m)-1]
+			for _, e := range es {
+				if e.Name == name {
+					return e.String() // <:name:id>, <a:name:id> when animated
+				}
 			}
-		}
-		return m
-	})
+			return m
+		})
+	}
+	return strings.Join(parts, "```")
 }
 
 // --- edit, delete ---
@@ -290,6 +297,23 @@ func (c *Client) DeleteChat(ctx context.Context, chat *model.Chat) {
 
 // --- reactions ---
 
+// message : the copy of the store, else one read of the page around id — a
+// user account cannot GET one message (a bot route). The store keeps the
+// newest 100 messages of a channel: an older one, a search hit or a message
+// replayed from the cache is not there.
+func (c *Client) message(ctx context.Context, ch discord.ChannelID, id discord.MessageID) (*discord.Message, error) {
+	if m, err := c.state().Cabinet.Message(ch, id); err == nil {
+		return m, nil
+	}
+	ms, err := c.rest(ctx).MessagesAround(ch, id, 1)
+	for i := range ms {
+		if ms[i].ID == id {
+			return &ms[i], nil
+		}
+	}
+	return nil, cmp.Or(err, errors.New(i18n.T("message_gone")))
+}
+
 // React sets or drops my reaction on a message. The list up to date comes
 // back on its own through MessageReactionAdd/Remove, so nothing is posted
 // here beyond the errors.
@@ -298,11 +322,15 @@ func (c *Client) React(ctx context.Context, chat *model.Chat, id int, e string) 
 		defer c.Guard("React", nil)
 		chID, guild := ids(chat)
 		mid := discord.MessageID(id)
-		// Cache only: a REST read per click would be neither sober nor useful,
-		// the message under the cursor is one the window has just shown.
-		m, _ := c.state().Cabinet.Message(chID, mid)
+		// The message names my reaction to drop, and tells a click on my own
+		// reaction (a removal) from a new one: a read on a store miss is one
+		// request per click.
+		m, err := c.message(ctx, chID, mid)
 		e, add := toggleReaction(m, e)
 		if e == "" {
+			if err != nil {
+				c.Post(model.EvLog{Level: "ERROR", Msg: i18n.T("react_error", err)})
+			}
 			return // nothing of mine to drop
 		}
 		ae, ok := c.apiEmoji(e, m, guild)
@@ -311,7 +339,6 @@ func (c *Client) React(ctx context.Context, chat *model.Chat, id int, e string) 
 				Reason: i18n.T("reaction_not_available")})
 			return
 		}
-		var err error
 		if add {
 			err = c.rest(ctx).React(chID, mid, ae)
 		} else {
@@ -422,7 +449,7 @@ func (c *Client) WhoReacted(ctx context.Context, chat *model.Chat, id int, rs []
 		defer c.Guard("WhoReacted", nil)
 		chID, guild := ids(chat)
 		mid := discord.MessageID(id)
-		m, err := c.state().Cabinet.Message(chID, mid) // for the ids of the custom emojis
+		m, err := c.message(ctx, chID, mid) // for the ids of the custom emojis
 		if err != nil {
 			m = &discord.Message{ID: mid, ChannelID: chID}
 		}
@@ -461,9 +488,20 @@ func (c *Client) history(ctx context.Context, name string, chat *model.Chat, ev 
 		// display name instead of the nickname of the member — on the page
 		// shown here, and on the store copy an edit or a reaction re-converts
 		// later.
+		//
+		// The order is the one the store takes: it only adds a message newer
+		// than its first one or older than its last, so a page above what it
+		// holds goes in oldest first (the page comes newest first), and an
+		// older page newest first.
 		for i := range ms {
 			ms[i].GuildID = guild
-			c.state().Cabinet.MessageSet(&ms[i], false)
+		}
+		for i := range ms {
+			j := len(ms) - 1 - i
+			if ev.Older {
+				j = i
+			}
+			c.state().Cabinet.MessageSet(&ms[j], false)
 		}
 		ms = newerThan(ms, minID)
 		ev.Msgs = c.msgsOf(ms)
@@ -549,7 +587,7 @@ func (c *Client) Info(ctx context.Context, chat *model.Chat, id, _, _ int) {
 		defer c.Guard("Info", fail)
 		chID, guild := ids(chat)
 		mid := discord.MessageID(id)
-		m, err := c.state().Message(chID, mid) // the cache first, the network after
+		m, err := c.message(ctx, chID, mid)
 		if err != nil {
 			fail(err.Error())
 			return
@@ -695,9 +733,9 @@ func (c *Client) Away(ctx context.Context, msg string) {
 
 // --- downloads ---
 
-// dlClient : the CDN of Discord. A timeout on the whole exchange, so a
-// stalled connection cannot hold a slot of the semaphore for ever.
-var dlClient = &http.Client{Timeout: 60 * time.Second, CheckRedirect: func(req *http.Request, via []*http.Request) error {
+// dlClient : the CDN of Discord. No timeout on the whole exchange: fetch
+// cuts a download that stops moving (dlIdle), never a long one that moves.
+var dlClient = &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error {
 	if len(via) >= 10 || !mediaRequestAllowed(req) {
 		return errors.New("discord: media redirect refused")
 	}
@@ -738,6 +776,26 @@ const (
 	unknownFetch = 16 << 20
 )
 
+// dlIdle : the longest a download waits for a byte — for the answer, then
+// between two reads of the body. A stalled connection frees its slot of the
+// semaphore; a transfer that moves has no limit of time (a video on a slow
+// link takes minutes). A variable: the test shortens it.
+var dlIdle = 60 * time.Second
+
+var errStalled = errors.New("discord: download stalled")
+
+// moving : a body read that sets the idle timer back at each read.
+type moving struct {
+	r    io.Reader
+	idle *time.Timer
+}
+
+func (m moving) Read(p []byte) (int, error) {
+	n, err := m.r.Read(p)
+	m.idle.Reset(dlIdle)
+	return n, err
+}
+
 // Download downloads m.Loc to path (3 in parallel at most). A file already
 // there = success at once.
 func (c *Client) Download(ctx context.Context, m *model.Media, path string) {
@@ -764,7 +822,7 @@ func (c *Client) Download(ctx context.Context, m *model.Media, path string) {
 		if size == 0 {
 			limit = unknownFetch
 		}
-		if err := fetch(ctx, string(u), path, limit); err != nil {
+		if err := fetch(ctx, c.fresh(ctx, string(u)), path, limit); err != nil {
 			c.Post(model.EvDownloaded{Media: m, Err: err.Error()})
 			return
 		}
@@ -772,11 +830,40 @@ func (c *Client) Download(ctx context.Context, m *model.Media, path string) {
 	}()
 }
 
+// fresh : u itself, or a new signature of it when its own has run out. An
+// attachment URL carries its end (ex=, a hex unix time, about a day): a
+// message of the disk cache read days later gets 404 from the CDN, and
+// /attachments/refresh-urls signs it again.
+func (c *Client) fresh(ctx context.Context, u string) string {
+	p, err := url.Parse(u)
+	if err != nil || !strings.Contains(p.Path, "/attachments/") {
+		return u
+	}
+	if ex, err := strconv.ParseInt(p.Query().Get("ex"), 16, 64); err != nil || time.Now().Unix() < ex {
+		return u
+	}
+	var res struct {
+		URLs []struct {
+			Refreshed string `json:"refreshed"`
+		} `json:"refreshed_urls"`
+	}
+	err = c.rest(ctx).RequestJSON(&res, http.MethodPost, api.Endpoint+"attachments/refresh-urls",
+		httputil.WithJSONBody(map[string][]string{"attachment_urls": {u}}))
+	if err != nil || len(res.URLs) == 0 {
+		return u // the old one fails as it would have
+	}
+	return cmp.Or(res.URLs[0].Refreshed, u)
+}
+
 // fetch writes url to path, max bytes at most. 0700 on the directory and a
 // temp file of its own like tgc: a private media must not be readable by the
 // other accounts of the machine, two downloads of the same media no longer
 // walk on each other, and no pre-existing symbolic link is followed.
 func fetch(ctx context.Context, url, path string, max int64) error {
+	ctx, cancel := context.WithCancelCause(ctx)
+	defer cancel(nil)
+	idle := time.AfterFunc(dlIdle, func() { cancel(errStalled) })
+	defer idle.Stop()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return err
@@ -787,7 +874,7 @@ func fetch(ctx context.Context, url, path string, max int64) error {
 	req.Header.Set("User-Agent", dlAgent)
 	resp, err := dlClient.Do(req)
 	if err != nil {
-		return err
+		return cmp.Or(context.Cause(ctx), err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
@@ -802,9 +889,12 @@ func fetch(ctx context.Context, url, path string, max int64) error {
 		return err
 	}
 	tmp := f.Name()
-	n, cerr := io.Copy(f, io.LimitReader(resp.Body, max+1))
-	if n > max {
+	n, cerr := io.Copy(f, io.LimitReader(moving{resp.Body, idle}, max+1))
+	switch {
+	case n > max:
 		cerr = fmt.Errorf(i18n.T("download_too_big"), rend.HumanSize(max))
+	case cerr != nil:
+		cerr = cmp.Or(context.Cause(ctx), cerr) // "stalled" rather than "context canceled"
 	}
 	if err := cmp.Or(cerr, f.Close()); err != nil {
 		os.Remove(tmp)

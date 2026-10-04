@@ -6,6 +6,8 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
+	"log"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -41,7 +43,7 @@ func cleanFiles(dl, cache string) {
 		age time.Duration
 	}{
 		{dl + "/.part-*", time.Hour}, {dl + "/*/.part-*", time.Hour}, {dl + "/*/*/.part-*", time.Hour},
-		{dl + "/paste/*", day},
+		{dl + "/paste/[0-9]*-[0-9]*.*", day}, // the names clipName gives: a user's own files there stay
 		{cache + "/gifs/*/*", 7 * day}, {cache + "/thumbs/*/*", 7 * day}, {cache + "/emoji/*/*", 7 * day},
 	} {
 		m, _ := filepath.Glob(p.pat)
@@ -82,8 +84,8 @@ func load(mods []module.Module) (*config.Config, error) {
 		return nil, err
 	}
 	lang := cfg.Lang
-	if lang == "" {
-		lang = i18n.Detect(cmp.Or(os.Getenv("LC_ALL"), os.Getenv("LANG")))
+	if lang == "" { // the POSIX order for messages
+		lang = i18n.Detect(cmp.Or(os.Getenv("LC_ALL"), os.Getenv("LC_MESSAGES"), os.Getenv("LANG")))
 	}
 	i18n.Set(lang)
 	return cfg, err
@@ -112,6 +114,11 @@ func run(build update.Build) error {
 		th = theme.Terminal()
 	}
 
+	// arikawa and ningen write to the log package (slog goes through it):
+	// over the full-screen UI such a line lands at the cursor.
+	// ponytail: dropped, not shown; send it to /debug if a library line is
+	// ever needed to understand a failure.
+	log.SetOutput(io.Discard)
 	t, err := term.Open()
 	if err != nil {
 		return err

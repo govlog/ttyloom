@@ -51,7 +51,7 @@ func TestCleanFilesOldPictures(t *testing.T) {
 	gone := []string{filepath.Join(cache, "gifs", "telegram", "a.mp4"), filepath.Join(cache, "thumbs", "discord", "b.jpg"),
 		filepath.Join(cache, "emoji", "discord", "c.png"), filepath.Join(dl, "paste", "20260901-120000-1.png")}
 	kept := []string{filepath.Join(cache, "telegram", "history", "1.gob"), filepath.Join(cache, "gifs", "telegram", "fresh.mp4"),
-		filepath.Join(dl, "20260901-120000_telegram_1_x_7.jpg")}
+		filepath.Join(dl, "20260901-120000_telegram_1_x_7.jpg"), filepath.Join(dl, "paste", "notes.txt")}
 	for _, p := range append(gone, kept...) {
 		os.MkdirAll(filepath.Dir(p), 0o700)
 		os.WriteFile(p, nil, 0o600)

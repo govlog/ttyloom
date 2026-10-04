@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -34,8 +35,8 @@ func withName(id int64, name string) *tg.User {
 
 // offline gives a Client with no api: any network call would panic the test.
 func offline(events chan<- model.Event) *Client {
-	return &Client{peers: peers.Options{}.Build(nil), seen: map[int64]peers.Peer{}, Poster: model.Poster{Events: events},
-		dlSem: make(chan struct{}, 3), ulSem: make(chan struct{}, 2)}
+	return &Client{peers: peers.Options{}.Build(nil), seen: map[int64]peers.Peer{}, fills: map[[2]int64]uint64{}, Poster: model.Poster{Events: events},
+		dlSem: make(chan struct{}, 3), ulSem: make(chan struct{}, 2), fillSem: make(chan struct{}, 2)}
 }
 
 // New builds the whole gotd stack without opening a single connection; the
@@ -82,6 +83,31 @@ func TestLogger(t *testing.T) {
 		}
 	default:
 		t.Fatal("the WARN was not delivered")
+	}
+}
+
+// The typing updates also carry a cancel (the draft was cleared), the
+// speakers of a voice chat and emoji taps: only a real "is writing" shows.
+func TestTypingOnlyWhileComposing(t *testing.T) {
+	ev := make(chan model.Event, 8)
+	c := offline(ev)
+	d := tg.NewUpdateDispatcher()
+	c.registerHandlers(d)
+	for _, a := range []tg.SendMessageActionClass{&tg.SendMessageCancelAction{}, &tg.SpeakingInGroupCallAction{},
+		&tg.SendMessageEmojiInteractionSeen{Emoticon: "🎉"}, &tg.SendMessageRecordAudioAction{}} {
+		err := d.Handle(context.Background(), &tg.Updates{Users: []tg.UserClass{withName(7, "alice")},
+			Updates: []tg.UpdateClass{&tg.UpdateUserTyping{UserID: 7, Action: a}}})
+		if err != nil {
+			t.Fatalf("%T: %v", a, err)
+		}
+	}
+	if e, ok := next(t, ev).(model.EvTyping); !ok || e.ChatID != 7 || e.Who != "alice" {
+		t.Fatalf("voice note being recorded: %+v, want alice typing in chat 7", e)
+	}
+	select {
+	case e := <-ev:
+		t.Fatalf("second event %+v: a cancel, a speaker or an emoji tap is not typing", e)
+	default:
 	}
 }
 
@@ -519,6 +545,9 @@ func TestLoadDialogs(t *testing.T) {
 	if e.Err != "" || len(e.Chats) != 2 || e.Chats[1].Username != "bob" {
 		t.Fatalf("dialogs (main list, then the archive): %+v", e)
 	}
+	if !e.Complete { // the whole account: a chat left on the phone leaves the sidebar
+		t.Fatal("whole list not marked complete")
+	}
 	c := e.Chats[0]
 	if c.ID != 7 || c.Username != "alice" || c.Unread != 3 || c.ReadInboxMaxID != 9 || c.ReadOutboxMaxID != 11 || !c.UnreadReactions {
 		t.Fatalf("chat: %+v", c)
@@ -534,6 +563,26 @@ func TestLoadDialogs(t *testing.T) {
 		if _, ok := r.(*tg.MessagesGetDialogsRequest); !ok {
 			t.Fatalf("per-dialog lookup: %T", r)
 		}
+	}
+}
+
+// TestLoadDialogsIncomplete : a dialog whose peer is missing from the answer
+// is dropped, and the list is then not the whole account — its chat must not
+// be taken for gone (the UI would drop it and its cached history).
+func TestLoadDialogsIncomplete(t *testing.T) {
+	ev := make(chan model.Event, 4)
+	inv := &fakeInvoker{answer: func(req bin.Encoder) (any, error) {
+		if r, ok := req.(*tg.MessagesGetDialogsRequest); !ok || r.FolderID == 1 {
+			return &tg.MessagesDialogs{}, nil
+		}
+		return &tg.MessagesDialogs{
+			Dialogs: []tg.DialogClass{&tg.Dialog{Peer: &tg.PeerUser{UserID: 7}}, &tg.Dialog{Peer: &tg.PeerUser{UserID: 8}}},
+			Users:   []tg.UserClass{withName(7, "alice")}, // 8 missing
+		}, nil
+	}}
+	fakeClient(inv, ev).LoadDialogs(context.Background())
+	if e := next(t, ev).(model.EvDialogs); e.Err != "" || len(e.Chats) != 1 || e.Complete {
+		t.Fatalf("dialogs: %+v, want alice alone and the list not complete", e)
 	}
 }
 
@@ -614,6 +663,153 @@ func TestHistoryStopsAtMinID(t *testing.T) {
 	}
 }
 
+// TestReplyToOtherChat : a reply to a post of another chat names that chat
+// and offers no jump; the id is never read in this chat, where it is another,
+// unrelated message.
+func TestReplyToOtherChat(t *testing.T) {
+	ev := make(chan model.Event, 4)
+	reply := &tg.Message{ID: 10, PeerID: &tg.PeerUser{UserID: 7}, Date: 1700000000, Message: "look"}
+	h := &tg.MessageReplyHeader{ReplyToMsgID: 5}
+	h.SetReplyToPeerID(&tg.PeerChannel{ChannelID: 1234}) // the flag too, like a decoded answer
+	reply.SetReplyTo(h)
+	inv := &fakeInvoker{answer: func(req bin.Encoder) (any, error) {
+		r, ok := req.(*tg.MessagesGetHistoryRequest)
+		if !ok {
+			return nil, fmt.Errorf("unexpected request %T", req)
+		}
+		if r.OffsetID != 0 { // the iterator asks once more: the end
+			return &tg.MessagesMessages{}, nil
+		}
+		return &tg.MessagesMessages{Messages: []tg.MessageClass{reply}, Users: []tg.UserClass{withName(7, "alice")},
+			Chats: []tg.ChatClass{&tg.Channel{ID: 1234, Title: "News", Broadcast: true}}}, nil
+	}}
+	c := fakeClient(inv, ev)
+	c.history(context.Background(), &model.Chat{ID: 7, Kind: model.ChatUser, Peer: &tg.InputPeerUser{UserID: 7}}, 0, 0, 50, false)
+	e := next(t, ev).(model.EvHistory)
+	if e.Err != "" || len(e.Msgs) != 1 || e.Msgs[0].Reply == nil {
+		t.Fatalf("history: %+v", e)
+	}
+	if q := *e.Msgs[0].Reply; q.ID != 0 || q.From != "News" || q.Text == "" {
+		t.Fatalf("quote %+v: want the channel named, a text and no jump", q)
+	}
+	for _, r := range inv.calls {
+		if _, ok := r.(*tg.MessagesGetHistoryRequest); !ok {
+			t.Fatalf("%T sent: the quoted id must not be read in this chat", r)
+		}
+	}
+}
+
+// TestDeleteChatWholeHistory : the server deletes a long history in chunks
+// and says so with a positive offset; the chat is gone only once the last
+// chunk is.
+func TestDeleteChatWholeHistory(t *testing.T) {
+	ev := make(chan model.Event, 4)
+	left := 2 // chunks of the history on the server; each call deletes one
+	inv := &fakeInvoker{answer: func(req bin.Encoder) (any, error) {
+		if _, ok := req.(*tg.MessagesDeleteHistoryRequest); !ok {
+			return nil, fmt.Errorf("unexpected request %T", req)
+		}
+		left--
+		return &tg.MessagesAffectedHistory{Offset: max(left, 0) * 1000}, nil
+	}}
+	c := fakeClient(inv, ev)
+	c.DeleteChat(context.Background(), &model.Chat{ID: 7, Kind: model.ChatUser, Peer: &tg.InputPeerUser{UserID: 7}})
+	if e, ok := next(t, ev).(model.EvChatGone); !ok || e.ChatID != 7 {
+		t.Fatalf("event %+v, want the chat gone", e)
+	}
+	if len(inv.calls) != 2 {
+		t.Fatalf("%d calls, want 2: the call again while the offset is positive", len(inv.calls))
+	}
+}
+
+// TestQuoteReadOffUpdateLoop : a live reply is posted at once and its quote
+// read after, off the update loop — a read there held every update behind
+// it. The quote comes as an edit, and the read of an older version never
+// brings back the text an edit replaced meanwhile.
+func TestQuoteReadOffUpdateLoop(t *testing.T) {
+	ev := make(chan model.Event, 8)
+	release := make(chan struct{})
+	var once sync.Once
+	free := func() { once.Do(func() { close(release) }) }
+	t.Cleanup(free)
+	inv := &fakeInvoker{answer: func(req bin.Encoder) (any, error) {
+		if _, ok := req.(*tg.MessagesGetMessagesRequest); !ok {
+			return nil, fmt.Errorf("unexpected request %T", req)
+		}
+		<-release
+		return &tg.MessagesMessages{Users: []tg.UserClass{withName(7, "alice")}, Messages: []tg.MessageClass{
+			&tg.Message{ID: 5, PeerID: &tg.PeerUser{UserID: 7}, FromID: &tg.PeerUser{UserID: 7}, Message: "quoted"}}}, nil
+	}}
+	c := fakeClient(inv, ev)
+	d := tg.NewUpdateDispatcher()
+	c.registerHandlers(d)
+	handle := func(u tg.UpdateClass) {
+		done := make(chan error, 1)
+		go func() {
+			done <- d.Handle(context.Background(), &tg.Updates{Users: []tg.UserClass{withName(7, "alice")}, Updates: []tg.UpdateClass{u}})
+		}()
+		select {
+		case err := <-done:
+			if err != nil {
+				t.Fatal(err)
+			}
+		case <-time.After(time.Second):
+			t.Fatal("the update loop waits for the read of the quote")
+		}
+	}
+	reply := func(text string) *tg.Message {
+		m := &tg.Message{ID: 10, PeerID: &tg.PeerUser{UserID: 7}, Date: 1700000000, Message: text}
+		m.SetReplyTo(&tg.MessageReplyHeader{ReplyToMsgID: 5})
+		return m
+	}
+	handle(&tg.UpdateNewMessage{Message: reply("first")})
+	if e, ok := next(t, ev).(model.EvNewMessage); !ok || e.Msg.Text != "first" {
+		t.Fatalf("new message: %+v", e)
+	}
+	handle(&tg.UpdateEditMessage{Message: reply("second")})
+	if e, ok := next(t, ev).(model.EvEditMessage); !ok || e.Msg.Text != "second" {
+		t.Fatalf("edit: %+v", e)
+	}
+	free() // both reads answer now, in any order
+	if e, ok := next(t, ev).(model.EvQuote); !ok || e.ID != 10 || e.Quote.Text != "quoted" || e.Quote.From != "alice" {
+		t.Fatalf("filled: %+v, want the quote of message 10 alone", e)
+	}
+	select {
+	case e := <-ev:
+		t.Fatalf("%+v: the read of the first version came back over the edit", e)
+	case <-time.After(100 * time.Millisecond):
+	}
+}
+
+// TestHistoryTripsFloodBreaker : a FLOOD_WAIT on a history page opens the
+// breaker, and the reads after it (the next chat of the sync, a /search) are
+// refused with no request — the sync would otherwise ask the server again
+// every 150 ms while it says to wait.
+func TestHistoryTripsFloodBreaker(t *testing.T) {
+	ev := make(chan model.Event, 8)
+	inv := &fakeInvoker{answer: func(bin.Encoder) (any, error) { return nil, tgerr.New(420, "FLOOD_WAIT_120") }}
+	c := fakeClient(inv, ev)
+	chat := &model.Chat{ID: 7, Kind: model.ChatUser, Peer: &tg.InputPeerUser{UserID: 7}}
+	c.history(context.Background(), chat, 0, 0, 50, true)
+	c.history(context.Background(), chat, 0, 0, 50, true)
+	c.Search(context.Background(), chat, "x", 10)
+	var errs []string
+	for len(errs) < 3 {
+		switch e := next(t, ev).(type) {
+		case model.EvHistory:
+			errs = append(errs, e.Err)
+		case model.EvSearch:
+			errs = append(errs, e.Err)
+		}
+	}
+	if len(inv.calls) != 1 {
+		t.Fatalf("%d requests sent, one expected: the reads after a FLOOD_WAIT must not reach the server", len(inv.calls))
+	}
+	if errs[0] == "" || errs[1] != i18n.T("flood_wait_active") || errs[2] != i18n.T("flood_wait_active") {
+		t.Fatalf("errors %q: the FLOOD_WAIT, then the breaker twice", errs)
+	}
+}
+
 // TestSendGivesID : Send unpacks the id of the message out of the updates and
 // stamps the pending item; a failure comes back on the same event.
 func TestSendGivesID(t *testing.T) {
@@ -636,6 +832,41 @@ func TestSendGivesID(t *testing.T) {
 	if txt := inv.calls[0].(*tg.MessagesSendMessageRequest).Message; txt != "bonjour" {
 		t.Fatalf("text sent: %q", txt)
 	}
+}
+
+// TestMentionFromMemberBox : a member picked in the F3 box, with no
+// @username, goes out as a real mention. The user comes from the peers the
+// box kept, access hash included: no users.getUsers, which the server refuses
+// for a user it was never asked about.
+func TestMentionFromMemberBox(t *testing.T) {
+	ev := make(chan model.Event, 4)
+	inv := &fakeInvoker{answer: func(req bin.Encoder) (any, error) {
+		if _, ok := req.(*tg.MessagesSendMessageRequest); !ok {
+			return nil, fmt.Errorf("unexpected request %T", req)
+		}
+		return &tg.Updates{Updates: []tg.UpdateClass{
+			&tg.UpdateNewMessage{Message: &tg.Message{ID: 50, PeerID: &tg.PeerUser{UserID: 7}}},
+		}}, nil
+	}}
+	c := fakeClient(inv, ev)
+	c.entities([]tg.UserClass{&tg.User{ID: 9, AccessHash: 77, FirstName: "Bob"}}) // what the member box keeps
+	chat := &model.Chat{ID: 7, Kind: model.ChatUser, Peer: &tg.InputPeerUser{UserID: 7}}
+	c.SendStyled(context.Background(), chat, []model.Seg{{Text: "Bob", Kind: model.SegMention, UserID: 9}, {Text: " hi"}}, 5)
+	if e := next(t, ev).(model.EvSent); e.Err != "" || e.ID != 50 {
+		t.Fatalf("sent: %+v", e)
+	}
+	req, ok := inv.calls[0].(*tg.MessagesSendMessageRequest)
+	if !ok || len(inv.calls) != 1 {
+		t.Fatalf("requests %T…: the send alone expected", inv.calls[0])
+	}
+	for _, e := range req.Entities {
+		if m, ok := e.(*tg.InputMessageEntityMentionName); ok {
+			if u, ok := m.UserID.(*tg.InputUser); ok && u.UserID == 9 && u.AccessHash == 77 {
+				return
+			}
+		}
+	}
+	t.Fatalf("entities %+v: no mention of user 9 with its access hash", req.Entities)
 }
 
 // TestSendFails : the RPC refuses, the pending item is marked failed and no

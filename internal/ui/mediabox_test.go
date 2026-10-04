@@ -87,3 +87,25 @@ func TestMediaBoxUnsupported(t *testing.T) {
 		t.Fatal("box opened on a network that cannot search media")
 	}
 }
+
+// "o" on a GIF whose page opens asks on the input line: the box closes first,
+// it would hold the y/n. An error on the first page is asked again at the next
+// move.
+func TestMediaBoxOpenPageAndRetry(t *testing.T) {
+	u, fb := gifUI()
+	b := &mediaBackend{fakeBackend: fb}
+	u.nets[netTelegram] = b
+	u.ws.Cur = 1
+	u.openMediaBox("")
+	u.dispatch(model.Envelope{Net: netTelegram, Ev: model.EvMedia{ChatID: 1, Filter: model.TabMedia, Err: "index not ready"}})
+	u.mboxKey(term.Key{Code: term.Down})
+	if len(b.asks) != 2 || b.asks[1] != (mediaAsk{model.TabMedia, 0}) {
+		t.Fatalf("asks %v: want the first page asked again after a move", b.asks)
+	}
+	gif := model.MediaItem{Msg: model.Msg{ChatID: 1, ID: 7, Media: &model.Media{Kind: model.MediaGIF, Loc: 7, URL: "https://tenor.com/view/x"}}}
+	u.dispatch(model.Envelope{Net: netTelegram, Ev: model.EvMedia{ChatID: 1, Filter: model.TabMedia, Items: []model.MediaItem{gif}}})
+	u.mboxKey(term.Key{Code: term.None, Rune: 'o'})
+	if u.mbox != nil || u.ask == nil {
+		t.Fatalf("box open %v, question %v: want the box closed and the question asked", u.mbox != nil, u.ask != nil)
+	}
+}

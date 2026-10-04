@@ -73,7 +73,8 @@ func (c *Client) Block(ctx context.Context, chat *model.Chat) {
 
 // DeleteChat deletes the chat: the dialog leaves the list. Private chat and
 // basic group: messages.deleteHistory, MaxID 0 = the whole history and
-// just_clear false also drops the dialog. Supergroup and channel:
+// just_clear false also drops the dialog — a basic group stays joined, and
+// its next message brings it back. Supergroup and channel:
 // channels.deleteHistory only empties the history, and only
 // channels.leaveChannel drops the dialog.
 func (c *Client) DeleteChat(ctx context.Context, chat *model.Chat) {
@@ -83,8 +84,17 @@ func (c *Client) DeleteChat(ctx context.Context, chat *model.Chat) {
 			_, err := c.api.ChannelsLeaveChannel(ctx, inputChannel(p))
 			return err
 		}
-		_, err := c.api.MessagesDeleteHistory(ctx, &tg.MessagesDeleteHistoryRequest{Peer: peer})
-		return err
+		// A long history goes in chunks: a positive Offset asks for the same
+		// call again.
+		// ponytail: 100 calls at most; a history longer than that comes back
+		// with its rest, and a second delete takes it.
+		for range 100 {
+			res, err := c.api.MessagesDeleteHistory(ctx, &tg.MessagesDeleteHistoryRequest{Peer: peer})
+			if err != nil || res.Offset <= 0 {
+				return err
+			}
+		}
+		return nil
 	})
 }
 

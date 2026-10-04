@@ -46,8 +46,9 @@ func TestMsgOf(t *testing.T) {
 			{Count: 3, Me: true, Emoji: discord.Emoji{Name: "🔥"}},
 			{Count: 1, Emoji: discord.Emoji{ID: 88, Name: "party"}},
 		},
+		// Two lines: the quote is one, or the second would read as the reply.
 		ReferencedMessage: &discord.Message{
-			ID: msgID(900), Author: discord.User{ID: 42, Username: "bob"}, Content: "**q**"},
+			ID: msgID(900), Author: discord.User{ID: 42, Username: "bob"}, Content: "**q**\nnext"},
 	}
 	got := c.msgOf(m)
 
@@ -84,9 +85,31 @@ func TestMsgOf(t *testing.T) {
 	if media == nil || !reflect.DeepEqual(*media, wantMedia) {
 		t.Fatalf("attachment = %+v, want %+v", media, wantMedia)
 	}
-	wantReply := model.Quote{ID: int(msgID(900)), From: "Bobby", Text: "q"}
+	wantReply := model.Quote{ID: int(msgID(900)), From: "Bobby", Text: "q next"}
 	if reply == nil || *reply != wantReply {
 		t.Fatalf("reply = %+v, want %+v", reply, wantReply)
+	}
+}
+
+// A forward is an empty message carrying the forwarded one in a snapshot: its
+// text and its file show, named after the channel they come from.
+func TestMsgOfForward(t *testing.T) {
+	c := testClient(nil)
+	cab := c.state().Cabinet
+	if err := cab.GuildSet(&discord.Guild{ID: 9, Name: "g"}, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := cab.ChannelSet(&discord.Channel{ID: 77, GuildID: 9, Name: "news", Type: discord.GuildText}, false); err != nil {
+		t.Fatal(err)
+	}
+	m := &discord.Message{ID: msgID(1000), ChannelID: 5, Author: discord.User{ID: 42, Username: "bob"},
+		Reference: &discord.MessageReference{Type: discord.MessageReferenceTypeForward, ChannelID: 77, MessageID: msgID(900)},
+		MessageSnapshots: []discord.MessageSnapshot{{Message: discord.MessageSnapshotMessage{Content: "look **here**",
+			Attachments: []discord.Attachment{{Filename: "a.png", ContentType: "image/png", Size: 100, Width: 10, Height: 10,
+				URL: "https://cdn.discordapp.com/attachments/1/2/a.png"}}}}}}
+	got := c.msgOf(m)
+	if got.Text != "look here" || got.Media == nil || got.Media.Kind != model.MediaPhoto || got.FwdFrom != "g / #news" {
+		t.Fatalf("forward: text %q, media %+v, from %q; want the snapshot and the channel", got.Text, got.Media, got.FwdFrom)
 	}
 }
 
@@ -268,6 +291,25 @@ func TestReactions(t *testing.T) {
 	}
 }
 
+// A moderator who clears the reactions of a message (all, or one emoji)
+// changes the list live, like a reaction removed by its author.
+func TestReactionsCleared(t *testing.T) {
+	ev := make(chan model.Event, 4)
+	c := testClient(ev)
+	c.wire()
+	m := discord.Message{ID: msgID(1000), ChannelID: 5} // the state has dropped the reactions
+	if err := c.state().Cabinet.MessageSet(&m, false); err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range []gateway.Event{&gateway.MessageReactionRemoveAllEvent{ChannelID: 5, MessageID: msgID(1000)},
+		&gateway.MessageReactionRemoveEmojiEvent{ChannelID: 5, MessageID: msgID(1000), Emoji: discord.Emoji{Name: "🔥"}}} {
+		c.state().Handler.Call(e)
+		if got, ok := next(t, ev).(model.EvReactions); !ok || got.ID != int(msgID(1000)) || len(got.Reactions) != 0 {
+			t.Fatalf("%T: %#v, want the empty list", e, got)
+		}
+	}
+}
+
 // A guild left, deleted or a kick drops its text channels from the sidebar.
 // A guild that only went unavailable is an outage on the Discord side: it
 // comes back, and nothing is dropped.
@@ -375,6 +417,15 @@ func TestAttachMediaUnknownTypeBin(t *testing.T) {
 	}
 }
 
+// A GIF uploaded as a file plays in the chat, like the clip of a provider.
+func TestAttachMediaGIFPlays(t *testing.T) {
+	m := attachMedia(discord.Attachment{Filename: "cat.gif", ContentType: "image/gif", Size: 2048, Width: 200, Height: 100,
+		URL: "https://cdn.discordapp.com/attachments/1/2/cat.gif"})
+	if m.Kind != model.MediaGIF || m.Ext != ".gif" || !m.Previewable() {
+		t.Fatalf("GIF upload: %+v, want an animated GIF", m)
+	}
+}
+
 // A Tenor GIF received (what SendGif posts) comes as a "gifv" embed with a
 // video: it becomes an animated GIF of the message, the page kept as its URL,
 // instead of a link label nobody can play.
@@ -383,9 +434,11 @@ func TestMsgOfEmbedGIFV(t *testing.T) {
 	got := c.msgOf(&discord.Message{ID: msgID(10), ChannelID: 55, Author: discord.User{ID: 42, Username: "bob"},
 		Content: "https://tenor.com/view/cat-1",
 		Embeds: []discord.Embed{{Type: discord.GIFVEmbed, URL: "https://tenor.com/view/cat-1",
-			Video: &discord.EmbedVideo{URL: "https://media.tenor.com/a.mp4", Width: 498, Height: 280}}}})
+			Video: &discord.EmbedVideo{URL: "https://media.tenor.com/a.mp4", Width: 498, Height: 280,
+				Proxy: "https://images-ext-1.discordapp.net/external/x/https/media.tenor.com/a.mp4"}}}})
 	md := got.Media
-	if md == nil || md.Kind != model.MediaGIF || md.Loc != fileURL("https://media.tenor.com/a.mp4") || md.W != 498 ||
+	// The clip through the proxy of Discord: the provider never sees the reader.
+	if md == nil || md.Kind != model.MediaGIF || md.Loc != fileURL("https://images-ext-1.discordapp.net/external/x/https/media.tenor.com/a.mp4") || md.W != 498 ||
 		md.Mime != "video/mp4" || md.Ext != ".mp4" || md.URL != "https://tenor.com/view/cat-1" || !md.Previewable() {
 		t.Fatalf("gifv embed: %+v", md)
 	}

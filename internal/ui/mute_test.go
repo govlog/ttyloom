@@ -102,3 +102,24 @@ func TestMuteFollowsIRCRekey(t *testing.T) {
 		t.Fatalf("muted after the rekey: %v, file %v; want only %v", u.muted, m, key)
 	}
 }
+
+// An alert held by the rate limit is dropped when its message is read
+// before it goes out.
+func TestAlertDroppedOnceRead(t *testing.T) {
+	var out bytes.Buffer
+	u := &UI{ws: NewWindows(), agg: &Window{}, debug: &Window{}, cfg: &config.Config{Bell: true, Notify: "terminal"},
+		t: term.NewOffscreen(&out, 80, 24), nets: map[string]model.Backend{netTelegram: &fakeBackend{}}, conn: map[string]bool{},
+		focused: true, chats: map[model.ChatKey]*model.Chat{}, dirty: map[model.ChatKey]bool{}, self: map[string]selfInfo{}}
+	say := func(id int64) {
+		dm := &model.Chat{Net: netTelegram, ID: id, Kind: model.ChatUser, Title: "alice"}
+		u.dispatch(model.Envelope{Net: netTelegram, Ev: model.EvNewMessage{Chat: dm, Msg: model.Msg{ID: int(id), ChatID: id, Text: "hi", From: "alice"}}})
+	}
+	say(1) // rings at once
+	say(2) // held by the gap
+	u.goTo(u.ws.ForChat(model.ChatKey{Net: netTelegram, ID: 2}))
+	u.flushAlert(time.Now().Add(alertGap))
+	u.t.Flush()
+	if n := strings.Count(out.String(), "\a"); n != 1 {
+		t.Fatalf("%d bells, want 1: the held one was read before it went out", n)
+	}
+}

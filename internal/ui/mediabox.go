@@ -180,6 +180,17 @@ func (u *UI) mboxLoad() {
 	}
 }
 
+// mboxRetry : a move asks again what an error or a run of empty pages
+// stopped (mboxLoad); a first page that failed is asked again here.
+func (u *UI) mboxRetry() {
+	b := u.mbox
+	failed := b.err != "" && len(b.items) == 0 && b.asked < 0
+	b.auto, b.err = 0, ""
+	if failed {
+		u.mboxAsk(0)
+	}
+}
+
 func (u *UI) mboxClose() {
 	u.gridFree(u.mbox)
 	u.mbox = nil
@@ -230,11 +241,14 @@ func (u *UI) mboxKey(k term.Key) {
 	case k.Code == term.Enter:
 		u.mboxView()
 	case b.g.key(k):
-		b.auto = 0 // a move asks again what a run of empty pages stopped
+		u.mboxRetry()
 	case k.Code == term.None && k.Rune == 'j':
 		u.mboxJump()
 	case k.Code == term.None && k.Rune == 'o':
 		if m := u.mboxPick(); m != nil {
+			if render.SafeURL(m.Media.URL) { // a page asks first, on the input line the box would hold
+				u.mboxClose()
+			}
 			u.openItemMedia(u.view(), &Item{Msg: m})
 		}
 	}
@@ -259,7 +273,9 @@ func (u *UI) mboxMouse(e term.MouseEvent) {
 			}
 		}
 	default:
-		b.auto = 0
+		if click { // a press or the wheel, not the pointer going by
+			u.mboxRetry()
+		}
 		if b.g.mouse(e, e.X-r.col-1, e.Y-r.row-2) >= 0 {
 			u.mboxView()
 		}
@@ -270,7 +286,7 @@ func (u *UI) mboxMouse(e term.MouseEvent) {
 // and when.
 func mediaText(m *model.Msg) []string {
 	md := m.Media
-	return []string{cmp.Or(md.Name, md.Label), render.HumanSize(md.Size), m.From, i18n.LocalTime(m.Date)}
+	return []string{render.CleanLine(cmp.Or(md.Name, md.Label)), render.HumanSize(md.Size), m.From, i18n.LocalTime(m.Date)}
 }
 
 // mboxHead : the tabs, the current one lit, then the conversation and the
