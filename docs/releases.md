@@ -9,15 +9,18 @@ builds. FFmpeg, clipboard tools and dictionaries are installed separately.
 Each version contains two binary archives, a source archive from the same
 commit, and `SHA256SUMS`. Binary archives include the README, documentation,
 dependency notices and license texts. `BUILD.txt` records the version, commit,
-Go toolchain and build flags; `ttyloom --version` prints the version, the build
-id (the first 8 hex digits of the commit) and the commit.
+Go toolchain, target and build flags; `ttyloom --version` prints the version,
+the build id (the first 8 hex digits of the commit) and the commit.
 
 While TTYloom is in beta, versions are numbered `v0.N-beta` (`v0.11-beta`, then `v0.12-beta`) and every GitHub release is marked as a pre-release.
 
 ## Prepare and publish
 
-1. Update the changelog and the version in the README and the manual. Review dependency
-   notices if `go.mod`, copied code, assets or build targets have changed.
+1. Turn the `Unreleased` section of the changelog into `## <version> — <date>`:
+   the Release workflow takes its notes from that heading. Update the version in
+   the README and the manual. Review dependency notices if `go.mod`, copied code,
+   assets or build targets have changed; after a change of `go.mod`,
+   `python3 scripts/licenses.py` refreshes `licenses/go`, which CI checks.
 2. Run the checks in `.github/workflows/ci.yml`, then commit the release changes.
 3. Tag that commit and push it, replacing `v0.11-beta` below with the new version:
 
@@ -36,8 +39,12 @@ While TTYloom is in beta, versions are numbered `v0.N-beta` (`v0.11-beta`, then 
 5. Review its files and release notes, then publish the draft from GitHub or:
 
    ```bash
-   gh release edit v0.11-beta --draft=false --prerelease --latest
+   gh release edit v0.11-beta --draft=false --prerelease
    ```
+
+   GitHub never marks a pre-release as Latest: while TTYloom is in beta,
+   `releases/latest` has nothing to show, so link to the release list or to
+   the tag.
 
 The CLI checks do not replace testing live accounts or testing on native ARM64
 hardware. Do not overwrite published assets or move a published tag: release
@@ -61,4 +68,6 @@ working documents. Output is stored under `dist/`, which Git ignores.
 Builds use `-trimpath` and record the commit explicitly. Archive timestamps,
 ordering, permissions and ownership are fixed. Use the same Go patch version
 when comparing checksums between machines. `SHA256SUMS` detects corrupted or changed downloads;
-it is not a digital signature.
+it is not a digital signature. The attestation of the Release workflow is the
+signed record of where an archive was built:
+`gh attestation verify <archive> --repo govlog/ttyloom` checks it.

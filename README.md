@@ -20,13 +20,13 @@
 
 - **Play videos inside the conversation.** `l` plays or pauses, `s` stops; choose previews, hidden videos or autoplay. Silent playback also works full screen, with FFmpeg.
 - **Open an image and explore it.** Click or press `v` for the built-in viewer. Zoom up to 8× with the wheel or `+`/`-`, **drag with the mouse to pan**, press `0` to fit again, and ←/→ to go to the previous or next media. [Viewer controls](docs/guide.md#viewer).
-- **Keep photos and GIFs in the flow.** Native pixels through kitty graphics, Unicode half blocks elsewhere. `F5` shows images only on hover; `Ctrl+G` opens a searchable GIF picker whose previews play under the mouse; `Ctrl+M` browses every photo, video, GIF and file of a conversation.
+- **Keep photos and GIFs in the flow.** Native pixels through kitty graphics, Unicode half blocks elsewhere. `F5` shows images only on hover; `Ctrl+G` opens a searchable GIF picker whose previews play under the mouse; `Ctrl+M` (or `/media`) browses every photo, video, GIF and file of a conversation.
 - **Move between conversations your way.** Numbered windows, a draft in each, `/query`, `/join`, `/msg`, `/me`, and a cycle through unread windows. `F6` combines conversations in window 0.
-- **Make the sidebar work for you.** Fold networks and Discord servers, filter with `/net`, sort by recent activity or unread messages, split the windows into channels and direct messages, and drag the border to resize. The wheel switches between open conversations.
+- **Make the sidebar work for you.** Fold networks and Discord servers, filter with `/net` or by typing over it, sort by recent activity, name or unread messages, split the windows into channels and direct messages, and drag the border to resize. The wheel switches between open conversations.
 - **Find a message, then jump to it.** `Ctrl+F` searches locally; press it twice to search across networks. Click a reply’s quote to return to its original message, loading the surrounding history when needed.
 - **React without a detour.** A right-click menu with quick reactions, double-click 👍, replies, edits (`Ctrl+↑` walks your previous messages), custom Discord emojis and message details. `F3` shows members and presence; click a member to open a conversation.
-- **Give your draft some room.** Expand the multiline editor, paste a code block, complete an `@mention`, pick an emoji or paste an image with `Ctrl+V`. `Ctrl+B`, `Ctrl+I` and `Ctrl+U` style the draft in bold, italic and underline, sent as Discord Markdown or Telegram entities. Optional Hunspell underlines misspellings; `Ctrl+R` offers corrections.
-- **Keep the useful little details.** Drag to copy several messages, preview themes live, show seconds in timestamps, spot the unread divider, and keep a local history cache. Typing indicators, focus-aware read state and configurable notifications complete the flow.
+- **Give your draft some room.** Expand the multiline editor, paste a code block, complete an `@mention`, pick an emoji or paste an image with `Ctrl+V`. `Ctrl+B`, `Ctrl+I` and `Ctrl+U` style the draft in bold, italic and underline, sent as Discord Markdown, Telegram entities or mIRC codes. Optional Hunspell underlines misspellings; `Ctrl+R` offers corrections.
+- **Keep the useful little details.** Drag to copy several messages, preview themes live, show seconds in timestamps, spot the unread divider, and keep a local history cache. Typing indicators, focus-aware read state, configurable notifications that merge a burst into one, and `/mute` for a noisy conversation complete the flow.
 - **Answer with your own programs.** Hooks run a script when a message matches a network, a chat, a sender or a pattern; its output is sent, proposed in the input line or shown. [Hooks](docs/hooks.md).
 - **Switch languages while chatting.** French and English interface: `/set lang fr` or `/set lang en` applies immediately.
 
@@ -37,7 +37,7 @@ Capabilities depend on the network. Unsupported actions are hidden.
 | Telegram | User and bot login, DMs, groups, channels, media, search, reactions, read state | Bot mode receives new messages; no account history or dialog list |
 | Discord | User accounts, DMs, group DMs, server text channels, media, search, reactions, GIFs | No threads, forums, voice, read receipts or bot-account mode |
 | WhatsApp | Planned | No implementation yet |
-| IRC | As many networks as wanted, no bouncer: channels, private chats, `/whois`, members, mIRC styles, DCC SEND/GET | No history on the server (the disk cache is the scrollback), no DCC resume or DCC CHAT |
+| IRC | As many networks as wanted, no bouncer: channels, private chats, `/whois`, members, mIRC styles, DCC SEND/GET | No history on the server (the disk cache is the scrollback); no edits, reactions, read receipts, search, GIFs or media browser; no DCC resume or DCC CHAT |
 
 Discord user-token access is unsupported by Discord and can lead to account suspension. Read the [authentication guide](docs/authentication.md#discord) before enabling it.
 
@@ -60,6 +60,7 @@ These frames use **the actual UI renderer with fictional data** and the Catppucc
 | --- | --- |
 | [Full user manual](docs/guide.md) | Installation, every setting, commands, mouse controls, media, cache and troubleshooting |
 | [Account setup](docs/authentication.md) | Telegram API credentials, QR/phone/bot login, Discord tokens, IRC passwords and session handling |
+| [Hooks](docs/hooks.md) | Programs run on incoming messages: filters, variables, replies, safety and examples |
 | [Contributing](CONTRIBUTING.md) | Testing, feedback, translations, development and checks |
 
 ## Install
@@ -78,7 +79,7 @@ cd ttyloom_0.11-beta_linux_amd64
 ./ttyloom
 ```
 
-For ARM64, replace `amd64` with `arm64`. Each archive includes the dependency licenses; keep them with the binary when redistributing it. The release also includes matching source.
+For ARM64, replace `amd64` with `arm64`. `--version` prints the version, the build id (the first 8 hex digits of the source commit) and the commit. Each archive includes the dependency licenses; keep them with the binary when redistributing it. The release also includes matching source.
 
 ### Build from source
 
@@ -131,7 +132,7 @@ Start `./ttyloom`. Scan the QR code from **Telegram → Settings → Devices →
 
 ### Discord
 
-Add an empty `[discord]` section **at the end** of `config.toml`, start `./ttyloom` and scan the QR code from the Discord app (**Settings → Scan QR Code**). TTYloom logs in as a device of its own and keeps the token in `~/.config/ttyloom/discord.token` (mode `0600`).
+Add an empty `[discord]` section **at the end** of `config.toml`, start `./ttyloom`, scan the QR code from the Discord app (**Settings → Scan QR Code**) and confirm on the phone. TTYloom logs in as a device of its own and keeps the token in `~/.config/ttyloom/discord.token` (mode `0600`).
 
 Prefer to hold the token yourself? Store it in a password manager and name the command that prints it:
 
@@ -146,7 +147,7 @@ token_cmd = "pass show discord/token"
 
 ### IRC
 
-Type `/irc add` in TTYloom: a form asks for the name, host (← → pick Libera.Chat, OFTC, EFnet, DALnet, Undernet, IRCnet, QuakeNet, Rizon, hackint and more, ports filled in), port, TLS, nick, user, real name and NickServ password, then writes an `[[irc]]` table at the end of `config.toml` and connects. No bouncer, no helper program; as many networks as you like, each one a section of the sidebar; `/irc delete <name>` removes one. Rooms joined with `/join` are remembered and joined again at the next start. `/dcc send <nick> <path>` and `/dcc get` transfer files straight between clients.
+Type `/irc add` in TTYloom: a form asks for the name, host (← → pick Libera.Chat, OFTC, EFnet, DALnet, Undernet, IRCnet, QuakeNet, Rizon, hackint and more, ports filled in), port, TLS, nick, user, real name and NickServ password, then writes an `[[irc]]` table at the end of `config.toml` and connects. No bouncer, no helper program; as many networks as you like, each one a section of the sidebar; `/irc delete <name>` removes one. Rooms joined with `/join`, with their key, are remembered and joined again at the next start. `/dcc send <nick> <path>` and `/dcc get` transfer files straight between clients.
 
 ```toml
 [[irc]]
@@ -160,7 +161,7 @@ nickserv_password = ""
 channels = ["#go-nuts"]
 ```
 
-The usual IRC commands answer in the window they were typed in: `/join #room [key]`, `/part`, `/cycle`, `/topic`, `/nick`, `/notice`, `/invite`, `/names`, `/mode`, `/kick`, `/ban`, `/kickban`, `/who`, `/whowas`, `/whois`, `/motd`, `/ctcp`, `/quote` and `/ignore`, whose masks are kept in the `ignores` key of the table.
+The usual IRC commands answer in the window they were typed in (a window of that network; else window 0): `/join #room [key]`, `/part`, `/cycle`, `/topic`, `/nick`, `/notice`, `/invite`, `/names`, `/mode`, `/kick`, `/ban`, `/kickban`, `/who`, `/whowas`, `/whois`, `/motd`, `/ctcp`, `/quote` and `/ignore`, whose masks are kept in the `ignores` key of the table.
 
 [IRC networks, DCC and the NAT settings →](docs/guide.md#irc-networks)
 
@@ -203,7 +204,7 @@ Review `download_dir` and `log_dir` in that configuration. Caches written with e
 
 | Language | Code | How to select |
 | --- | --- | --- |
-| English | `en` | Default unless `LANG`/`LC_ALL` names French |
+| English | `en` | Default unless `LC_ALL`, `LC_MESSAGES` or `LANG` names French |
 | Français | `fr` | `lang = "fr"` in `config.toml`, or `/set lang fr` live; `fr+en` falls back to English for a missing text |
 
 The documentation is written in English; the interface follows `lang`.
@@ -223,7 +224,7 @@ sidebar = "hidden"           # hidden, chats, windows; F2 writes it
 members = false              # member box open at start; F3 writes it
 spell = "off"                # fr+en_US enables installed dictionaries
 notify = "terminal"          # terminal, desktop, off
-auto_media_max_kb = 5120      # 0 disables automatic media downloads
+auto_media_max_kb = 5120     # 0 disables automatic media downloads
 cache_messages = 2000
 update_check = false         # true asks GitHub at start whether a newer release exists
 ```
@@ -233,23 +234,26 @@ Configuration and session files contain account data. They live outside the sour
 ## Code layout
 
 ```text
-cmd/ttyloom/       application entry point and network setup
+cmd/ttyloom/       application entry point and the list of network modules
 protocols/
-  tgc/            Telegram adapter: MTProto through gotd
-  dsc/            Discord adapter: arikawa and ningen
-  irc/            IRC adapter: ergochat/irc-go, DCC
+  tgc/            Telegram module: MTProto through gotd
+  dsc/            Discord module: arikawa and ningen
+  irc/            IRC module: ergochat/irc-go, DCC
 internal/
   model/          shared messages, events, Backend and capability contract
+  module/         what a network module gives the client: config, commands, setup page
   ui/             windows, editor, sidebar, overlays and event loop
   term/           terminal input/output, keyboard and mouse
   render/         text, entities, wrapping and half-block images
   media/          bounded downloads/decoding helpers and kitty graphics
   cache/          per-network disk snapshots
   config/         settings and private file writes
+  hook/           hooks.toml: filters and program runs
+  update/         build id and the optional update check
   emoji/ i18n/ spell/ theme/
 ```
 
-**One Go module, separate protocol packages.** The adapters depend on the shared model; the UI has no Telegram or Discord SDK imports. This keeps a future protocol adapter in `protocols/` without adding separate versioning or a `go.work` file.
+**One Go module, separate protocol packages.** The modules depend on the shared model; the UI has no Telegram, Discord or IRC library imports. This keeps a future network module in `protocols/` without adding separate versioning or a `go.work` file. [Writing a network module](docs/modules.md) explains how one plugs in.
 
 ```mermaid
 flowchart LR
@@ -257,8 +261,10 @@ flowchart LR
     U --> M[model.Backend + Caps]
     M --> TG[protocols/tgc]
     M --> DC[protocols/dsc]
+    M --> IR[protocols/irc]
     TG -->|events| U
     DC -->|events| U
+    IR -->|events| U
     U <--> C[Local cache]
 ```
 
@@ -276,4 +282,4 @@ To prepare another release, follow the [release instructions](docs/releases.md).
 
 TTYloom’s original code, documentation and artwork are [MIT licensed](LICENSE.md). Third-party components retain their own licenses; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for dependency versions, license texts, copied code, Unicode data and native-library requirements.
 
-Built on [gotd](https://github.com/gotd/td), [arikawa](https://github.com/diamondburned/arikawa), [ningen](https://github.com/diamondburned/ningen), [rsc.io/qr](https://github.com/rsc/qr), [Hunspell](https://hunspell.github.io/) and the [kitty graphics protocol](https://sw.kovidgoyal.net/kitty/graphics-protocol/). Inspired by ircii and BitchX. Screenshot colours are from [Catppuccin](https://github.com/catppuccin/palette).
+Built on [gotd](https://github.com/gotd/td), [arikawa](https://github.com/diamondburned/arikawa), [ningen](https://github.com/diamondburned/ningen), [ergochat/irc-go](https://github.com/ergochat/irc-go), [rsc.io/qr](https://github.com/rsc/qr), [Hunspell](https://hunspell.github.io/) and the [kitty graphics protocol](https://sw.kovidgoyal.net/kitty/graphics-protocol/). Inspired by ircii and BitchX. Screenshot colours are from [Catppuccin](https://github.com/catppuccin/palette).

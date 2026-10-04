@@ -11,10 +11,11 @@ another configuration directory. Keep top-level settings before TOML sections.
 ## Telegram
 
 The quickest way: start ttyloom and use the Networks box (`/networks`, opened
-at the first start). Its Telegram page links to my.telegram.org, takes the
-api_id and api_hash of your application, writes them to `config.toml` and
-shows the QR code. The steps below are the same with `config.toml`, and cover
-bots, which the box does not set up.
+at the first start). Its Telegram page links to my.telegram.org (Ctrl+O opens
+the link), takes the api_id and api_hash of your application, writes them to
+`config.toml` and shows the QR code. It refuses an api_id that is not a number
+and an api_hash that is not 32 hexadecimal characters. The steps below are the
+same with `config.toml`, and cover bots, which the box does not set up.
 
 ### Your personal account: API ID and API hash
 
@@ -33,19 +34,25 @@ not a BotFather token.
    bot_token = ""                    # leave empty for a personal account
    ```
 
+   A `[telegram]` section with the same three keys, at the end of the file,
+   replaces these top-level keys.
+
 5. Start `./ttyloom`. On your phone, open **Settings → Devices → Link Desktop
-   Device** and scan the QR code. Alternatively, press Enter in TTYloom for the
-   phone-number flow; enter the phone number with its country code and the
-   login code that Telegram sends. Complete the 2FA password prompt if enabled.
+   Device** and scan the QR code; it renews itself until you scan it.
+   Alternatively, press Enter in TTYloom for the phone-number flow; enter the
+   phone number with its country code and the login code that Telegram sends.
+   Complete the 2FA password prompt if enabled, after the QR code too.
 
 The exact names of the phone menus depend on the app language and version.
 TTYloom writes the resulting session to `session.json` in its configuration
-directory. That file grants account access: keep it private and out of Git.
-There is no need to extract a Telegram token from your browser or phone.
+directory, with mode `0600` and no encryption. That file grants account
+access: keep it private and out of Git. There is no need to extract a Telegram
+token from your browser or phone.
 
-`TG_API_ID` and `TG_API_HASH` can override file settings. TTYloom does not copy
-environment overrides back into the file. Avoid putting secrets in shell
-history, shared launch scripts or bug reports.
+`TG_API_ID` and `TG_API_HASH` override the file settings, a `[telegram]`
+section included. TTYloom does not copy environment overrides back into the
+file. Avoid putting secrets in shell history, shared launch scripts or bug
+reports.
 
 ### A Telegram bot: get a BotFather token
 
@@ -66,12 +73,14 @@ history, shared launch scripts or bug reports.
    only sees chats and messages Telegram allows it to receive.
 
 The bot session uses `session-bot.json`, separate from your user session.
-Bot mode has no dialog list, account history or account-wide search. A bot
+Bot mode has no dialog list, account history, search, GIF box or media
+browser: `/query @user` or `/join @channel` chooses where to send. A bot
 cannot start an unsolicited private conversation with an arbitrary user.
 
 ### Lost access or exposed credentials
 
-For a personal account, revoke the relevant session from Telegram’s **Devices**
+`/telegram logout` ends the session of TTYloom on the server. Otherwise, for a
+personal account, revoke the relevant session from Telegram’s **Devices**
 settings, stop TTYloom and move its session file aside before logging in again.
 For a bot, use BotFather to revoke and replace the token. Do not upload a session
 file, login code, API hash or token when reporting a problem.
@@ -95,24 +104,35 @@ Discord says that using a user token in another application can result in
 suspension or termination. This is an unofficial integration, not an approved
 Discord client. See [Discord’s account safety guidance](https://discord.com/safety/360044104071-Tips-against-spam-and-hacking)
 and [self-bot policy](https://support.discord.com/hc/en-us/articles/115002192352-Automated-User-Accounts-Self-Bots).
-Every Discord request names itself as the arikawa library (REST User-Agent
-`DiscordBot (…arikawa…)`, gateway `browser: Arikawa`): Discord can tell that
-TTYloom is a third-party client.
+The API requests name the arikawa library (REST User-Agent
+`DiscordBot (…arikawa…)`) and the gateway connection says `browser: Arikawa`;
+the QR login and the file downloads go out as a plain Go HTTP client. Discord
+can tell that TTYloom is a third-party client.
 
 ningen keeps the conversation summaries Discord sends under
-`~/.cache/ningen/summary/`, outside TTYloom’s directories; `/discord logout`
-does not remove them.
+`~/.cache/ningen/summary/` (`$XDG_CACHE_HOME/ningen/summary/` when that
+variable is set), outside TTYloom’s directories, whatever `TTYLOOM_DIR` says;
+`/discord logout` does not remove them.
 
 ### Log in with a QR code (recommended)
 
 Write an empty `[discord]` section at the end of `config.toml` and start
-TTYloom. It shows a QR code in window 0; scan it from the Discord app
-(**Settings → Scan QR Code**) and confirm on the phone. This is the remote
-authentication of the official desktop client: TTYloom becomes a device of
-its own, listed in **Settings → Devices**, and the token it receives is saved
-in `~/.config/ttyloom/discord.token` with mode `0600`. Nothing is read from a
-browser or from the desktop client. `/discord logout` ends that session on the
-server and deletes the file; `/discord login` shows the QR again.
+TTYloom. It shows a QR code over window 0, with the time it has left; scan it
+from the Discord app (**Settings → Scan QR Code**) and confirm on the phone.
+The input line names the account seen on the phone until you confirm. This is
+the remote authentication of the official desktop client: TTYloom becomes a
+device of its own, listed in **Settings → Devices**, and the token it receives
+is saved in `~/.config/ttyloom/discord.token`, next to `config.toml`, with
+mode `0600`. Nothing is read from a browser or from the desktop client.
+
+The code does not renew itself. Enter gives the login up; an expired code or a
+refusal on the phone stops Discord too, with a line in window 0, and
+`/discord login` shows a new QR. `/discord disconnect` closes the connection
+and keeps the token: `/discord login` connects again without a QR.
+`/discord logout` ends that session on the server and deletes the file;
+`/discord login` shows the QR again. A token revoked meanwhile (a password
+change, “log out of all devices”) stops Discord with a message in window 0
+and the file is deleted: `/discord login` shows a new QR.
 
 ### Obtain your own user token manually
 
@@ -158,10 +178,18 @@ Start `./ttyloom`. For Discord alone, leave `api_id = 0`, `api_hash = ""` and
 
 You can use another password manager or a local executable that prints only
 the token. The command runs **without a shell**, splits arguments on whitespace,
-and stops after 30 seconds. Pipes, redirects, shell variables and shell quoting
-are not interpreted. Use an executable wrapper if its path or arguments contain
-spaces. TTYloom trims surrounding whitespace and does not save the returned
-token to `config.toml` or intentionally log its value.
+and stops after 30 seconds. Pipes, redirects, `~`, shell variables and shell
+quoting are not interpreted. Use an executable wrapper if its path or arguments
+contain spaces. TTYloom trims surrounding whitespace and does not save the
+returned token to `config.toml` or intentionally log its value.
+
+A command that fails, or prints nothing, leaves Discord stopped with a line in
+window 0 that quotes the first line of its error output; the rest of TTYloom
+starts. The first run happens before TTYloom takes over the terminal, so a
+pinentry that asks on the terminal works there; `/discord login` runs the
+command again from inside the interface, where only a graphical pinentry or an
+unlocked agent can answer. With `token_cmd`, `/discord logout` only
+disconnects: the token is yours.
 
 An authentication failure normally means a revoked token, an incorrect manager
 entry or a command that failed. A token revoked during a session (a password
@@ -185,17 +213,20 @@ would require an implementation using the supported bot APIs.
 IRC needs no token: a nick, and a password when the nick is registered with
 the network's services (NickServ). `/irc add` asks for both in a form and
 writes an `[[irc]]` table at the end of `config.toml` (mode `0600`); the
-password stays in that file and goes nowhere else. TTYloom connects straight
-to the server over TLS (port 6697 on most networks), no bouncer involved.
+password stays in that file and goes nowhere else. So does the key of a room
+joined with `/join #room key`: it is kept with the room in `channels`, in clear.
+TTYloom connects straight to the server over TLS (port 6697 on most networks),
+no bouncer involved.
 
 With a password, TTYloom identifies by **SASL PLAIN** when the server offers
-it, which is the case of Libera.Chat, OFTC and every modern ircd; a server that
-offers no SASL at all gets a `NickServ IDENTIFY` right after registration
+it (Libera.Chat does), with the nick of the table as the account name; a server
+that offers no SASL at all gets a `NickServ IDENTIFY` right after registration
 instead. A SASL failure is not followed by a NickServ IDENTIFY: the password is
-not sent a second time. A nick already
-taken is retried with a `_1`, `_2`… suffix while connecting, and the network's
-local cache and sidebar entries survive that retry. Leave the password
-empty on a network where the nick is not registered.
+not sent a second time. Window 0 shows the answer: logged in, or the password
+refused. A nick already taken is retried with a `_0`, `_1`… suffix while
+connecting, and the nick of the table is asked for again every four minutes
+until it is free; the network's local cache and sidebar entries survive that
+retry. Leave the password empty on a network where the nick is not registered.
 
 On a connection without TLS, the password is not sent at all (neither SASL
 PLAIN nor NickServ IDENTIFY), since it would go out in clear; a warning line
@@ -207,9 +238,13 @@ Set `nickserv_password_cmd` instead of `nickserv_password` to read the
 password from a command (a password manager) rather than storing it in
 `config.toml`, exactly like Discord's `token_cmd`: no shell, split on
 whitespace, 30-second timeout. It takes priority over `nickserv_password`,
-which still works; a failing command is a launch error of that network.
+which still works; a failing command is a launch error of that network. The
+command runs at start, before the screen is taken, so a terminal pinentry
+works; `/irc connect <name>` runs it again from inside the raw terminal, where
+it needs a graphical pinentry or an unlocked agent.
 
-To stop using a network, `/irc disconnect <name>` keeps its table; removing
-the table from `config.toml` forgets it, password and channel list included.
-Change the password with the network's services (`/msg NickServ SET PASSWORD`
-on most networks) if it was exposed.
+To stop using a network, `/irc disconnect <name>` keeps its table;
+`/irc delete <name>`, or removing the table from `config.toml` by hand, forgets
+it, password and channel list included. Change the password with the
+network's services (`/msg NickServ SET PASSWORD` on most networks) if it was
+exposed.

@@ -236,10 +236,14 @@ func (m *Module) Template() string {
 #   port = 6697
 #   tls = true
 #   nick = "me"
+#   user = ""                    # empty = nick
+#   realname = ""                # empty = nick
 #   nickserv_password_cmd = "pass show irc/libera"  # prints the password (no shell, like token_cmd); wins over the next key
 #   nickserv_password = ""       # SASL PLAIN, or NickServ IDENTIFY when the server has no SASL
 #   password_without_tls = false # true sends the password in clear on a connection without TLS; withheld otherwise
-#   channels = ["#go-nuts"]      # kept up to date by /join and /part, joined again at start
+#   channels = ["#go-nuts"]      # kept up to date by /join and /part ("#room key" for a room with a key), joined again at start
 #   ignores = ["spammer!*@*"]    # kept up to date by /ignore: lines of those masks are dropped
+#   dcc_ip = ""                  # address DCC SEND announces (the public one behind a NAT); empty = the IRC socket's
+#   dcc_ports = ""               # "5000-5010": ports DCC SEND listens on (forwarded behind a NAT); empty = any free port
 `
 }

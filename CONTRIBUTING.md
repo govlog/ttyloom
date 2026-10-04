@@ -6,8 +6,8 @@ English or French. Please follow the [code of conduct](CODE_OF_CONDUCT.md).
 
 ## Test and report a problem
 
-Try the [latest release](https://github.com/govlog/ttyloom/releases/latest).
-Useful areas include Telegram and Discord login, keyboard and mouse input,
+Try the [newest release](https://github.com/govlog/ttyloom/releases).
+Useful areas include Telegram, Discord and IRC login, keyboard and mouse input,
 inline images, search, reconnects, and both interface languages.
 
 Search [existing issues](https://github.com/govlog/ttyloom/issues) first. Include
@@ -36,14 +36,19 @@ go test -race ./...
 go test -tags nospell ./...
 go vet ./...
 go mod tidy -diff
+python3 scripts/licenses.py --check
 CGO_ENABLED=0 go build -trimpath -tags nospell -o /tmp/ttyloom ./cmd/ttyloom
+go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
 ```
 
 Normal builds and race tests need Hunspell development files. Without them,
 use `CGO_ENABLED=0 go test -tags nospell ./...` and state that limitation in your
-pull request. Describe the problem, resulting behavior and checks performed.
+pull request. Tests that need FFmpeg or the French and US English dictionaries
+are skipped without them; CI installs `ffmpeg`, `hunspell-fr` and
+`hunspell-en-us`. Describe the problem, resulting behavior and checks performed.
 
 Keep credentials and personal working notes out of commits. Original code is
 [MIT licensed](LICENSE.md); preserve separate licenses of copied code and
-dependencies. If adding one, update [third-party notices](THIRD_PARTY_NOTICES.md).
+dependencies. If adding one, update [third-party notices](THIRD_PARTY_NOTICES.md);
+after a change of `go.mod`, `python3 scripts/licenses.py` refreshes `licenses/go`.
 For publishing, see [release instructions](docs/releases.md).

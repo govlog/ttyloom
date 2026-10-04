@@ -2,7 +2,8 @@
 
 [Overview](../README.md) · [Account setup](authentication.md)
 
-Manual for **0.11-beta**, checked against the code on **October 5, 2026**.
+Manual for **0.11-beta** and the unreleased changes of the
+[changelog](../CHANGELOG.md), checked against the code on **October 5, 2026**.
 
 <details>
 <summary>Contents</summary>
@@ -30,29 +31,33 @@ do not need Go. Building from source requires **Go 1.26.7 or newer**.
 line. The kitty graphics protocol displays photos, stickers, GIFs and video
 frames inside Ghostty or kitty. Unicode half blocks provide a fallback in other
 terminals. It supports message formatting, clickable OSC 8 links and Ghostty
-color themes.
+color themes. Each frame goes to the terminal as one synchronized update (DEC
+mode 2026), so the screen never shows a half-drawn frame; a terminal without
+that mode ignores it.
 
 Automated checks run on Ubuntu; the ARM64 binary gets a startup check under
 QEMU. These checks do not cover every terminal combination or live account login.
 
-Connect **Telegram, Discord, or both**. Discord alone needs no Telegram
-credentials. The sidebar and aggregate view combine networks; `/net` filters
-them. IRC is supported too, as many networks as wanted; WhatsApp is planned but not implemented.
+Connect **Telegram, Discord, IRC, or any mix**. Discord and IRC need no
+Telegram credentials. IRC takes as many networks as you want. The sidebar and
+aggregate view combine networks; `/net` filters them. WhatsApp is planned but
+not implemented.
 
 Telegram supports a user account, through QR or phone/code/2FA login, and bot
 login through BotFather. Bots only see messages received after login. Discord
-uses a user token; bot tokens and OAuth login are not supported.
+uses a user token, from a QR login or from a command you name; bot tokens and
+OAuth login are not supported.
 
 ## Requirements
 
 - For source builds only: [Go 1.26.7 or newer](https://go.dev/dl/).
-- Optional: `ffmpeg` and `ffprobe` for videos and animated WebP. Actual GIF
-  files are decoded in Go.
+- Optional: `ffmpeg` and `ffprobe` for videos, animated WebP and the
+  metadata of a video sent with `/send`. Actual GIF files are decoded in Go.
 - For source builds with spell checking: Hunspell development files and
   dictionaries. The portable release binaries use `nospell`.
 - For Telegram only: an application API ID and hash from
   [my.telegram.org/apps](https://my.telegram.org/apps). Both Telegram user and bot
-  modes need them; Discord does not. See the [account setup guide](authentication.md).
+  modes need them; Discord and IRC do not. See the [account setup guide](authentication.md).
 
 On Debian or Ubuntu:
 
@@ -80,7 +85,9 @@ cd ttyloom_0.11-beta_linux_amd64
 ```
 
 Replace `amd64` with `arm64` for ARM64. Portable binaries omit Hunspell. Keep
-the supplied licenses and notices with the binary.
+the supplied licenses and notices with the binary. `--version` prints the
+version, the build id (the first 8 hex digits of the source commit) and the
+commit.
 
 ### Build from source
 
@@ -101,7 +108,8 @@ ttyloom
 With no network configured, the expected result is the Networks box (see
 [Networks box](#networks-box)) and a new `~/.config/ttyloom/config.toml`
 containing defaults. A source build without release flags reports `dev` for
-its version.
+its version; built in a Git checkout, it also knows the build id of its
+commit.
 
 To build without Hunspell or a C compiler:
 
@@ -118,19 +126,22 @@ Other optional tools are `wl-paste`/`wl-copy` (package `wl-clipboard`) or
 ### Networks box
 
 The first start, with no network configured, opens the **Networks** box;
-`/networks` opens it again at any time. It lists each network with its state
-(connected as whom, connecting, stopped), then a `+ Add …` line per network
-that can be added: Telegram and Discord once, IRC as many times as you like.
+`/networks` opens it again at any time. It lists, module by module, each
+configured network with its state (connected as whom, connecting, stopped) and
+a `+ Add …` line when one more can be added: Telegram and Discord while none is
+configured, IRC always.
 
 - **Enter on `+ Add …`** opens the page of that network in the box: a short
   guide, and the fields to fill. Telegram: a link to my.telegram.org (Ctrl+O
-  opens it), then the api_id and api_hash of your application. Discord: the
-  warning about the terms of Discord, and an optional `token_cmd` (empty: the
-  QR code). IRC: the form of `/irc add`. Enter writes `config.toml` and
-  connects; Esc goes back to the list. The box does not set up a Telegram bot:
-  see [Telegram bot login](#telegram-bot-login).
-- **Enter on a network** gives its actions: Connect, Disconnect, Log out of the
-  account (Telegram and Discord), Remove (IRC, after a `y`).
+  opens it), then the api_id and api_hash of your application; the page refuses
+  an api_id that is not a number and an api_hash that is not 32 hexadecimal
+  characters. Discord: the warning about the terms of Discord, and an optional
+  `token_cmd` (empty: the QR code). IRC: the form of `/irc add`. Enter writes
+  `config.toml` and connects; Esc goes back to the list. The box does not set
+  up a Telegram bot: see [Telegram bot login](#telegram-bot-login).
+- **Enter on a network** gives its actions: Connect when it is stopped;
+  Disconnect and Log out of the account (Telegram and Discord) while it runs;
+  Remove (IRC, after a `y`).
 
 A login prompt or a QR code closes the box; once a network started from the
 box is connected, or has stopped, the box comes back with its new state.
@@ -145,8 +156,8 @@ The default file is `~/.config/ttyloom/config.toml`, or
 creates it. `TTYLOOM_DIR` overrides the complete configuration directory path.
 
 Edit existing keys. This is a reference example; do not replace a file holding
-your credentials with this empty example. Put `[telegram]` and `[discord]`
-sections after all top-level settings.
+your credentials with this empty example. Put the `[telegram]` and `[discord]`
+sections and the `[[irc]]` tables after all top-level settings.
 
 ```toml
 api_id = 0
@@ -195,18 +206,18 @@ update_check = false
 | --- | --- |
 | `api_id`, `api_hash` | Telegram application credentials; required only for Telegram. |
 | `bot_token` | Empty for a user account; a BotFather token for Telegram bot mode. |
-| `lang` | `en`, `fr`, or a fallback chain such as `fr+en`. The first language also selects plural rules. Empty follows `LC_ALL`/`LANG`: French for `fr_*`, otherwise English. `/set lang` changes it live and rejects unknown languages. See the Languages table of the README. |
+| `lang` | `en`, `fr`, or a fallback chain such as `fr+en`. The first language also selects plural rules. Empty follows the first of `LC_ALL`, `LC_MESSAGES` and `LANG` that is set: French when it starts with `fr`, otherwise English. `/set lang` changes it live and rejects unknown languages. See the Languages table of the README. |
 | `theme` | Ghostty theme name. Empty reads the `theme` setting in `~/.config/ghostty/config`; `terminal` uses the terminal’s ANSI colors. |
 | `download_dir` | Downloaded media directory. Names include date, network, chat ID, title and message ID. |
-| `auto_media_max_kb` | Automatic download threshold in KiB, from 0 to 524288. **0 disables all automatic media downloads**, including unknown sizes. `/open` and `/view` remain explicit requests. |
+| `auto_media_max_kb` | Automatic download threshold in KiB, from 0 to 524288. **0 disables all automatic downloads of message media**, including unknown sizes; avatars and the pictures of the GIF picker and media browser still load. `/open`, `/view`, `v`, `o` and a click remain explicit requests. |
 | `images` | `auto` detects kitty graphics; `kitty`, `halfblock` and `off` select an explicit mode. `F4` cycles modes. |
 | `images_hover` | Show images in an overlay when hovering over a message, with no reserved image rows in the conversation. `F5` toggles it. |
 | `kitty_images` | Maximum number of images retained in the terminal, including GIFs and avatars. The least recently displayed image is released and sent again when needed. |
 | `video_inline_frames` | Frames decoded for video playback, at 10 frames per second. Default 300; decoding also has a 200 MiB budget. Change this in the file and restart. |
 | `video` | `show`: first frame until `l` starts playback. `hidden`: label only, with `v` and `o` still available. `autoplay`: loop a downloaded video when visible; `s` stops and `l` controls playback. Frame limits still apply. |
 | `gifplay` | `always`: every animated GIF on the screen plays. `hover`: only the GIF of the message under the mouse moves, the others hold their frame. `off`: the first frame alone. |
-| `link_previews` | Display a recognized Telegram link’s site, title, description and thumbnail. `o` or a click on the label opens its page. |
-| `maps` | Fetch OpenStreetMap tiles for a visible Telegram location or an explicit viewer request. Attribution remains visible; tiles are cached by coordinates under `download_dir/maps`. Disabled by default because it contacts `tile.openstreetmap.org`. |
+| `link_previews` | Display the preview the network gives of a link: on Telegram its site, title, description and thumbnail; on Discord the title and description of an embed. Off, the label stays alone. `o` or a click on the label asks before it opens the page. |
+| `maps` | Fetch OpenStreetMap tiles for a visible Telegram location or an explicit viewer request. Attribution remains visible; the map of each position is kept under `download_dir/maps`, the tiles in the cache directory. Disabled by default because it contacts `tile.openstreetmap.org`. |
 | `avatars` | Small profile photos beside names and in the sidebar; kitty graphics only. |
 | `hover` | `menu` and `highlight` highlight the message under the pointer; a right click opens its menu. `off`: disable hover tracking. Old boolean values remain accepted. Also controls pointer tracking for sidebar wheel navigation. |
 | `separator` | A horizontal rule between messages and the status bar. |
@@ -227,20 +238,23 @@ update_check = false
 | `aggregate` | Combine open conversations in window 0; `F6` toggles it. |
 | `tabs` | One tab per network at the right of the status line, clickable; `F9` turns them on and walks the tabs. Nothing with a single network. |
 | `cache` | Save dialogs and recent message history on disk. False disables the history cache. |
-| `cache_messages` | Recent messages kept per conversation on disk; window memory follows the same message-count setting. |
-| `notify` | `terminal` for native terminal notifications, `desktop` for `notify-send`, or `off`. Notification delivery also depends on focus. A `desktop` notification escapes `&`, `<` and `>` in its body, so markup from a remote sender shows as plain text. |
+| `cache_messages` | Recent messages kept per conversation on disk; a change reaches the disk cache at the next start. Window memory follows it at once, never below 2000 messages. |
+| `notify` | `terminal` for native terminal notifications (OSC 777), `desktop` for `notify-send`, or `off`. Same conditions as the bell: a private message or a mention outside the window shown, or while the terminal is not focused; a burst gives one notification at once, then one for the last message after 2 seconds; a muted conversation never notifies. A `desktop` notification escapes `&`, `<` and `>` in its body, so markup from a remote sender shows as plain text. |
 | `log`, `log_dir` | Plain-text conversation logs. `/log` toggles one window; `log = true` enables logging for new windows. |
 | `update_check` | Off by default: no request. On, each start asks the GitHub API (`api.github.com`), in the background, for the newest release, and window 0 names it when it is newer than the running build. A release build compares versions; a build from source compares the date of its commit with the release. `/set update_check on` checks at once. Window 0 shows the version and build id at start; the build id is the first 8 hex digits of the source commit, also printed by `ttyloom --version`. |
 | `[discord] token_cmd` | Command printing the Discord user token. Omit the section to disable Discord; a section without the command logs in by QR code and keeps the token in `discord.token`. |
 
-`[telegram]` accepts `api_id`, `api_hash` and `bot_token` and takes precedence
-over those top-level keys. Unknown settings produce a startup warning. `/set`
-lists settings that can change live. Credentials, `cache` and
-`video_inline_frames` are file settings that require a restart.
+`[telegram]` accepts `api_id`, `api_hash` and `bot_token` and replaces those
+top-level keys as a whole: a key left out of the section is empty. Unknown
+settings produce a startup warning. `/set` lists settings that can change
+live. Credentials, `cache` and `video_inline_frames` are file settings that
+require a restart; `theme` changes with `/theme`, `sidebar` with F2 and
+`members` with F3.
 
 The `TG_API_ID`, `TG_API_HASH` and `TG_BOT_TOKEN` environment variables override
-file values. `/set` and `/theme` save the configuration, but do not copy these
-environment-supplied secrets into it. Saving keeps top-level keys of
+file values, a `[telegram]` section included. `/set`, `/theme` and the keys
+that write the configuration (F2 to F7, F9) save it, but do not copy these
+environment-supplied secrets into it. Saving keeps the keys and tables of
 `config.toml` this version does not know (comments are still lost, and the
 file comes out with its keys sorted); if `config.toml` no longer parses, for
 example after a hand edit while TTYloom runs, a save no longer overwrites it
@@ -260,8 +274,10 @@ configuration before moving it, and review `download_dir` and `log_dir` too.
 
 Leave `bot_token` empty and supply your application ID and hash. On startup,
 scan the QR code through **Telegram → Settings → Devices → Link Desktop
-Device**. The code refreshes when it expires. Complete the 2FA prompt if enabled.
-For phone login, follow the phone/code prompts instead.
+Device**. The code refreshes when it expires. Complete the 2FA prompt if enabled;
+it can also follow a scanned QR code. For phone login, press Enter at the QR
+prompt (a number typed first is taken as the phone number), then follow the
+prompts.
 
 ```text
 Phone number (+1…):
@@ -285,8 +301,10 @@ bot_token = "YOUR_BOTFATHER_TOKEN"
 
 Bots cannot list dialogs or load account history: Telegram rejects
 `messages.getDialogs` and `messages.getHistory` for bots. TTYloom only shows
-messages received after login; `/chats` and `/history` are unavailable. A bot
-cannot initiate a private conversation with a user who has not contacted it.
+messages received after login; `/chats`, `/history`, `/search`, the
+new-conversation box, the GIF picker and the media browser are unavailable.
+`/query @user` or `/join @channel` chooses where to send. A bot cannot initiate
+a private conversation with a user who has not contacted it.
 
 Bot sessions use `session-bot.json`, separate from the user session. Switching
 modes does not merge identities.
@@ -303,14 +321,14 @@ Add this section once, at the end of `config.toml`, and start TTYloom:
 [discord]
 ```
 
-A QR code appears in window 0, like the Telegram one. Scan it from the Discord
-app (**Settings → Scan QR Code**), confirm on the phone, and TTYloom is logged
-in as its own device: the session shows in **Discord → Settings → Devices**
-and survives a logout of your browser. The code is valid five minutes;
-`/discord login` shows a new one. The token is kept in
-`~/.config/ttyloom/discord.token`, mode `0600`, next to the Telegram session;
-`/discord logout` ends that session on the server and deletes the file, Enter
-gives the QR up.
+A QR code appears over window 0, like the Telegram one. Scan it from the
+Discord app (**Settings → Scan QR Code**), confirm on the phone, and TTYloom
+is logged in as its own device: the session shows in **Discord → Settings →
+Devices** and survives a logout of your browser. The box counts the code down
+and does not renew it: Enter, an expired code or a refusal on the phone stops
+Discord, and `/discord login` shows a new one. The token is kept in
+`~/.config/ttyloom/discord.token`, mode `0600`, next to the Telegram session.
+`/discord logout` ends that session on the server and deletes the file.
 
 You may instead keep the token yourself, in a password manager for example,
 and name the command that prints it:
@@ -324,20 +342,21 @@ The command must print only the token. It runs without a shell, splits on
 whitespace and times out after 30 seconds: no pipes, redirections, variable
 expansion or shell quoting. Use a wrapper script for a command that needs those
 features. Its output is not copied into the configuration, logs or window 0.
-A failing command leaves Discord disconnected and is reported in window 0
-with what the command said on stderr; the client starts all the same. Fix the
-manager entry, then `/discord login` runs the command again and connects
-without a restart. That later run happens inside the raw terminal: a command
-that prompts on the tty (a curses pinentry) only works at start; use a
-graphical pinentry or an unlocked agent for `/discord login`. With
+A failing command, or one that prints nothing, leaves Discord stopped and is
+reported in window 0 with the first line it wrote on stderr; the client starts
+all the same. Fix the manager entry, then `/discord login` runs the command
+again and connects without a restart. That later run happens inside the raw
+terminal: a command that prompts on the tty (a curses pinentry) only works at
+start; use a graphical pinentry or an unlocked agent for `/discord login`. With
 `token_cmd`, no QR is shown and `/discord logout` only disconnects: the token
 is yours.
 
 Sections must follow top-level settings: a plain key written after `[discord]`
-belongs to that section. Telegram is optional. With both configured, each
-network reports its connected account in window 0.
+belongs to that section. Telegram is optional. With several networks
+configured, each one reports its connected account in window 0.
 
-Outside sections, superscript `ᵗ` and `ᵈ` indicate the network in the sidebar.
+Outside sections, a superscript letter (`ᵗ`, `ᵈ`, `ⁱ`) shows the network of
+each chat in the sidebar.
 Direct messages use the other person’s name. Server text channels are grouped
 by server and sorted by channel name within it. Network and server headers
 appear when needed; click a header or use `/fold` to collapse it. A collapsed
@@ -350,12 +369,12 @@ is saved in `sidebar.toml`. One network without a server needs no section header
 | `/hooks` | Hooks: list them; `/hooks reload` reads `hooks.toml` again; `/hooks test <name> <text>` tries one without sending anything. See [Hooks](hooks.md). |
 | `/net`, Shift+F2 | Cycle all networks, then each network in name order. |
 | `/net discord` | Show Discord in the sidebar and aggregate view. |
-| `/net telegram` | Show Telegram. |
+| `/net telegram`, `/net irc:libera` | Show Telegram, or one IRC network. |
 | `/net all` | Remove the filter. |
-| `/discord`, `/telegram` | Network status: not started, connecting, connected as X. |
-| `/discord login` | Log in again: the QR code, or `token_cmd` run again when it is set. |
+| `/discord`, `/telegram` | Network status: not started, connecting, connected as X, or disconnected and reconnecting. |
+| `/discord login` | Start Discord again: at once with the token of the QR login, else a new QR code; with `token_cmd`, the command runs again. |
 | `/discord logout` | End the session on the server and forget the token file; with `token_cmd`, only disconnect. |
-| `/telegram login` | Start Telegram again after a logout or a fatal error: QR, or phone and code. |
+| `/telegram login` | Start Telegram again: at once with the saved session (after a disconnect), else QR, or phone and code. |
 | `/telegram logout` | End the session on the server (it leaves **Telegram → Settings → Devices**) and disconnect. |
 | `/discord disconnect`, `/telegram disconnect` | Disconnect and keep the session: `login` connects again without a QR. |
 | `/irc`, `/irc add`, `/irc connect <name>`, `/irc disconnect <name>`, `/irc delete <name>` | The IRC networks, see [IRC networks](#irc-networks). |
@@ -378,18 +397,25 @@ Available on Discord:
 - Paged history and disk cache, reactions and reaction participants.
 - Typing, synchronization of your own read position, attachments, images and
   uploads with `/send`. This is not a read receipt from the other person.
-- F3 members and presence: online, idle and do-not-disturb states. Server member
-  lists use the members currently available to the client.
+- F3 members, online ones highlighted, at most 200 for a server, from what the
+  gateway has sent so far (a first opening can be short). A DM's status bar
+  shows online, idle or do not disturb.
 - Deleting a DM; deleting a group DM leaves that group.
-- Conversation search and global search across servers plus the ten most recent
-  DMs, with a 15-second global-search deadline.
+- Conversation search, and a global search of the ten most recently active
+  servers and the ten most recent DMs, one request every 250 ms, within 15
+  seconds; a server whose search index is still being built is asked once more.
 - Ctrl+G GIF search through Discord's provider (currently KLIPY). Sending a GIF
   posts its page URL; supported received GIFs animate in the conversation.
+- The Ctrl+M media browser, and `/away` as an idle status with the message as
+  custom status (experimental).
 
 Current limits:
 
 - No threads, forums, voice channels or categories in the list.
-- No `/whois`, contact directory or resolution of an unknown Discord username.
+- No `/whois`, contact directory or resolution of an unknown Discord username:
+  a click on a member in F3 opens only a DM already in the list.
+- Unread counts are the mention count, or 1 for something new: Discord gives no
+  exact count.
 - Custom emojis show as `:name:`; on kitty their image takes the cell of the
   picker. Only the emojis of the current server are offered and sent.
 - No other-person read receipts, stickers or location cards.
@@ -419,29 +445,36 @@ realname = "me"              # empty = nick
 nickserv_password_cmd = ""   # command printing the password (no shell, like token_cmd); wins over the next key
 nickserv_password = ""       # SASL PLAIN when the server offers it, NickServ IDENTIFY when it offers none at all
 password_without_tls = false # true sends the password in clear on a connection without TLS; withheld otherwise
-channels = ["#go-nuts"]      # kept by the client: /join adds, /part removes, joined again at start
+channels = ["#go-nuts"]      # kept by the client: /join adds ("#room key" for a room with a key), /part removes, joined again at start
 ignores = []                 # kept by the client: /ignore adds and removes; lines of those masks are dropped
-dcc_ip = ""                  # address DCC SEND announces and its listener binds to (behind a NAT); empty = the IRC socket's
+dcc_ip = ""                  # address DCC SEND announces (the public one behind a NAT); empty = the IRC socket's
 dcc_ports = ""               # "5000-5010" to pin the DCC ports; empty = any free port
 ```
 
 The name is the key of the network (`irc:libera`): `/net irc:libera`, a
 section of its own in the sidebar headed by the name, superscript `ⁱ` in
-front of its chats. A private chat is a nick, a room a channel; `/join #room`
-and `/query nick` open them (from a window of the network when several are
-configured, `#room` goes to the IRC networks only). The channel list of the
-table is the memory of the client across sessions; the disk cache is the
-scrollback, the server keeps no history. Because that cache is the only copy,
-TTYloom keeps it on disk across `/part`, a leave-the-room or delete-the-chat
-action, `/clear`, a peer's nick change or a cache format change: the history
-plays back the next time the room or query is opened, and a nick already
-taken at login (a ghost session, a quick restart) no longer wipes the
-network's cache. Incoming bold, italic and underline
-codes are kept, colours dropped; the draft styles (Ctrl+B/I/U) go out as
-mIRC codes. `/whois`, F3 (NAMES) and `/me` work; edits, reactions, read
-receipts and search do not exist on IRC and are hidden. A notice from a
-person or a service (NickServ) lands in window 0. NAMES, WHOIS and MOTD
-answers are capped at 10000 lines each.
+front of its chats when the sidebar shows no section headers. A private chat
+is a nick, a room a channel. `/join #room [key]` and `/query nick` reach them:
+the room is joined, or the private chat made, with its own window in the
+sidebar, and it becomes the send target of the window. With several IRC
+networks, type them from a window of the network: elsewhere `#room` goes to
+every IRC network. The channel list of the table is the memory of the client
+across sessions; the disk cache is the scrollback, the server keeps no
+history. Because that cache is the only copy, TTYloom keeps it on disk across
+`/part`, a leave-the-room or delete-the-chat action, `/clear`, a peer's nick
+change or a cache format change: the history plays back the next time the room
+or query is opened, and a nick already taken at login (a ghost session, a
+quick restart) does not wipe the network's cache. Incoming bold, italic,
+underline, strikethrough and monospace codes are kept, colours dropped; the
+draft styles (Ctrl+B/I/U) go out as mIRC codes. `/whois`, F3 (NAMES) and `/me`
+work: `/me` goes out as a CTCP ACTION and shows as `* nick does`, without
+`<nick>`, like the actions received. A reply (`p`) goes out as a plain message
+with no quote. Edits, reactions, read receipts, search, GIFs and the media
+browser do not exist on IRC. A notice sent to you, by a person or a service
+(NickServ), lands in window 0, as do the SASL answers and the invitations; a
+notice to a room shows in the room as `-nick- text`, and a message to its ops
+(`@#room`) shows there marked `[@#room]`. NAMES answers are capped at 10000
+nicks, WHOIS and MOTD answers at 10000 lines.
 
 | Command | Effect |
 | --- | --- |
@@ -450,37 +483,40 @@ answers are capped at 10000 lines each.
 | `/irc connect <name>`, `/irc disconnect <name>` | Start or stop one network. |
 | `/irc delete <name>` | Stop one network, remove its `[[irc]]` table from `config.toml`, close its windows and drop its chats from the sidebar. Its cache directory stays on disk. |
 | `/dcc` | DCC offers waiting and transfers running. |
-| `/dcc send <nick> <path>` | Send a file straight to that person (DCC SEND); `/send` in a private IRC chat does the same. |
-| `/dcc get [nick]` | Fetch the last offer of the window, or of that nick's chat; the download key on the file line too. |
+| `/dcc send <nick> <path>` | Send a file straight to that person (DCC SEND), from an IRC window or tab, or with a single IRC network; `/send` in a private IRC chat does the same, without its caption. |
+| `/dcc get [nick]` | Fetch the last offer of the window, or of that nick's chat; `o` on the selected file line fetches it too, then opens it. |
 
-DCC goes from client to client over TCP: the sender listens on the announced
-address only (`dcc_ip`, else the IRC socket's address, never every interface)
-and announces its address and port, the receiver connects. A send is reported
-as sent only once the peer has acknowledged the whole file; a peer that closes
-early or stays silent for 2 minutes gives an error on the line instead. Behind
-a NAT, set `dcc_ip` to the public address and `dcc_ports` to a forwarded
-range. A received offer shows as a file line in the private chat, labelled
-with the `ip:port` it points to (`passive` for a reverse offer); the file
-lands in `download_dir`. An offer pointing to `0.0.0.0`, to loopback (unless
-`dcc_ip` is itself loopback), or to a multicast or link-local address is
-refused with a warning line. Reverse offers (a sender behind a NAT) are
-accepted. No resume, no DCC CHAT.
+DCC goes from client to client over TCP: the sender listens on `dcc_ip` when
+it is an address of the machine, else on the IRC socket's address, never on
+every interface; it announces `dcc_ip` (or that address) and the port, and the
+receiver has 2 minutes to connect. A send is reported as sent only once the
+peer has acknowledged the whole file; a peer that closes early or stays silent
+for 2 minutes gives an error on the line instead. Behind a NAT, set `dcc_ip`
+to the public address and `dcc_ports` to a forwarded range. A received offer
+shows as a file line in the private chat, labelled with the `ip:port` it
+points to (`passive` for a reverse offer); the file lands in `download_dir`.
+An offer pointing to `0.0.0.0`, to loopback (unless `dcc_ip` is itself
+loopback), or to a multicast or link-local address is dropped, with a warning
+in `/debug`. Reverse offers (a sender behind a NAT) are accepted. No resume, no
+DCC CHAT, no DCC to a room.
 
-The usual IRC commands need an IRC context: a window on an IRC chat, the IRC
-tab, or a single IRC network configured. With several IRC networks and none of
-those, the answer says to type the command from a window of the network or on
-its tab; with no IRC network at all they stay unknown commands. Answers land in
-the window the command was typed in, server errors in window 0. A short prefix
-goes to the generic commands first: `/i` is `/irc` and `/wh` is `/whois`, while
-`/who` has to be typed in full.
+The usual IRC commands need an IRC context: a window on an IRC chat (or with an
+IRC send target), the IRC tab or `/net irc:<name>`, or a single IRC network
+configured. With several IRC networks and none of those, the answer says to
+type the command from a window of the network or on its tab; with no IRC
+network at all they stay unknown commands. Answers land in the window the
+command was typed in when it is a window of that network, else in window 0;
+server errors go to window 0. A short prefix goes to the generic commands
+first: `/i` is `/irc` and `/wh` is `/whois`, while `/who` has to be typed in
+full.
 
 | Command | Effect |
 | --- | --- |
-| `/join #room [key]` | Join a room, with its channel key when it has one; the room is kept in `channels`. |
+| `/join #room [key]` | Join a room, with its channel key when it has one; the room is kept in `channels`, with its key, and becomes the send target of the window. |
 | `/part [#room] [reason]` | Leave the room, the current one by default: closes the window and drops the sidebar entry, but keeps the history file on disk, replayed when the room is joined again. This is the command other clients call `/leave`; TTYloom only knows `/part`. |
 | `/cycle [#room]` | Leave and rejoin the room, the window kept: the way to take ops back. |
 | `/topic [#room] [text]` | Show or set the topic. |
-| `/nick <nick>` | Change my nick on this network; the other networks keep theirs. |
+| `/nick <nick>` | Change my nick on this network for the session (`nick` in `config.toml` stays); the other networks keep theirs. A taken nick is refused in window 0. |
 | `/notice <target> <text>` | Send a NOTICE to a nick or a room. |
 | `/invite <nick> [#room]` | Invite a nick into the room. |
 | `/names [#room]` | List the nicks of the room in the window, ops `@` and voices `+` marked; F3 opens the same list as a box. |
@@ -490,12 +526,12 @@ goes to the generic commands first: `/i` is `/irc` and `/wh` is `/whois`, while
 | `/kickban [#room] <nick> [reason]` | Ban, then kick, so that the nick cannot come back before the mode is set. |
 | `/who [mask]` | WHO: the users of the room, or those matching a mask such as `*!*@*.fr`. |
 | `/whowas <nick>` | The last known identity of a nick that left, to build a ban mask after a quit. |
-| `/whois <nick>` | Profile of a nick in an irssi-style box: nick, user@host, ircname, server, secure, actually, loggedin, channels, idle, away. No open chat needed. |
+| `/whois <nick>` | Profile of a nick in an irssi-style box: nick, user@host, ircname, server, secure, actually, loggedin, oper, bot, channels, idle, away. No open chat needed; no answer within 10 seconds gives an error. |
 | `/motd` | Message of the day of the server; every connection also shows its MOTD in window 0. |
-| `/ctcp <nick> <VERSION \| PING \| TIME \| …>` | Send a CTCP request; the answer comes back as `[ctcp(nick)] …`. TTYloom itself answers VERSION, PING, TIME and CLIENTINFO the same way, but only when sent directly to it, never from an ignored nick, and at most 3 in a burst then one every 2 seconds; it no longer answers USERINFO. |
+| `/ctcp <nick> <VERSION \| PING \| TIME \| …>` | Send a CTCP request; the answer comes back as `[ctcp(nick)] …`, and a PING answer gives the round trip in seconds. TTYloom itself answers VERSION, PING, TIME and CLIENTINFO only when asked directly (not through a room), never to an ignored nick, at most 3 at once then one every 2 seconds, and nothing else (USERINFO included). |
 | `/quote <raw line>` | Send a raw IRC line as typed, for what the client has no command for. |
 | `/ignore [nick \| mask]` | List, add or remove an ignored mask, saved in `ignores`. |
-| `/away [message]` | Mark me away on the networks that can; `/away` alone comes back. |
+| `/away [message]` | Mark me away on the networks that can (any network, see below); `/away` alone comes back. |
 
 Tab completes the arguments of those commands: the nick or the room where one
 is expected, the CTCP names after `/ctcp`, the masks after `/ignore`; a nick
@@ -513,10 +549,11 @@ the contacts first and asks IRC only when nothing matches.
 
 `/away message` marks you away where the network knows how: IRC sends `AWAY`,
 Discord goes idle with the message as a custom status (experimental, through the
-gateway presence), Telegram has no equivalent. On the `all` tab, or with tabs
-off, every network that can; on a network tab, or after `/net`, that network
-only. `/away` alone comes back. The status bar carries an `[away: message]`
-segment while it lasts, and nothing is announced in the rooms.
+gateway presence), Telegram has no equivalent. With no network filter (the
+`all` tab, no `/net`), every network that can; on a network tab, or after
+`/net`, that network only. `/away` alone comes back. The status bar carries an
+`[away: message]` segment while it lasts, IRC's answer shows in window 0, and
+nothing is announced in the rooms.
 
 ### Themes
 
@@ -582,11 +619,12 @@ name order → `all`. They sit at the right of the status line, clickable:
 [15:42] [@chris] [2:#go]        [*] [telegram(6)] [discord(5)] [irc:libera]
 ```
 
-The current tab is highlighted; the others carry the unread count of their
-windows. `[*]` is all the networks. The current tab already names the network
+The current tab is highlighted; each network tab carries the unread count of
+its windows, pulsing in the mention colour when one of them is hot. `[*]` is
+all the networks. The current tab already names the network
 of the window shown, so the `[net]` segment of the status line goes while the
 tabs are on; when the line is too narrow, whole segments of its left part go
-first, from the end (flash message, `[away: …]`, `[Act: …]`, `[img: …]`, …),
+first, from the end (flash message, `[away: …]`, `[Act: …]`, `[img:…]`, …),
 the clock, the account and the window always staying, and the tabs go only when
 they no longer fit alone. A network tab shows only the
 windows of that network, window 0 included: Ctrl+X and Alt+Left/Right stay
@@ -602,7 +640,7 @@ global again. A single network has no tabs.
 
 | Command | Effect |
 | --- | --- |
-| `/query name`, `/q name`, `/qu name` | Pin this window's send target to a contact or channel, using an exact name or prefix. |
+| `/query name`, `/q name`, `/qu name` | Pin this window's send target to a contact or channel, using an exact name, a prefix or a word inside a name; a name unknown here is asked of the networks that can resolve it (`@username` or a `t.me/…` link on Telegram, a nick or `#room` on IRC). |
 | `/join channel`, `/j channel` | Join or resolve a channel/group and pin it as the send target. |
 | `/q`, `/j` without a name | Clear the target and return input to this window's usual conversation. |
 | `/msg name text`, `/m name text` | Send without switching windows; the line is echoed here as `[msg(name)] text`. `name` must be an exact chat name or a name unique to one prefix; a word found only inside a chat's name is refused with "unknown". |
@@ -612,7 +650,7 @@ global again. A single network has no tabs.
 | `/telegram [status\|login\|logout\|disconnect]`, `/discord [status\|login\|logout\|disconnect]` | One network: its status, a new login (Discord runs `token_cmd` again), a logout (Telegram ends the session on the server) or a `disconnect`, which cuts the connection and keeps the session. |
 | `/fold [section]` | Toggle a sidebar section by key, such as `telegram` or `discord:Gophers`, or a displayed-name prefix. No argument lists sections and their collapsed/expanded state. |
 | `/mute [name]`, `/unmute [name]` | Mute the conversation of the window, or the one named (exact name or prefix): no bell, no notification and no pulse in the sidebar, even on a mention; its unread count stays, dimmed. `/mute` alone in a window with no conversation lists the muted ones. Saved in `muted.toml`; the network is not told. |
-| `/history N`, `/hist N` | Load N older messages; PgUp at the top also loads older history. |
+| `/history N`, `/hist N` | Load N older messages, 50 by default and at most what a window keeps (2000, or `cache_messages` when higher); PgUp at the top also loads older history. |
 | `/clear`, `/c` | Clear the current window. Ctrl+L only clears the screen: the lines stay in the history. `/clear` keeps the disk history too: the next write merges the window into the file instead of replacing it. |
 | `/rename [target] name`, `/unrename [target]` | Set or remove a local chat/contact alias, saved in `aliases.toml`. It applies to the sidebar, status bar, aggregate view, completion and the DM contact’s displayed name. It is not sent to the network. |
 | `/away [message]` | Mark yourself away on every network that can, or on the one of the current tab; `/away` alone comes back. See [IRC networks](#irc-networks). |
@@ -644,7 +682,7 @@ Tab after `/m `, `/q ` or `/j `, with no letters yet, lists up to 20 targets;
 a second Tab expands to up to 100. `/join` completes channels and groups only,
 `/query` private conversations only, `/msg` all of them. Online contacts come
 first, with one name per chat in the unfiltered list. Command completion cycles alphabetically:
-`/ne` → Tab → `/net` → Tab → `/new`. Unique command prefixes work on Enter
+`/ne` → Tab → `/net` → Tab → `/networks` → Tab → `/new`. Unique command prefixes work on Enter
 without Tab, for example `/quer alice`; `/qu` is an explicit alias for `/query`
 because `/quit` shares that prefix. Exact aliases take precedence when executing.
 
@@ -652,16 +690,16 @@ because `/quit` shares that prefix. Exact aliases take precedence when executing
 
 | Command or key | Effect |
 | --- | --- |
-| `/open`, `/open N` | Download if needed and open the newest, or Nth-newest, media with `xdg-open`. |
+| `/open`, `/open N` | Download if needed and open the newest, or Nth-newest, media with `xdg-open`; a link preview asks before it opens its page. |
 | `/set images halfblock` | Select half blocks; `auto`, `kitty` and `off` are also available. |
 | `/view [N]`, `v` on a selected message | Open media in the full-screen viewer. |
 | `l` on a downloaded video | Play in the conversation without sound; press again to pause. |
 | `s` | Stop playback and return to the first frame. |
 | `/set video hidden` | Keep only video labels in the conversation; `show` previews one frame and `autoplay` loops visible downloaded videos. |
-| `/send path [caption]` | Send a local file: PNG/JPEG as a photo, MP4 as a video with ffprobe metadata, other formats as documents. Tab completes the path: `~`, relative paths and spaces work, a directory gets its `/` and the next Tab goes on inside it. |
-| Ctrl+V | Paste an image through `wl-paste` or `xclip`, then choose send, caption or cancel using the displayed prompt keys. Plain text goes into the editor. |
-| Ctrl+G, `/gif [query]` | Search animated GIF previews: Telegram’s `@gif` bot or Discord’s GIF provider (currently KLIPY). Trends appear immediately; typing searches. Up to 24 previews show at a time, six by four rows; a smaller terminal shrinks the previews first, then shows fewer columns or rows. A scrollbar on the right, thicker under the pointer, shows the others: click it or drag its thumb. Only the preview under the mouse, or the one the arrows reached, plays. Arrows, the wheel or the scrollbar move; Enter or a click sends; Escape closes. |
-| Ctrl+M, `/media [media\|gifs\|files]` | Browse the media of the conversation of the window, sent by anyone, newest first: photos and videos, GIFs, or files (Telegram, Discord). Same grid as the GIF picker: up to six by four, with the same scrollbar; older ones load as you scroll. Tab changes tab, Enter or a click shows the media in the viewer, where ←/→ go through the list (a file opens with its program); `j` goes to its message, `o` opens it, Escape closes. Only the GIF under the mouse plays. Small media download to `download_dir` like the ones of the conversation; larger ones show their name and size. Ctrl+M needs the kitty keyboard protocol (Ghostty, kitty, WezTerm, foot); elsewhere it is Enter, so use `/media`. |
+| `/send path [caption]` | Send a local file of 2 GB at most. On Telegram, PNG/JPEG goes as a photo, a video or a sound file as a playable media with its ffprobe metadata, other formats as documents; on Discord, as an attachment; in a private IRC chat, by DCC SEND. Tab completes the path: `~`, relative paths and spaces work, a directory gets its `/` and the next Tab goes on inside it. |
+| Ctrl+V | Paste an image through `wl-paste` or `xclip`, then `e` sends it, `l` adds a caption first, `a` or Escape cancels. Plain text goes into the editor. |
+| Ctrl+G, `/gif [query]` | Search animated GIF previews: Telegram’s `@gif` bot or Discord’s GIF provider (currently KLIPY). Images must be on (F4). Trends appear immediately; typing searches. Up to 24 previews show at a time, six by four rows; a smaller terminal shrinks the previews first, then shows fewer columns or rows. A scrollbar on the right, thicker under the pointer, shows the others: click it or drag its thumb. Only the preview under the mouse, or the one the arrows reached, plays. Arrows, PgUp/PgDn, Home/End, the wheel or the scrollbar move; Enter or a click sends; Escape closes. |
+| Ctrl+M, `/media [media\|gifs\|files]` | Browse the media of the conversation of the window, sent by anyone, newest first: photos and videos, GIFs, or files (Telegram, Discord; not for a bot account). Same grid as the GIF picker: up to six by four, with the same scrollbar; older ones load as you scroll. Tab and Shift+Tab, or a click on a tab, change tab; Enter or a click shows the media in the viewer, where ←/→ go through the list (a file opens with its program); `j` goes to its message, `o` opens it, Escape or Ctrl+M closes. Only the GIF under the mouse plays. A cell shows the small picture the network gives (kept in the cache directory), a small GIF itself, or the name, size, sender and date of a file; a GIF or a media with no small picture downloads to `download_dir`, like the ones of the conversation, when it is under `auto_media_max_kb`. Ctrl+M needs the kitty keyboard protocol (Ghostty, kitty, WezTerm, foot); elsewhere it is Enter, so use `/media`. |
 | `/set auto_media_max_kb 20480` | Raise the automatic download threshold to 20 MiB. |
 
 <a id="viewer"></a>
@@ -673,7 +711,7 @@ open a media from the media browser (Ctrl+M). ←/→ show the media before and
 after: in the conversation, in the order of the window, skipping messages
 without a picture; from the media browser, in the order of its grid.
 Images must be enabled with F4. The viewer works with kitty pixels and Unicode
-half blocks. A Telegram photo is shown at 800 px in the conversation; the
+half blocks. A Telegram photo is shown at up to 800 px in the conversation; the
 viewer, `o` and `/open` take its largest size (1280 or 2560 px), downloaded
 once to a `_full` file next to the inline one.
 
@@ -687,7 +725,7 @@ once to a `_full` file next to the inline one.
 | `0` | Center and fit to the screen again. |
 | `l` on a video | Start or pause full-screen playback, without sound. |
 | `s` | Stop and return to the first frame. |
-| `o` | Open the file externally, or the web page for a link preview. |
+| `o` | Open the file externally, or, after a question, the web page of a link preview. |
 | `c` | Copy the image to the system clipboard (`wl-copy` on Wayland, `xclip` on X11), to paste it in another application. |
 | Escape, `q`, or a click without dragging | Close the viewer. |
 
@@ -696,18 +734,21 @@ Other unassigned keys close the viewer. Videos require FFmpeg; playback is
 bounded by frame and memory limits. This is silent terminal playback, with
 `show`, `hidden` and `autoplay` controlling the conversation view.
 
-Photos, stickers and GIFs below the download threshold are fetched into
-`download_dir`; GIFs animate. Recognized Telegram links can show a clickable
-site/title label, description and thumbnail. Only HTTP, HTTPS and mailto links
-(without a `?query` or a `#fragment`, which are never made clickable)
-are passed to `xdg-open`. Larger media stay as labels until requested. Files
-outside the allowed extension list are saved as `.bin` and cannot be opened
-through `o`. The list covers common images, video, audio, office files, archives,
-text and PDF. Downloads are created with mode `0600` in `0700` directories.
+Photos, stickers (animated stickers stay labels), GIFs and videos below the
+download threshold are fetched into `download_dir`; GIFs animate and a video
+shows its first frame. A link preview shows a clickable label (site and title
+on Telegram, title on Discord) and a description, with a thumbnail on
+Telegram. Only HTTP and HTTPS links, and mailto links without a `?` or `#`
+part, are made clickable and passed to `xdg-open`. Larger media stay as labels
+until requested. Files outside the allowed extension list are saved as `.bin`
+and cannot be opened through `o`. The list covers common images, video, audio,
+office files, archives, text and PDF. Downloads are created with mode `0600` in
+`0700` directories.
 
-Image decoding rejects still images over about 40 megapixels and animated GIF
-frames over about 1.6 megapixels. GIF previews decode at most 100 frames; the
-picker uses at most 40 per thumbnail. Videos use `video_inline_frames`, capped
+Image decoding rejects still images over about 40 megapixels (20 for a 16-bit
+PNG) and animated GIF frames over about 1.6 megapixels. GIFs in the
+conversation decode at most 100 frames; the GIF picker at most 40 per preview.
+Videos use `video_inline_frames`, capped
 at 1,000 frames and 200 MiB of decoded PNG per operation. Off-screen decoded
 images are released when the 256 MiB target budget is exceeded, then decoded
 again from their files when visible. This is not a cap on total process memory.
@@ -719,16 +760,20 @@ avoid retransmitting pixels on a simple terminal resize. Font-size changes
 trigger decoding for the new cell size.
 
 With `images_hover` or F5, images take no rows in the conversation. A preview
-appears beside the label when space allows, otherwise below the message, without
-covering the message text itself.
+appears beside the label when space allows, otherwise below or above the
+message; it covers the message text only when none of those fits. Hover
+tracking must be on (`hover` not `off`).
 
 ### Cache and synchronization
 
 The default cache is `~/.cache/ttyloom`, or `$XDG_CACHE_HOME/ttyloom`. With
 `TTYLOOM_DIR`, it becomes `$TTYLOOM_DIR/cache`, so separate instances can keep
-separate identities. Each network has its own directory: `telegram/` and
-`discord/`, each with `dialogs.gob` and `history/`. Telegram bots use
-`telegram/bot/`.
+separate identities. Each network has its own directory: `telegram/`,
+`discord/` and `irc:<name>/` for each IRC network, each with `dialogs.gob` and
+`history/`. Telegram bots use `telegram/bot/`. The pictures of the GIF picker,
+of the media browser and of the custom emojis live in `gifs/`, `thumbs/` and
+`emoji/`; at start, those unused for a week are removed, and so are the pasted
+images of `download_dir/paste` never sent after a day.
 
 Cached conversations and history appear before the network connects. Recently
 active conversations get hidden windows according to `auto_open_days`; other
@@ -760,15 +805,22 @@ configuration directory; rebuilding the cache does not log out the account.
 F2 cycles conversations, open windows and hidden. With multiple networks,
 window mode visits each network filter before hiding; Shift+F2 changes only the
 filter. F7, or clicking the sidebar title, cycles recent, alphabetical and
-unread order. Window 0 stays first; unbound windows follow in number order.
-Sorting changes display order, not actual window numbers.
+unread order. In window mode, window 0 stays first and the windows bound to no
+conversation come last, in number order. Sorting changes display order, not
+actual window numbers.
 
-The sidebar uses `#` for a group, `&` for a channel, `@` for a username and `*`
+The sidebar uses `#` for a group, `&` for a channel, `@` for a person and `*`
 for the status window; in window mode the number comes first, right-aligned,
-then the marker glued to the name (a Discord `#general` keeps one `#`). In window mode a name also fades with the age of the last message of its chat: the text colour under an hour, darker under a day, darker again under a week, and the dim colour after that (the `terminal` theme has two steps only: under a day or older). The `⊟`
-of the header, or `sidebar_split`, puts the windows in two sections, channels
-then direct messages; the section rules take no click. Kitty can show avatars. A long current-chat title scrolls
-within the column. Drag the vertical border to resize and save the panel width.
+then the marker glued to the name (a Discord `#general` keeps one `#`). In
+window mode a name also fades with the age of the last message of its chat:
+the text colour under an hour, darker under a day, darker again under a week,
+and the dim colour after that (the `terminal` theme has two steps only: under
+a day or older). The `⊟` of the header, or `sidebar_split`, puts the windows in
+two sections, channels then direct messages; the section rules take no click.
+Kitty can show avatars. A long current-chat title scrolls once within the
+column, then rests. Drag the vertical border to resize and save the panel
+width. A terminal too narrow to leave 20 columns to the messages hides the
+panel.
 
 Click a conversation to open it; click a section header or use `/fold` to
 collapse it. With hover tracking enabled, the wheel over the sidebar switches
@@ -785,8 +837,8 @@ under the sidebar title as `filter: fa`; folded sections open while it runs. ↑
 and ↓ move a cursor, which starts on the first line left. Enter opens the line
 under the cursor, drops the filter and gives the keyboard back to the input
 line, so the next message goes straight to that chat. Escape drops the filter
-and gives the keyboard back too; a click on a line does the same as Enter. It
-works in both sidebar modes, conversations and windows.
+and gives the keyboard back too, and so does the wheel; a click on a line does
+the same as Enter. It works in both sidebar modes, conversations and windows.
 
 The `+ new message` row, `/new` or Ctrl+N opens a live-filtered conversation
 picker. Telegram contacts and local chats appear immediately; at least three
@@ -804,16 +856,18 @@ have a similar context menu.
 F3 opens the member box: contact and presence for DMs, members with admins
 marked `★` and online members highlighted in groups, subscriber count for
 channels, IRC operators and voiced users included. Click a member to open a
-DM; click `[x]` to close the box.
+DM (on Discord, only a DM already in the list); right-click it for its menu;
+click `[x]` to close the box.
 
 The message scrollbar supports clicking to jump and dragging to scroll. Its
 track highlights under the pointer, and its thumb becomes a solid block during
 mouse interaction. The status bar lists background activity as
 `[Act: 2(3),5(1)]`: window number and unread count. Private messages and mentions
-(on IRC, your nick as a word: `chris: hello`) can trigger the bell; `/set bell
-off` disables it. Desktop or terminal notifications are controlled by `notify`
-and focus. A burst merges: one alert at once, then one for the last message
-after 2 seconds. `/mute` silences one conversation.
+(on IRC, your nick as a word: `chris: hello`) can trigger the bell when their
+window is not shown or the terminal is not focused; `/set bell off` disables
+it. Desktop or terminal notifications follow the same rule and `notify`. A
+burst merges: one alert at once, then one for the last message after 2
+seconds. `/mute` silences one conversation.
 
 A window holding an unread private message or a mention of you is hot: its
 `(N)` counter takes the mention color, in bold, and pulses once a second, in
@@ -829,13 +883,15 @@ shows the target. While the terminal has focus, displayed messages are marked
 read on their network. Discord synchronizes your read position without exposing
 other people’s read receipts.
 
-Ctrl+F starts local search. Typing filters without case or accent sensitivity,
-highlights matches and shows the current/total count. Enter moves to the previous
-match, Ctrl+N to the next, and Escape closes search.
+Ctrl+F starts local search. Typing searches the window as you type, without
+case or accent sensitivity: matches are highlighted, the view goes to the
+newest one, and the status bar shows the current/total count. Enter moves to
+the previous match, Ctrl+N to the next, and Escape closes search.
 
 Press Ctrl+F again for global search. Telegram searches the account; Discord
-searches each server and the ten most recent DMs, with a 15-second deadline.
-The `/net` filter limits the networks queried. After a 300 ms typing delay,
+searches the ten most recently active servers and the ten most recent DMs,
+within 15 seconds; IRC has no search. The `/net` filter limits the networks queried. Not
+available when every network is a bot account. After a 300 ms typing delay,
 results from participating networks are merged newest first, with up to 50
 results per backend. Use arrows, the wheel or a click to select; Enter opens
 the conversation at the message. Ctrl+F returns to local search; Escape closes.
@@ -843,8 +899,10 @@ the conversation at the message. Ctrl+F returns to local search; Escape closes.
 ### Drafts, focus and logging
 
 Each window keeps its own draft across window switches. `/me text` sends an
-italic action in IRC style. `/shrug text` (or `/shrugs`) sends the text followed
-by `¯\_(ツ)_/¯`, escaped on Discord so that the arm stays.
+action, `* name text` in italics; on IRC it goes out as a CTCP ACTION and shows
+like the actions received, without `<nick>`, its Ctrl+B/U styles kept.
+`/shrug text` (or `/shrugs`) sends the text followed by `¯\_(ツ)_/¯`, escaped
+on Discord so that the arm stays.
 
 The conversation shown when you quit comes back at the next start: its key is
 kept in `last.toml`, next to `config.toml`, and it opens again once its network
@@ -900,12 +958,13 @@ or shifting text.
 
 A right click on a message opens its context menu at the pointer: the quick
 reactions the chat allows on the first row (click one to toggle it), then the
-actions of the message — reply, react, copy, info, open, view, play — with
-edit and delete last. The entry under the pointer is the current one; Enter or
-a click runs it, Escape closes. Double-click a message to toggle 👍. Clicking
-any reaction below a message also toggles it. A deleted message shows the
-"(deleted)" marker alone: a click on it reveals the content the cache still
-holds, the next click hides it again.
+actions of the message — go to the quoted message, reply, react, copy, info,
+open, view, play — with edit and delete last. The entry under the pointer is
+the current one; Enter or a click runs it, any other key closes the menu.
+Double-click a message to toggle 👍 (or the first reaction the chat allows).
+Clicking any reaction below a message also toggles it. A deleted message shows
+the "(deleted)" marker alone: a click on it reveals the content the cache
+still holds, the next click hides it again.
 The active mouse area controls the wheel: sidebar navigation over the sidebar,
 history scrolling over messages. `hover = "off"` disables hover tracking and
 sidebar wheel switching; normal message scrolling remains available.
@@ -917,7 +976,7 @@ sidebar wheel switching; normal message scrolling remains available.
 | `p` | Reply to the selected message. |
 | `r` | Choose a supported reaction; choosing it again removes it. Telegram chats can restrict the available set; Discord takes any emoji, so the picker is the whole table with the search, and `:name:` sends a custom emoji of the server. |
 | `i` | Show message details: dates, ID, views, reaction participants and, where supported, read receipts. |
-| `o` | Open the message’s media externally. |
+| `o` | Open the message’s media externally; a link preview asks before it opens its page. |
 | `v` | Open the built-in full-screen viewer. |
 | `l`, `s` | Play/pause a video, or stop and reset it. |
 | `c` | Copy message text through OSC 52. |
@@ -925,20 +984,21 @@ sidebar wheel switching; normal message scrolling remains available.
 | Escape | Deselect. |
 
 Up on an empty input edits your last message when no other editing/selection
-mode is active. Drag across messages to copy a range: plain message text,
-without timestamps or indentation, is copied on release.
+mode is active. Drag across messages to copy a range through OSC 52 on
+release: the text of each message, without timestamps or indentation, prefixed
+with `<nick>` when there are several.
 
 On Telegram, outgoing messages show sent and read markers, and incoming
 messages distinguish unread from read. `i` can show who read a group message,
 subject to Telegram’s privacy and server limits. These other-person read
-receipts are unavailable on Discord.
+receipts are unavailable on Discord and IRC.
 
 Editing starts with the message’s text, without reconstructing its original
 formatting. Complete triple-backtick fences work when sending and editing;
 restore their delimiters to retain a code block. Discord interprets its Markdown,
 while ordinary Telegram input is not a full Markdown editor. A reply takes
 precedence over sending a fenced/code-block paste. The Ctrl+B/I/U styles go out as
-Discord Markdown or Telegram entities, on a new message, an edit or `/me`
+Discord Markdown, Telegram entities or mIRC codes, on a new message, an edit or `/me`
 (which stays italic under them); a reply or a code-block paste drops the
 toggles and goes out plain.
 
@@ -955,7 +1015,7 @@ toggles and goes out plain.
 | Ctrl+Up/Down | Walk my messages in edit mode: from an empty input Ctrl+Up edits the last one, each Ctrl+Up goes one message of mine up, Ctrl+Down one down; past the newest the edit is left and the input emptied. A draft is never replaced. |
 | Shift+Enter, Alt+Enter | Insert a line break. Shift+Enter needs kitty keyboard support; Alt+Enter is the fallback. With `multiline` enabled, open the expanded editor. |
 | Enter, Ctrl+Enter | Send the draft. |
-| Tab | Complete commands, chats (`/query`, `/join`, `/msg`: from the start of any word of a title, `@username` too), windows, settings, themes, help topics, `/send` paths, and the arguments of `/log`, `/net`, `/fold`, `/irc`, `/telegram`, `/discord` and the IRC commands. Several names left and nothing more to add: a second Tab lists them in the window; Escape removes those listings. |
+| Tab | Complete commands, chats (after `/query`, `/join`, `/msg`, `/whois`, `/rename`, `/unrename`, `/mute`, `/unmute`, and in a message: from the start of any word of a title, `@username` too), the nicks of an IRC room (a nick at the start of a message becomes `nick: `), windows, settings and their values, themes, help topics, `/send` paths, and the arguments of `/log`, `/media`, `/net`, `/fold`, `/irc`, `/telegram`, `/discord` and the IRC commands. Several names left and nothing more to add: Tab lists up to 20 of them in the window, a further Tab up to 100; Escape removes those listings. |
 | PgUp/PgDn | Scroll history. An image cut by the edge of the window shows its visible part, so the scroll moves line by line over it. Scrolled up, a pill `↓ last message` at the bottom right of the messages brings back to the end on a click. |
 | Ctrl+L | Clear the window like a terminal `clear`: the lines stay in the history, Page Up or the wheel brings them back. |
 | Ctrl+C, `/quit`, `/exit` | Quit. |
@@ -968,17 +1028,19 @@ Long output from `/chats`, `/theme list`, `/help` and `/window list` is paged.
 Space or Enter shows the next page; `q` shows all; Escape abandons the rest.
 The wheel shows all output and returns scrolling control.
 
-Pastes over 64 KiB are rejected. Multiline paste asks before sending: send as
-text, send as a code block, or cancel, using the keys shown in your interface
-language. In the expanded editor it can instead insert text or a code block
-into the draft.
+Pastes over 64 KiB are rejected, and a pasted tab becomes four spaces.
+Multiline paste asks before sending: `e` sends it as text, `c` as a code block,
+`a` or Escape cancels. In the expanded editor the same keys insert it, as text
+or as a code block, into the draft; while you edit a message, the paste goes
+into the text with no question.
 
 Typing `@` opens member suggestions, IRC operators and voiced users included.
-Arrows choose, Tab or Enter inserts, and Escape closes. The plain name is
-inserted and sent, without the `★` admin mark or the `(me)` suffix the box
-shows; a member with no username is inserted as `@Name` and sent as a
-mention by id, so the person is notified all the same. Spell correction and mention completion
-work without leaving the conversation.
+Arrows or the wheel choose, Tab, Enter or a click inserts, and Escape closes.
+The `@username` is inserted and sent (on IRC the bare nick), without the `★`
+admin mark or the `(me)` suffix the box shows; a member with no username is
+inserted as `@Name` and sent as a mention by id, so the person is notified all
+the same. Spell correction and mention completion work without leaving the
+conversation.
 
 ```text
 /set
@@ -1000,15 +1062,19 @@ anything. The file, the variables, the guards and four examples:
 
 ## Version and limits
 
-This manual describes **0.11-beta**. See the [changelog](../CHANGELOG.md) and
-[planned work](../TODO.md). Videos play without sound. Portable binaries omit
-Hunspell. Discord threads, forums, voice and bot tokens are not supported;
-WhatsApp is not implemented. One configuration directory holds one
-account per network. Use separate `TTYLOOM_DIR` paths for separate instances.
+This manual describes **0.11-beta** and the changes listed under Unreleased in
+the [changelog](../CHANGELOG.md). See also the [planned work](../TODO.md).
+Videos play without sound. Portable binaries omit Hunspell. Discord threads,
+forums, voice and bot tokens are not supported; IRC has no server history, no
+DCC resume and no DCC CHAT; WhatsApp is not implemented. One configuration
+directory holds one account per network. Use separate `TTYLOOM_DIR` paths for
+separate instances.
 
 ## Signing out
 
-Quit TTYloom first. To remove local Telegram sessions:
+`/telegram logout` and `/discord logout` end the session on the server from
+inside TTYloom; the Discord one also deletes `discord.token`. To remove local
+Telegram sessions by hand, quit TTYloom first:
 
 ```bash
 rm -f ~/.config/ttyloom/session.json ~/.config/ttyloom/session-bot.json
@@ -1021,7 +1087,8 @@ Devices** to terminate the server-side session when necessary.
 
 Removing an `[[irc]]` table forgets that network; its NickServ password
 lives in `config.toml` (mode `0600`) and nowhere else. Removing `[discord]`
-disables Discord in TTYloom. Revoke an exposed token through
+disables Discord in TTYloom but leaves `discord.token`: run `/discord logout`
+first, or delete the file. Revoke an exposed token through
 Discord account settings. The [authentication guide](authentication.md) covers
 session and credential handling in more detail.
 
@@ -1050,16 +1117,17 @@ does not add Hunspell support to a `nospell` executable.
 
 ### Window 0 fills with warnings
 
-Telegram library warnings belong in `/debug`; errors still appear in window 0.
+Library warnings belong in `/debug`; errors still appear in window 0.
 The debug view can show `FLOOD_WAIT` or peer-resolution warnings. A flood wait
-pauses network name resolution for the server’s requested interval, with one
-notice describing that pause. It does not mean that credentials are missing.
+pauses the Telegram requests that can wait — name resolution, the history
+sync, `/search`, the media browser, member lists, read marks and typing hints —
+for the interval Telegram asked, with one `FLOOD_WAIT … network lookups held`
+line in `/debug`. It does not mean that credentials are missing.
 
 ### Alt+A does not work
 
-Desktop environments may intercept Alt+letter combinations. Use F6 for the
-aggregate view and F4 for image mode; those are the supported function-key
-shortcuts.
+Alt+A is an old shortcut of the aggregate view, and desktop environments may
+intercept Alt+letter combinations. Use F6, the supported shortcut.
 
 ### Reaction unavailable here
 
@@ -1102,8 +1170,10 @@ history and dialog listing. A bot must wait for a user to contact it first.
 
 For Telegram, create an application at [my.telegram.org/apps](https://my.telegram.org/apps)
 and edit the active configuration, or supply `TG_API_ID` and `TG_API_HASH`.
-Check whether a `[telegram]` section overrides top-level values. If you only
-want Discord, omit Telegram credentials and add a `[discord]` section.
+Check whether a `[telegram]` section overrides top-level values. Setting one
+Telegram key without the others (a `bot_token` alone, say) stops TTYloom at
+start with a message that names the file. If you only want Discord or IRC,
+omit Telegram credentials and add a `[discord]` section or an `[[irc]]` table.
 
 ## Sources
 

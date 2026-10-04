@@ -5,7 +5,7 @@
 Each network of TTYloom is a module: a package under `protocols/` that brings
 its configuration, its launch, its commands and its texts. The client
 (`internal/`) names no network. Adding a network is a package and one line in
-`cmd/ttyloom/main.go`:
+`cmd/ttyloom/main.go`, here for an example `matrix` package:
 
 ```go
 func modules() []module.Module {
@@ -17,10 +17,12 @@ The order of that list is the order in which the networks start and in which
 their blocks appear in a new `config.toml`.
 
 A module has two parts. The backend implements `model.Backend`: it connects,
-loads chats and history, sends, and posts events to the UI. The module
-(`internal/module`) is what the client sees of the network. This page covers
-the module; `protocols/irc` is the most complete example, `protocols/dsc` the
-shortest.
+loads chats and history, sends, and posts events to the UI. Every method but
+`Run` and `Caps` returns at once: the work goes on in a goroutine, its result
+comes back as an event. `Caps()` says what the network can do; the UI hides
+the rest. The module (`internal/module`) is what the client sees of the
+network. This page covers the module; `protocols/irc` is the most complete
+example, `protocols/dsc` the shortest.
 
 ## The Module interface
 
@@ -31,7 +33,7 @@ shortest.
 | `Save(dst)` | Writes its keys back with `dst.Set(key, v)`, as the file had them. Never write a secret that came from the environment. |
 | `Template()` | Its commented block of a new `config.toml`. Top-level keys only, no table: the client writes it after its own keys. |
 | `Networks()` | The networks configured now. It is read again at every call: a command may add one while the client runs. |
-| `Cache(net)` | The directory of the disk cache of `net` under the cache root, and `keepOld` when the cache is the only copy of the history (IRC). |
+| `Cache(net)` | The directory of the disk cache of `net` under the cache root, and `keepOld`: files of an older format are still read, for a cache that is the only copy of the history (IRC). |
 | `Launch(ctx, h, net, ev)` | Builds the backend of `net` from the configuration of the moment; the client runs it. An error (a token command that fails) starts nothing. |
 | `Commands()` | Its slash commands (see below). |
 | `Claims(name)` | A name only this module resolves (`"#room"` for IRC): `/query` and `/join` then ask its networks alone. |
@@ -46,6 +48,9 @@ and stops it (`h.RemoveNetwork`). IRC does; Telegram and Discord do not.
 **The page.** `OpenSetup` opens a `module.Form`. `Intro` holds lines of guide,
 folded to the box above the fields; `Link` a link drawn under them, which
 Ctrl+O opens with no question (it comes from the module, not the network).
+`Fields` are its lines: `Secret` draws dots, `Choices` are presets that ← → or
+Space cycle, `Sel` is -1 for free text; `Pick` lets the module fill the other
+fields when a preset shows (the IRC hosts fill port, TLS and name).
 `Submit` checks the values (an error text keeps the page open), sets the
 settings of the module, writes them with `h.SaveConfig()` (on `false`, put the
 settings back and return an error text) and calls `h.AddNetwork(net)`; the
@@ -67,7 +72,7 @@ Every method runs on the goroutine of the UI, except `Do`.
 | `AddNetwork(net)`, `RemoveNetwork(net)` | A network configured or deleted while the client runs. |
 | `Backend(net)`, `Context(net)` | The running backend (nil when stopped) and its context. Type-assert your own backend type. |
 | `ContextNet(w, mod)` | The network of your module that `w` means: the one of its chat or target, else the `/net` filter, else your only network. |
-| `SaveConfig()` | Writes `config.toml`. |
+| `SaveConfig()` | Writes `config.toml`; `false`, with a line saying why, when it fails. |
 | `Chats`, `ChatByTitle`, `SendFile`, `Resolve`, `Download`, `LastIncomingFile` | Actions of the UI on chats and files. |
 | `OpenForm(f)` | A centred form (see `module.Form`); in the Networks box, the page of the module. |
 | `Do(f)` | From a backend goroutine: `f` runs on the goroutine of the UI. The only way for a backend to change the configuration. |
@@ -85,12 +90,14 @@ module.Command{
 ```
 
 A general command resolves by prefix with the commands of the client. A
-context command (IRC's `/kick`) exists only where `ContextNet` is not empty,
-and never takes a prefix from a general one. `Help.Key` names three texts of
-your catalogue: `<Key>_name`, `<Key>_short`, `<Key>_long`. `Help.Section` is a
-section of `/help`; a new one needs `help_section_<Section>` in your
-catalogue. `Complete` gets everything typed after the command and gives the
-candidates with the part of the line they replace.
+context command (IRC's `/kick`) resolves only where `ContextNet` is not empty,
+and never takes a prefix from a general one. Typed in full elsewhere, it asks
+for a window of the network; with no network of the module configured, it is
+an unknown command. `Help.Key` names three texts of your catalogue:
+`<Key>_name`, `<Key>_short`, `<Key>_long`. `Help.Section` is a section of
+`/help`; a new one needs `help_section_<Section>` in your catalogue, and comes
+right after the Chats section. `Complete` gets everything typed after the
+command and gives the candidates with the part of the line they replace.
 
 ## Texts
 
@@ -107,8 +114,10 @@ func init() { i18n.Register(Catalog) }
 ```
 
 `TestCatalogs` (`cmd/ttyloom`) checks that both languages have the same keys,
-that no key is in two catalogues, and that every `i18n.T("…")` of the code has
-its key. Add your `Catalog` to its list.
+that no key is in two catalogues, and that every `i18n.T("…")` or
+`i18n.Error("…")` of the code has its key. `TestModuleHelpTexts` checks the
+help texts of your commands and their section in both languages, and that
+`Label()` is not a key. Add your `Catalog` to the lists of both tests.
 
 ## Chats and remote text
 
@@ -141,12 +150,13 @@ fires a hook: set them right, and a hook never answers itself.
 ## Checklist
 
 1. `protocols/<x>/`: the backend (`model.Backend`) and `module.go` (`Module`).
-2. `catalog.go` and `i18n/{en,fr}.toml`; the catalogue added to `TestCatalogs`.
+2. `catalog.go` and `i18n/{en,fr}.toml`; the catalogue added to `TestCatalogs`
+   and `TestModuleHelpTexts`.
 3. The module added to `modules()` in `cmd/ttyloom/main.go`.
 4. Tests of the module with a small fake `Host`; `TestCoreNamesNoNetwork`
    still passes (the core names no network).
-5. The README, `docs/guide.md` and the changelog, in both languages where they
-   have two.
+5. The README, `docs/guide.md` and the changelog; the documentation is in
+   English only, the texts of the interface in both languages.
 
 `internal/ui/e2e_test.go` holds `cfgFake`, with `fakeMod` of
 `internal/ui/fakenet_test.go`: a whole module in a few dozen lines — a section

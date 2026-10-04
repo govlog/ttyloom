@@ -10,17 +10,18 @@ log, a reply suggested by a language model: each is a few lines of
 
 ## The file
 
-`hooks.toml` sits next to `config.toml` (`~/.config/ttyloom/`, or the
-directory of `TTYLOOM_DIR`). TTYloom reads it at start and at `/hooks reload`,
-and never writes it. With no file there is no hook, and nothing is said.
+`hooks.toml` sits next to `config.toml` (`~/.config/ttyloom/` by default, or
+the directory of `TTYLOOM_DIR`). TTYloom reads it at start and at
+`/hooks reload`, and never writes it. With no file there is no hook, and
+nothing is said.
 
 ```toml
 [[hook]]
 name    = "meteo"                         # required: one word, unique
 net     = "irc:libera"                    # a network, or a module: "irc" is every IRC network
-chats   = ["#ttyloom"]                    # chat titles, case apart
+chats   = ["#ttyloom"]                    # chat titles of the network, case apart
 kinds   = ["group"]                       # "private", "group", "channel"
-from    = ["chris"]                       # sender ids; nicks on IRC
+from    = ["chris"]                       # sender ids, bare or quoted; nicks on IRC
 match   = '^!meteo\s+(?P<city>[\pL-]+)$'  # a Go regular expression on the text
 mention = false                           # the message must mention you
 cmd     = "sh ~/bin/meteo.sh"             # required: the program and its arguments
@@ -38,10 +39,14 @@ that matches a message runs, in the order of the file.
 name is looked up in `PATH`. A script needs its execute bit, or run it through
 its interpreter: `cmd = "sh ~/bin/meteo.sh"`.
 
-A hook with a mistake is left out, with a line in window 0 that names it and
-says why — an unknown key too, so that a typo (`mentoin = true`) never gives a
-hook that filters less than you think. A file that is not valid TOML gives
+A hook with a mistake is left out, with a line that names it and says why —
+an unknown key too, in a `[[hook]]` table or outside one, so that a typo
+(`mentoin = true`) never gives a hook that filters less than you think. These
+lines, and the count of hooks loaded, go to window 0 at start and to the
+window of the command at `/hooks reload`. A file that is not valid TOML gives
 one line: at start no hook runs, at `/hooks reload` the hooks of before stay.
+The values of `net`, `chats` and `from` are not checked: a name that matches
+nothing gives a hook that never fires.
 
 ## What fires a hook
 
@@ -55,16 +60,21 @@ And never:
 - a message dated more than two minutes ago: the messages caught up after a
   cut.
 
+A muted chat (`/mute`) fires its hooks like the others.
+
 **The filters.** `net` takes the network of the message or its module.
-`chats` compares titles, case apart; a Discord channel is titled
-`Server / channel`. `kinds`: `private` is a conversation with one person,
-`group` a group or a room, `channel` a broadcast channel. `from` takes the id
-of the sender: on Telegram `/whois <name>` shows it; on Discord, turn on
-Developer Mode (User Settings → Advanced), then right-click the user → Copy
-User ID; on IRC `from` compares nicks, case apart. `mention` is the test of
-the notifications — an `@name` or a mention — and on IRC your nick as a word
-(`chris: hello`). `match` runs on the text as shown: an IRC action starts
-with `* nick `, and a photo with no caption has an empty text.
+`chats` compares the titles the network gives, case apart, never a local name
+of `/rename`; a Discord server channel is titled `Server / #channel`.
+`kinds`: `private` is a conversation with one person, `group` a group or a
+room (a Discord server channel too), `channel` a broadcast channel. `from`
+takes the id of the sender, bare or quoted: on Telegram `/whois <name>` shows
+it; on Discord, turn on Developer Mode (User Settings → Advanced), then
+right-click the user → Copy User ID; on IRC `from` compares nicks, case
+apart. `mention` is the mention test of the notifications — an `@name` or a
+mention — and on IRC your nick as a word (`chris: hello`); a private message
+is not a mention in itself: `kinds = ["private"]` takes those. `match` runs on
+the text as shown: an IRC action starts with `* nick `, and a photo with no
+caption has an empty text.
 
 ## The program
 
@@ -84,22 +94,25 @@ plus:
 | `TTYLOOM_MATCH_1`, `TTYLOOM_MATCH_2`… | Its numbered groups. |
 | `TTYLOOM_MATCH_<NAME>` | Its named groups, the name in capitals: `(?P<city>…)` is `TTYLOOM_MATCH_CITY`. |
 
+IRC gives no ids: TTYloom makes up the ids of its chats, senders and
+messages, so a script there reads the names.
+
 Its standard output is the reply: 64 KiB at most, the blanks around trimmed.
 A run fails on a non-zero exit, past its timeout, past 64 KiB of output, or
 when the program cannot start; past its timeout or its 64 KiB it is killed
-with every process it started. The failure says why, with the first line of
-the standard error. The first failure of a hook writes a line in window 0;
-the next ones stay quiet until the hook works again. `/debug` keeps every
-failure, `/hooks` the last result.
+with every process it started. The failure says why; a non-zero exit adds the
+first line of the standard error. The first failure of a hook writes a line
+in window 0; the next ones stay quiet until the hook works again. `/debug`
+keeps every failure, `/hooks` the last result.
 
 Each run has its own process: TTYloom never waits for one. A program left in
 the background does not hold the run more than a second past the end of the
 script, but what it writes to the standard output during that second is part
 of the reply: send its output elsewhere (`mpv ding.ogg >/dev/null 2>&1 &`).
 
-Two guards, per hook: at most 4 runs at a time — one message more is skipped
-and counted; at most 10 `send` replies a minute — one more is dropped and
-counted.
+Two guards, per hook: at most 4 runs at a time — one message more is
+skipped; at most 10 `send` replies a minute — one more is dropped. `/hooks`
+counts both, and `/debug` notes each one.
 
 ## The reply
 
@@ -109,20 +122,22 @@ become spaces. An empty output does nothing, whatever the mode.
 
 | `reply` | What happens |
 | --- | --- |
-| `send` | Sent as a normal message in the chat of the message, even when its window is not shown. Your input line, the reply you are preparing and the typing indicator stay as they are. Several lines make one message (one message per line on IRC). A reply too long for the network fails like any send. |
-| `draft` | Put in the input line of the chat when it is empty: the input on the screen, or the draft you find when you go to that window. Your own text is never replaced, nor a reply or an edit you are preparing: then the output shows as with `display`. |
+| `send` | Sent as a normal message in the chat of the message, even when its window is not shown. Your input line, the reply you are preparing and the typing indicator stay as they are. Several lines make one message; on IRC each line is a message, and a line over 400 bytes is cut in several. On Telegram and Discord, a reply too long for the network fails like any send. |
+| `draft` | Put in the input line of the chat when it is empty: the input on the screen, or the draft you find when you go to that window. Your own text is never replaced, nor a reply or an edit you are preparing, nor a search or a question on the input line: then the output shows as with `display`. |
 | `display` | Each line becomes a line of the window of the chat, `[name] text`. Nothing leaves your machine. |
 | `none` | The output is ignored: the hook works for what it does (a notification, a log). |
 
-`draft` and `display` mark the window of the chat as active in the list.
+`draft` and `display` mark the window of the chat as active when it is not
+the one shown. A reply whose chat is gone meanwhile, or whose network is
+stopped for `send`, is dropped with a line in `/debug`.
 
 ## Commands
 
 | Command | Effect |
 | --- | --- |
-| `/hooks` | One line per hook: name, filters, reply, runs, failures, skipped messages, dropped replies, last result. |
+| `/hooks` | One line per hook: name, filters, reply, runs, failures, skipped messages, dropped replies, last result. With no hook, it names the file to write. |
 | `/hooks reload` | Reads `hooks.toml` again. A hook that keeps its name keeps its counters. |
-| `/hooks test <name> <text>` | Runs the hook as if you wrote `<text>` in the chat of the window (none in window 0). Only `match` is checked, with its groups; the output shows as with `display`, never sent. |
+| `/hooks test <name> <text>` | Runs the hook as if you wrote `<text>` in the chat of the window (none in window 0). Only `match` is checked, with its groups; the output shows as with `display`, never sent. No guard, no counter. |
 
 ## Safety
 
@@ -137,14 +152,15 @@ become spaces. An empty output does nothing, whatever the mode.
   services of the network is safer, not proof.
 - **Discord**: an automatic reply from a user account is a self-bot, against
   the terms of Discord; the account can be closed. TTYloom lets `send`
-  through and says so in window 0 when it loads such a hook; `draft` or
-  `display` leave the sending to you.
-- On IRC each line of a `send` reply is a message: keep replies short. A long
-  output takes a while to go out and can get you kicked for flooding.
+  through and says so when it loads such a hook (in window 0 at start);
+  `draft` or `display` leave the sending to you.
+- On IRC each line of a `send` reply is a message: keep replies short. After
+  the first four, the lines go out one a second, and a room can still kick a
+  nick that floods it.
 
 ## Examples
 
-**Ping**, one line of shell:
+**Ping**, with no script:
 
 ```toml
 [[hook]]
@@ -210,9 +226,11 @@ import anthropic
 text = sys.stdin.read()
 reply = anthropic.Anthropic().messages.create(
     model="claude-sonnet-5",
-    max_tokens=300,
+    max_tokens=1024,
+    output_config={"effort": "low"},  # the model thinks by default: keep it short
     system="Suggest a short reply to this chat message, in its language. Answer with the reply only.",
     messages=[{"role": "user", "content": f"{os.environ['TTYLOOM_FROM']}: {text}"}],
 )
-print(next(b.text for b in reply.content if b.type == "text"))
+# No text block (the tokens all went to thinking): an empty output does nothing.
+print("".join(b.text for b in reply.content if b.type == "text"))
 ```

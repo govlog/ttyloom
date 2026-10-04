@@ -94,12 +94,15 @@ func (m *Module) Save(dst module.ConfigSink) {
 
 // Template : the Telegram block of a new config.toml — top-level keys.
 func (m *Module) Template() string {
-	return `# api_id / api_hash / bot_token below are the telegram network. They can also
-# be written as a section, which then wins:
+	return `# api_id / api_hash / bot_token below are the telegram network (/networks
+# fills the first two). They can also be written as a section at the end of
+# the file, which then replaces them:
 #   [telegram]
 #   api_id = 0
 #   api_hash = ""
 #   bot_token = ""
+# TG_API_ID, TG_API_HASH and TG_BOT_TOKEN in the environment win over both and
+# are never written here.
 api_id = 0            # https://my.telegram.org
 api_hash = ""
 bot_token = ""        # empty = user account; otherwise a BotFather token (bot mode)

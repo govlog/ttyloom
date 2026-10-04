@@ -16,7 +16,7 @@ exposed, revoke the affected token or session through the service’s settings.
 
 ## Versions and fixes
 
-Use the [latest stable release](https://github.com/govlog/ttyloom/releases/latest)
+Use the [newest release](https://github.com/govlog/ttyloom/releases)
 when checking whether an issue still occurs. Fixes target the current release
 and `main`; older releases are not maintained as separate branches. Reports
 about older versions are useful if they identify an affected current path.

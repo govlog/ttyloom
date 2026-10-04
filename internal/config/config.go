@@ -168,26 +168,27 @@ const defaultFile = `# ttyloom
 # Sections go at the END of the file: a plain key written after a [section]
 # would be read as one of its keys. The keys of each network follow the ones
 # of the client.
-theme = ""            # empty = current Ghostty theme, otherwise a theme name
+theme = ""            # empty = current Ghostty theme, "terminal" = the colours of the terminal, otherwise a theme name
 download_dir = "~/Downloads/ttyloom"
-auto_media_max_kb = 5120
-images = "auto"       # auto | kitty | halfblock | off
+auto_media_max_kb = 5120 # media downloaded on their own up to this size, in KiB (0 = none; 524288 at most)
+images = "auto"       # auto | kitty | halfblock | off (F4 cycles them)
 images_hover = false  # image shown only under the mouse (F5), with no line kept free
-avatars = true        # profile photos before the names and in the member box (kitty only)
-kitty_images = 48     # images kept by the terminal (kitty); above that, the oldest ones are freed
-video_inline_frames = 300 # frames decoded by "l" on a video (300 = 30 s at 10 fps)
+avatars = true        # profile photos before the names and in the sidebar (kitty only)
+kitty_images = 48     # images kept by the terminal (kitty); above that, the least recently shown are freed
+video_inline_frames = 300 # frames decoded by "l" on a video (300 = 30 s at 10 fps, 1000 at most)
 video = "show"        # inline video: show (first frame, "l" plays) | hidden (label only) | autoplay
 gifplay = "always"    # animated GIFs: always | hover (the one under the mouse only) | off (first frame alone)
 timestamps = true
 timestamps_seconds = false # 15:04:05 instead of 15:04 before each message
 cycle_mode = "next"   # Ctrl+X: next (window after the current one) | last_unread (unread windows in turn, then back)
+multiline = false     # Shift+Enter opens an expanded editor
 link_previews = true   # link preview: title, description and thumbnail under the message
 maps = false           # OpenStreetMap map under a position (third-party network, off by default)
 hover = "menu"         # mouse hover: menu | highlight (both: background of the message under the pointer) | off
 bell = true            # bell (\a) on a private message or a mention
 notify = "terminal"    # notification on a private message or a mention: terminal (OSC 777) | desktop (notify-send) | off
-auto_open_days = 7     # opens at start the chats active for N days (0 = off)
-aggregate = false      # window 0: stream of every message received (Alt+A)
+auto_open_days = 7     # opens at start the chats active for N days, in hidden windows (0 = off)
+aggregate = false      # window 0: stream of every message received (F6)
 tabs = false           # tabs per network at the right of the status line, F9 switches (several networks only)
 cache = true           # local cache (dialogs, history) for a fast start
 cache_messages = 2000  # messages kept per chat in the disk cache; scrolling up loads the rest from the network — not on IRC, where the cache is the only copy (/log keeps everything)
@@ -195,10 +196,14 @@ log_dir = "~/.local/share/ttyloom/logs"
 log = false            # /log: logs every window created afterwards
 separator = true       # separator line above the status bar
 redline = true         # red last-read line (unread separator) in each window
+sidebar = "hidden"      # sidebar at start: hidden | chats | windows (F2 writes it)
 sidebar_sort = "recent" # sort of the F2 sidebar (F7 cycles it): recent | alpha | unread
 sidebar_width = 26      # width of the F2 sidebar; the vertical bar drags with the mouse
 sidebar_split = false   # windows list in two sections, channels then direct messages (⊟ of the header)
-lang = ""               # interface language: empty = $LANG, otherwise fr | en
+members = false         # member box (F3) open at start (F3 writes it)
+spell = "off"           # spell checking: off, or Hunspell dictionaries joined with + (fr, en_US, fr+en_US)
+spell_quotes = false    # also check the quoted lines and the code blocks
+lang = ""               # interface language: en | fr | a chain such as fr+en; empty = $LC_ALL, $LC_MESSAGES or $LANG
 update_check = false    # at start, asks GitHub whether a newer release exists (off: no request)
 `
 

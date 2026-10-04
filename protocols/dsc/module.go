@@ -81,13 +81,15 @@ func (m *Module) Save(dst module.ConfigSink) {
 
 // Template : the Discord block of a new config.toml.
 func (m *Module) Template() string {
-	return `# Discord is a second, optional network. Its token is never written here: the
-# command below prints it (a password manager), and it runs with no shell —
-# split on blanks, so a path with a space in it needs a wrapper script.
+	return `# Discord, optional: an empty [discord] section at the end of the file logs
+# in by QR code at start, and the token goes to discord.token (mode 0600) next
+# to this file. token_cmd instead names a command that prints the token (a
+# password manager); it runs with no shell — split on blanks, so a path with a
+# space in it needs a wrapper script. The token is never written here.
 # Third-party clients on a user account are against the Discord terms of
 # service: a secondary account is the safe way to try it.
 #   [discord]
-#   token_cmd = "pass show discord/token"   # or nothing: /discord login shows a QR code
+#   token_cmd = "pass show discord/token"   # or none: the QR code
 `
 }
 
