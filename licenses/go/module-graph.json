@@ -14,8 +14,8 @@
   },
   {
     "Path": "github.com/andybalholm/brotli",
-    "Version": "v1.2.5",
-    "Sum": "h1:BSI8V4zmx/3BAn6OKjF1PmfVq7Aoi52AdFsi6bpCx+s="
+    "Version": "v1.2.6",
+    "Sum": "h1:ftYnfj6usCp+UGV5kSJ3+chpMQgU+gJf/AxsUQ52REI="
   },
   {
     "Path": "github.com/andybalholm/cascadia",
@@ -96,8 +96,8 @@
   },
   {
     "Path": "github.com/diamondburned/arikawa/v3",
-    "Version": "v3.6.1-0.20260306005901-b24e0a8447e1",
-    "Sum": "h1:Px6g5tRW5FZLQyX3z4gLLBV/tDiYG8LKCjY26cWrYpc="
+    "Version": "v3.6.1-0.20260518050745-b430932b3ee1",
+    "Sum": "h1:7nU4wRdBZjM8b8+uwV288wjcscG0mGWxTInUwQqrsUY="
   },
   {
     "Path": "github.com/diamondburned/ningen/v3",
@@ -543,13 +543,18 @@
   },
   {
     "Path": "go.opentelemetry.io/otel",
-    "Version": "v1.46.0",
-    "Sum": "h1:FHt5/CDyVxi/8IM1CH7VE/rRgq3kLHa2mSTVMO8AWyc="
+    "Version": "v1.47.0",
+    "Sum": "h1:j7ALJ/zgkS7Z6aeJW09p8VC9804bC+PpeTfCD4XPnOM="
+  },
+  {
+    "Path": "go.opentelemetry.io/otel/log",
+    "Version": "v1.47.0",
+    "Sum": "h1:cOTS1CcLbSQeZKanGJ+0JpF/+t4PELi3O3bbl2lqCcI="
   },
   {
     "Path": "go.opentelemetry.io/otel/metric",
-    "Version": "v1.46.0",
-    "Sum": "h1:yBnkXvgV7AXFILZc5K6IZe/CBFF3OS7BJ8ov6/lj0K8="
+    "Version": "v1.47.0",
+    "Sum": "h1:4PptaldXx3Eat1XjMZ68pPJEs5wrhlemctZE9a3UdWY="
   },
   {
     "Path": "go.opentelemetry.io/otel/sdk",
@@ -561,8 +566,8 @@
   },
   {
     "Path": "go.opentelemetry.io/otel/trace",
-    "Version": "v1.46.0",
-    "Sum": "h1:OULy7ccdJnZtJ0UDYFOIGaCmiWzJ8Vi2G/Rsu60qs1c="
+    "Version": "v1.47.0",
+    "Sum": "h1:JOjX/Oci8K94QHddo+bbfya/Ai/nf6/dt9ZfrFNWSrM="
   },
   {
     "Path": "go.uber.org/atomic",
@@ -638,7 +643,7 @@
   },
   {
     "Path": "golang.org/x/telemetry",
-    "Version": "v0.0.0-20260908163034-4bcc4b2ee518"
+    "Version": "v0.0.0-20260924152758-ed294f943157"
   },
   {
     "Path": "golang.org/x/term",
@@ -657,8 +662,8 @@
   },
   {
     "Path": "golang.org/x/tools",
-    "Version": "v0.50.0",
-    "Sum": "h1:c2ifzfcuY7L90lZ2aKd8S4K2NpASF08SZx9ZuJkHmSU="
+    "Version": "v0.51.0",
+    "Sum": "h1:k4Xc/1Om9jwkBJBo4NVLMSARBoWtK10mx+W5BnXCeAI="
   },
   {
     "Path": "golang.org/x/tools/go/expect",

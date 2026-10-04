@@ -1,11 +1,11 @@
 module github.com/govlog/ttyloom
 
-go 1.26.7
+go 1.26.8
 
 require (
 	github.com/BurntSushi/toml v1.6.0
 	github.com/clipperhouse/uax29/v2 v2.7.0
-	github.com/diamondburned/arikawa/v3 v3.6.1-0.20260306005901-b24e0a8447e1
+	github.com/diamondburned/arikawa/v3 v3.6.1-0.20260518050745-b430932b3ee1
 	github.com/diamondburned/ningen/v3 v3.0.1-0.20260306213430-5a08d3a709b4
 	github.com/ergochat/irc-go v0.7.0
 	github.com/gorilla/websocket v1.5.3
@@ -21,7 +21,7 @@ require (
 )
 
 require (
-	github.com/andybalholm/brotli v1.2.5 // indirect
+	github.com/andybalholm/brotli v1.2.6 // indirect
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/coder/websocket v1.8.15 // indirect
@@ -46,9 +46,9 @@ require (
 	github.com/shopspring/decimal v1.4.0 // indirect
 	github.com/twmb/murmur3 v1.2.0 // indirect
 	github.com/yuin/goldmark v1.8.6 // indirect
-	go.opentelemetry.io/otel v1.46.0 // indirect
-	go.opentelemetry.io/otel/metric v1.46.0 // indirect
-	go.opentelemetry.io/otel/trace v1.46.0 // indirect
+	go.opentelemetry.io/otel v1.47.0 // indirect
+	go.opentelemetry.io/otel/metric v1.47.0 // indirect
+	go.opentelemetry.io/otel/trace v1.47.0 // indirect
 	go.uber.org/atomic v1.12.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.28.0 // indirect
@@ -58,6 +58,6 @@ require (
 	golang.org/x/net v0.59.0 // indirect
 	golang.org/x/sync v0.23.0 // indirect
 	golang.org/x/time v0.16.0 // indirect
-	golang.org/x/tools v0.50.0 // indirect
+	golang.org/x/tools v0.51.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )

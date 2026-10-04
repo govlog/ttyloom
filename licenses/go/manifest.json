@@ -25,16 +25,16 @@
   },
   {
     "module": "github.com/andybalholm/brotli",
-    "version": "v1.2.5",
-    "sum": "h1:BSI8V4zmx/3BAn6OKjF1PmfVq7Aoi52AdFsi6bpCx+s=",
+    "version": "v1.2.6",
+    "sum": "h1:ftYnfj6usCp+UGV5kSJ3+chpMQgU+gJf/AxsUQ52REI=",
     "scope": "application or tests",
     "notices": [
       {
-        "file": "licenses/go/github.com/andybalholm/brotli@v1.2.5/LICENSE",
+        "file": "licenses/go/github.com/andybalholm/brotli@v1.2.6/LICENSE",
         "sha256": "3d180008e36922a4e8daec11c34c7af264fed5962d07924aea928c38e8663c94"
       },
       {
-        "file": "licenses/go/github.com/andybalholm/brotli@v1.2.5/flate/LICENSE",
+        "file": "licenses/go/github.com/andybalholm/brotli@v1.2.6/flate/LICENSE",
         "sha256": "2d36597f7117c38b006835ae7f537487207d8ec407aa9d9980794b2030cbc067"
       }
     ]
@@ -89,16 +89,16 @@
   },
   {
     "module": "github.com/diamondburned/arikawa/v3",
-    "version": "v3.6.1-0.20260306005901-b24e0a8447e1",
-    "sum": "h1:Px6g5tRW5FZLQyX3z4gLLBV/tDiYG8LKCjY26cWrYpc=",
+    "version": "v3.6.1-0.20260518050745-b430932b3ee1",
+    "sum": "h1:7nU4wRdBZjM8b8+uwV288wjcscG0mGWxTInUwQqrsUY=",
     "scope": "application or tests",
     "notices": [
       {
-        "file": "licenses/go/github.com/diamondburned/arikawa/v3@v3.6.1-0.20260306005901-b24e0a8447e1/LICENSE",
+        "file": "licenses/go/github.com/diamondburned/arikawa/v3@v3.6.1-0.20260518050745-b430932b3ee1/LICENSE",
         "sha256": "da515e1b177271963aedd19c8df5bf0543c768c6e7ceaa8696d5b8194e3ff393"
       },
       {
-        "file": "licenses/go/github.com/diamondburned/arikawa/v3@v3.6.1-0.20260306005901-b24e0a8447e1/utils/bot/extras/shellwords/LICENSE",
+        "file": "licenses/go/github.com/diamondburned/arikawa/v3@v3.6.1-0.20260518050745-b430932b3ee1/utils/bot/extras/shellwords/LICENSE",
         "sha256": "dce57e2906b8ebfc7a0978105aac3082ddceb8a1f673bec71b9c8dc5df51c5d7"
       }
     ]
@@ -517,36 +517,36 @@
   },
   {
     "module": "go.opentelemetry.io/otel",
-    "version": "v1.46.0",
-    "sum": "h1:FHt5/CDyVxi/8IM1CH7VE/rRgq3kLHa2mSTVMO8AWyc=",
+    "version": "v1.47.0",
+    "sum": "h1:j7ALJ/zgkS7Z6aeJW09p8VC9804bC+PpeTfCD4XPnOM=",
     "scope": "application or tests",
     "notices": [
       {
-        "file": "licenses/go/go.opentelemetry.io/otel@v1.46.0/LICENSE",
+        "file": "licenses/go/go.opentelemetry.io/otel@v1.47.0/LICENSE",
         "sha256": "1ae07514be1d7bb33f0698f8d91fb51b8b9fe1463157ec1c72081a49b9bc6f40"
       }
     ]
   },
   {
     "module": "go.opentelemetry.io/otel/metric",
-    "version": "v1.46.0",
-    "sum": "h1:yBnkXvgV7AXFILZc5K6IZe/CBFF3OS7BJ8ov6/lj0K8=",
+    "version": "v1.47.0",
+    "sum": "h1:4PptaldXx3Eat1XjMZ68pPJEs5wrhlemctZE9a3UdWY=",
     "scope": "declared; not imported on this platform",
     "notices": [
       {
-        "file": "licenses/go/go.opentelemetry.io/otel/metric@v1.46.0/LICENSE",
+        "file": "licenses/go/go.opentelemetry.io/otel/metric@v1.47.0/LICENSE",
         "sha256": "1ae07514be1d7bb33f0698f8d91fb51b8b9fe1463157ec1c72081a49b9bc6f40"
       }
     ]
   },
   {
     "module": "go.opentelemetry.io/otel/trace",
-    "version": "v1.46.0",
-    "sum": "h1:OULy7ccdJnZtJ0UDYFOIGaCmiWzJ8Vi2G/Rsu60qs1c=",
+    "version": "v1.47.0",
+    "sum": "h1:JOjX/Oci8K94QHddo+bbfya/Ai/nf6/dt9ZfrFNWSrM=",
     "scope": "application or tests",
     "notices": [
       {
-        "file": "licenses/go/go.opentelemetry.io/otel/trace@v1.46.0/LICENSE",
+        "file": "licenses/go/go.opentelemetry.io/otel/trace@v1.47.0/LICENSE",
         "sha256": "1ae07514be1d7bb33f0698f8d91fb51b8b9fe1463157ec1c72081a49b9bc6f40"
       }
     ]
@@ -749,16 +749,16 @@
   },
   {
     "module": "golang.org/x/tools",
-    "version": "v0.50.0",
-    "sum": "h1:c2ifzfcuY7L90lZ2aKd8S4K2NpASF08SZx9ZuJkHmSU=",
+    "version": "v0.51.0",
+    "sum": "h1:k4Xc/1Om9jwkBJBo4NVLMSARBoWtK10mx+W5BnXCeAI=",
     "scope": "declared; not imported on this platform",
     "notices": [
       {
-        "file": "licenses/go/golang.org/x/tools@v0.50.0/LICENSE",
+        "file": "licenses/go/golang.org/x/tools@v0.51.0/LICENSE",
         "sha256": "911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad"
       },
       {
-        "file": "licenses/go/golang.org/x/tools@v0.50.0/PATENTS",
+        "file": "licenses/go/golang.org/x/tools@v0.51.0/PATENTS",
         "sha256": "96f408bfae65bf137fc2525d3ecb030271c50c1e90799f87abf8846d8dd505cc"
       }
     ]

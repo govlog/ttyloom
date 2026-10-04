@@ -9,12 +9,12 @@ Original texts and checksums are recorded in [manifest.json](manifest.json). Kee
 | Module | Version | Scope | Original notices |
 | --- | --- | --- | --- |
 | `github.com/BurntSushi/toml` | `v1.6.0` | application or tests | [COPYING](github.com/BurntSushi/toml@v1.6.0/COPYING), [COPYING](github.com/BurntSushi/toml@v1.6.0/cmd/toml-test-decoder/COPYING), [COPYING](github.com/BurntSushi/toml@v1.6.0/cmd/toml-test-encoder/COPYING), [COPYING](github.com/BurntSushi/toml@v1.6.0/cmd/tomlv/COPYING) |
-| `github.com/andybalholm/brotli` | `v1.2.5` | application or tests | [LICENSE](github.com/andybalholm/brotli@v1.2.5/LICENSE), [LICENSE](github.com/andybalholm/brotli@v1.2.5/flate/LICENSE) |
+| `github.com/andybalholm/brotli` | `v1.2.6` | application or tests | [LICENSE](github.com/andybalholm/brotli@v1.2.6/LICENSE), [LICENSE](github.com/andybalholm/brotli@v1.2.6/flate/LICENSE) |
 | `github.com/cenkalti/backoff/v4` | `v4.3.0` | application or tests | [LICENSE](github.com/cenkalti/backoff/v4@v4.3.0/LICENSE) |
 | `github.com/cespare/xxhash/v2` | `v2.3.0` | application or tests | [LICENSE.txt](github.com/cespare/xxhash/v2@v2.3.0/LICENSE.txt) |
 | `github.com/clipperhouse/uax29/v2` | `v2.7.0` | application or tests | [LICENSE](github.com/clipperhouse/uax29/v2@v2.7.0/LICENSE) |
 | `github.com/coder/websocket` | `v1.8.15` | application or tests | [LICENSE.txt](github.com/coder/websocket@v1.8.15/LICENSE.txt) |
-| `github.com/diamondburned/arikawa/v3` | `v3.6.1-0.20260306005901-b24e0a8447e1` | application or tests | [LICENSE](github.com/diamondburned/arikawa/v3@v3.6.1-0.20260306005901-b24e0a8447e1/LICENSE), [LICENSE](github.com/diamondburned/arikawa/v3@v3.6.1-0.20260306005901-b24e0a8447e1/utils/bot/extras/shellwords/LICENSE) |
+| `github.com/diamondburned/arikawa/v3` | `v3.6.1-0.20260518050745-b430932b3ee1` | application or tests | [LICENSE](github.com/diamondburned/arikawa/v3@v3.6.1-0.20260518050745-b430932b3ee1/LICENSE), [LICENSE](github.com/diamondburned/arikawa/v3@v3.6.1-0.20260518050745-b430932b3ee1/utils/bot/extras/shellwords/LICENSE) |
 | `github.com/diamondburned/ningen/v3` | `v3.0.1-0.20260306213430-5a08d3a709b4` | application or tests | [LICENSE](github.com/diamondburned/ningen/v3@v3.0.1-0.20260306213430-5a08d3a709b4/LICENSE) |
 | `github.com/dlclark/regexp2` | `v1.12.0` | declared; not imported on this platform | [LICENSE](github.com/dlclark/regexp2@v1.12.0/LICENSE) |
 | `github.com/ergochat/irc-go` | `v0.7.0` | application or tests | [LICENSE](github.com/ergochat/irc-go@v0.7.0/LICENSE), [LICENSE](github.com/ergochat/irc-go@v0.7.0/ircevent/LICENSE) |
@@ -43,9 +43,9 @@ Original texts and checksums are recorded in [manifest.json](manifest.json). Kee
 | `github.com/shopspring/decimal` | `v1.4.0` | declared; not imported on this platform | [LICENSE](github.com/shopspring/decimal@v1.4.0/LICENSE) |
 | `github.com/twmb/murmur3` | `v1.2.0` | application or tests | [LICENSE](github.com/twmb/murmur3@v1.2.0/LICENSE) |
 | `github.com/yuin/goldmark` | `v1.8.6` | declared; not imported on this platform | [LICENSE](github.com/yuin/goldmark@v1.8.6/LICENSE) |
-| `go.opentelemetry.io/otel` | `v1.46.0` | application or tests | [LICENSE](go.opentelemetry.io/otel@v1.46.0/LICENSE) |
-| `go.opentelemetry.io/otel/metric` | `v1.46.0` | declared; not imported on this platform | [LICENSE](go.opentelemetry.io/otel/metric@v1.46.0/LICENSE) |
-| `go.opentelemetry.io/otel/trace` | `v1.46.0` | application or tests | [LICENSE](go.opentelemetry.io/otel/trace@v1.46.0/LICENSE) |
+| `go.opentelemetry.io/otel` | `v1.47.0` | application or tests | [LICENSE](go.opentelemetry.io/otel@v1.47.0/LICENSE) |
+| `go.opentelemetry.io/otel/metric` | `v1.47.0` | declared; not imported on this platform | [LICENSE](go.opentelemetry.io/otel/metric@v1.47.0/LICENSE) |
+| `go.opentelemetry.io/otel/trace` | `v1.47.0` | application or tests | [LICENSE](go.opentelemetry.io/otel/trace@v1.47.0/LICENSE) |
 | `go.uber.org/atomic` | `v1.12.0` | application or tests | [LICENSE.txt](go.uber.org/atomic@v1.12.0/LICENSE.txt) |
 | `go.uber.org/multierr` | `v1.11.0` | application or tests | [LICENSE.txt](go.uber.org/multierr@v1.11.0/LICENSE.txt) |
 | `go.uber.org/zap` | `v1.28.0` | declared; not imported on this platform | [LICENSE](go.uber.org/zap@v1.28.0/LICENSE) |
@@ -59,6 +59,6 @@ Original texts and checksums are recorded in [manifest.json](manifest.json). Kee
 | `golang.org/x/term` | `v0.46.0` | application or tests | [LICENSE](golang.org/x/term@v0.46.0/LICENSE), [PATENTS](golang.org/x/term@v0.46.0/PATENTS) |
 | `golang.org/x/text` | `v0.42.0` | application or tests | [LICENSE](golang.org/x/text@v0.42.0/LICENSE), [PATENTS](golang.org/x/text@v0.42.0/PATENTS) |
 | `golang.org/x/time` | `v0.16.0` | application or tests | [LICENSE](golang.org/x/time@v0.16.0/LICENSE), [PATENTS](golang.org/x/time@v0.16.0/PATENTS) |
-| `golang.org/x/tools` | `v0.50.0` | declared; not imported on this platform | [LICENSE](golang.org/x/tools@v0.50.0/LICENSE), [PATENTS](golang.org/x/tools@v0.50.0/PATENTS) |
+| `golang.org/x/tools` | `v0.51.0` | declared; not imported on this platform | [LICENSE](golang.org/x/tools@v0.51.0/LICENSE), [PATENTS](golang.org/x/tools@v0.51.0/PATENTS) |
 | `gopkg.in/yaml.v2` | `v2.4.0` | declared; not imported on this platform | [LICENSE](gopkg.in/yaml.v2@v2.4.0/LICENSE), [LICENSE.libyaml](gopkg.in/yaml.v2@v2.4.0/LICENSE.libyaml), [NOTICE](gopkg.in/yaml.v2@v2.4.0/NOTICE) |
 | `rsc.io/qr` | `v0.2.0` | application or tests | [LICENSE](rsc.io/qr@v0.2.0/LICENSE) |

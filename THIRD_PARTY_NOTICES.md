@@ -1,7 +1,7 @@
 # Third-party licenses and notices
 
 Reviewed on 2026-09-05 for the source checkout and Linux/amd64 builds, with and
-without Hunspell. The portable Linux/arm64 build uses the same 37 dependency
+without Hunspell. The portable Linux/arm64 build uses the same 38 dependency
 modules; its notice coverage and notice checksums were also verified.
 Third-party copyrights and licenses remain with their owners.
 The project license does not replace them.
@@ -20,7 +20,7 @@ those components.
   NOTICE files are retained, not just each module’s top-level license.
 - [Machine-readable manifest](licenses/go/manifest.json): exact versions, module
   checksums, notice paths and SHA-256 hashes of the copied files.
-- [Resolved module graph](licenses/go/module-graph.json): all 155 selected upstream
+- [Resolved module graph](licenses/go/module-graph.json): all 159 selected upstream
   module versions. A graph entry can be an upstream tool or test dependency with
   no code imported or redistributed by TTYloom.
 - [Package license report](licenses/go-licenses.csv): classification with
@@ -29,7 +29,7 @@ those components.
   original license and corrected manually. Multiple rows for a library can
   reflect separate notices bundled by that library; do not assume they are
   interchangeable license choices.
-- [Go toolchain license](licenses/go-toolchain/LICENSE): Go 1.26.7 runtime and
+- [Go toolchain license](licenses/go-toolchain/LICENSE): Go 1.26.8 runtime and
   standard-library notice, with its [patent grant](licenses/go-toolchain/PATENTS).
 
 The imported Go libraries have MIT, MIT-0, ISC, BSD or Apache-2.0 notices in
