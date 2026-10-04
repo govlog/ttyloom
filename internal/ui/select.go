@@ -115,9 +115,6 @@ func (u *UI) actClick(w *Window, it *Item, a render.Action) {
 		if it != nil && it.Msg != nil {
 			u.viewMsg(it.Msg)
 		}
-	case a.Key == render.KeyEsc:
-		u.cancelMode()
-		u.setSel(w, nil)
 	case it != nil:
 		u.setSel(w, it) // the palette acts on the message clicked
 		u.selKey(w, a.Key)

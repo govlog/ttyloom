@@ -85,7 +85,10 @@ type Window struct {
 	// Filter : messages left out of the drawing (/net on the aggregate). nil =
 	// everything. The items stay in memory: the filter moves with no reload.
 	Filter func(*model.Msg) bool
-	nLines int // lines of the last drawing: capacity hint of the next one
+	// lineBuf, itemBuf : the slices of the last LineItems, filled again by the
+	// next one — a frame, a wheel step and a drag each draw the window.
+	lineBuf []render.Line
+	itemBuf []*Item
 	// seps : day separators already drawn — LongDate and its i18n lookups ran
 	// for each separator at each frame. Invalidate drops them (theme change).
 	seps map[sepKey]render.Line
@@ -563,12 +566,10 @@ func (w *Window) Lines(o render.Opts) []render.Line {
 
 // LineItems draws like Lines and also gives back the item of each line (nil
 // for the separators), and the rank of the redline (-1 when it is missing or
-// off, o.Redline): map of the clicks + first read position.
+// off, o.Redline): map of the clicks + first read position. The slices are
+// the window's own, valid until its next call.
 func (w *Window) LineItems(o render.Opts) ([]render.Line, []*Item, int) {
-	// Sized on the frame before: the drawing rarely changes height, and the
-	// doubling growth cost more than the lines themselves.
-	out := make([]render.Line, 0, w.nLines)
-	items := make([]*Item, 0, w.nLines)
+	out, items := w.lineBuf[:0], w.itemBuf[:0]
 	var lastDay [3]int // year, month, day: no time.Format per message per frame
 	marked := false
 	markIdx := -1
@@ -625,7 +626,7 @@ func (w *Window) LineItems(o render.Opts) ([]render.Line, []*Item, int) {
 			items = append(items, it)
 		}
 	}
-	w.nLines = len(out)
+	w.lineBuf, w.itemBuf = out, items
 	return out, items, markIdx
 }
 
@@ -660,9 +661,6 @@ func (ws *Windows) New(hide bool) *Window {
 	return w
 }
 
-// Close closes the current window (never window 0) and gives the closed window back.
-func (ws *Windows) Close() *Window { return ws.CloseAt(ws.Cur) }
-
 // CloseAt closes the window i (never window 0, never an index outside the
 // list) and resets Cur: the shown window stays the same, or the one before
 // when it is the one being closed. nil when nothing was closed.
@@ -690,8 +688,6 @@ func (u *UI) setMaxItems(n int) {
 	}
 	u.agg.max, u.debug.max = n, n
 }
-
-func (ws *Windows) Next() { ws.Cur = (ws.Cur + 1) % len(ws.List) }
 
 func (ws *Windows) Switch(n int) bool {
 	if n < 0 || n >= len(ws.List) {

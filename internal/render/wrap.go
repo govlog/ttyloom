@@ -159,12 +159,22 @@ func Wrap(spans []Span, width int) []Line {
 			if curW > 0 {
 				flush()
 			}
-			for w > width {
-				n, _ := hardCut(runes[i:j], width)
+			for w > width && i < j {
+				// A row never holds more than 8 runes per cell: cutting from a
+				// bounded slice keeps a long word linear. A cut that takes the
+				// whole slice may split a cluster (a pile of combining marks),
+				// whose halves do not add up to its width: the rest is measured
+				// again then, and i, not w, ends the word.
+				end := min(j, i+8*width)
+				n, cw := hardCut(runes[i:end], width)
 				add(i, i+n)
 				flush()
 				i += n
-				w = runesWidth(runes[i:j])
+				if i == end {
+					w = runesWidth(runes[i:j])
+				} else {
+					w -= cw
+				}
 			}
 			if j > i {
 				add(i, j)

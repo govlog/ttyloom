@@ -49,18 +49,11 @@ type Opts struct {
 	// ReadInbox : last received message I read in the chat of the message. nil:
 	// no tick on the messages of other people.
 	ReadInbox func(m *model.Msg) int
-	// Reactions : reactions usable in the chat of the window, in Telegram order.
-	// nil = restriction unknown (aggregated view, tests); empty non-nil = none,
-	// so no hover emoji.
-	Reactions []string
 	// ChatKind : kind of the chat of the message. It is the avatar/colour
 	// fallback for an incoming message with no FromID in a private chat (cache
 	// written before the 30/08 fix, or any future MTProto case with no from_id):
 	// the TDLib id of the peer is then the one of the chat itself. nil = no fallback.
 	ChatKind func(m *model.Msg) model.ChatKind
-	// Jump : search window — the palette offers "g go" (join the message in its
-	// chat) instead of "g quoted".
-	Jump bool
 	// Alias : local name of the chat of the message (/rename), "" with no alias.
 	// It replaces the title of the [chat] prefix of the aggregate and, in a
 	// private chat, the name of the peer. nil = no renaming.
@@ -119,7 +112,7 @@ func Message(m *model.Msg, o Opts) []Line {
 	}
 	sel := o.Selected == m
 	// Hover: same background as the selection, without the marker. The selection
-	// wins, otherwise the message would carry two help lines.
+	// wins.
 	hov := !sel && o.Hover == m
 	tsel := !sel && !hov && o.TextSel[m]
 	if sel {

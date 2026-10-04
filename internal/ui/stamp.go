@@ -33,6 +33,7 @@ func stamp(net string, ev model.Event) model.Event {
 			h := &e.Hits[i]
 			stampChat(net, h.Chat)
 			h.From, h.Text = render.CleanLine(h.From), render.CleanLine(h.Text)
+			h.Date = h.Date.Local()
 		}
 		e.Err = render.CleanLine(e.Err)
 		return e
@@ -104,6 +105,7 @@ func stampChats(net string, cs []*model.Chat) {
 // the labels are single lines.
 func stampMsg(net string, m *model.Msg) {
 	m.Net = net
+	m.Date = m.Date.Local() // IRC server-time comes in UTC: the clock and the day separators are local
 	m.Text, m.Service = render.Clean(m.Text), render.Clean(m.Service)
 	m.From, m.ChatLabel = render.CleanLine(m.From), render.CleanLine(m.ChatLabel)
 	if md := m.Media; md != nil {

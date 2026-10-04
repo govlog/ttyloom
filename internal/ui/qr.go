@@ -202,7 +202,7 @@ func (u *UI) setQR(e model.EvQR) {
 		u.retireKitty(q.md)
 	}
 	u.qr = q
-	u.clear()
+	u.repaint()
 }
 
 // closeQR : QR scanned, given up or failed.
@@ -216,5 +216,5 @@ func (u *UI) closeQR() {
 	if u.t.Kitty {
 		u.t.WriteString(s)
 	}
-	u.clear()
+	u.repaint()
 }

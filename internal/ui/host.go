@@ -126,15 +126,7 @@ func (h host) ContextNet(w module.Win, mod string) string {
 
 func (h host) SaveConfig() bool { return h.u.saveCfg() }
 
-func (h host) Chats(net string) []*model.Chat {
-	var out []*model.Chat
-	for _, c := range h.u.chatList {
-		if c.Net == net {
-			out = append(out, c)
-		}
-	}
-	return out
-}
+func (h host) Chats(net string) []*model.Chat { return h.u.netChats(net) }
 
 // ChatByTitle : the chat of net whose title is name, case apart.
 func (h host) ChatByTitle(net, name string) *model.Chat {

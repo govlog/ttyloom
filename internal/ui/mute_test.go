@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/govlog/ttyloom/internal/config"
 	"github.com/govlog/ttyloom/internal/model"
@@ -23,6 +24,7 @@ func TestMute(t *testing.T) {
 		u.t.Flush()
 		out.Reset()
 		u.dispatch(model.Envelope{Net: netTelegram, Ev: model.EvNewMessage{Chat: dm, Msg: model.Msg{ID: id, ChatID: 1, Text: "psst", From: "alice"}}})
+		u.flushAlert(time.Now().Add(alertGap)) // past the rate limit of the alerts
 		u.t.Flush()
 		return out.String()
 	}
@@ -53,5 +55,27 @@ func TestMute(t *testing.T) {
 	}
 	if m, _ := loadMuted(mutedPath()); len(m) != 0 {
 		t.Errorf("muted.toml after /unmute: %v, want empty", m)
+	}
+}
+
+// A burst of hot messages rings once at once, then once more for the last
+// one when the gap is over — never once per message.
+func TestAlertBurst(t *testing.T) {
+	var out bytes.Buffer
+	u := &UI{ws: NewWindows(), agg: &Window{}, debug: &Window{}, cfg: &config.Config{Bell: true, Notify: "terminal"},
+		t: term.NewOffscreen(&out, 80, 24), nets: map[string]model.Backend{netTelegram: &fakeBackend{}}, conn: map[string]bool{},
+		focused: true, chats: map[model.ChatKey]*model.Chat{}, dirty: map[model.ChatKey]bool{}, self: map[string]selfInfo{}}
+	for i := 1; i <= 50; i++ {
+		dm := &model.Chat{Net: netTelegram, ID: int64(i), Kind: model.ChatUser, Title: "spam"}
+		u.dispatch(model.Envelope{Net: netTelegram, Ev: model.EvNewMessage{Chat: dm, Msg: model.Msg{ID: i, ChatID: int64(i), Text: "hi", From: "spam"}}})
+	}
+	u.t.Flush()
+	if n := strings.Count(out.String(), "\a"); n != 1 {
+		t.Fatalf("%d bells for a burst, want 1", n)
+	}
+	u.flushAlert(time.Now().Add(alertGap))
+	u.t.Flush()
+	if n := strings.Count(out.String(), "\a"); n != 2 {
+		t.Fatalf("%d bells after the gap, want 2", n)
 	}
 }

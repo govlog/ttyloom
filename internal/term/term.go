@@ -22,6 +22,7 @@ import (
 type Term struct {
 	in    *os.File
 	out   *bufio.Writer
+	sync  bool // a synchronized update is open until the next Flush
 	state *xterm.State
 	keys  chan Key
 	winch chan os.Signal
@@ -85,8 +86,26 @@ func (t *Term) Close() {
 	xterm.Restore(int(t.in.Fd()), t.state)
 }
 
-func (t *Term) WriteString(s string)      { t.out.WriteString(s) }
-func (t *Term) Flush()                    { t.out.Flush() }
+// WriteString queues s for the next Flush, inside a synchronized update
+// (DEC mode 2026): the terminal holds its paint until Flush ends it, so a
+// frame never shows half drawn — a row erased and not yet written again, an
+// image placed twice. A terminal without the mode ignores it.
+func (t *Term) WriteString(s string) {
+	if !t.sync {
+		t.sync = true
+		t.out.WriteString("\x1b[?2026h")
+	}
+	t.out.WriteString(s)
+}
+
+// Flush ends the synchronized update and writes everything queued.
+func (t *Term) Flush() {
+	if t.sync {
+		t.sync = false
+		t.out.WriteString("\x1b[?2026l")
+	}
+	t.out.Flush()
+}
 func (t *Term) Keys() <-chan Key          { return t.keys }
 func (t *Term) Resized() <-chan os.Signal { return t.winch }
 

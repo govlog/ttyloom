@@ -95,7 +95,8 @@ func TestParseCommand(t *testing.T) {
 }
 
 func TestMeEntity(t *testing.T) {
-	text, ents := meMsg("alice", "part 😀")
+	segs := meSegs("alice", "part 😀")
+	text, ents := fenceText(segs), fenceEntities(segs)
 	if text != "* alice part 😀" {
 		t.Fatalf("text: %q", text)
 	}
@@ -112,24 +113,16 @@ func TestWindowsFlow(t *testing.T) {
 	if ws.Cur != 0 || len(ws.List) != 2 {
 		t.Fatalf("hide: cur=%d n=%d", ws.Cur, len(ws.List))
 	}
-	ws.Next() // the next window in the ring; Ctrl+X goes through cycleTarget
-	if ws.Cur != 1 {
-		t.Fatalf("next: %d", ws.Cur)
-	}
 	antonio := &model.Chat{ID: 5, Title: "Antonio"}
-	ws.Current().Chat = antonio
-	ws.Next()
-	if ws.Cur != 0 {
-		t.Fatalf("cycle: %d", ws.Cur)
-	}
+	ws.List[1].Chat = antonio
 	if ws.ForChat(antonio.Key()) != 1 || ws.ByName("ant", nil) != 1 || ws.ForChat(model.ChatKey{ID: 9}) != -1 {
 		t.Fatal("lookup")
 	}
-	if ws.Close() != nil {
+	if ws.CloseAt(0) != nil {
 		t.Fatal("window 0 must not close")
 	}
 	ws.Switch(1)
-	if ws.Close() == nil || len(ws.List) != 1 || ws.Cur != 0 {
+	if ws.CloseAt(ws.Cur) == nil || len(ws.List) != 1 || ws.Cur != 0 {
 		t.Fatal("close")
 	}
 }
@@ -685,11 +678,6 @@ func TestNetRouting(t *testing.T) {
 	}
 	if u.net(nil) != nil || u.net(&model.Chat{}) != nil || u.net(&model.Chat{Net: "discord"}) != nil {
 		t.Fatal("nil expected: nil chat, not stamped, network gone")
-	}
-	var seen []model.Backend
-	u.eachNet(func(b model.Backend) { seen = append(seen, b) })
-	if len(seen) != 1 || seen[0] != model.Backend(b) {
-		t.Fatalf("eachNet: %v", seen)
 	}
 }
 

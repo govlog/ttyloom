@@ -164,3 +164,16 @@ func TestRegressionCacheLoadCleansRemoteText(t *testing.T) {
 		t.Fatalf("%d cached messages played, want 1", played)
 	}
 }
+
+// A date that comes in UTC (IRC server-time) shows in local time, like the
+// lines typed here.
+func TestStampLocalTime(t *testing.T) {
+	old := time.Local
+	time.Local = time.FixedZone("CEST", 2*3600)
+	defer func() { time.Local = old }()
+	at, _ := time.Parse(time.RFC3339, "2026-10-04T16:12:00Z")
+	e := stamp("irc:libera", model.EvNewMessage{Msg: model.Msg{Date: at, Text: "hi"}}).(model.EvNewMessage)
+	if got := e.Msg.Date.Format("15:04"); got != "18:12" {
+		t.Fatalf("shown at %s, want 18:12 local", got)
+	}
+}

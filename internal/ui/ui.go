@@ -49,6 +49,10 @@ type UI struct {
 	cfg       *config.Config
 	th        theme.Theme
 	build     update.Build                  // what this binary was built from (banner, update check)
+	lastFrame string                        // bytes of the last frame sent: the same frame again is not sent
+	alertNext *alertNote                    // hot message waiting for its bell and notification (alert)
+	alertAt   time.Time                     // last bell and notification given
+	sgrs      map[theme.Style]string        // SGR sequence of each style drawn (sgr)
 	nets      map[string]model.Backend      // network name → live backend (started, not stopped)
 	netList   []string                      // configured networks, sorted: the ones /<net> login can start
 	launch    model.Launcher                // builds and runs one of them, given by Run
@@ -434,15 +438,6 @@ func (u *UI) evKey(chatID int64) model.ChatKey {
 	return model.ChatKey{Net: u.dispatchNet, ID: chatID}
 }
 
-// eachNet runs f on every backend. Account-level calls (dialogs, contacts,
-// global search) go to all of them: each answers what it can, and the answers
-// come back tagged by their envelope.
-func (u *UI) eachNet(f func(model.Backend)) {
-	for _, b := range u.nets {
-		f(b)
-	}
-}
-
 // eachNetCap runs f on the backends that carry the capability has reads. false
 // when none of them does: the caller then says net_unsupported rather than
 // waiting for an answer that will never come.
@@ -817,6 +812,11 @@ func (u *UI) flash(s string) {
 	u.flashMsg, u.flashUntil = render.CleanLine(s), time.Now().Add(2*time.Second)
 }
 
+// repaint : the next frame is sent whole even when it looks like the last
+// one — the screen carried something else (the preview, the QR box) or the
+// user asks for a repair (Ctrl+L).
+func (u *UI) repaint() { u.lastFrame = "" }
+
 // view gives the shown window. In window 0, the log (/debug) wins over the
 // aggregate (Alt+A).
 func (u *UI) view() *Window {
@@ -949,6 +949,7 @@ func (u *UI) touchShared(m *model.Msg) {
 // area, status bar and input erased line by line (\x1b[K), sidebar filled up to
 // the separator, alternate screen (CSI ?1049h) already blank at opening time.
 func (u *UI) clear() {
+	u.repaint()
 	u.zone = zoneNone // the zones moved: nothing under the pointer until it moves again
 	for _, w := range u.ws.List {
 		w.Invalidate()
@@ -964,13 +965,7 @@ func (u *UI) opts() render.Opts {
 		CellW: cellW, CellH: cellH, MaxImgCols: maxCols, MaxImgRows: maxRows, Self: u.selfID,
 		Avatars: u.avatarsOn(), ShowChat: v == u.agg, ReadOutbox: u.readOutboxOf, ReadInbox: u.readInboxOf,
 		ImagesHover: u.cfg.ImagesHover, Video: u.cfg.Video, ChatKind: u.chatKindOf,
-		Alias: u.aliasOf, Redline: u.cfg.Redline, Caps: u.capsOf,
-		// Search window: the palette offers "g go" (join the message in its chat)
-		// rather than "g quoted".
-		Jump: v.Search != "",
-		// v.Chat nil (aggregate, window 0): global list, the restriction per
-		// chat is caught at click time by react().
-		Reactions: u.allowed(v.Chat)}
+		Alias: u.aliasOf, Redline: u.cfg.Redline, Caps: u.capsOf}
 	if it := v.Sel; it != nil { // every view draws the shown window
 		o.Selected = it.Msg
 	}
@@ -997,7 +992,6 @@ func (u *UI) opts() render.Opts {
 func (u *UI) optsFor(w *Window) render.Opts {
 	o := u.opts()
 	o.ShowChat, o.Selected, o.Hover, o.TextSel = w == u.agg, nil, nil, nil
-	o.Jump = w.Search != "" // result: "g go" rather than "g quoted"
 	if w.Sel != nil {
 		o.Selected = w.Sel.Msg
 	}
@@ -1100,7 +1094,7 @@ func (u *UI) event(ev model.Event) {
 		} else if b := u.netOf(net); b != nil {
 			// Not a broadcast although the call is account-level: EvReady is
 			// per network, and each one asks for its own dialogs when it comes
-			// up. eachNet here would ask a backend that is not connected yet.
+			// up. A call to every backend would ask one not connected yet.
 			b.LoadDialogs(u.backendContext(b))
 		}
 		u.hubBack(net)
@@ -1250,7 +1244,6 @@ func (u *UI) event(ev model.Event) {
 		u.reactions(e)
 	case model.EvReactionsList:
 		u.reactList[u.dispatchNet] = baseAll(e.Emojis)
-		u.clear() // the hover emoji depends on the list
 	case model.EvChatReactions:
 		if c := u.chats[u.evKey(e.ChatID)]; c != nil {
 			c.Reactions = baseAll(e.Emojis) // nil = no restriction left
@@ -1365,10 +1358,7 @@ func (u *UI) newMessage(e model.EvNewMessage) {
 			}
 		}
 		if (!u.focused || i != u.ws.Cur) && hot {
-			if u.cfg.Bell {
-				u.t.WriteString("\a") // flushed at the next draw()
-			}
-			u.notify(chat, &m)
+			u.alert(chat, &m)
 		}
 	}
 	if seen {
@@ -1392,8 +1382,7 @@ func logLine(m *model.Msg, now time.Time) string {
 	if body == "" && m.Media != nil {
 		body = m.Media.Label
 	}
-	body = strings.ReplaceAll(render.Clean(body), "\n", " ")
-	return fmt.Sprintf("%s <%s> %s", now.Format("2006-01-02 15:04"), render.CleanLine(m.From), body)
+	return fmt.Sprintf("%s <%s> %s", now.Format("2006-01-02 15:04"), render.CleanLine(m.From), render.CleanLine(body))
 }
 
 // logTitleRunes : readable part of a journal file name. Cut on runes, not on
@@ -2156,7 +2145,7 @@ func (u *UI) key(k term.Key) {
 			u.spellFixStart()
 		case 'l': // clear of the window, the lines come back with PgUp
 			w.HideBacklog()
-			u.clear()
+			u.repaint()
 		case 'c':
 			u.cancel()
 		}
@@ -2448,13 +2437,6 @@ func (u *UI) insertPending(w *Window, m *model.Msg) {
 	}
 }
 
-// meMsg builds the text and the italic entity of /me <text>: "* <meName>
-// <text>", in italics over its whole length (IRC convention).
-func meMsg(meName, arg string) (string, []model.Span) {
-	segs := meSegs(meName, arg)
-	return fenceText(segs), fenceEntities(segs)
-}
-
 // meSegs : the runs of /me, all italic; the Ctrl+B/U markers of arg add
 // their style on top (Ctrl+I changes nothing: the action is italic already).
 func meSegs(meName, arg string) []model.Seg {
@@ -2609,6 +2591,9 @@ func (u *UI) tick() bool {
 	}
 	if u.flashMsg != "" && now.After(u.flashUntil) {
 		u.flashMsg, redraw = "", true
+	}
+	if u.flushAlert(now) { // the bell goes out with a frame
+		redraw = true
 	}
 	if q := u.qr; q != nil { // countdown of the token
 		if n := q.left(now); n != q.shown {

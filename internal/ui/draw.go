@@ -112,10 +112,10 @@ func (u *UI) draw() {
 	u.placed = append(u.placed, u.customPlacements(x0)...)
 	if u.cfg.Separator { // separator line, column of the bar included
 		dim := theme.Style{FG: u.th.Color(theme.Dim), BG: u.th.BG}.SGR()
-		fmt.Fprintf(&b, "\x1b[%d;%dH%s%s\x1b[K", view+1, x0+1, dim, strings.Repeat("─", u.t.Cols-x0))
+		fmt.Fprintf(&b, "\x1b[%d;%dH%s%s", view+1, x0+1, dim, strings.Repeat("─", u.t.Cols-x0)) // the run covers the row: an EL after it would erase the last cell
 	}
 	if hov != nil {
-		// Whole block of the hovered item (help line and reactions included),
+		// Whole block of the hovered item (reactions included),
 		// in screen lines bounded to the view: the image on top must cover none
 		// of its lines when another position is possible.
 		first, last := blockOf(items, u.hover)
@@ -211,7 +211,12 @@ func (u *UI) draw() {
 		b.WriteString("\x1b[?25h")
 	}
 	u.noteShown()
-	u.t.WriteString(b.String())
+	// A frame byte for byte the same as the last one changes nothing on the
+	// screen: not sent again (what other code queued still goes, Flush).
+	if frame := b.String(); frame != u.lastFrame {
+		u.lastFrame = frame
+		u.t.WriteString(frame)
+	}
 	u.t.Flush()
 }
 
@@ -381,7 +386,7 @@ const hoverPID = 1 << 23 // under the avatar bit (1<<24), above any line
 // written (images_hover mode). In kitty it is a placement like any other,
 // pushed into u.placed so that animate() animates the GIFs; in half blocks the
 // cells are written again in place. msgTop/msgBottom: screen lines of the
-// whole block of the hovered message (help line and reactions included);
+// whole block of the hovered message (reactions included);
 // labelRow: line of the media label, where the image can sit at the right.
 func (u *UI) drawHover(b *strings.Builder, hov *render.Img, msgTop, msgBottom, labelRow, x0, cols, view int, ov overlays) {
 	col, row, ok := hoverImageBox(msgTop, msgBottom, labelRow, hov.Col, hov.Cols, hov.Rows, cols, view)
@@ -403,7 +408,7 @@ func (u *UI) drawHover(b *strings.Builder, hov *render.Img, msgTop, msgBottom, l
 
 // hoverImageBox gives the top left corner of the hover image on top. Screen
 // coordinates of the message area, 0-based. msgTop..msgBottom: lines of the
-// block of the hovered message (help line and reactions included). Order of
+// block of the hovered message (reactions included). Order of
 // preference, each covering no line of the block (but labelRow, where the
 // label leaves room at the right on purpose):
 //
@@ -578,7 +583,7 @@ func (u *UI) writeLine(b *strings.Builder, l render.Line, cols int, rh *rowHit) 
 		if rh != nil && st.URL != "" {
 			rh.urls = append(rh.urls, urlSpan{col0: w, col1: w + tw, url: st.URL, masked: st.Masked})
 		}
-		b.WriteString(st.SGR())
+		b.WriteString(u.sgr(st))
 		if st.URL != "" {
 			b.WriteString("\x1b]8;;" + st.URL + "\x1b\\")
 		}
@@ -592,6 +597,22 @@ func (u *UI) writeLine(b *strings.Builder, l render.Line, cols int, rh *rowHit) 
 		}
 	}
 	b.WriteString("\x1b[0m")
+}
+
+// sgr : st.SGR(), kept for the session — a frame draws a few dozen styles
+// hundreds of times. The link fields play no part in the sequence; half
+// blocks make one style per pixel pair, so the table is bounded.
+func (u *UI) sgr(st theme.Style) string {
+	st.URL, st.Masked = "", false
+	if s, ok := u.sgrs[st]; ok {
+		return s
+	}
+	if u.sgrs == nil || len(u.sgrs) >= 4096 {
+		u.sgrs = map[theme.Style]string{}
+	}
+	s := st.SGR()
+	u.sgrs[st] = s
+	return s
 }
 
 // actSpans : the [Act: …] list of the status bar, one span per window (a hot
@@ -1067,4 +1088,5 @@ func (u *UI) freeImages(w *Window) {
 			u.dropFrames(it.Msg.Media)
 		}
 	}
+	w.lineBuf, w.itemBuf = nil, nil // a window left: its drawing is made again at the next visit
 }

@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"bytes"
 	"image"
 	"os"
 	"path/filepath"
@@ -11,6 +12,7 @@ import (
 	"github.com/govlog/ttyloom/internal/media"
 	"github.com/govlog/ttyloom/internal/model"
 	"github.com/govlog/ttyloom/internal/render"
+	"github.com/govlog/ttyloom/internal/term"
 	"github.com/govlog/ttyloom/internal/theme"
 )
 
@@ -440,5 +442,25 @@ func TestStatusSegmentsDropped(t *testing.T) {
 	}
 	if len(u.tabHits) != 3 || u.tabHits[2].col1 != x0+70 {
 		t.Fatalf("the tabs no longer end at the right edge: %+v", u.tabHits)
+	}
+}
+
+// A repaint with nothing changed sends nothing to the terminal; Ctrl+L sends
+// the whole frame again (the repair after an outside write).
+func TestDrawSkipsSameFrame(t *testing.T) {
+	u := hoverUI()
+	u.view().AddSys("line")
+	var out bytes.Buffer
+	u.t = term.NewOffscreen(&out, 80, 10)
+	u.draw()
+	first := out.Len()
+	u.draw()
+	if out.Len() != first {
+		t.Fatalf("unchanged repaint wrote %d bytes", out.Len()-first)
+	}
+	u.key(term.Key{Code: term.Ctrl, Rune: 'l'})
+	u.draw()
+	if out.Len() == first {
+		t.Fatal("Ctrl+L sent nothing")
 	}
 }

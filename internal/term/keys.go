@@ -146,6 +146,8 @@ func parseOne(b []byte, final bool) (Key, int, bool) {
 				return Key{Code: Home}, 3, true
 			case 'F':
 				return Key{Code: End}, 3, true
+			case 'P':
+				return Key{Code: F1}, 3, true
 			case 'Q':
 				return Key{Code: F2}, 3, true
 			case 'R':

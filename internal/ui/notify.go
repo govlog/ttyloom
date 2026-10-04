@@ -3,6 +3,7 @@ package ui
 import (
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/mattn/go-runewidth"
 
@@ -21,8 +22,7 @@ var notifySendBin, _ = exec.LookPath("notify-send")
 // body cut to 200 cells.
 func notifyArgs(title, body string) (string, string) {
 	clean := func(s string) string {
-		s = strings.ReplaceAll(render.Clean(s), "\n", " ")
-		return strings.ReplaceAll(s, ";", ",")
+		return strings.ReplaceAll(render.CleanLine(s), ";", ",")
 	}
 	return clean(title), runewidth.Truncate(clean(body), 200, "")
 }
@@ -37,6 +37,42 @@ var markupEscape = strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;")
 func desktopArgs(title, body string) (string, string) {
 	t, b := notifyArgs(title, body)
 	return t, markupEscape.Replace(b)
+}
+
+// alertGap : one bell and one notification at most in that time; the hot
+// messages in between merge into the last one, given once it is over.
+const alertGap = 2 * time.Second
+
+// alertNote : a hot message waiting for its bell and notification.
+type alertNote struct {
+	chat *model.Chat
+	msg  model.Msg
+}
+
+// alert rings and notifies for a hot message: at once when the last alert is
+// alertGap old, else at the end of that time (tick), for the last message
+// only — a burst of fifty messages gives two alerts, not fifty.
+func (u *UI) alert(chat *model.Chat, m *model.Msg) {
+	u.alertNext = &alertNote{chat: chat, msg: *m}
+	u.flushAlert(time.Now())
+}
+
+// flushAlert gives the alert waiting once its time has come; true when it
+// did.
+func (u *UI) flushAlert(now time.Time) bool {
+	a := u.alertNext
+	if a == nil || now.Sub(u.alertAt) < alertGap {
+		return false
+	}
+	u.alertNext, u.alertAt = nil, now
+	if u.muted[a.chat.Key()] { // muted while it waited
+		return false
+	}
+	if u.cfg.Bell {
+		u.t.WriteString("\a") // flushed at the next draw()
+	}
+	u.notify(a.chat, &a.msg)
+	return true
 }
 
 // notify sends a desktop notification on a new message (same conditions as

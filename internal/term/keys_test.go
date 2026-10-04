@@ -104,6 +104,7 @@ func TestParseF3F4(t *testing.T) {
 		in   string
 		code Code
 	}{
+		{"\x1bOP", F1},
 		{"\x1b[13~", F3}, {"\x1bOR", F3},
 		{"\x1b[14~", F4}, {"\x1bOS", F4},
 		{"\x1b[15~", F5},

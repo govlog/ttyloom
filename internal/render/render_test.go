@@ -870,3 +870,24 @@ func TestDeletedReveal(t *testing.T) {
 		t.Fatalf("revealed: %q", got)
 	}
 }
+
+// A word of clusters heavy with combining marks, cut inside a cluster, ends
+// whole: it once looped for ever on a narrow column (a crafted message kept
+// in the cache hung every start).
+func TestWrapCombiningPile(t *testing.T) {
+	word := strings.Repeat("a"+strings.Repeat("\u0301", 15)+"\uFE0F", 230) // 3 910 runes, under Telegram's 4 096
+	done := make(chan []Line, 1)
+	go func() { done <- Wrap([]Span{{word, theme.Style{}}}, 20) }()
+	select {
+	case lines := <-done:
+		var b strings.Builder
+		for _, l := range lines {
+			b.WriteString(LineText(l))
+		}
+		if b.String() != word {
+			t.Fatalf("%d lines that do not give the word back", len(lines))
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Wrap does not end on a word of combining marks")
+	}
+}

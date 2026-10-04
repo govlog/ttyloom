@@ -207,7 +207,7 @@ func (u *UI) closeViewer() {
 	}
 	v.md.Frames = nil // full screen frames given up
 	u.placed = u.placed[:0]
-	u.clear() // full repaint: the whole screen carried the preview
+	u.repaint() // the whole screen carried the preview
 }
 
 // viewerKey : the preview takes everything. o opens the file with the desktop,

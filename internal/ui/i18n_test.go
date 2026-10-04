@@ -111,19 +111,17 @@ func TestCleanLineOnSingleLineSites(t *testing.T) {
 	// nature, cleaned once when the event comes in; Wrap keeps their breaks.
 	multiline := []string{"paste.go", "select.go", "stamp.go"}
 	for _, path := range goFiles(t, ".") {
-		if slices.ContainsFunc(multiline, func(f string) bool { return strings.HasSuffix(path, f) }) {
-			continue
-		}
 		b, err := os.ReadFile(path)
 		if err != nil {
 			t.Fatal(err)
 		}
+		multi := slices.ContainsFunc(multiline, func(f string) bool { return strings.HasSuffix(path, f) })
 		for i, line := range strings.Split(string(b), "\n") {
 			if !strings.Contains(line, "render.Clean(") {
 				continue
 			}
 			n++
-			if strings.Contains(line, `"\n"`) { // breaks dropped on the spot
+			if multi || strings.Contains(line, `"\n"`) { // multiline by nature, or breaks dropped on the spot
 				continue
 			}
 			t.Errorf("%s:%d: render.Clean in a single-line context: %s", path, i+1, strings.TrimSpace(line))

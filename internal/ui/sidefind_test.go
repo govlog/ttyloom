@@ -192,7 +192,7 @@ func TestSideFindDraw(t *testing.T) {
 	var b strings.Builder
 	u.t = term.NewOffscreen(&b, 80, 24)
 	u.draw()
-	if !strings.HasSuffix(b.String(), "\x1b[2;12H\x1b[?25h") { // "filtre : fa" (tests run in fr) is 11 cells wide
+	if !strings.HasSuffix(b.String(), "\x1b[2;12H\x1b[?25h\x1b[?2026l") { // "filtre : fa" (tests run in fr) is 11 cells wide
 		t.Fatalf("terminal cursor not at the end of the filter: %q", b.String()[max(0, b.Len()-40):])
 	}
 }
