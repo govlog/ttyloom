@@ -16,23 +16,25 @@ import (
 // Picture grid of the GIF box (Ctrl+G) and of the media browser (Ctrl+M):
 // gridCols x gridRows cells at most on the screen out of a longer list, a
 // marker line under each row (the current cell underlined) and a scrollbar
-// at their right. Only the live cell plays — the one under the pointer, or
-// the one the arrows just reached; the others hold their frame. One picture
-// moves at a time: little to send to the terminal, nothing that blinks.
+// at their right, thicker under the pointer, that a drag moves. Only the
+// live cell plays — the one under the pointer, or the one the arrows just
+// reached; the others hold their frame. One picture moves at a time: little
+// to send to the terminal, nothing that blinks.
 
 const (
-	gridCols = 3
-	gridRows = 2
+	gridCols = 6
+	gridRows = 4
 	gridPID  = 1 << 21 // kitty placements of the cells: gridPID | rank of the cell
 	gridKeep = 2       // pages of cells kept decoded on each side of the view
 )
 
 type grid struct {
-	n                  int // cells in the list
-	cur, top           int // current cell, first row shown
-	live               int // cell that plays, -1: none
-	perRow, rows       int // cells per row, rows shown
-	cellCols, cellRows int // size of one cell
+	n                  int  // cells in the list
+	cur, top           int  // current cell, first row shown
+	live               int  // cell that plays, -1: none
+	perRow, rows       int  // cells per row, rows shown
+	cellCols, cellRows int  // size of one cell
+	barHot, held       bool // pointer on the scrollbar, thumb grabbed: drawn thicker
 }
 
 // thumbs : a box drawn on the grid. thumb gives the picture of cell i, nil
@@ -118,13 +120,22 @@ func (u *UI) gridCell() (cols, rows int) {
 	return 16, 7
 }
 
-// fit sizes the grid for the screen: gridCols x gridRows cells at most, one
-// at least. The box around adds two borders, a header and a foot.
+// fit sizes the grid for a screen of cols x rows: gridCols x gridRows cells
+// of cellCols x cellRows. On a smaller screen the cells shrink first, down to
+// half their size, then the grid loses columns or rows. The box around takes
+// two borders, a header, a foot, the scrollbar and a margin.
 func (g *grid) fit(cols, rows, cellCols, cellRows int) {
-	g.cellCols, g.cellRows = cellCols, cellRows
-	g.perRow = max(1, min(gridCols, (cols-6)/(cellCols+1)))
-	g.rows = max(1, min(gridRows, (rows-6)/(cellRows+1)))
+	g.perRow, g.cellCols = fitAxis(cols-5, gridCols, cellCols)
+	g.rows, g.cellRows = fitAxis(rows-6, gridRows, cellRows)
 	g.move(0) // a resize: the current cell comes back on the screen
+}
+
+// fitAxis : n cells of size want at most, each followed by a gap, in room:
+// the size shrinks to fit, down to half of want; past that, cells go.
+func fitAxis(room, n, want int) (count, size int) {
+	least := max(1, want/2)
+	count = max(1, min(n, room/(least+1)))
+	return count, max(1, min(want, room/count-1))
 }
 
 // width : inner columns of the grid, the scrollbar included; height : its
@@ -210,38 +221,60 @@ func (g *grid) bar() (top, length int, ok bool) {
 	return scrollbar(total, g.height(), total-g.height()-g.top*step)
 }
 
-// mouse : the wheel scrolls a row, a click on the scrollbar brings the rows
-// there, the pointer makes the cell under it play. x, y count from the top
-// left cell; click gives the cell clicked, -1 for none.
-func (g *grid) mouse(e term.MouseEvent, x, y int) (click int) {
+// onBar tells whether (x, y) is on the scrollbar.
+func (g *grid) onBar(x, y int) bool { return x == g.width()-1 && y >= 0 && y < g.height() }
+
+// barTo brings the rows where line y of the scrollbar points.
+func (g *grid) barTo(y int) {
+	step := g.cellRows + 1
+	total := (g.lastTop() + g.rows) * step
+	above := total - g.height() - scrollFromY(y, g.height(), total)
+	g.scrollTo((above + step/2) / step)
+}
+
+// mouse : the wheel scrolls a row, a press on the scrollbar brings the rows
+// there and grabs it (grab: a drag follows, see drag), the pointer makes the
+// cell under it play. x, y count from the top left cell; click gives the
+// cell clicked, -1 for none.
+func (g *grid) mouse(e term.MouseEvent, x, y int) (click int, grab bool) {
 	click = -1
 	switch {
 	case e.Button == 64:
 		g.scrollTo(g.top - 1)
 	case e.Button == 65:
 		g.scrollTo(g.top + 1)
-	case e.Button == 0 && e.Press && !e.Motion && x == g.width()-1 && y >= 0 && y < g.height():
-		step := g.cellRows + 1
-		total := (g.lastTop() + g.rows) * step
-		above := total - g.height() - scrollFromY(y, g.height(), total)
-		g.scrollTo((above + step/2) / step)
+	case e.Button == 0 && e.Press && !e.Motion && g.onBar(x, y):
+		g.barTo(y)
+		g.held, grab = true, true
 	case e.Button == 0 && e.Press && !e.Motion:
 		if click = g.at(x, y); click >= 0 {
 			g.cur = click
 		}
 	}
-	g.live = g.at(x, y) // after a scroll, another cell is under the pointer
-	return click
+	g.live, g.barHot = g.at(x, y), g.onBar(x, y) // after a scroll, another cell is under the pointer
+	return click, grab
+}
+
+// drag : a move of the pointer with the thumb grabbed — the rows follow it;
+// the button let go ends the drag (false).
+func (g *grid) drag(e term.MouseEvent, y int) bool {
+	if !e.Press {
+		g.held = false
+		return false
+	}
+	g.barTo(y)
+	return true
 }
 
 // hover : the pointer moved to (x, y) of the grid. true when the cell that
-// plays changed — worth a repaint.
+// plays changed, or the pointer came on or left the scrollbar — worth a
+// repaint.
 func (g *grid) hover(x, y int) bool {
-	i := g.at(x, y)
-	if i == g.live {
+	i, hot := g.at(x, y), g.onBar(x, y)
+	if i == g.live && hot == g.barHot {
 		return false
 	}
-	g.live = i
+	g.live, g.barHot = i, hot
 	return true
 }
 
@@ -277,8 +310,12 @@ func (g *grid) lines(b boxDraw, th theme.Theme, fill theme.Style, cell func(i, l
 		}
 		mark := render.Span{Text: " ", Style: fill}
 		switch {
+		case bar && y >= barTop && y < barTop+barLen && (g.barHot || g.held):
+			mark = render.Span{Text: "█", Style: acc} // pointed or grabbed: thicker
 		case bar && y >= barTop && y < barTop+barLen:
 			mark = render.Span{Text: "┃", Style: acc}
+		case bar && g.barHot:
+			mark = render.Span{Text: "│", Style: acc}
 		case bar:
 			mark = render.Span{Text: "│", Style: dim}
 		}
@@ -378,10 +415,31 @@ func (u *UI) gridDecode(g *grid, md *model.Media) {
 	u.loadFrames(md, g.cellCols*cw, g.cellRows*ch, frames, 0)
 }
 
+// gridMouse runs the mouse of a picture box on g, whose top left cell is at
+// (row0, col0) of the screen: a drag of the thumb goes on wherever the
+// pointer goes, a press on the scrollbar grabs it. It gives the cell
+// clicked, -1 for none.
+func (u *UI) gridMouse(g *grid, e term.MouseEvent, row0, col0 int) int {
+	if u.drag == dragGrid {
+		if !g.drag(e, e.Y-row0) {
+			u.drag = dragNone
+		}
+		return -1
+	}
+	click, grab := g.mouse(e, e.X-col0, e.Y-row0)
+	if grab {
+		u.drag = dragGrid
+	}
+	return click
+}
+
 // gridFree drops what the pictures of t decoded and sent to the terminal. A
 // download still on its way is orphaned: dropped when it lands. A picture
 // that was decoding is loading too, but its download has landed already.
 func (u *UI) gridFree(t thumbs) {
+	if u.drag == dragGrid { // the box closes or changes its list under the thumb
+		u.drag, t.grid().held = dragNone, false
+	}
 	for i := range t.grid().n {
 		md := t.thumb(i)
 		if md == nil {

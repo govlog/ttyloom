@@ -159,7 +159,7 @@ func (u *UI) gifKey(k term.Key) {
 // scrollbar and the pointer, and a click on a cell sends it.
 func (u *UI) gifMouse(e term.MouseEvent) {
 	r := u.gifRect()
-	if !r.hits(e.Y, e.X, 1, 1) {
+	if u.drag != dragGrid && !r.hits(e.Y, e.X, 1, 1) { // a drag of the thumb may leave the box
 		if e.Press && !e.Motion {
 			u.gifClose()
 		} else {
@@ -167,7 +167,7 @@ func (u *UI) gifMouse(e term.MouseEvent) {
 		}
 		return
 	}
-	if u.gifs.g.mouse(e, e.X-r.col-1, e.Y-r.row-2) >= 0 {
+	if u.gridMouse(&u.gifs.g, e, r.row+2, r.col+1) >= 0 {
 		u.gifSend()
 	}
 }

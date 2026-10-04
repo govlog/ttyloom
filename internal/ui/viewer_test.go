@@ -176,3 +176,53 @@ func TestOpenHiddenLinkAsks(t *testing.T) {
 		t.Fatalf("o in the preview: viewer open %v, question %+v", u.viewer != nil, u.ask)
 	}
 }
+
+// ←/→ in the preview show the media before and after in the window it came
+// from — messages with no media skipped, nothing past the ends — and, from
+// the media browser, the cells of the grid, the current one following.
+// Shift+←/→ keep panning.
+func TestViewerArrowsStep(t *testing.T) {
+	u, fb := gifUI()
+	u.ws.Cur = 1
+	w := u.ws.List[1]
+	photo := func(id int) *model.Msg {
+		return &model.Msg{Net: netTelegram, ChatID: 1, ID: id, Date: time.Unix(int64(1700000000+id), 0),
+			Media: &model.Media{Kind: model.MediaPhoto, Loc: id, Path: "/none.jpg", W: 10, H: 10}}
+	}
+	m1, m3 := photo(1), photo(3)
+	w.Upsert(m1)
+	w.Upsert(&model.Msg{Net: netTelegram, ChatID: 1, ID: 2, Date: time.Unix(1700000002, 0), Text: "no media"})
+	w.Upsert(m3)
+	u.viewMsg(m1)
+	u.viewerKey(term.Key{Code: term.Right})
+	if u.viewer == nil || u.viewer.msg != m3 {
+		t.Fatal("→ must show the next media of the window, past the text")
+	}
+	u.viewerKey(term.Key{Code: term.Right})
+	if u.viewer == nil || u.viewer.msg != m3 {
+		t.Fatal("→ at the last media must stay on it")
+	}
+	u.viewerKey(term.Key{Code: term.Right, Shift: true})
+	if u.viewer == nil || u.viewer.msg != m3 {
+		t.Fatal("Shift+→ pans, it does not step")
+	}
+	u.viewerKey(term.Key{Code: term.Left})
+	if u.viewer == nil || u.viewer.msg != m1 {
+		t.Fatal("← must come back to the media before")
+	}
+	u.closeViewer()
+
+	b := &mediaBackend{fakeBackend: fb}
+	u.nets[netTelegram] = b
+	u.openMediaBox("")
+	items := mediaItems(100, 3)
+	for i := range items {
+		items[i].Msg.Media.Path = "/none.jpg"
+	}
+	u.dispatch(model.Envelope{Net: netTelegram, Ev: model.EvMedia{ChatID: 1, Filter: model.TabMedia, Items: items}})
+	u.mboxView()
+	u.viewerKey(term.Key{Code: term.Right})
+	if u.viewer == nil || u.viewer.msg.ID != 99 || u.mbox.g.cur != 1 {
+		t.Fatalf("→ from the browser: shows %v, cell %d; want message 99 and the cell after", u.viewer != nil, u.mbox.g.cur)
+	}
+}

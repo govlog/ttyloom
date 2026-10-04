@@ -54,8 +54,8 @@ func TestMediaBox(t *testing.T) {
 	}
 	u.dispatch(model.Envelope{Net: netTelegram, Ev: model.EvMedia{ChatID: 1, Filter: model.TabMedia, Items: mediaItems(100, 8), Next: 93}})
 	u.overlay() // a frame: the cells on the screen ask for their picture, the end is near
-	if len(fb.downloads) != gridCols*gridRows || !strings.Contains(fb.downloads[0], "thumbs") {
-		t.Fatalf("downloads %v: want the %d small pictures in the cache", fb.downloads, gridCols*gridRows)
+	if len(fb.downloads) != 8 || !strings.Contains(fb.downloads[0], "thumbs") {
+		t.Fatalf("downloads %v: want the 8 small pictures in the cache", fb.downloads)
 	}
 	if len(b.asks) != 2 || b.asks[1] != (mediaAsk{model.TabMedia, 93}) {
 		t.Fatalf("asks %v: want the page before 93", b.asks)

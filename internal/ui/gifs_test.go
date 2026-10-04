@@ -74,7 +74,7 @@ func TestGifSend(t *testing.T) {
 		t.Fatalf("grid: %d gifs, %dx%d", len(g.gifs), g.g.perRow, g.g.rows)
 	}
 	u.overlay() // a frame: the visible cells ask for their file
-	if want := gridCols * gridRows; len(b.downloads) != want {
+	if want := min(gridCols*gridRows, 12); len(b.downloads) != want {
 		t.Fatalf("downloads: %d, want the %d cells on the screen", len(b.downloads), want)
 	}
 	u.gifKey(term.Key{Code: term.Right})
@@ -130,40 +130,67 @@ func TestGifCloseDuringDecode(t *testing.T) {
 	}
 }
 
-// However large the screen, 3 x 2 previews at most, with a scrollbar when the
-// list is longer: a click at the foot of the bar shows the last rows, the
-// wheel moves a row, and the previews far from the view let their frames go.
+// 6 x 4 previews at most; on a smaller screen the cells shrink before the
+// grid loses columns. A scrollbar shows when the list is longer: a click at
+// its foot shows the last rows and grabs the thumb, a drag brings it back
+// to the top, the wheel moves a row, and the previews far from the view let
+// their frames go.
 func TestGifGridScroll(t *testing.T) {
 	u, _ := gifUI()
-	u.t.Cols, u.t.Rows = 200, 60
 	u.ws.Cur = 1
 	u.openGifs("cat")
-	u.dispatch(model.Envelope{Net: netTelegram, Ev: model.EvGifs{Query: "cat", Gifs: gifList(30)}})
+	u.dispatch(model.Envelope{Net: netTelegram, Ev: model.EvGifs{Query: "cat", Gifs: gifList(200)}})
 	g := &u.gifs.g
-	r := u.gifRect()
-	if g.perRow != 3 || g.rows != 2 {
-		t.Fatalf("grid %dx%d on a 200x60 screen, want 3x2", g.perRow, g.rows)
+	for _, sz := range []struct{ cols, rows, perRow, gridRows, cellCols, cellRows int }{
+		{200, 60, 6, 4, 16, 7}, // room for the whole size
+		{80, 24, 6, 4, 11, 3},  // the cells shrink
+		{40, 15, 3, 2, 10, 3},  // then cells go
+	} {
+		u.t.Cols, u.t.Rows = sz.cols, sz.rows
+		u.gifRect()
+		if g.perRow != sz.perRow || g.rows != sz.gridRows || g.cellCols != sz.cellCols || g.cellRows != sz.cellRows {
+			t.Fatalf("%dx%d screen: %dx%d cells of %dx%d, want %dx%d of %dx%d", sz.cols, sz.rows,
+				g.perRow, g.rows, g.cellCols, g.cellRows, sz.perRow, sz.gridRows, sz.cellCols, sz.cellRows)
+		}
 	}
+	u.t.Cols, u.t.Rows = 200, 60
+	r := u.gifRect()
 	var bar strings.Builder
 	for _, l := range u.gifLines(r) {
 		bar.WriteString(render.LineText(l))
 	}
 	if !strings.Contains(bar.String(), "┃") {
-		t.Fatal("no scrollbar thumb for 30 previews")
+		t.Fatal("no scrollbar thumb for 200 previews")
+	}
+	if !u.gridHover(r.col+1+g.width()-1, r.row+2) {
+		t.Fatal("the pointer on the scrollbar asks no repaint")
+	}
+	bar.Reset()
+	for _, l := range u.gifLines(r) {
+		bar.WriteString(render.LineText(l))
+	}
+	if !strings.Contains(bar.String(), "█") {
+		t.Fatal("the thumb under the pointer is not thicker")
 	}
 	first := u.gifs.gifs[0].Preview
 	first.State, first.Frames = model.MediaReady, [][]byte{{1}}
-	u.gifMouse(term.MouseEvent{Press: true, X: r.col + 1 + g.width() - 1, Y: r.row + 2 + g.height() - 1})
-	if g.top != 8 || g.cur < 24 {
-		t.Fatalf("click at the foot of the bar: top %d, cur %d; want top 8 (rows 9 and 10), cur on the screen", g.top, g.cur)
+	barX, foot := r.col+1+g.width()-1, r.row+2+g.height()-1
+	u.gifMouse(term.MouseEvent{Press: true, X: barX, Y: foot})
+	if g.top != 30 || g.cur < 180 || u.drag != dragGrid {
+		t.Fatalf("press at the foot of the bar: top %d, cur %d, drag %v; want top 30 (the last rows), cur on the screen, the thumb held", g.top, g.cur, u.drag)
 	}
 	u.overlay()
 	if first.Frames != nil {
-		t.Error("the frames of a preview 4 pages away are kept")
+		t.Error("the frames of a preview far from the view are kept")
 	}
-	u.gifMouse(term.MouseEvent{Button: 64, Press: true, X: r.col + 2, Y: r.row + 3})
-	if g.top != 7 {
-		t.Errorf("wheel up: top %d, want 7", g.top)
+	u.gifMouse(term.MouseEvent{Press: true, Motion: true, X: barX + 9, Y: r.row + 2}) // dragged up, off the bar
+	u.gifMouse(term.MouseEvent{X: barX, Y: r.row + 2})                                // let go
+	if g.top != 0 || u.drag != dragNone || u.gifs == nil {
+		t.Fatalf("drag to the top: top %d, drag %v, box open %v", g.top, u.drag, u.gifs != nil)
+	}
+	u.gifMouse(term.MouseEvent{Button: 65, Press: true, X: r.col + 2, Y: r.row + 3})
+	if g.top != 1 {
+		t.Errorf("wheel down: top %d, want 1", g.top)
 	}
 }
 

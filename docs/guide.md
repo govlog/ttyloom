@@ -660,15 +660,18 @@ because `/quit` shares that prefix. Exact aliases take precedence when executing
 | `/set video hidden` | Keep only video labels in the conversation; `show` previews one frame and `autoplay` loops visible downloaded videos. |
 | `/send path [caption]` | Send a local file: PNG/JPEG as a photo, MP4 as a video with ffprobe metadata, other formats as documents. Tab completes the path: `~`, relative paths and spaces work, a directory gets its `/` and the next Tab goes on inside it. |
 | Ctrl+V | Paste an image through `wl-paste` or `xclip`, then choose send, caption or cancel using the displayed prompt keys. Plain text goes into the editor. |
-| Ctrl+G, `/gif [query]` | Search animated GIF previews: Telegram’s `@gif` bot or Discord’s GIF provider (currently KLIPY). Trends appear immediately; typing searches. Six previews show at a time, with a scrollbar for the others; only the preview under the mouse, or the one the arrows reached, plays. Arrows, the wheel or a click on the scrollbar move; Enter or a click sends; Escape closes. |
-| Ctrl+M, `/media [media\|gifs\|files]` | Browse the media of the conversation of the window, sent by anyone, newest first: photos and videos, GIFs, or files (Telegram, Discord). Six at a time with a scrollbar; older ones load as you scroll. Tab changes tab, Enter or a click shows the media (a file opens with its program), `j` goes to its message, `o` opens it, Escape closes. Only the GIF under the mouse plays. Small media download to `download_dir` like the ones of the conversation; larger ones show their name and size. Ctrl+M needs the kitty keyboard protocol (Ghostty, kitty, WezTerm, foot); elsewhere it is Enter, so use `/media`. |
+| Ctrl+G, `/gif [query]` | Search animated GIF previews: Telegram’s `@gif` bot or Discord’s GIF provider (currently KLIPY). Trends appear immediately; typing searches. Up to 24 previews show at a time, six by four rows; a smaller terminal shrinks the previews first, then shows fewer columns or rows. A scrollbar on the right, thicker under the pointer, shows the others: click it or drag its thumb. Only the preview under the mouse, or the one the arrows reached, plays. Arrows, the wheel or the scrollbar move; Enter or a click sends; Escape closes. |
+| Ctrl+M, `/media [media\|gifs\|files]` | Browse the media of the conversation of the window, sent by anyone, newest first: photos and videos, GIFs, or files (Telegram, Discord). Same grid as the GIF picker: up to six by four, with the same scrollbar; older ones load as you scroll. Tab changes tab, Enter or a click shows the media in the viewer, where ←/→ go through the list (a file opens with its program); `j` goes to its message, `o` opens it, Escape closes. Only the GIF under the mouse plays. Small media download to `download_dir` like the ones of the conversation; larger ones show their name and size. Ctrl+M needs the kitty keyboard protocol (Ghostty, kitty, WezTerm, foot); elsewhere it is Enter, so use `/media`. |
 | `/set auto_media_max_kb 20480` | Raise the automatic download threshold to 20 MiB. |
 
 <a id="viewer"></a>
 
 #### Built-in viewer: zoom, pan and video
 
-Click an inline image, select a message and press `v`, or use `/view [N]`.
+Click an inline image, select a message and press `v`, use `/view [N]`, or
+open a media from the media browser (Ctrl+M). ←/→ show the media before and
+after: in the conversation, in the order of the window, skipping messages
+without a picture; from the media browser, in the order of its grid.
 Images must be enabled with F4. The viewer works with kitty pixels and Unicode
 half blocks. A Telegram photo is shown at 800 px in the conversation; the
 viewer, `o` and `/open` take its largest size (1280 or 2560 px), downloaded
@@ -678,7 +681,8 @@ once to a `_full` file next to the inline one.
 | --- | --- |
 | `+`, `=`, wheel up | Zoom in. |
 | `-`, wheel down | Zoom out. |
-| Arrow keys | Pan the visible area. |
+| ←/→ | Previous or next media of the conversation or of the media browser. |
+| ↑/↓, Shift+←/→ | Pan the visible area. |
 | Hold the left mouse button and drag | Pan with the mouse. |
 | `0` | Center and fit to the screen again. |
 | `l` on a video | Start or pause full-screen playback, without sound. |

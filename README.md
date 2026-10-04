@@ -19,7 +19,7 @@
 ## Built for conversations
 
 - **Play videos inside the conversation.** `l` plays or pauses, `s` stops; choose previews, hidden videos or autoplay. Silent playback also works full screen, with FFmpeg.
-- **Open an image and explore it.** Click or press `v` for the built-in viewer. Zoom up to 8× with the wheel or `+`/`-`, **drag with the mouse to pan**, use arrow keys, and press `0` to fit again. [Viewer controls](docs/guide.md#viewer).
+- **Open an image and explore it.** Click or press `v` for the built-in viewer. Zoom up to 8× with the wheel or `+`/`-`, **drag with the mouse to pan**, press `0` to fit again, and ←/→ to go to the previous or next media. [Viewer controls](docs/guide.md#viewer).
 - **Keep photos and GIFs in the flow.** Native pixels through kitty graphics, Unicode half blocks elsewhere. `F5` shows images only on hover; `Ctrl+G` opens a searchable GIF picker whose previews play under the mouse; `Ctrl+M` browses every photo, video, GIF and file of a conversation.
 - **Move between conversations your way.** Numbered windows, a draft in each, `/query`, `/join`, `/msg`, `/me`, and a cycle through unread windows. `F6` combines conversations in window 0.
 - **Make the sidebar work for you.** Fold networks and Discord servers, filter with `/net`, sort by recent activity or unread messages, split the windows into channels and direct messages, and drag the border to resize. The wheel switches between open conversations.

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"image"
 	"image/png"
+	"slices"
 	"strings"
 
 	"github.com/govlog/ttyloom/internal/i18n"
@@ -19,6 +20,7 @@ import (
 // only the image and a status line.
 
 type viewer struct {
+	msg    *model.Msg      // message whose media is shown
 	src    *model.Media    // media of the message: never changed
 	md     *model.Media    // full screen copy (frames and kitty id apart)
 	w, h   int             // box of the last decoding started, in pixels
@@ -33,6 +35,10 @@ type viewer struct {
 	// so its release is not a click.
 	dragX, dragY int
 	moved        bool
+	// nav : the message d steps away from cur in the list the preview was
+	// opened from (the window, the media browser), nil at an end; nil: no
+	// list, the arrows pan.
+	nav func(cur *model.Msg, d int) *model.Msg
 }
 
 const (
@@ -125,7 +131,43 @@ func (u *UI) viewMsg(m *model.Msg) {
 		u.sys(i18n.T("maps_off"))
 	default:
 		u.openViewer(m)
+		u.viewer.nav = u.winNav(u.view())
 	}
+}
+
+// viewable tells whether the preview can show md — the checks of viewMsg.
+func (u *UI) viewable(md *model.Media) bool {
+	return md != nil && md.Previewable() && u.images != "off" && (md.Kind != model.MediaMap || u.cfg.Maps)
+}
+
+// winNav : the arrows of a preview opened from w step through the media of
+// its messages, in the order of the window.
+func (u *UI) winNav(w *Window) func(cur *model.Msg, d int) *model.Msg {
+	return func(cur *model.Msg, d int) *model.Msg {
+		i := slices.IndexFunc(w.Items, func(it *Item) bool { return it.Msg == cur })
+		if i < 0 {
+			return nil
+		}
+		for j := i + d; j >= 0 && j < len(w.Items); j += d {
+			if it := w.Items[j]; it.Msg != nil && !it.Msg.Deleted && w.shown(it) && u.viewable(it.Msg.Media) {
+				return it.Msg
+			}
+		}
+		return nil
+	}
+}
+
+// viewStep shows the media d steps away in the list the preview came from
+// (←/→); at an end, nothing moves.
+func (u *UI) viewStep(d int) {
+	v := u.viewer
+	next := v.nav(v.msg, d)
+	if next == nil {
+		return
+	}
+	nav := v.nav
+	u.openViewer(next)
+	u.viewer.nav = nav
 }
 
 // viewNth : preview of the nth previewable media of w, from the end (/view).
@@ -151,7 +193,7 @@ func (u *UI) openViewer(m *model.Msg) {
 	md := full(m)
 	u.closeViewer()
 	u.picker, u.pager, u.pasteAsk = nil, nil, "" // the preview is exclusive
-	u.viewer = &viewer{src: md, md: viewCopy(md), zoom: 1, cx: 0.5, cy: 0.5}
+	u.viewer = &viewer{msg: m, src: md, md: viewCopy(md), zoom: 1, cx: 0.5, cy: 0.5}
 	if md.Path == "" {
 		if md.State != model.MediaLoading {
 			u.downloadFull(m)
@@ -207,10 +249,12 @@ func (u *UI) closeViewer() {
 	u.repaint() // the whole screen carried the preview
 }
 
-// viewerKey : the preview takes everything. o opens the file with the desktop,
-// l and s play the video full screen, +/-/0, the arrows and the wheel zoom and
-// move the view, the left button held pans, everything else (Esc, q, a plain
-// click, Ctrl+X, F2…) closes it — predictable rather than silent.
+// viewerKey : the preview takes everything. ←/→ show the media before and
+// after in the list it came from, o opens the file with the desktop, l and s
+// play the video full screen, +/-/0 and the wheel zoom, ↑/↓ and Shift+←/→
+// (plain ←/→ with no list) move the view, the left button held pans,
+// everything else (Esc, q, a plain click, Ctrl+X, F2…) closes it —
+// predictable rather than silent.
 func (u *UI) viewerKey(k term.Key) {
 	v := u.viewer
 	if k.Code == term.Mouse && k.Mouse.Button == 0 { // left button: a drag pans, a click closes
@@ -226,6 +270,14 @@ func (u *UI) viewerKey(k term.Key) {
 				u.closeViewer()
 			}
 		}
+		return
+	}
+	if (k.Code == term.Left || k.Code == term.Right) && !k.Shift && v.nav != nil {
+		d := 1
+		if k.Code == term.Left {
+			d = -1
+		}
+		u.viewStep(d)
 		return
 	}
 	if v.md.Path != "" {
@@ -370,6 +422,9 @@ func (v *viewer) status() string {
 	}
 	if pct := int(v.zoom*100 + 0.5); pct != 100 {
 		s += i18n.T("viewer_zoom", pct)
+	}
+	if v.nav != nil {
+		s += i18n.T("viewer_nav")
 	}
 	return s + i18n.T("viewer_keys")
 }

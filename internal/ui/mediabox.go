@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"fmt"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/govlog/ttyloom/internal/config"
@@ -213,9 +214,36 @@ func (u *UI) mboxView() {
 	case m == nil:
 	case m.Media.Previewable() && u.images != "off":
 		u.viewMsg(m)
+		if u.viewer != nil {
+			u.viewer.nav = u.mboxNav
+		}
 	default:
 		u.openItemMedia(u.view(), &Item{Msg: m})
 	}
+}
+
+// mboxNav : the arrows of a preview opened from the browser step through its
+// list in the order of the grid; the current cell follows, and the next page
+// is asked before the step reaches the end of what is loaded.
+func (u *UI) mboxNav(cur *model.Msg, d int) *model.Msg {
+	b := u.mbox
+	if b == nil {
+		return nil
+	}
+	i := slices.IndexFunc(b.items, func(it model.MediaItem) bool { return it.Msg.ID == cur.ID })
+	if i < 0 {
+		return nil
+	}
+	for j := i + d; j >= 0 && j < len(b.items); j += d {
+		if m := &b.items[j].Msg; u.viewable(m.Media) {
+			b.g.move(j - b.g.cur)
+			if j >= len(b.items)-b.g.perRow*b.g.rows && b.asked < 0 && b.next != 0 && b.err == "" {
+				u.mboxAsk(b.next)
+			}
+			return m
+		}
+	}
+	return nil
 }
 
 // mboxJump closes the box and goes to the message of the current cell.
@@ -260,13 +288,13 @@ func (u *UI) mboxMouse(e term.MouseEvent) {
 	b, r := u.mbox, u.gridRect(&u.mbox.g)
 	click := e.Press && !e.Motion
 	switch {
-	case !r.hits(e.Y, e.X, 1, 1):
+	case u.drag != dragGrid && !r.hits(e.Y, e.X, 1, 1): // a drag of the thumb may leave the box
 		if click {
 			u.mboxClose()
 		} else {
 			b.g.live = -1
 		}
-	case e.Y == r.row+1:
+	case u.drag != dragGrid && e.Y == r.row+1:
 		for t, c := range b.tabCols {
 			if x := e.X - r.col - 1; click && e.Button == 0 && x >= c[0] && x < c[1] {
 				u.mboxTab(model.MediaFilter(t))
@@ -276,7 +304,7 @@ func (u *UI) mboxMouse(e term.MouseEvent) {
 		if click { // a press or the wheel, not the pointer going by
 			u.mboxRetry()
 		}
-		if b.g.mouse(e, e.X-r.col-1, e.Y-r.row-2) >= 0 {
+		if u.gridMouse(&b.g, e, r.row+2, r.col+1) >= 0 {
 			u.mboxView()
 		}
 	}

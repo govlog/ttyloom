@@ -60,6 +60,7 @@ const (
 	dragText          // selection of messages to copy
 	dragSide          // │ bar of the sidebar: resizing
 	dragView          // left button held in the preview: the image pans
+	dragGrid          // scrollbar of a picture box (GIF box, media browser) grabbed
 )
 
 // mouse : wheel = scroll, left click = link, image, selection or scrollbar

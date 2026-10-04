@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Previous and next in the viewer**: ←/→ show the media before and after, in the conversation or in the media browser the viewer was opened from; ↑/↓ and Shift+←/→ pan a zoomed image.
+
+### Changed
+
+- **GIF picker and media browser** are large boxes again: up to six previews by four rows; a smaller terminal shrinks the previews first, then shows fewer columns or rows. The scrollbar thickens under the pointer, and a drag of its thumb scrolls.
+
 ## v0.11-beta — 2026-10-05
 
 ### Added
