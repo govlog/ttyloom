@@ -100,10 +100,10 @@ func TestHostDo(t *testing.T) {
 func TestResolversClaimed(t *testing.T) {
 	u, _ := modUI("fake:a")
 	u.nets["fake:a"], u.nets["telegram"] = &fakeBackend{caps: model.Caps{Resolve: true}}, &fakeBackend{caps: model.Caps{Resolve: true}}
-	if got := u.resolversFor(nil, "%room"); len(got) != 1 || got[0] != u.nets["fake:a"] {
+	if got, _ := u.resolversFor(nil, "%room"); len(got) != 1 || got[0] != u.nets["fake:a"] {
 		t.Fatalf("claimed: %v", got)
 	}
-	if got := u.resolversFor(nil, "bob"); len(got) != 2 {
+	if got, _ := u.resolversFor(nil, "bob"); len(got) != 2 {
 		t.Fatalf("free name: %v", got)
 	}
 }

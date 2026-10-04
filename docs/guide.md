@@ -24,7 +24,7 @@ Manual for **0.11-beta** and the unreleased changes of the
 
 This manual covers installation, accounts, every configuration option, commands,
 mouse controls and keyboard shortcuts on Linux. The amd64 and arm64 binaries
-do not need Go. Building from source requires **Go 1.26.7 or newer**.
+do not need Go. Building from source requires **Go 1.26.8 or newer**.
 
 **TTYloom** is a terminal client for **Telegram, Discord and IRC**, inspired by
 **ircii** and **BitchX**: numbered message windows, a status bar and an input
@@ -50,7 +50,7 @@ OAuth login are not supported.
 
 ## Requirements
 
-- For source builds only: [Go 1.26.7 or newer](https://go.dev/dl/).
+- For source builds only: [Go 1.26.8 or newer](https://go.dev/dl/).
 - Optional: `ffmpeg` and `ffprobe` for videos, animated WebP and the
   metadata of a video sent with `/send`. Actual GIF files are decoded in Go.
 - For source builds with spell checking: Hunspell development files and

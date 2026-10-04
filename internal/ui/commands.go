@@ -438,9 +438,13 @@ func (u *UI) bind(w *Window, name string, join bool) {
 	// the lookup that is still running. The list is made before anything is
 	// said, so a network that cannot resolve never shows a "resolving…" it
 	// would take back on the next line.
-	resolvers := u.resolversFor(w, name)
+	resolvers, several := u.resolversFor(w, name)
 	if len(resolvers) == 0 {
 		w.AddSys(i18n.T("net_unsupported", strings.Join(u.netNames(), ", ")))
+		return
+	}
+	if join && several != nil {
+		w.AddSys(i18n.T("join_which_net", name, strings.Join(several, ", ")))
 		return
 	}
 	w.AddSys(i18n.T("resolving", name))
@@ -661,15 +665,20 @@ func (u *UI) nickWhoisNet(w *Window) string {
 
 // resolversFor : the backends a lookup of name from w goes to. The network
 // of the window when it resolves (two IRC networks would both join the
-// room), else the networks of the module that claims name ("#room" for
-// IRC), else every resolving one.
-func (u *UI) resolversFor(w *Window, name string) []model.Backend {
+// room), else the one of the tab or of /net, else the networks of the module
+// that claims name ("#room" for IRC), else every resolving one. several
+// names the networks that claim name when more than one does: a /join would
+// join it on each of them.
+func (u *UI) resolversFor(w *Window, name string) (resolvers []model.Backend, several []string) {
 	if w != nil {
 		for _, c := range []*model.Chat{w.Chat, w.Target} {
 			if b := u.net(c); b != nil && b.Caps().Resolve {
-				return []model.Backend{b}
+				return []model.Backend{b}, nil
 			}
 		}
+	}
+	if b := u.nets[u.netFilter]; b != nil && b.Caps().Resolve {
+		return []model.Backend{b}, nil
 	}
 	var out, claimed []model.Backend
 	for _, n := range u.netNames() {
@@ -679,11 +688,14 @@ func (u *UI) resolversFor(w *Window, name string) []model.Backend {
 		}
 		out = append(out, b)
 		if m := u.modOf(n); m != nil && m.Claims(name) {
-			claimed = append(claimed, b)
+			claimed, several = append(claimed, b), append(several, n)
 		}
 	}
 	if len(claimed) > 0 {
-		return claimed
+		if len(several) < 2 {
+			several = nil
+		}
+		return claimed, several
 	}
-	return out
+	return out, nil
 }

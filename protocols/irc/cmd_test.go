@@ -47,6 +47,11 @@ func TestJoinWithKey(t *testing.T) {
 	if l := s2.expect("JOIN"); l != "JOIN #priv secret" {
 		t.Fatalf("join at the next connection: %q", l)
 	}
+	cmd(c, 7, "#priv", "cycle", "") // the saved key goes with the JOIN again
+	s.expect("PART")
+	if l := s.expect("JOIN"); l != "JOIN #priv secret" {
+		t.Fatalf("cycle: %q", l)
+	}
 	s.send(":me!u@h PART #priv") // left, then joined again: the key changed meanwhile
 	s.send("PING :sync")
 	s.expect("PONG") // the PART is read before the next /join

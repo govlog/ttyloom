@@ -30,11 +30,11 @@ import (
 // is there.
 var _ model.Backend = (*Client)(nil)
 
-// Discord has reactions and edits, nothing else of what the UI gates —
+// Discord has reactions, edits and deletes, nothing else of what the UI gates —
 // leaving a room and blocking included, so the context menu offers neither.
 func TestCaps(t *testing.T) {
 	got := New(Config{}, make(chan model.Event, 1)).Caps()
-	want := model.Caps{Reactions: true, AnyReaction: true, Edit: true, Gifs: true, Search: true, GlobalSearch: true, History: true}
+	want := model.Caps{Reactions: true, AnyReaction: true, Edit: true, Delete: true, Gifs: true, Search: true, GlobalSearch: true, History: true}
 	if got != want {
 		t.Fatalf("Caps: %+v, want %+v", got, want)
 	}

@@ -107,7 +107,7 @@ func (r remoteAuth) run(ctx context.Context) (string, error) {
 				return "", ctx.Err()
 			}
 			r.log("remote-auth: %v", err)
-			if shown { // the gateway closes when the code expires (five minutes today)
+			if shown { // the gateway closes when the code expires (the timeout of hello)
 				return "", errors.New(i18n.T("qr_expired_discord"))
 			}
 			return "", err

@@ -225,7 +225,7 @@ import anthropic
 
 text = sys.stdin.read()
 reply = anthropic.Anthropic().messages.create(
-    model="claude-sonnet-5",
+    model="claude-sonnet-5-5",
     max_tokens=1024,
     output_config={"effort": "low"},  # the model thinks by default: keep it short
     system="Suggest a short reply to this chat message, in its language. Answer with the reply only.",

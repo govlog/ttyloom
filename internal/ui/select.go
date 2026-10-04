@@ -71,7 +71,7 @@ func (u *UI) selKey(w *Window, r rune) bool {
 		u.stopVideo(m.Media)
 	case r == 'e' && act && u.own(m):
 		u.startEdit(it)
-	case r == 'd' && act && u.own(m):
+	case r == 'd' && act && u.own(m) && u.capsOf(m).Delete:
 		u.confirm(i18n.T("confirm_delete_message", m.ID), func() {
 			c := u.chatOf(m)
 			if b := u.net(c); b != nil {

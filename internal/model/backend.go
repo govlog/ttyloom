@@ -77,6 +77,7 @@ type Caps struct {
 	// emoji of the room goes as ":name:".
 	AnyReaction  bool
 	Edit         bool
+	Delete       bool // deleting my own message (IRC cannot)
 	Whois        bool
 	Search       bool // search inside a chat (/search)
 	GlobalSearch bool
@@ -124,7 +125,7 @@ type MediaSearcher interface {
 // AllCaps : every capability on — Telegram, and the tests that draw a message
 // with nothing gated off.
 func AllCaps() Caps {
-	return Caps{ReadReceipts: true, Reactions: true, Edit: true, Whois: true, Search: true,
+	return Caps{ReadReceipts: true, Reactions: true, Edit: true, Delete: true, Whois: true, Search: true,
 		GlobalSearch: true, Contacts: true, Resolve: true, Sync: true, Leave: true, Block: true, Gifs: true, History: true}
 }
 

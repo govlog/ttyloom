@@ -69,8 +69,8 @@ func main() {
 	}
 }
 
-// modules : the networks the client knows, in the order of their windows and
-// of /net. Adding one is a line here.
+// modules : the networks the client knows, in the order they start and their
+// blocks are written in config.toml. Adding one is a line here.
 func modules() []module.Module {
 	return []module.Module{tgc.NewModule(), dsc.NewModule(), irc.NewModule()}
 }

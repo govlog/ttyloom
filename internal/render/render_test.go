@@ -399,7 +399,7 @@ func TestSelActs(t *testing.T) {
 	if got := keys(SelActs(m, false, false, model.AllCaps())); got != "prciov" {
 		t.Fatalf("someone else's: %q", got)
 	}
-	if got := keys(SelActs(&model.Msg{ID: 1, Text: "x"}, true, false, model.Caps{})); got != "dpci" {
+	if got := keys(SelActs(&model.Msg{ID: 1, Text: "x"}, true, false, model.Caps{})); got != "pci" { // IRC: my line stays
 		t.Fatalf("nothing allowed: %q", got)
 	}
 }

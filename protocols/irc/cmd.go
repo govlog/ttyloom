@@ -101,6 +101,9 @@ func (c *Client) command(reply int64, room, name string, args []string, text str
 		if err := c.send("PART", ch); err != nil {
 			return err
 		}
+		if key := c.roomKey(ch); key != "" { // a +k room: its saved key, or the server answers 475
+			return c.send("JOIN", ch, key)
+		}
 		return c.send("JOIN", ch)
 	case "topic":
 		ch, more, ok := roomArg(args, room)

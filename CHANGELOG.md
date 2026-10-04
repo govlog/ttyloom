@@ -11,6 +11,15 @@
 - **GIF picker and media browser** are large boxes again: up to six previews by four rows; a smaller terminal shrinks the previews first, then shows fewer columns or rows. The scrollbar thickens under the pointer, and a drag of its thumb scrolls.
 - **A new `config.toml`** lists `multiline`, `spell`, `spell_quotes`, `sidebar` and `members` too, and its IRC block `user`, `realname`, `dcc_ip` and `dcc_ports`; the comments of the file follow the code (F6 for the aggregate view, avatars in the sidebar, `$LC_MESSAGES` for the language, the `[telegram]` section that replaces the top-level keys).
 - **The manual, the README, the account and hooks guides and `/help`** were checked against the code: Discord's global search asks the ten most recently active servers, `/send` keeps the media kind of a video or a sound file on Telegram, `/history` asks at most what a window keeps, the bell and the notifications follow the same rule, IRC notices, `/nick`, `/ctcp` and DCC are described as they work, and the help of F4, F7, `/log` and `/me` is fixed.
+- **Dependencies**: arikawa moves to the head of its v3 branch, and ningen stays at the head of its own (read states now carry their type and badge count, and a message the thread it started); brotli v1.2.6, OpenTelemetry v1.47.0 and x/tools v0.51.0 move along; builds use Go 1.26.8; the license bundle under `licenses/` is regenerated to match. govulncheck and osv-scanner find no vulnerability reached.
+
+### Fixed
+
+- **`/join #room` with several IRC networks**, from a window of none of them, asks which one instead of joining the room on all of them; the tab (F9) or `/net` picks the network of a lookup.
+- **IRC `/cycle`** joins a room with a key again with its saved key.
+- **An `[[irc]]` table with no `port`** dials 6697 with TLS, 6667 without, instead of port 0.
+- **IRC messages** no longer offer "delete", which IRC cannot do.
+- **`/help log`** shows the `log` option, `/help /log` the command.
 
 ## v0.11-beta — 2026-10-05
 

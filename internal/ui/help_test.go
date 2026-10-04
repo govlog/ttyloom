@@ -67,3 +67,15 @@ func helpText(lines []render.Line) string {
 	}
 	return strings.Join(out, "\n")
 }
+
+// "/help log" is the option and "/help /log" the command, though both names
+// fold to "log".
+func TestHelpExactName(t *testing.T) {
+	head := func(q string) string { return render.LineText(helpTopic(helpTopics, q, 200)[0]) }
+	if got, want := head("log"), "*** "+i18n.T("help_log_opt_name"); got != want {
+		t.Errorf("/help log: %q, want %q", got, want)
+	}
+	if got, want := head("/log"), "*** "+i18n.T("help_log_name"); got != want {
+		t.Errorf("/help /log: %q, want %q", got, want)
+	}
+}

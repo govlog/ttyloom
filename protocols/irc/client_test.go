@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -854,5 +855,29 @@ func TestStopDuringDial(t *testing.T) {
 		}
 	case <-time.After(3 * time.Second):
 		t.Fatal("Run still waits for the dial")
+	}
+}
+
+// A table with no port dials the usual one: 6697 with TLS, 6667 without.
+func TestDefaultPort(t *testing.T) {
+	for tls, want := range map[bool]string{true: "irc.example:6697", false: "irc.example:6667"} {
+		dialed := make(chan string, 1)
+		c := New(Config{Name: "test", Host: "irc.example", TLS: tls, Nick: "me",
+			Dial: func(ctx context.Context, _, addr string) (net.Conn, error) {
+				dialed <- addr
+				return nil, errors.New("no network")
+			}},
+			make(chan model.Event, 16))
+		ctx, cancel := context.WithCancel(context.Background())
+		go c.Run(ctx)
+		select {
+		case got := <-dialed:
+			if got != want {
+				t.Errorf("tls %v: dialed %s, want %s", tls, got, want)
+			}
+		case <-time.After(3 * time.Second):
+			t.Fatalf("tls %v: no dial", tls)
+		}
+		cancel()
 	}
 }

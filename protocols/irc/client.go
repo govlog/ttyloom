@@ -147,12 +147,19 @@ func (c *Client) build() *ircevent.Connection {
 	if real == "" {
 		real = cfg.Nick
 	}
+	port := cfg.Port
+	if port == 0 { // a table written by hand with no port: the usual one
+		port = 6667
+		if cfg.TLS {
+			port = 6697
+		}
+	}
 	dial := cfg.Dial
 	if dial == nil {
 		dial = (&net.Dialer{Timeout: 30 * time.Second}).DialContext
 	}
 	conn := &ircevent.Connection{
-		Server:        net.JoinHostPort(cfg.Host, strconv.Itoa(cfg.Port)),
+		Server:        net.JoinHostPort(cfg.Host, strconv.Itoa(port)),
 		Nick:          cfg.Nick,
 		User:          user,
 		RealName:      real,
@@ -430,6 +437,18 @@ func (c *Client) connected() {
 }
 
 // roomName : the room of an entry of the list, its key left out.
+// roomKey : the key saved with room ch, "" with none.
+func (c *Client) roomKey(ch string) string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for _, x := range c.channels {
+		if name, key, ok := strings.Cut(x, " "); ok && c.casefold(name) == c.casefold(ch) {
+			return strings.TrimSpace(key)
+		}
+	}
+	return ""
+}
+
 func roomName(entry string) string {
 	n, _, _ := strings.Cut(entry, " ")
 	return n

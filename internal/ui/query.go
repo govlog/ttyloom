@@ -60,9 +60,13 @@ func (u *UI) query(w *Window, name string, join bool) {
 	} else if ambiguous {
 		return
 	}
-	resolvers := u.resolversFor(w, name)
+	resolvers, several := u.resolversFor(w, name)
 	if len(resolvers) == 0 {
 		w.AddSys(i18n.T("net_unsupported", strings.Join(u.netNames(), ", ")))
+		return
+	}
+	if join && several != nil {
+		w.AddSys(i18n.T("join_which_net", displayQuery(name), strings.Join(several, ", ")))
 		return
 	}
 	u.cancelQuery(w)

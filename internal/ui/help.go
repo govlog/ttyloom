@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/govlog/ttyloom/internal/i18n"
@@ -201,8 +202,11 @@ const suggestLimit = 5
 // helpTopic : /help <topic> — detailed help, or suggestions when unknown.
 func helpTopic(topics []topic, query string, width int) []render.Line {
 	q := fold(query)
-	for _, t := range topics {
-		if t.match(q) {
+	// The name as typed first: "log" is the option, "/log" the command — both
+	// fold to "log".
+	exact := slices.IndexFunc(topics, func(t topic) bool { return strings.EqualFold(t.name, strings.TrimSpace(query)) })
+	for i, t := range topics {
+		if i == exact || (exact < 0 && t.match(q)) {
 			var lines []render.Line
 			lines = append(lines, render.Plain("*** "+t.display(), theme.Style{Bold: true}, width)...)
 			body := i18n.T(t.key + "_long")

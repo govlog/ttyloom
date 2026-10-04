@@ -201,15 +201,24 @@ func TestResolversFor(t *testing.T) {
 	u := netUI()
 	u.mods = []module.Module{irc.NewModule()} // it claims the #rooms
 	u.nets = map[string]model.Backend{netTelegram: tg, "irc:libera": lib, "irc:oftc": oftc}
-	if got := u.resolversFor(&Window{}, "#go"); len(got) != 2 {
-		t.Fatalf("#room: %d resolvers", len(got))
+	if got, several := u.resolversFor(&Window{}, "#go"); len(got) != 2 || len(several) != 2 {
+		t.Fatalf("#room: %d resolvers, several %v", len(got), several)
 	}
-	if got := u.resolversFor(&Window{}, "alice"); len(got) != 3 {
-		t.Fatalf("nick: %d resolvers", len(got))
+	if got, several := u.resolversFor(&Window{}, "alice"); len(got) != 3 || several != nil {
+		t.Fatalf("nick: %d resolvers, several %v", len(got), several)
 	}
 	w := &Window{Chat: &model.Chat{Net: "irc:oftc", ID: 1}}
-	if got := u.resolversFor(w, "#go"); len(got) != 1 || got[0] != model.Backend(oftc) {
+	if got, _ := u.resolversFor(w, "#go"); len(got) != 1 || got[0] != model.Backend(oftc) {
 		t.Fatalf("bound window: %v", got)
+	}
+	x := u.ws.New(false) // a window of no network: /join #go would join it on both
+	u.query(x, "#go", true)
+	if len(lib.resolves)+len(oftc.resolves) != 0 || !strings.Contains(lastSys(x), "irc:oftc") {
+		t.Fatalf("join on two networks: resolves %v %v, said %q", lib.resolves, oftc.resolves, lastSys(x))
+	}
+	u.netFilter = "irc:libera" // the tab picks the network
+	if got, several := u.resolversFor(&Window{}, "#go"); len(got) != 1 || got[0] != model.Backend(lib) || several != nil {
+		t.Fatalf("tab: %v, several %v", got, several)
 	}
 }
 
