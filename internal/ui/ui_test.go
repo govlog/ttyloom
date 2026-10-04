@@ -43,14 +43,6 @@ func TestEditor(t *testing.T) {
 	if e.String() != "x" {
 		t.Fatalf("history down: %q", e.String())
 	}
-	e.Set("abc def")
-	e.Left()
-	e.Left()
-	e.Left()
-	e.KillLine()
-	if e.String() != "def" || e.Cursor() != 0 {
-		t.Fatalf("killline: %q %d", e.String(), e.Cursor())
-	}
 }
 
 func TestEditorComplete(t *testing.T) {
@@ -117,6 +109,10 @@ func TestWindowsFlow(t *testing.T) {
 	ws.List[1].Chat = antonio
 	if ws.ForChat(antonio.Key()) != 1 || ws.ByName("ant", nil) != 1 || ws.ForChat(model.ChatKey{ID: 9}) != -1 {
 		t.Fatal("lookup")
+	}
+	ws.List[1].Chat = &model.Chat{ID: 6, Title: "Éloïse"}
+	if ws.ByName("elo", nil) != 1 { // /win elo: accents apart, as the sidebar filter
+		t.Fatal("lookup by a name typed without its accents")
 	}
 	if ws.CloseAt(0) != nil {
 		t.Fatal("window 0 must not close")

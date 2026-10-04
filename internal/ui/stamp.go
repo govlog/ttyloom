@@ -68,7 +68,7 @@ func stamp(net string, ev model.Event) model.Event {
 	case model.EvParticipants:
 		for i := range e.Lines {
 			p := &e.Lines[i]
-			p.Text, p.Name = render.CleanLine(p.Text), render.CleanLine(p.Name)
+			p.Text, p.Name, p.Query = render.CleanLine(p.Text), render.CleanLine(p.Name), render.CleanLine(p.Query)
 		}
 	case model.EvGifs:
 		e.Err = render.CleanLine(e.Err)

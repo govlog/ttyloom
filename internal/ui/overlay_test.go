@@ -304,3 +304,31 @@ func TestOverlayMenu(t *testing.T) {
 		t.Fatalf("click on an entry: menu = %v, action run = %v", u.menu != nil, said())
 	}
 }
+
+// Two lead overlays at once — the hub comes back on its own (the network
+// started from it is ready) while the user types in the new chat box: the box
+// drawn on top is the one the keys go to, the hub waits under it.
+func TestRegressionLeadOverlayOnTopTakesKeys(t *testing.T) {
+	u, _ := hubUI()
+	u.hubReturn["fake:a"] = true
+	u.openNewChat()
+	u.hubBack("fake:a")
+	u.key(term.Key{Rune: 'z'})
+	ov := u.overlay()
+	if top := ov[len(ov)-1].rect; string(u.newChat.query) != "z" || top != u.ncRect() {
+		t.Fatalf("keys to the new chat box: %q; top box %+v, the new chat box is %+v", string(u.newChat.query), top, u.ncRect())
+	}
+}
+
+// A login prompt closes the boxes on screen by their own way out: the theme
+// the picker previews goes back to the one in use.
+func TestRegressionPromptCancelsThemePreview(t *testing.T) {
+	u := listUI()
+	u.themePick = newThemePicker(themeNames, "terminal", u.th, u.t.Cols, u.t.Rows)
+	u.themePick.load = fakeLoad
+	u.themeKey(term.Key{Code: term.Down}) // preview of the next theme
+	u.authStart(netTelegram, model.EvAuthPrompt{Reply: make(chan string, 1)})
+	if u.themePick != nil || u.th.Name != "terminal" {
+		t.Fatalf("after the prompt: picker open %v, theme %q", u.themePick != nil, u.th.Name)
+	}
+}

@@ -11,6 +11,7 @@ import (
 	"github.com/govlog/ttyloom/internal/config"
 	"github.com/govlog/ttyloom/internal/model"
 	"github.com/govlog/ttyloom/internal/render"
+	"github.com/govlog/ttyloom/internal/term"
 	"github.com/govlog/ttyloom/internal/theme"
 )
 
@@ -83,6 +84,21 @@ func TestFindChatCollision(t *testing.T) {
 	}
 	if got, _ := u.findChat("Bob", false); got != b { // unique exact name: always resolved
 		t.Fatal("unique title not resolved")
+	}
+}
+
+// Tab puts a whole title of several words in the line: /rename takes it as
+// the target, the rest as the new name.
+func TestRegressionRenameTitleOfSeveralWords(t *testing.T) {
+	t.Setenv("TTYLOOM_DIR", t.TempDir()) // setAlias writes aliases.toml
+	u, _, room, _ := queryUI()
+	u.aliases = map[model.ChatKey]string{}
+	u.ed.Set("/rename Fri")
+	u.completeTab()
+	u.ed.Insert("Pals")
+	u.key(term.Key{Code: term.Enter})
+	if got := u.title(room); got != "Pals" {
+		t.Fatalf("Friends room renamed %q, want Pals", got)
 	}
 }
 

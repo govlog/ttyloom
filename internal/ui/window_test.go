@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"slices"
 	"testing"
 	"time"
 
@@ -31,6 +32,66 @@ func TestDraftSwitch(t *testing.T) {
 	w := &Window{}
 	if got := swapDraft(w, w, "texte en cours"); got != "texte en cours" || w.Draft != "" {
 		t.Fatalf("same window: got=%q draft=%q", got, w.Draft)
+	}
+}
+
+// draftUI : queryUI, its two windows, and the room shown with text typed in
+// its input.
+func draftUI() (*UI, *queryBackend, *Window, *Window) {
+	u, b, room, peer := queryUI()
+	wr, wp := u.winFor(room), u.winFor(peer)
+	u.goTo(u.ws.ForChat(room.Key()))
+	u.ed.Set("draft for the room")
+	return u, b, wr, wp
+}
+
+// Opening a chat that has no window yet files the draft of the window left,
+// as a click on a chat that has one does: it never lands in the new chat.
+func TestRegressionOpenChatKeepsDraft(t *testing.T) {
+	u, _, wr, _ := draftUI()
+	carol := &model.Chat{Net: netTelegram, ID: 3, Title: "Carol", Kind: model.ChatUser}
+	u.remember(carol)
+	u.openChat(carol)
+	if u.view().Chat != carol || u.ed.String() != "" || wr.Draft != "draft for the room" {
+		t.Fatalf("in %q: input %q, room draft %q", u.view().Name(), u.ed.String(), wr.Draft)
+	}
+}
+
+// The input history is browsed for the window where Up was pressed: another
+// window does not take its draft back with Down.
+func TestRegressionHistoryBrowseEndsAtWindowChange(t *testing.T) {
+	u, _, _, wp := draftUI()
+	u.ed.hist = []string{"an old line"}
+	u.ed.hi = 1
+	u.key(term.Key{Code: term.Up})
+	u.goTo(slices.Index(u.ws.List, wp))
+	u.key(term.Key{Code: term.Down})
+	if got := u.ed.String(); got != "" {
+		t.Fatalf("input of the peer window: %q, want empty", got)
+	}
+}
+
+// Closing the shown window lands on another one with that window's own draft:
+// the text it kept is neither wiped nor replaced by the input of the closed one.
+func TestRegressionCloseWindowKeepsLandingDraft(t *testing.T) {
+	u, _, wr, wp := draftUI()
+	u.goTo(slices.Index(u.ws.List, wp)) // the room keeps its draft
+	input(u, "/close")
+	if u.view() != wr || u.ed.String() != "draft for the room" {
+		t.Fatalf("after /close: in %q, input %q", u.view().Name(), u.ed.String())
+	}
+	// The menu entry "close" of a private chat closes its window too.
+	u.openChat(wp.Chat) // a window again: the room files its draft
+	u.ed.Set("text for the peer")
+	u.menuDo(&ctxMenu{chat: wp.Chat}, "leave")
+	if u.view() != wr || u.ed.String() != "draft for the room" {
+		t.Fatalf("after the menu close: in %q, input %q", u.view().Name(), u.ed.String())
+	}
+	// A chat gone from the account takes its window away under the input.
+	u.ws.List[0].Draft = "draft of window 0"
+	u.chatGone(wr.Chat.Key())
+	if u.ws.Cur != 0 || u.ed.String() != "draft of window 0" {
+		t.Fatalf("after the chat went: window %d, input %q", u.ws.Cur, u.ed.String())
 	}
 }
 

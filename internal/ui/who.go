@@ -35,8 +35,8 @@ type whoBox struct {
 }
 
 // whoZone : the act under the pointer that carries a popup — the tick, or a
-// reaction already on the message. The quick-react button of the help line
-// shares KeyReact: only an emoji found on the message counts.
+// reaction already on the message. Only an emoji found on the message
+// counts.
 func whoZone(h hit) *render.Action {
 	if h.item == nil || h.item.Msg == nil || h.act == nil {
 		return nil

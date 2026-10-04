@@ -153,8 +153,8 @@ func TestSideFindKeyboardFocus(t *testing.T) {
 	overSide(u)
 	u.mouse(term.MouseEvent{X: 2, Y: sideHdr + 1, Press: true}) // second line: Stéfany
 	typeIn(u, "d")
-	if c := u.ws.Current().Chat; c == nil || c.Title != "Stéfany" || u.ed.String() != "abcd" || len(u.sideRowList()) != 3 {
-		t.Fatalf("click: chat %v, input %q, %d rows", c, u.ed.String(), len(u.sideRowList()))
+	if c := u.ws.Current().Chat; c == nil || c.Title != "Stéfany" || u.ed.String() != "d" || u.ws.List[0].Draft != "abc" || len(u.sideRowList()) != 3 {
+		t.Fatalf("click: chat %v, input %q (the draft stays with the window left: %q), %d rows", c, u.ed.String(), u.ws.List[0].Draft, len(u.sideRowList()))
 	}
 }
 
@@ -221,5 +221,26 @@ func TestSideFindWindows(t *testing.T) {
 	press(u, term.Enter)
 	if u.ws.Cur != 3 {
 		t.Fatalf("Enter went to window %d, want 3", u.ws.Cur)
+	}
+}
+
+// The pointer gave the keyboard to the panel, then left the terminal over it
+// (no event says so): back with Alt+Tab and no motion, the typing goes to the
+// input line. A keyboard given by Shift+Tab stays with the panel.
+func TestRegressionFocusGivesPointerKeyboardBack(t *testing.T) {
+	u := findUI()
+	overSide(u)
+	press(u, term.FocusOut)
+	press(u, term.FocusIn)
+	typeIn(u, "hello")
+	if u.ed.String() != "hello" || u.find.q != "" {
+		t.Fatalf("after a focus round trip: input %q, panel filter %q", u.ed.String(), u.find.q)
+	}
+	overMsgs(u)
+	shiftTab(u)
+	press(u, term.FocusOut)
+	press(u, term.FocusIn)
+	if !u.sideHasKeys() {
+		t.Fatal("Shift+Tab gave the keyboard to the panel: a focus round trip keeps it there")
 	}
 }

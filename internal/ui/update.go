@@ -41,10 +41,7 @@ func (u *UI) checkUpdate(manual bool) {
 			defer cancel()
 			ev.rel, ev.newer, ev.err = update.Check(ctx, http.DefaultClient, updateAPI, b)
 		}()
-		select {
-		case u.events <- ev:
-		case <-ctx.Done(): // /quit: nobody reads the events any more
-		}
+		u.post(ev)
 	}()
 }
 

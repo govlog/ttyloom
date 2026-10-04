@@ -286,7 +286,10 @@ func (u *UI) menuDo(m *ctxMenu, key string) {
 	case "leave":
 		if c.Kind == model.ChatUser { // nothing to leave: only the bound window closes
 			if i := u.ws.ForChat(c.Key()); i >= 0 {
-				u.closeWindowAt(i)
+				shown := u.ws.Current()
+				if u.closeWindowAt(i) != nil && u.ws.Current() != shown {
+					u.landed()
+				}
 				u.loadParts() // the F3 box follows the shown window
 			}
 			return
@@ -351,20 +354,22 @@ func (u *UI) menuMember(m *ctxMenu, key string) {
 	}
 }
 
-// openChat gives the window of the chat, opened when it does not exist yet.
+// openChat gives the window of the chat, opened when it does not exist yet —
+// hidden first, then shown by goTo, which files the draft of the window left.
 func (u *UI) openChat(c *model.Chat) {
 	if i := u.ws.ForChat(c.Key()); i >= 0 {
 		u.goTo(i)
 		return
 	}
-	u.attach(u.ws.New(false), c)
+	u.attach(u.ws.New(true), c)
+	u.goTo(len(u.ws.List) - 1)
 }
 
 // chatGone : chat left, blocked or gone from the account. Bound windows
 // closed, entry dropped from the sidebar, cached history erased where the
 // server keeps one (see dropChat), and one line to say so.
 func (u *UI) chatGone(k model.ChatKey) {
-	c := u.chats[k]
+	c, shown := u.chats[k], u.ws.Current()
 	if !u.dropChat(k) {
 		// Nothing known under that key, and so nothing to say: a member
 		// blocked with no private chat open with them, a channel of a kind the
@@ -374,7 +379,11 @@ func (u *UI) chatGone(k model.ChatKey) {
 		return
 	}
 	u.saveDialogs() // otherwise the cache would bring it back at the next start
-	u.goTo(u.ws.Cur)
+	if u.ws.Current() != shown {
+		u.landed()
+	} else {
+		u.goTo(u.ws.Cur)
+	}
 	u.sys(i18n.T("chat_removed", render.CleanLine(u.title(c))))
 }
 

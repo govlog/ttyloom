@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/BurntSushi/toml"
 
@@ -169,11 +170,25 @@ func cutTarget(text string) (target, rest string) {
 	return target, strings.TrimSpace(rest)
 }
 
+// afterWords : text after its n first words, the spacing inside kept.
+func afterWords(text string, n int) string {
+	for range n {
+		text = strings.TrimLeftFunc(text, unicode.IsSpace)
+		i := strings.IndexFunc(text, unicode.IsSpace)
+		if i < 0 {
+			return ""
+		}
+		text = text[i:]
+	}
+	return strings.TrimSpace(text)
+}
+
 // rename : /rename <new name> on the current window, /rename <target> <new
 // name> elsewhere. As soon as text follows the first word, that word is a
 // target: when it is unknown the command refuses instead of renaming the
-// current window with the whole line. A name (or a target) of several words
-// goes between quotes.
+// current window with the whole line. A target of several words is the whole
+// name of a chat (as Tab puts it) or goes between quotes, like a new name of
+// several words.
 func (u *UI) rename(w *Window, text string) {
 	if text == "" {
 		w.AddSys(i18n.T("usage_rename"))
@@ -182,15 +197,22 @@ func (u *UI) rename(w *Window, text string) {
 	target, rest := cutTarget(text)
 	c, name := w.Chat, target
 	if rest != "" {
-		t, ambiguous := u.findChat(target, false)
-		if ambiguous {
-			return // findChat has already listed the candidates
+		t, after := (*model.Chat)(nil), rest
+		if !strings.HasPrefix(text, `"`) {
+			t, after = u.leadingChat(text)
+		}
+		if t == nil {
+			var ambiguous bool
+			if t, ambiguous = u.findChat(target, false); ambiguous {
+				return // findChat has already listed the candidates
+			}
+			after = rest
 		}
 		if t == nil {
 			w.AddSys(i18n.T("rename_unknown_target", target))
 			return
 		}
-		c, name = t, unquote(rest)
+		c, name = t, unquote(after)
 	}
 	if c == nil {
 		w.AddSys(i18n.T("rename_window_not_bound"))

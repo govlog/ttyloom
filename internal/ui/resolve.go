@@ -40,9 +40,10 @@ func (u *UI) resolve(w *Window, name string, join bool, backends []model.Backend
 
 // displayQuery : what a query may be shown as. "#room key" joins a channel
 // with its key: the key has nothing to do on the screen, nor in the log of
-// the window.
+// the window. The rooms of irc.IsChannel but "+", which has no modes, so no
+// key — and a Telegram phone number starts with it.
 func displayQuery(q string) string {
-	if strings.HasPrefix(q, "#") {
+	if q != "" && strings.ContainsRune("#&!", rune(q[0])) {
 		name, _, _ := strings.Cut(q, " ")
 		return name
 	}

@@ -221,14 +221,13 @@ func (u *UI) draw() {
 }
 
 // cursorShown : the input cursor is drawn; an open overlay keeps it hidden.
-func (u *UI) cursorShown() bool {
-	return u.picker == nil && u.menu == nil && u.themePick == nil && u.gsearch == nil && u.newChat == nil && u.gifs == nil && u.mbox == nil && u.form == nil && u.hub == nil
-}
+func (u *UI) cursorShown() bool { return u.lead() == nil }
 
 // drawScrollbar : column kept free at the right of the message area. Always
 // written, with a space when there is no bar: no 2J clears the screen.
 func (u *UI) drawScrollbar(b *strings.Builder, col, view, total, scroll int) {
 	top, length, ok := scrollbar(total, view, scroll)
+	u.barShown = ok
 	acc := theme.Style{FG: u.th.Color(theme.Accent), BG: u.th.BG}.SGR()
 	track, cur := theme.Style{FG: u.th.Color(theme.Dim), BG: u.th.BG}.SGR()+"│", "┃"
 	if u.zone == zoneMsgs || u.zone == zoneBar { // follow-mouse: the column of the pointed area lights up
@@ -475,8 +474,9 @@ func (o overlays) hits(row, col, h, w int) bool {
 	return false
 }
 
-// overlay gives the boxes on top in drawing order: members (F3), emoji
-// picker, context menu, theme picker; the last one wins when two overlap.
+// overlay gives the boxes on top in drawing order: hover popup, members (F3),
+// @… box, spell box, then the lead overlays; the last one wins when two
+// overlap.
 func (u *UI) overlay() overlays {
 	var out overlays
 	// Hover popup (who read, who reacted): its message must still be shown.
@@ -487,11 +487,6 @@ func (u *UI) overlay() overlays {
 	if r, ok := u.partsRect(); ok {
 		out = append(out, overlayBox{rect: r, lines: u.parts.Lines(u.th, r.w, r.h)})
 	}
-	if u.picker != nil {
-		u.customLoad() // the images of the custom emojis on the screen
-		r := u.pickerRect()
-		out = append(out, overlayBox{rect: r, lines: u.picker.Lines(u.th)})
-	}
 	if u.mention != nil { // @… box, above the input
 		r := u.mentionRect()
 		out = append(out, overlayBox{rect: r, lines: u.mention.Lines(u.th, r.w, r.h)})
@@ -500,37 +495,10 @@ func (u *UI) overlay() overlays {
 		r := u.spellFixRect()
 		out = append(out, overlayBox{rect: r, lines: u.spellFix.Lines(u.th, r.w, r.h, u.spellFixHelp())})
 	}
-	if u.menu != nil { // above the members and the emoji picker
-		r := u.menuBox()
-		out = append(out, overlayBox{rect: r, lines: u.menu.Lines(u.th, r.w, r.h)})
-	}
-	if u.themePick != nil { // above everything: it takes everything
-		out = append(out, overlayBox{rect: u.themeRect(), lines: u.themePick.Lines(u.th)})
-	}
-	if u.gsearch != nil { // global search: it takes everything too
-		r := u.gsRect()
-		out = append(out, overlayBox{rect: r, lines: u.gsearch.Lines(u.th, r.w, r.h, u.title)})
-	}
-	if u.newChat != nil { // new chat: it takes everything too
-		r := u.ncRect()
-		out = append(out, overlayBox{rect: r, lines: u.newChat.Lines(u.th, r.w, r.h, u.title, u.online)})
-	}
-	if u.hub != nil && u.form == nil { // hub "Networks": its page (a form) takes its place
-		u.hubRefresh()
-		r := u.hubRect()
-		out = append(out, overlayBox{rect: r, lines: u.hub.Lines(u.th, r.w)})
-	}
-	if u.form != nil { // form (/irc add): it takes everything too
-		r := u.formRect()
-		out = append(out, overlayBox{rect: r, lines: u.form.Lines(u.th, r.w)})
-	}
-	if u.gifs != nil { // GIF box: it takes everything too
-		r := u.gifRect()
-		out = append(out, overlayBox{rect: r, lines: u.gifLines(r)})
-	}
-	if u.mbox != nil { // media browser: it takes everything too
-		r := u.gridRect(&u.mbox.g)
-		out = append(out, overlayBox{rect: r, lines: u.mboxLines(r)})
+	for i := len(leads) - 1; i >= 0; i-- { // the lead overlays, the one with the keys last: on top
+		if o := leads[i]; o.open(u) {
+			out = append(out, o.box(u))
+		}
 	}
 	if u.qr != nil { // login running: nothing else counts
 		r := u.qrRect()
@@ -982,7 +950,7 @@ func (u *UI) drawInput(b *strings.Builder, row, x0, cols int) (curRow, curCol in
 	if u.inputRows() > 1 {
 		return u.drawInputMulti(b, row, x0, cols, prompt)
 	}
-	text := strings.ReplaceAll(u.ed.String(), "\n", "⏎")
+	text := strings.ReplaceAll(u.ed.Shown(), "\n", "⏎")
 	cursor := u.ed.Cursor()
 	switch {
 	case u.pasteAsk != "" || u.ask != nil || (u.sendAsk != nil && !u.sendAsk.caption):
@@ -1016,7 +984,8 @@ func (u *UI) drawInput(b *strings.Builder, row, x0, cols int) (curRow, curCol in
 func (u *UI) drawInputMulti(b *strings.Builder, row, x0, cols int, prompt string) (curRow, curCol int) {
 	ir := u.inputRows()
 	top := row - ir + 1
-	lines := strings.Split(u.ed.String(), "\n")
+	draft := u.ed.Shown()
+	lines := strings.Split(draft, "\n")
 	// Line and column of the cursor, in runes.
 	ci, ccol, left := 0, 0, u.ed.Cursor()
 	for i, l := range lines {
@@ -1042,7 +1011,7 @@ func (u *UI) drawInputMulti(b *strings.Builder, row, x0, cols int, prompt string
 	if u.spellActive() {
 		bad = u.spellBadRanges()
 	}
-	all := []rune(u.ed.String())
+	all := []rune(draft)
 	// Rune offset of each draft line in the whole buffer, for the ranges.
 	offs := make([]int, len(lines))
 	for i := 1; i < len(lines); i++ {

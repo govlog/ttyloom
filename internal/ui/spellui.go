@@ -227,8 +227,7 @@ var spellNew = func(mode, perso string) (spellChecker, error) {
 
 // spellActive : the input carries a message and the checking is on.
 func (u *UI) spellActive() bool {
-	return u.spell != nil && u.prompt == nil && u.ask == nil && u.search == nil &&
-		u.pasteAsk == "" && u.sendAsk == nil
+	return u.spell != nil && !u.inputAsks()
 }
 
 // spellStyle : red undercurl (straight underline without terminal support);
@@ -314,7 +313,7 @@ func (u *UI) spellFixRect() rect {
 	if !u.inMap.multi && f.word.Start >= u.inMap.lo {
 		rs := []rune(strings.ReplaceAll(u.ed.String(), "\n", "⏎"))
 		end := min(f.word.Start, len(rs))
-		col = x0 + u.inMap.pw + render.Width(string(rs[u.inMap.lo:end]))
+		col = x0 + u.inMap.pw + render.Width(string(rs[min(u.inMap.lo, end):end])) // lo: last frame, the text may be shorter now
 	}
 	w := render.Width(u.spellFixHelp()) + 2
 	for _, s := range f.sugg {

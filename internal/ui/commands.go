@@ -136,12 +136,15 @@ func (u *UI) command(name string, args []string, text string) {
 			w.AddSys(i18n.T("usage_msg"))
 			return
 		}
-		c, _ := u.findChat(arg(0), true)
+		c, body := u.leadingChat(text) // a whole title of several words, as Tab puts it
+		if c == nil {
+			c, _ = u.findChat(arg(0), true)
+			body = afterWords(text, 1)
+		}
 		if c == nil {
 			w.AddSys(i18n.T("unknown_name", arg(0)))
 			return
 		}
-		body := strings.TrimSpace(strings.TrimPrefix(text, arg(0)))
 		u.send(u.winFor(c), body) // always keep the message in its own conversation too
 	case "me":
 		if text == "" {
@@ -210,8 +213,9 @@ func (u *UI) command(name string, args []string, text string) {
 		if err != nil || n < 1 {
 			n = 50
 		}
+		n = min(n, cmp.Or(w.max, defaultMaxItems)) // more would be trimmed at once, after a page per 100
 		b := u.net(w.Chat)
-		if b == nil {
+		if b == nil || w.Loading { // one load in flight per window, as for the scroll
 			return
 		}
 		w.Loading = true
@@ -256,11 +260,11 @@ func (u *UI) command(name string, args []string, text string) {
 		c := w.Chat
 		if !toNick && arg(0) != "" {
 			var ambiguous bool
-			if c, ambiguous = u.findChat(arg(0), false); c == nil {
+			if c, ambiguous = u.findChat(text, false); c == nil { // the whole line: a name of several words
 				toNick = nickNet != "" && !ambiguous // no chat of that name: a nick
 				if !toNick {
 					if !ambiguous {
-						w.AddSys(i18n.T("unknown_name", arg(0)))
+						w.AddSys(i18n.T("unknown_name", text))
 					}
 					return
 				}
@@ -374,6 +378,15 @@ func (u *UI) closeWindow() {
 	if u.closeWindowAt(u.ws.Cur) == nil {
 		return
 	}
+	u.landed()
+}
+
+// landed : the shown window has just been closed. Its input and its mode go
+// with it; the window shown now comes back with its own draft (goTo would
+// file the input of the closed one as that draft).
+func (u *UI) landed() {
+	u.cancelMode()
+	u.ed.Load(u.ws.Current().Draft)
 	u.goTo(u.ws.Cur)
 }
 
@@ -478,6 +491,7 @@ func (u *UI) cycleNet() {
 // typo must not leave a dead key behind in sidebar.toml. Silent when it works,
 // like F7: the sidebar shows the result.
 func (u *UI) foldCmd(w *Window, name string) {
+	u.sideDone() // a filter hides the sections with no hit and draws the others open
 	secs := u.foldSections()
 	if len(secs) == 0 {
 		w.AddSys(i18n.T("fold_none"))

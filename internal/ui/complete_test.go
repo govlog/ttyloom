@@ -261,14 +261,34 @@ func TestChatCandidatesByCommand(t *testing.T) {
 	}
 }
 
-// TestEscDropsCompletionChoices : the lists of a Tab, Tab (short then long)
-// leave the window on Esc; the input stays.
-func TestEscDropsCompletionChoices(t *testing.T) {
+// contactsUI : listUI with 35 contacts, more than the short list of a Tab.
+func contactsUI() *UI {
 	u := listUI()
 	for i := 0; i < 35; i++ {
 		u.chatList = append(u.chatList, &model.Chat{Net: netTelegram, ID: int64(i + 1), Kind: model.ChatUser,
 			Title: fmt.Sprintf("contact%02d", i), Username: fmt.Sprintf("contact%02d", i)})
 	}
+	return u
+}
+
+// Tab lists the short list, a second Tab the long one; the Tabs after that
+// change nothing — held down, the key no longer floods the window.
+func TestRegressionTabListsOnce(t *testing.T) {
+	u := contactsUI()
+	u.ed.Set("/m ")
+	before := len(u.view().Items)
+	for range 6 {
+		u.key(term.Key{Code: term.Tab})
+	}
+	if n := len(u.view().Items); n != before+2 {
+		t.Fatalf("after six Tabs: %d lists, want 2", n-before)
+	}
+}
+
+// TestEscDropsCompletionChoices : the lists of a Tab, Tab (short then long)
+// leave the window on Esc; the input stays.
+func TestEscDropsCompletionChoices(t *testing.T) {
+	u := contactsUI()
 	u.ed.Set("/m ")
 	before := len(u.view().Items)
 	u.key(term.Key{Code: term.Tab})
@@ -279,5 +299,28 @@ func TestEscDropsCompletionChoices(t *testing.T) {
 	u.key(term.Key{Code: term.Esc})
 	if n := len(u.view().Items); n != before || u.ed.String() != "/m " {
 		t.Fatalf("after Esc: %d items (want %d), input %q", n, before, u.ed.String())
+	}
+}
+
+// Tab completes a chat name typed without its accents, the way the sidebar
+// filter finds it.
+func TestRegressionTabFoldsAccents(t *testing.T) {
+	u, _, _, _ := queryUI()
+	stefany(u)
+	u.ed.Set("/q stef")
+	u.completeTab()
+	if got := u.ed.String(); got != "/q stefany " {
+		t.Fatalf("/q stef + Tab: %q", got)
+	}
+}
+
+// A word at the start of a line of the expanded editor completes on its own:
+// the line break ends the word before it, as a space does.
+func TestRegressionTabAfterLineBreak(t *testing.T) {
+	u, _, _, _ := queryUI()
+	u.ed.Set("hello\nBl")
+	u.completeTab()
+	if got := u.ed.String(); got != "hello\nBlop " {
+		t.Fatalf("Tab: %q", got)
 	}
 }

@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"bytes"
 	"context"
 	"strings"
 	"testing"
@@ -241,6 +242,7 @@ func TestZoneOf(t *testing.T) {
 // second and each one must not draw a frame.
 func TestZoneAt(t *testing.T) {
 	u := hoverUI()
+	u.barShown = true // the last frame drew a scrollbar: the zones off the panel show on it
 	if !u.zoneAt(2, 2) || u.zone != zoneSide {
 		t.Fatalf("panel: %d", u.zone)
 	}
@@ -343,5 +345,29 @@ func TestTabBarClick(t *testing.T) {
 	u.mouse(term.MouseEvent{Button: 0, X: 2, Y: u.tabRow(), Press: true}) // sidebar column
 	if u.netFilter != "" || u.ws.Cur != 1 {                               // window of that panel line
 		t.Fatalf("click in the panel taken by the tabs: filter %q cur %d", u.netFilter, u.ws.Cur)
+	}
+}
+
+// Off the sidebar the zone shows on the scrollbar only: with no bar (a short
+// history) the pointer crossing the status line costs no repaint; with one,
+// it does.
+func TestRegressionZoneRepaintsWhatShows(t *testing.T) {
+	u := hoverUI()
+	u.side = sideHidden
+	u.t = term.NewOffscreen(&bytes.Buffer{}, 80, 10)
+	w := u.view()
+	w.AddSys("one line")
+	u.draw()
+	u.zoneAt(40, 2)
+	if u.zoneAt(40, 9) {
+		t.Fatal("zone change with no scrollbar: a repaint for nothing")
+	}
+	for range 20 {
+		w.AddSys("line")
+	}
+	u.draw()
+	u.zoneAt(40, 2)
+	if !u.zoneAt(40, 9) {
+		t.Fatal("zone change with a scrollbar: its colour must follow")
 	}
 }

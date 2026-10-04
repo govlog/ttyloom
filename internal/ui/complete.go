@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"io/fs"
 	"os"
 	"path"
 	"slices"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/govlog/ttyloom/internal/config"
 	"github.com/govlog/ttyloom/internal/model"
+	"github.com/govlog/ttyloom/internal/render"
 
 	"github.com/govlog/ttyloom/internal/i18n"
 )
@@ -54,7 +56,7 @@ func complContext(line string, cursor int, names cmdNames) (src complSource, tai
 		if strings.HasPrefix(s, "/") {
 			return complCommands, s, ""
 		}
-		return complChats, s, "" // last (and only) word
+		return complChats, s[strings.LastIndexByte(s, '\n')+1:], "" // last word, a line break ends the one before
 	}
 	if !strings.HasPrefix(before, "/") {
 		return complChats, s[strings.LastIndexAny(s, " \n")+1:], ""
@@ -145,7 +147,12 @@ func pathCandidates(p string) []string {
 		if !strings.HasPrefix(n, base) || (base == "" && strings.HasPrefix(n, ".")) {
 			continue
 		}
-		if st, err := os.Stat(config.Expand(dir + n)); err == nil && st.IsDir() { // symlinks too
+		isDir := e.IsDir()
+		if e.Type()&fs.ModeSymlink != 0 { // a link: what it points to (one stat, not one per entry)
+			st, err := os.Stat(config.Expand(dir + n))
+			isDir = err == nil && st.IsDir()
+		}
+		if isDir {
 			n += "/"
 		}
 		out = append(out, dir+n)
@@ -156,21 +163,28 @@ func pathCandidates(p string) []string {
 // chatCandidates : the names Tab may complete after /query, /join, /msg —
 // each chat by its @username, its bare username and its shown title. A name
 // matches from its start or from the start of any of its words ("cop" gives
-// "copains du foot"), and the candidate is the name from there on: the editor
-// completes its last word, and findChat takes the piece it gives.
+// "copains du foot"), case and accents apart ("stef" gives "Stéfany"), and the
+// candidate is the name from there on: the editor completes its last word,
+// and findChat takes the piece it gives.
 func (u *UI) chatCandidates(word, tail string) []string {
 	keep := chatKinds(u.ed.String())
-	tr := []rune(tail)
+	ft := []rune(render.Fold(tail))
 	var out []string
 	seen := map[string]bool{}
 	add := func(n string) {
 		r := []rune(n)
-		for i := range r {
-			if i > 0 && r[i-1] != ' ' || len(r)-i < len(tr) {
-				continue
+		f, orig := foldRunes(n) // orig: rune of n each folded rune comes from
+		for j := range f {
+			i := orig[j]
+			if (j > 0 && orig[j-1] == i) || (i > 0 && r[i-1] != ' ') || len(f)-j < len(ft) {
+				continue // inside a rune, or not at the start of a word
 			}
-			if strings.EqualFold(string(r[i:i+len(tr)]), tail) {
-				candidate := word + string(r[i+len(tr):])
+			if slices.Equal(f[j:j+len(ft)], ft) {
+				end := len(r)
+				if k := j + len(ft); k < len(f) {
+					end = orig[k]
+				}
+				candidate := word + string(r[end:])
 				key := strings.ToLower(candidate)
 				if !seen[key] {
 					out = append(out, candidate)
@@ -234,11 +248,12 @@ const completionShortLimit = 20
 const completionLongLimit = 100
 
 type completionState struct {
-	line    string
-	cursor  int
-	matches []string
-	index   int
-	cycle   bool
+	line     string
+	cursor   int
+	matches  []string
+	index    int
+	cycle    bool
+	expanded bool // the long list is shown: a further Tab adds nothing
 }
 
 func (u *UI) showCompletionChoices(list []string, expanded bool) {
@@ -271,7 +286,8 @@ func (u *UI) completeTab() {
 			s.index = (s.index + 1) % len(s.matches)
 			u.ed.Replace(0, cursor, s.matches[s.index])
 			s.line, s.cursor = u.ed.String(), u.ed.Cursor()
-		} else {
+		} else if !s.expanded {
+			s.expanded = true
 			// Presence and the member list may have changed between the two presses.
 			src, _, _ := complContext(line, cursor, u.commandNames())
 			if src == complChats {

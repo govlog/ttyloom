@@ -71,6 +71,26 @@ func TestAuthQueueRestoresDraft(t *testing.T) {
 	}
 }
 
+// A login prompt that comes during an edit ends the edit: its text never comes
+// back after the prompt as a plain draft, which Enter would send as a new
+// message.
+func TestRegressionPromptEndsEdit(t *testing.T) {
+	u, _, room, _ := queryUI()
+	u.goTo(u.ws.ForChat(room.Key()))
+	w := u.view()
+	w.Upsert(&model.Msg{Net: netTelegram, ChatID: room.ID, ID: 5, Out: true, Text: "old text of my message", Date: time.Now()})
+	u.setSel(w, w.Items[len(w.Items)-1])
+	u.key(term.Key{Rune: 'e'})
+	if u.edit == nil {
+		t.Fatal("e starts the edit")
+	}
+	u.authStart(netTelegram, model.EvAuthPrompt{Reply: make(chan string, 1)})
+	u.authDone(netTelegram)
+	if u.edit != nil || u.ed.String() != "" {
+		t.Fatalf("after the prompt: editing %v, input %q; want no edit, empty input", u.edit != nil, u.ed.String())
+	}
+}
+
 func TestStoppedSessionReplyIgnored(t *testing.T) {
 	u, _, room, _ := queryUI()
 	old, cancelOld := context.WithCancel(u.ctx)

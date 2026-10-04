@@ -276,7 +276,7 @@ func shotSearch(_ *testing.T, u *UI) {
 	u.search = &searchState{q: []rune("kitty"), cur: 0}
 	tg, dc := u.chatList[0], u.chatList[5]
 	now := shotTime
-	u.gsearch = &globalSearch{query: []rune("kitty"), sent: "kitty", hits: []model.SearchHit{
+	u.gsearch = &globalSearch{netQuery: netQuery{query: []rune("kitty"), sent: "kitty"}, hits: []model.SearchHit{
 		{Chat: tg, MsgID: 1, Date: now.Add(-52 * time.Minute), From: "alice", Text: "Morning! Has anyone tried the kitty graphics protocol from Go yet?"},
 		{Chat: dc, MsgID: 40, Date: now.Add(-3 * time.Hour), From: "dave", Text: "kitty and Ghostty both do the graphics protocol, WezTerm too"},
 		{Chat: u.chatList[1], MsgID: 12, Date: now.Add(-26 * time.Hour), From: "alice", Text: "switched to kitty for the images, worth it"},
@@ -285,7 +285,7 @@ func shotSearch(_ *testing.T, u *UI) {
 }
 
 func shotGifs(t *testing.T, u *UI) {
-	u.gifs = &gifBox{chat: u.chatList[0], query: []rune("landscape"), sent: "landscape", asked: true, g: grid{live: -1}}
+	u.gifs = &gifBox{chat: u.chatList[0], netQuery: netQuery{query: []rune("landscape"), sent: "landscape", asked: true}, g: grid{live: -1}}
 	// The frames answered by the two GIF searches for that query, as
 	// docs/screenshots/fixtures/SOURCES.md lists them.
 	for i, name := range []string{"gif-discord-2.png", "gif-discord-4.png", "gif-discord-6.png",
@@ -314,7 +314,7 @@ func shotMembers(_ *testing.T, u *UI) {
 }
 
 func shotNewChat(_ *testing.T, u *UI) {
-	u.newChat = &newChatBox{query: []rune("go")}
+	u.newChat = &newChatBox{netQuery: netQuery{query: []rune("go")}}
 	u.ncFilter()
 	u.newChat.found = []*model.Chat{{Net: netTelegram, ID: 300, Kind: model.ChatChannel, Title: "Go Weekly", Username: "goweekly"}}
 	u.ncFilter()

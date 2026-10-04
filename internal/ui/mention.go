@@ -51,7 +51,7 @@ func mentionFilter(all []model.Participant, q string) []model.Participant {
 		if p.Query == "" {
 			continue // header or "loading…" line
 		}
-		if q == "" || (mentionByID(p) == 0 && strings.HasPrefix(render.Fold(p.Query[1:]), q)) || strings.HasPrefix(render.Fold(mentionName(p)), q) {
+		if q == "" || (mentionByID(p) == 0 && strings.HasPrefix(render.Fold(strings.TrimPrefix(p.Query, "@")), q)) || strings.HasPrefix(render.Fold(mentionName(p)), q) {
 			out = append(out, p)
 		}
 	}
@@ -159,11 +159,11 @@ func (u *UI) mentionAll(c *model.Chat) []model.Participant {
 // mentionScan opens, refreshes or closes the box from the editor content.
 // Called after every key and when the members arrive (participants).
 func (u *UI) mentionScan() {
-	if u.prompt != nil || u.ask != nil || u.search != nil || u.pasteAsk != "" || u.sendAsk != nil || u.spellFix != nil {
+	if u.inputAsks() || u.spellFix != nil {
 		u.mention = nil // the input carries a question, not a message
 		return
 	}
-	buf := []rune(u.ed.String())
+	buf := u.ed.buf // read in place: after every key
 	start, q, ok := mentionWord(buf, u.ed.Cursor())
 	if !ok || (len(buf) > 0 && buf[0] == '/') { // a command completes with Tab
 		u.mention, u.mentionMute = nil, 0
@@ -211,6 +211,27 @@ func (u *UI) mentionKey(k term.Key) bool {
 	return true
 }
 
+// mentionMouse : an event in the box — the wheel moves the current member, a
+// left click picks the one under the pointer, as Tab does.
+func (u *UI) mentionMouse(e term.MouseEvent, r rect) {
+	m := u.mention
+	switch e.Button {
+	case 64:
+		u.mentionKey(term.Key{Code: term.Up})
+	case 65:
+		u.mentionKey(term.Key{Code: term.Down})
+	case 0:
+		rows := r.h - 2
+		if y := e.Y - r.row - 1; y >= 0 && y < rows && m.top(rows)+y < len(m.items) {
+			m.cur = m.top(rows) + y
+			u.mentionKey(term.Key{Code: term.Tab})
+		}
+	}
+}
+
+// top : the first member shown in a box of rows lines — the current one stays in view.
+func (m *mentionBox) top(rows int) int { return followTop(0, m.cur, rows) }
+
 // mentionRect gives the box, stuck above the status bar, at the left edge of
 // the message area.
 func (u *UI) mentionRect() rect {
@@ -227,9 +248,10 @@ func (u *UI) mentionRect() rect {
 }
 
 // mentionLabel : "@username  Name", the name left out when it repeats the
-// username; the name alone for a member with no username.
+// username; the name alone for a member with no username. An IRC nick comes
+// with no @.
 func mentionLabel(p model.Participant) string {
-	if mentionByID(p) != 0 || render.Fold(p.Text) == render.Fold(p.Query[1:]) {
+	if mentionByID(p) != 0 || render.Fold(p.Text) == render.Fold(strings.TrimPrefix(p.Query, "@")) {
 		return mentionInsert(p)
 	}
 	return p.Query + "  " + p.Text
@@ -242,10 +264,7 @@ func (m *mentionBox) Lines(th theme.Theme, w, h int) []render.Line {
 	b := boxDraw{edge: edge, fill: body, inner: max(0, w-2)}
 	out := []render.Line{b.bar("┌", "┐")}
 	rows := max(0, h-2)
-	off := 0
-	if m.cur >= rows {
-		off = m.cur - rows + 1
-	}
+	off := m.top(rows)
 	for i := off; i < min(len(m.items), off+rows); i++ {
 		st := body
 		if i == m.cur {

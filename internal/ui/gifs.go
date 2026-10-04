@@ -3,8 +3,6 @@ package ui
 import (
 	"fmt"
 	"path/filepath"
-	"strings"
-	"time"
 
 	"github.com/govlog/ttyloom/internal/config"
 	"github.com/govlog/ttyloom/internal/i18n"
@@ -23,15 +21,10 @@ import (
 const gifFrames = 40 // frames decoded per preview: memory, not fidelity
 
 type gifBox struct {
+	netQuery             // the trending ones answer the empty query
 	chat     *model.Chat // conversation the GIF goes to, pinned at opening
-	query    []rune
 	gifs     []model.Gif
 	g        grid
-	inflight string
-	sent     string
-	asked    bool // a query went out at least once (the trending one is "")
-	typed    time.Time
-	err      string
 }
 
 func (b *gifBox) grid() *grid              { return &b.g }
@@ -62,7 +55,7 @@ func (u *UI) openGifs(q string) {
 		u.sys(i18n.T("images_off"))
 		return
 	}
-	u.gifs = &gifBox{chat: c, query: []rune(render.CleanLine(q)), g: grid{live: -1}}
+	u.gifs = &gifBox{chat: c, netQuery: netQuery{query: []rune(render.CleanLine(q))}, g: grid{live: -1}}
 	u.gifRect() // sized before the first answer
 	u.gifQuery()
 }
@@ -71,16 +64,15 @@ func (u *UI) openGifs(q string) {
 // one goes out when the one in flight comes back (gifsResult).
 func (u *UI) gifQuery() {
 	g := u.gifs
-	q := strings.TrimSpace(string(g.query))
-	if g.inflight != "" || (g.asked && q == g.sent) {
+	q, ok := g.next()
+	if !ok {
 		return
 	}
 	b := u.net(g.chat)
 	if b == nil {
-		g.err = i18n.T("net_unsupported", g.chat.Net)
+		g.fail(i18n.T("net_unsupported", g.chat.Net))
 		return
 	}
-	g.inflight, g.err, g.asked = q, "", true
 	b.SearchGifs(u.backendContext(b), g.chat, q)
 }
 
@@ -91,17 +83,14 @@ func (u *UI) gifsResult(e model.EvGifs) {
 	if g == nil || e.Query != g.inflight || u.dispatchNet != g.chat.Net {
 		return
 	}
-	g.inflight = ""
-	if strings.TrimSpace(string(g.query)) != e.Query {
+	if g.back(e.Query) {
 		u.gifQuery()
 		return
 	}
 	u.gridFree(g) // the previews of the list before: frames and images go
-	g.err, g.sent, g.gifs = e.Err, e.Query, e.Gifs
+	g.shown(e.Query, e.Err)
+	g.gifs = e.Gifs
 	g.g.n, g.g.cur, g.g.top, g.g.live = len(e.Gifs), 0, 0, -1
-	if e.Err != "" {
-		g.asked = false // the same query can go out again
-	}
 }
 
 // gifLoad starts the download of the previews on the screen that have none
@@ -144,13 +133,10 @@ func (u *UI) gifSend() {
 		return
 	}
 	w := u.winFor(c)
-	u.tmpID++
-	me := u.selfOf(c.Net)
-	m := &model.Msg{Net: c.Net, ChatID: c.ID, ChatLabel: c.Title, Date: time.Now(), From: me.Name, FromID: me.ID,
-		Out: true, Pending: true, TmpID: u.tmpID,
-		Media: &model.Media{Kind: model.MediaGIF, State: model.MediaLoading, Label: "[gif]"}}
+	m := u.pendingMsg(c, "")
+	m.Media = &model.Media{Kind: model.MediaGIF, State: model.MediaLoading, Label: "[gif]"}
 	u.insertPending(w, m)
-	b.SendGif(u.backendContext(b), c, pick, u.tmpID)
+	b.SendGif(u.backendContext(b), c, pick, m.TmpID)
 	u.flash(i18n.T("sending"))
 }
 
@@ -164,14 +150,8 @@ func (u *UI) gifKey(k term.Key) {
 	case k.Code == term.Enter:
 		u.gifSend()
 	case g.g.key(k):
-	case k.Code == term.Backspace:
-		if n := len(g.query); n > 0 {
-			g.query, g.typed = g.query[:n-1], time.Now()
-		}
-	case k.Code == term.Paste:
-		g.query, g.typed = append(g.query, []rune(render.CleanLine(k.Text))...), time.Now()
-	case k.Code == term.None && k.Rune != 0 && !k.Alt:
-		g.query, g.typed = append(g.query, k.Rune), time.Now()
+	default:
+		g.edit(k) // the rest types the query
 	}
 }
 

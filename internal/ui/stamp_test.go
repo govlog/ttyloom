@@ -100,10 +100,10 @@ func TestRegressionStampCleansRemoteText(t *testing.T) {
 		{"who", model.EvWho{Text: bad}, func(e model.Event) []string { return []string{e.(model.EvWho).Text} }},
 		{"auth_prompt", model.EvAuthPrompt{Question: bad}, func(e model.Event) []string { return []string{e.(model.EvAuthPrompt).Question} }},
 		{"typing", model.EvTyping{Who: bad}, func(e model.Event) []string { return []string{e.(model.EvTyping).Who} }},
-		{"participants", model.EvParticipants{Lines: []model.Participant{{Text: bad, Name: bad}}},
+		{"participants", model.EvParticipants{Lines: []model.Participant{{Text: bad, Name: bad, Query: bad}}},
 			func(e model.Event) []string {
 				p := e.(model.EvParticipants).Lines[0]
-				return []string{p.Text, p.Name}
+				return []string{p.Text, p.Name, p.Query} // Query: the bare IRC nick, put in the draft by a pick
 			}},
 		{"gifs", model.EvGifs{Err: bad}, func(e model.Event) []string { return []string{e.(model.EvGifs).Err} }},
 		{"downloaded", model.EvDownloaded{Media: &model.Media{}, Err: bad}, func(e model.Event) []string { return []string{e.(model.EvDownloaded).Err} }},

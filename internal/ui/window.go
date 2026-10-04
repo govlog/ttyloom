@@ -716,14 +716,14 @@ func (ws *Windows) ForChat(k model.ChatKey) int {
 // ByName : title resolves the shown name of a chat (local names of /rename);
 // nil = Telegram title.
 func (ws *Windows) ByName(prefix string, title func(*model.Chat) string) int {
-	p := strings.ToLower(prefix)
+	p := render.Fold(prefix) // case and accents apart, as the sidebar filter
 	for i, w := range ws.List {
 		if w.Chat == nil {
 			continue
 		}
 		// winName and not Chat.Title: "/win ?text" reaches a search window, and a
 		// local name is a target too.
-		if strings.HasPrefix(strings.ToLower(winName(w, title)), p) || strings.HasPrefix(strings.ToLower(w.Chat.Username), p) {
+		if strings.HasPrefix(render.Fold(winName(w, title)), p) || strings.HasPrefix(render.Fold(w.Chat.Username), p) {
 			return i
 		}
 	}

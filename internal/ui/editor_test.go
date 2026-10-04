@@ -69,3 +69,14 @@ func TestLineHomeEnd(t *testing.T) {
 		t.Fatalf("LineEnd : %d", e.Cursor())
 	}
 }
+
+// Ctrl+W stops at a line break, as Ctrl+← does: the word of the line above
+// stays.
+func TestRegressionKillWordStopsAtLineBreak(t *testing.T) {
+	var e Editor
+	e.Set("first line\nsecond")
+	e.KillWord()
+	if e.String() != "first line\n" {
+		t.Fatalf("Ctrl+W: %q", e.String())
+	}
+}

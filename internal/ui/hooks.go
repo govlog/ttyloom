@@ -4,7 +4,6 @@ import (
 	"cmp"
 	"errors"
 	"path/filepath"
-	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -98,22 +97,8 @@ func (u *UI) runHooks(c *model.Chat, m *model.Msg) {
 
 // hookMsg : m, of chat c, as the filters see it.
 func (u *UI) hookMsg(c *model.Chat, m *model.Msg) hook.Msg {
-	me := u.selfOf(c.Net)
-	byName := backendCaps(u.netOf(c.Net)).NameIsID
 	return hook.Msg{Net: c.Net, Chat: c.Title, ChatID: c.ID, Kind: hook.KindOf(c.Kind), From: m.From, FromID: m.FromID,
-		ID: m.ID, Text: m.Text, NameIsID: byName,
-		Mention: mentionsMe(m, me.ID, me.Name) || (byName && nameSaid(m.Text, me.Name))}
-}
-
-// nameSaid : name as a whole word of text, case apart — how IRC calls on
-// someone ("chris: hello"), with no @.
-// ponytail: compiled for each message the hooks look at; cache it on the
-// name if a busy network ever makes it show.
-func nameSaid(text, name string) bool {
-	if name == "" {
-		return false
-	}
-	return regexp.MustCompile(`(?i)(?:^|\W)` + regexp.QuoteMeta(name) + `(?:$|\W)`).MatchString(text)
+		ID: m.ID, Text: m.Text, NameIsID: backendCaps(u.netOf(c.Net)).NameIsID, Mention: u.mentioned(c, m)}
 }
 
 // fireHook starts h on m in a goroutine of its own; the end comes back as an
@@ -143,10 +128,7 @@ func (u *UI) fireHook(h hook.Hook, m hook.Msg, c hook.Captures, key model.ChatKe
 			}()
 			ev.out, ev.err = hook.Run(ctx, h, env, m.Text)
 		}()
-		select {
-		case u.events <- ev:
-		case <-ctx.Done(): // /quit: nobody reads the events any more
-		}
+		u.post(ev)
 	}()
 }
 
@@ -203,11 +185,8 @@ func (u *UI) hookSend(name string, st *hookStat, c *model.Chat, text string) {
 	}
 	st.sends = append(st.sends, now)
 	w := u.winFor(c)
-	u.tmpID++
-	me := u.selfOf(c.Net)
-	m := &model.Msg{Net: c.Net, ChatID: c.ID, ChatLabel: c.Title, Date: now, From: me.Name, FromID: me.ID,
-		Out: true, Text: text, Pending: true, TmpID: u.tmpID}
-	u.noteActivity(c, m)
+	m := u.pendingMsg(c, text)
+	u.noteActivity(c, m) // not insertPending: the input, the selection and the scroll stay as they are
 	w.Upsert(m)
 	u.agg.Upsert(m)
 	b.Send(u.backendContext(b), c, text, u.tmpID)
@@ -221,7 +200,7 @@ func (u *UI) hookSend(name string, st *hookStat, c *model.Chat, text string) {
 func (u *UI) hookDraft(name string, c *model.Chat, text string) {
 	w := u.winFor(c)
 	if w == u.view() {
-		if u.ed.String() == "" && u.edit == nil && u.reply == nil && u.prompt == nil && u.sendAsk == nil && u.pasteAsk == "" {
+		if u.ed.String() == "" && u.edit == nil && u.reply == nil && !u.inputAsks() {
 			u.ed.Set(text)
 			return
 		}

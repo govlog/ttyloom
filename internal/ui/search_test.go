@@ -8,6 +8,7 @@ import (
 
 	"github.com/govlog/ttyloom/internal/model"
 	"github.com/govlog/ttyloom/internal/render"
+	"github.com/govlog/ttyloom/internal/term"
 	"github.com/govlog/ttyloom/internal/theme"
 )
 
@@ -145,7 +146,7 @@ func TestSearchOverlayNav(t *testing.T) {
 // TestSearchOverlayWidth : each line of the box is exactly its width. A line
 // too long would go past it onto the screen instead of staying in the box.
 func TestSearchOverlayWidth(t *testing.T) {
-	g := &globalSearch{query: []rune("café"), cur: 0, hits: []model.SearchHit{{
+	g := &globalSearch{netQuery: netQuery{query: []rune("café")}, cur: 0, hits: []model.SearchHit{{
 		Chat: &model.Chat{ID: 1, Kind: model.ChatGroup, Title: "salon au titre interminable"},
 		Date: time.Date(2026, 8, 30, 14, 22, 0, 0, time.UTC), From: "bob",
 		Text: strings.Repeat("bla ", 40) + "un Café au lait",
@@ -241,5 +242,23 @@ func TestGlobalSearchNetsMerged(t *testing.T) {
 	u.gsSend()
 	if len(tg.gsearch) != 1 || len(dc.gsearch) != 2 {
 		t.Fatalf("filtered: tg %v, dc %v", tg.gsearch, dc.gsearch)
+	}
+}
+
+// A paste goes into the query of every box that asks a network, as it went
+// into the GIF box only: the global search and the new chat box dropped it.
+func TestRegressionPasteIntoNetQuery(t *testing.T) {
+	u := listUI()
+	u.openNewChat()
+	u.key(term.Key{Code: term.Paste, Text: "carol"})
+	if got := string(u.newChat.query); got != "carol" {
+		t.Errorf("new chat box: query %q after a paste", got)
+	}
+	u.newChat = nil
+	u.search = &searchState{cur: -1}
+	u.searchGlobalOpen()
+	u.key(term.Key{Code: term.Paste, Text: "cat"})
+	if got := string(u.gsearch.query); got != "cat" {
+		t.Errorf("global search: query %q after a paste", got)
 	}
 }

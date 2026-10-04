@@ -7,6 +7,13 @@ import (
 	"github.com/govlog/ttyloom/internal/model"
 )
 
+// inputAsks : the input line carries a question, not a message — login
+// answer, y/n confirmation, Ctrl+F query, paste or send decision. The sidebar,
+// the @… box and the spell check keep away from it.
+func (u *UI) inputAsks() bool {
+	return u.prompt != nil || u.ask != nil || u.search != nil || u.pasteAsk != "" || u.sendAsk != nil
+}
+
 // inputChat is the recipient shown by the input mode, without creating a
 // window or emitting diagnostics. Replies and edits belong to their message;
 // otherwise a pending lookup blocks the old target until it resolves.

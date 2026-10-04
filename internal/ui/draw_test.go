@@ -445,6 +445,23 @@ func TestStatusSegmentsDropped(t *testing.T) {
 	}
 }
 
+// The input line is drawn cleaned, whatever put text into the draft: a raw
+// escape sequence never reaches the terminal, on one line or expanded.
+func TestRegressionInputDrawnClean(t *testing.T) {
+	for _, multi := range []bool{false, true} {
+		u := hoverUI()
+		var out bytes.Buffer
+		u.t = term.NewOffscreen(&out, 80, 10)
+		u.multi = multi
+		u.ed.Set("hi zed\x1b]0;owned\a\nnext")
+		u.draw()
+		s := out.String()
+		if strings.Contains(s, "\x1b]0;") || strings.Contains(s, "\a") || !strings.Contains(s, "zed ]0;owned") {
+			t.Errorf("multi=%v: input drawn %q, want its controls blanked", multi, s[max(0, strings.Index(s, "hi zed")):])
+		}
+	}
+}
+
 // A repaint with nothing changed sends nothing to the terminal; Ctrl+L sends
 // the whole frame again (the repair after an outside write).
 func TestDrawSkipsSameFrame(t *testing.T) {

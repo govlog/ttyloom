@@ -1,7 +1,10 @@
 package ui
 
 import (
+	"bytes"
+	"fmt"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -126,5 +129,53 @@ func TestMentionByID(t *testing.T) {
 	ents := fenceEntities(segs)
 	if len(ents) != 6 || ents[1] != (model.Span{Start: 3, End: 14, Kind: model.SpanMention, UserID: 43}) {
 		t.Fatalf("echo spans: %+v", ents)
+	}
+}
+
+// An IRC member carries its bare nick as Query, with no @: the label and the
+// filter read the whole nick, never the nick minus its first letter.
+func TestRegressionMentionBareNick(t *testing.T) {
+	alice := model.Participant{Text: "alice", Name: "alice", Query: "alice"}
+	if got := mentionLabel(alice); got != "alice" {
+		t.Errorf("label %q, want alice", got)
+	}
+	if got := mentionFilter([]model.Participant{alice}, "lic"); len(got) != 0 {
+		t.Errorf("@lic offers %v", got)
+	}
+}
+
+// The @… box covers the last messages: a click in it picks the member under
+// the pointer, and never reaches the message drawn below — its link above all.
+func TestRegressionMentionBoxTakesTheClick(t *testing.T) {
+	t.Setenv("PATH", t.TempDir()) // no xdg-open: an open would leave its error line
+	g := &model.Chat{Net: netTelegram, ID: 7, Kind: model.ChatGroup, Title: "grp"}
+	u := hoverUI()
+	u.t = term.NewOffscreen(&bytes.Buffer{}, 80, 10)
+	u.partsCache = map[model.ChatKey]partsEntry{g.Key(): {at: time.Now(), lines: []model.Participant{
+		{Text: "Alice", Query: "@alice_wonderland_liddell"}, {Text: "Albert", Query: "@albert"}}}}
+	w := u.ws.New(false)
+	w.Chat = g
+	for i := range 8 {
+		url := fmt.Sprintf("https://example.org/%d", i)
+		w.Upsert(&model.Msg{Net: netTelegram, ChatID: g.ID, ID: i + 1, From: "bob", Date: time.Now(), Text: url,
+			Entities: []model.Span{{End: len(url), Kind: model.SpanURL, URL: url}}})
+	}
+	u.ed.Set("yo @al")
+	u.mentionScan()
+	u.draw()
+	r := u.mentionRect()
+	x0, _ := u.layout()
+	y, x := r.row+1, -1 // first member of the box
+	for _, s := range u.hits[y].urls {
+		if c := x0 + s.col0; c > r.col && c < r.col+r.w-1 {
+			x = c
+		}
+	}
+	if x < 0 {
+		t.Fatal("setup: no link drawn under the first row of the box")
+	}
+	u.key(term.Key{Code: term.Mouse, Mouse: term.MouseEvent{X: x, Y: y, Press: true}})
+	if got := u.ed.String(); got != "yo @alice_wonderland_liddell " || strings.Contains(lastSys(w), "xdg-open") {
+		t.Fatalf("click in the box: input %q, last line %q", got, lastSys(w))
 	}
 }

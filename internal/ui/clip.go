@@ -337,16 +337,13 @@ func (u *UI) sendPath(chat *model.Chat, path, caption string, tmp bool) {
 		photo = true
 	}
 	w := u.winFor(chat) // the receipt lands there, never in a search window
-	u.tmpID++
-	me := u.selfOf(chat.Net)
-	m := &model.Msg{Net: chat.Net, ChatID: chat.ID, ChatLabel: chat.Title, Date: time.Now(),
-		From: me.Name, FromID: me.ID, Out: true, Text: caption, Pending: true, TmpID: u.tmpID,
-		Media: placeholderMedia(path, photo)}
+	m := u.pendingMsg(chat, caption)
+	m.Media = placeholderMedia(path, photo)
 	u.insertPending(w, m)
 	if photo {
-		b.SendPhoto(u.backendContext(b), chat, path, caption, tmp, u.tmpID)
+		b.SendPhoto(u.backendContext(b), chat, path, caption, tmp, m.TmpID)
 	} else {
-		b.SendFile(u.backendContext(b), chat, path, caption, tmp, u.tmpID)
+		b.SendFile(u.backendContext(b), chat, path, caption, tmp, m.TmpID)
 	}
 	if w == u.view() {
 		u.flash(i18n.T("sending"))

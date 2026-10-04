@@ -8,7 +8,6 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
-	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -122,6 +121,7 @@ type UI struct {
 	selY       int                 // line of the press: a drag starts when it leaves it
 	hover      *Item               // message under the pointer (hover), window shown
 	zone       zone                // area under the pointer: what the wheel acts on (follow-mouse)
+	barShown   bool                // the last frame drew a scrollbar, which the zone colours
 	who        *whoBox             // hover popup: who read (tick) or who reacted
 	whoCache   map[whoKey]whoEntry // its answers, valid whoTTL
 	lastClick  struct {            // last left button press on a message, double click detection
@@ -1347,18 +1347,15 @@ func (u *UI) newMessage(e model.EvNewMessage) {
 	// the terminal has the focus — away, nobody reads.
 	seen := u.focused && (u.view() == w || (u.view() == u.agg && u.netShown(&m)))
 	if added && !m.Out {
-		me := u.selfOf(m.Net)
 		// A muted chat counts its unread messages and nothing more.
-		hot := (chat.Kind == model.ChatUser || mentionsMe(&m, me.ID, me.Name)) && !u.muted[chat.Key()]
-		if !seen {
+		hot := (chat.Kind == model.ChatUser || u.mentioned(chat, &m)) && !u.muted[chat.Key()]
+		if !seen { // shown and read in the aggregate too: no bell either
 			w.Act++
 			chat.Unread++
 			if hot {
 				w.Hot = true
+				u.alert(chat, &m)
 			}
-		}
-		if (!u.focused || i != u.ws.Cur) && hot {
-			u.alert(chat, &m)
 		}
 	}
 	if seen {
@@ -1444,13 +1441,7 @@ func mentionsMe(m *model.Msg, me int64, username string) bool {
 			return true
 		}
 	}
-	if username == "" {
-		return false
-	}
-	// ponytail: regexp compiled again at each message; the volume (unread incoming
-	// messages) does not justify caching it on the current username.
-	re := regexp.MustCompile(`(?i)(?:^|\W)@` + regexp.QuoteMeta(username) + `(?:$|\W)`)
-	return re.MatchString(m.Text)
+	return username != "" && saidWord(m.Text, "@"+username)
 }
 
 // netChats : the chats of one network, in the order of the sidebar. The
@@ -1758,7 +1749,7 @@ func (u *UI) goTo(n int) {
 	// before cancelMode() so as not to be wiped (cancelMode() empties u.ed
 	// only when edit/reply was on, never in this branch).
 	if u.edit == nil && u.reply == nil && u.prompt == nil && u.pasteAsk == "" && u.sendAsk == nil {
-		u.ed.Set(swapDraft(old, w, u.ed.String()))
+		u.ed.Load(swapDraft(old, w, u.ed.String()))
 	}
 	u.cancelMode()
 	u.setSel(u.view(), nil)
@@ -1915,24 +1906,56 @@ func (u *UI) lines(e model.EvLines) {
 	}
 }
 
-// findChat : exact name (username, title or local name) then unique prefix,
-// case insensitive, then a unique piece inside a name. strict stops at the
-// prefix: a command that sends at once (/msg) never guesses its chat.
-func (u *UI) findChat(q string, strict bool) (chat *model.Chat, ambiguous bool) {
-	q = strings.ToLower(strings.TrimPrefix(q, "@"))
-	var exact, pref, inside []*model.Chat
-	for _, c := range u.chatList {
-		un, ti := strings.ToLower(c.Username), strings.ToLower(c.Title)
-		al := strings.ToLower(u.aliases[c.Key()])
+// chatName : the names of a listed chat — username, title, local name — folded
+// once for a lookup (render.Fold: case and accents apart, as the sidebar filter).
+type chatName struct {
+	c          *model.Chat
+	un, ti, al string
+}
+
+func (u *UI) chatNames() []chatName {
+	out := make([]chatName, len(u.chatList))
+	for i, c := range u.chatList {
+		out[i] = chatName{c, render.Fold(c.Username), render.Fold(c.Title), render.Fold(u.aliases[c.Key()])}
+	}
+	return out
+}
+
+// matchNames : the chats q names — exactly, by the start of a name, by a piece
+// inside one. No side effect: the caller says what an ambiguous name means.
+func matchNames(names []chatName, q string) (exact, pref, inside []*model.Chat) {
+	q = render.Fold(strings.TrimPrefix(q, "@"))
+	for _, n := range names {
 		switch {
-		case un == q || ti == q || al == q:
-			exact = append(exact, c)
-		case (un != "" && strings.HasPrefix(un, q)) || strings.HasPrefix(ti, q) || (al != "" && strings.HasPrefix(al, q)):
-			pref = append(pref, c)
-		case q != "" && (strings.Contains(un, q) || strings.Contains(ti, q) || strings.Contains(al, q)):
-			inside = append(inside, c) // "copains du foot", as the completion hands it over
+		case n.un == q || n.ti == q || n.al == q:
+			exact = append(exact, n.c)
+		case (n.un != "" && strings.HasPrefix(n.un, q)) || strings.HasPrefix(n.ti, q) || (n.al != "" && strings.HasPrefix(n.al, q)):
+			pref = append(pref, n.c)
+		case q != "" && (strings.Contains(n.un, q) || strings.Contains(n.ti, q) || strings.Contains(n.al, q)):
+			inside = append(inside, n.c) // "copains du foot", as the completion hands it over
 		}
 	}
+	return exact, pref, inside
+}
+
+// leadingChat : the chat whose exact name opens text — the most words first,
+// one word at least left after it — and the text after that name; nil when no
+// run of words names exactly one chat. Tab puts a whole title in the line.
+func (u *UI) leadingChat(text string) (*model.Chat, string) {
+	words, names := strings.Fields(text), u.chatNames()
+	for i := len(words) - 1; i >= 1; i-- {
+		if ex, _, _ := matchNames(names, strings.Join(words[:i], " ")); len(ex) == 1 {
+			return ex[0], afterWords(text, i)
+		}
+	}
+	return nil, ""
+}
+
+// findChat : exact name (username, title or local name) then unique prefix,
+// case and accents apart, then a unique piece inside a name. strict stops at
+// the prefix: a command that sends at once (/msg) never guesses its chat.
+func (u *UI) findChat(q string, strict bool) (chat *model.Chat, ambiguous bool) {
+	exact, pref, inside := matchNames(u.chatNames(), q)
 	// An exact name wins over the prefixes, a prefix over a piece inside; two
 	// chats with the same exact name (a local name that copies the title of
 	// another) stay ambiguous.
@@ -1994,6 +2017,9 @@ func (u *UI) key(k term.Key) {
 			u.hover.lines = nil
 			u.hover = nil
 		}
+		if u.zone == zoneSide { // the keyboard the pointer gave goes back with it
+			u.find.keys = false
+		}
 		u.who, u.zone = nil, zoneNone
 		return
 	case term.FocusIn:
@@ -2020,40 +2046,12 @@ func (u *UI) key(k term.Key) {
 		u.viewerKey(k)
 		return
 	}
-	if u.picker != nil {
-		// Ctrl+C closes the overlay with no choice (Ctrl+C does not quit while
-		// it is open); otherwise the picker keeps the lead until Enter, Esc or a
-		// click.
+	// Overlays that take everything until they close: the one on top (leads).
+	if o := u.lead(); o != nil {
 		if k.Code == term.Mouse {
-			u.pickerMouse(k.Mouse)
-			return
-		}
-		if (k.Code == term.Ctrl && k.Rune == 'c') || u.picker.Key(k) {
-			u.picker = nil
-		}
-		return
-	}
-	// Overlays that take everything until they close, in this order — it is the
-	// order that decides which one wins when two are open. The picker (above)
-	// and the viewer keep their own block: their mouse path is not the same
-	// shape.
-	for _, o := range []leadOverlay{
-		{u.themePick != nil, u.themeKey, u.themeMouse}, // like the emoji picker: lead until Enter or Esc
-		{u.newChat != nil, u.ncKey, u.ncMouse},         // new chat
-		{u.form != nil, u.formKey, u.formMouse},        // form (/irc add, a page of the hub)
-		{u.hub != nil, u.hubKey, u.hubMouse},           // hub "Networks", under its page
-		{u.gifs != nil, u.gifKey, u.gifMouse},          // GIF box
-		{u.mbox != nil, u.mboxKey, u.mboxMouse},        // media browser
-		{u.gsearch != nil, u.gsKey, u.gsMouse},         // global search
-		{u.menu != nil, u.menuKey, u.menuMouse},        // context menu, until the choice
-	} {
-		if !o.open {
-			continue
-		}
-		if k.Code == term.Mouse {
-			o.mouse(k.Mouse)
+			o.mouse(u, k.Mouse)
 		} else {
-			o.key(k)
+			o.key(u, k)
 		}
 		return
 	}
@@ -2364,10 +2362,7 @@ func (u *UI) sendWith(w *Window, text string, pre bool) {
 		return
 	}
 	b.Typing(u.backendContext(b), w.Chat, true)
-	u.tmpID++
-	me := u.selfOf(w.Chat.Net)
-	m := &model.Msg{Net: w.Chat.Net, ChatID: w.Chat.ID, ChatLabel: w.Chat.Title, Date: time.Now(), From: me.Name, FromID: me.ID,
-		Out: true, Text: text, Pending: true, TmpID: u.tmpID}
+	m := u.pendingMsg(w.Chat, text)
 	// The pending reply counts only for the chat aimed at: /msg aims at
 	// another chat and does not use it up.
 	replyTo := 0
@@ -2412,6 +2407,15 @@ func (u *UI) sendWith(w *Window, text string, pre bool) {
 	default:
 		b.Send(u.backendContext(b), w.Chat, text, u.tmpID)
 	}
+}
+
+// pendingMsg : my message on its way to c, shown at once until its receipt —
+// the fields every send fills the same way, with the next tmpID.
+func (u *UI) pendingMsg(c *model.Chat, text string) *model.Msg {
+	u.tmpID++
+	me := u.selfOf(c.Net)
+	return &model.Msg{Net: c.Net, ChatID: c.ID, ChatLabel: c.Title, Date: time.Now(), From: me.Name, FromID: me.ID,
+		Out: true, Text: text, Pending: true, TmpID: u.tmpID}
 }
 
 // insertPending puts the message sent locally into w and into the aggregate
@@ -2483,17 +2487,16 @@ func (u *UI) sendSegs(w *Window, segs func(me string) []model.Seg) {
 	if b == nil {
 		return // same guard as sendWith: no pending message with no sender
 	}
-	u.tmpID++
-	me := u.selfOf(w.Chat.Net)
-	runs := segs(me.Name)
-	m := &model.Msg{Net: w.Chat.Net, ChatID: w.Chat.ID, ChatLabel: w.Chat.Title, Date: time.Now(), From: me.Name, FromID: me.ID,
-		Out: true, Text: fenceText(runs), Entities: fenceEntities(runs), Pending: true, TmpID: u.tmpID}
+	m := u.pendingMsg(w.Chat, "")
+	runs := segs(m.From)
+	m.Text, m.Entities = fenceText(runs), fenceEntities(runs)
 	u.insertPending(w, m)
 	b.SendStyled(u.backendContext(b), w.Chat, runs, u.tmpID)
 }
 
 // memberNames : the members of the room of the shown window — its send
-// target when it is a room, else its chat — for a backend that lists them.
+// target when it is a room, else its chat — for a backend that lists them. A
+// copy, cleaned: the list comes by a direct call, stamp never saw it.
 func (u *UI) memberNames() []string {
 	w := u.view()
 	for _, room := range []bool{true, false} { // the room first: a query target must not hide it
@@ -2502,7 +2505,9 @@ func (u *UI) memberNames() []string {
 				continue
 			}
 			if l, ok := u.nets[c.Net].(model.MemberLister); ok {
-				return l.Members(c)
+				names := slices.Clone(l.Members(c))
+				cleanLines(names)
+				return names
 			}
 		}
 	}
@@ -2519,7 +2524,7 @@ func (u *UI) candidates(word string, atStart bool) []string {
 		return u.modComplete(setKey, tail, word)
 	case complChats:
 		out := u.chatCandidates(word, tail)
-		nicks := slices.Clone(u.memberNames())
+		nicks := u.memberNames()
 		if atStart { // irssi style: a nick opening a message addresses it
 			for i, n := range nicks {
 				nicks[i] = n + ":" // the editor adds the space of a finished word
@@ -2600,21 +2605,16 @@ func (u *UI) tick() bool {
 			q.shown, redraw = n, true
 		}
 	}
-	// Global search: the query goes out only once the typing has settled.
-	if g := u.gsearch; g != nil && !g.typed.IsZero() && now.Sub(g.typed) >= gsDelay {
-		g.typed = time.Time{}
+	// The boxes that ask a network: the query goes out once the typing has settled.
+	if g := u.gsearch; g != nil && g.due(now) {
 		u.gsSend()
 		redraw = true
 	}
-	// New chat: the server search waits for the end of the typing.
-	if n := u.newChat; n != nil && !n.typed.IsZero() && now.Sub(n.typed) >= ncDelay {
-		n.typed = time.Time{}
+	if n := u.newChat; n != nil && n.due(now) {
 		u.ncSend()
 		redraw = true
 	}
-	// GIF box: same rule, the query goes out once the typing has settled.
-	if g := u.gifs; g != nil && !g.typed.IsZero() && now.Sub(g.typed) >= gsDelay {
-		g.typed = time.Time{}
+	if g := u.gifs; g != nil && g.due(now) {
 		u.gifQuery()
 		redraw = true
 	}

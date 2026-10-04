@@ -226,7 +226,9 @@ func (u *UI) searchResult(e model.EvSearch) {
 	u.bindChat(w, origin.Chat)
 	msgs := reuseMsgs(origin, e.Msgs, e.Started)
 	w.Merge(msgs)
-	u.clear()
+	for _, v := range u.viewsOf(origin.Chat.Key()) { // the messages reconciled show there: drawn again
+		v.Invalidate()
+	}
 	for _, m := range msgs {
 		u.autoMedia(m, false)
 	}
@@ -240,34 +242,97 @@ func (u *UI) searchResult(e model.EvSearch) {
 // the chat and settles there; a 3rd Ctrl+F comes back to the local one.
 
 const (
-	gsLimit = 50                     // results brought back at most
-	gsDelay = 300 * time.Millisecond // typing settled before the query starts again
-	gsChatW = 20                     // columns of the [#room] cell
-	gsFromW = 14                     // columns of the <author> cell
+	gsLimit = 50 // results brought back at most
+	gsChatW = 20 // columns of the [#room] cell
+	gsFromW = 14 // columns of the <author> cell
 )
 
-type globalSearch struct {
+// netQuery : the typed query of a box that asks a network (global search, new
+// chat, GIF box) — it goes out once the typing has settled, one request in
+// flight, and an answer to an older query is dropped.
+type netQuery struct {
 	query    []rune
-	hits     []model.SearchHit
-	cur      int
-	scroll   int               // first result shown
-	inflight string            // query of the call running; "" = none (only one at a time)
-	pending  int               // networks still to answer the query in flight
-	acc      []model.SearchHit // their hits, shown once they are all in
-	errs     []string          // their failures, shown when nothing answered
-	sent     string            // query of the results shown
-	typed    time.Time         // last keystroke; zero = nothing to start again
+	inflight string    // query of the call running; "" = none (only one at a time)
+	sent     string    // query of the results shown
+	asked    bool      // sent went out: the GIF box asks for "" too (the trending ones)
+	typed    time.Time // last keystroke; zero = nothing to start again
 	err      string
+}
+
+// queryDelay : the typing rests that long before the query goes out.
+const queryDelay = 300 * time.Millisecond
+
+// edit : Backspace, a typed rune or a paste change the query; false when the
+// key changed nothing.
+func (q *netQuery) edit(k term.Key) bool {
+	switch {
+	case k.Code == term.Backspace && len(q.query) > 0:
+		q.query = q.query[:len(q.query)-1]
+	case k.Code == term.Paste:
+		q.query = append(q.query, []rune(render.CleanLine(k.Text))...)
+	case k.Code == term.None && k.Rune != 0 && !k.Alt:
+		q.query = append(q.query, k.Rune)
+	default:
+		return false
+	}
+	q.typed = time.Now()
+	return true
+}
+
+// due : the typing has rested for queryDelay — true once per burst of keys.
+func (q *netQuery) due(now time.Time) bool {
+	if q.typed.IsZero() || now.Sub(q.typed) < queryDelay {
+		return false
+	}
+	q.typed = time.Time{}
+	return true
+}
+
+// next : the trimmed query when it is to go out now, marked in flight — not
+// while another one is, nor when its results are the ones shown.
+func (q *netQuery) next() (string, bool) {
+	s := strings.TrimSpace(string(q.query))
+	if q.inflight != "" || (q.asked && s == q.sent) {
+		return "", false
+	}
+	q.inflight, q.err, q.asked = s, "", true
+	return s, true
+}
+
+// fail : the query in flight cannot go out (no network answers it). It counts
+// as sent: otherwise every key pressed would ask again for the same nothing.
+func (q *netQuery) fail(err string) { q.sent, q.inflight, q.err = q.inflight, "", err }
+
+// back : the answer to the query in flight came back. true when the query
+// moved during the round trip: the caller asks again rather than show it.
+func (q *netQuery) back(got string) (moved bool) {
+	q.inflight = ""
+	return strings.TrimSpace(string(q.query)) != got
+}
+
+// shown : the answer to got is on the screen; after an error the same query
+// may go out again.
+func (q *netQuery) shown(got, err string) {
+	q.sent, q.err = got, err
+	if err != "" {
+		q.sent, q.asked = "", false
+	}
+}
+
+type globalSearch struct {
+	netQuery
+	hits    []model.SearchHit
+	cur     int
+	scroll  int               // first result shown
+	pending int               // networks still to answer the query in flight
+	acc     []model.SearchHit // their hits, shown once they are all in
+	errs    []string          // their failures, shown when nothing answered
 }
 
 // move : bounded index, the scroll follows the current one.
 func (g *globalSearch) move(d, rows int) {
 	g.cur = max(0, min(g.cur+d, len(g.hits)-1))
-	g.scroll = min(g.scroll, g.cur)
-	if g.cur >= g.scroll+rows {
-		g.scroll = g.cur - rows + 1
-	}
-	g.scroll = max(0, min(g.scroll, max(0, len(g.hits)-rows)))
+	g.scroll = max(0, min(followTop(g.scroll, g.cur, rows), len(g.hits)-rows))
 }
 
 // gsRect : box of the overlay, wide and centred.
@@ -364,7 +429,7 @@ func (u *UI) searchGlobalOpen() {
 		u.sys(i18n.T("gsearch_bot_unavailable"))
 		return
 	}
-	u.gsearch = &globalSearch{query: slices.Clone(u.search.q)}
+	u.gsearch = &globalSearch{netQuery: netQuery{query: slices.Clone(u.search.q)}}
 	u.gsSend() // query already typed: no useless wait
 }
 
@@ -372,15 +437,15 @@ func (u *UI) searchGlobalOpen() {
 // goes out when the one in flight comes back (searchGlobalResult).
 func (u *UI) gsSend() {
 	g := u.gsearch
-	q := strings.TrimSpace(string(g.query))
-	if q == "" { // query erased: nothing left to show, and everything is to be done again
+	if strings.TrimSpace(string(g.query)) == "" { // query erased: nothing left to show, and everything is to be done again
 		g.hits, g.cur, g.scroll, g.sent, g.err = nil, 0, 0, "", ""
 		return
 	}
-	if g.inflight != "" || q == g.sent {
+	q, ok := g.next()
+	if !ok {
 		return
 	}
-	g.inflight, g.err, g.acc, g.errs, g.pending = q, "", nil, nil, 0
+	g.acc, g.errs, g.pending = nil, nil, 0
 	// Every network that searches, or the one of the /net filter alone (F2 in
 	// windows mode cycles it): the answers are merged once they are all in.
 	for name, b := range u.nets {
@@ -390,11 +455,8 @@ func (u *UI) gsSend() {
 		b.SearchGlobal(u.backendContext(b), q, gsLimit)
 		g.pending++
 	}
-	if g.pending == 0 {
-		// No network searches: the query is marked sent, otherwise every key
-		// pressed would ask again for the same nothing.
-		g.inflight, g.sent = "", q
-		g.err = i18n.T("net_unsupported", strings.Join(u.netNames(), ", "))
+	if g.pending == 0 { // no network searches
+		g.fail(i18n.T("net_unsupported", strings.Join(u.netNames(), ", ")))
 	}
 }
 
@@ -429,16 +491,17 @@ func (u *UI) searchGlobalResult(e model.EvSearchGlobal) {
 	if g.pending--; g.pending > 0 {
 		return
 	}
-	g.inflight = ""
-	if strings.TrimSpace(string(g.query)) != e.Query {
-		u.gsSend() // the query moved during the round trip
+	if g.back(e.Query) {
+		u.gsSend()
 		return
 	}
 	slices.SortStableFunc(g.acc, func(a, b model.SearchHit) int { return b.Date.Compare(a.Date) })
-	g.hits, g.acc, g.err, g.sent, g.cur, g.scroll = g.acc, nil, "", e.Query, 0, 0
-	if len(g.hits) == 0 && len(g.errs) > 0 {
-		g.err, g.sent = strings.Join(g.errs, "; "), "" // failure: the same query must be able to go out again
+	err := ""
+	if len(g.acc) == 0 && len(g.errs) > 0 { // nothing but failures
+		err = strings.Join(g.errs, "; ")
 	}
+	g.hits, g.acc, g.cur, g.scroll = g.acc, nil, 0, 0
+	g.shown(e.Query, err)
 }
 
 // itemByID gives the item of the window that carries this message, nil else.
@@ -483,17 +546,11 @@ func (u *UI) gsKey(k term.Key) {
 	if u.gsList(func() { u.gsearch, u.search = nil, nil }).key(k) {
 		return
 	}
-	g := u.gsearch
-	switch {
-	case k.Code == term.Ctrl && k.Rune == 'f':
+	if k.Code == term.Ctrl && k.Rune == 'f' {
 		u.gsearch = nil // 3rd Ctrl+F: back to the local search, query kept
-	case k.Code == term.Backspace:
-		if n := len(g.query); n > 0 {
-			g.query, g.typed = g.query[:n-1], time.Now()
-		}
-	case k.Code == term.None && k.Rune != 0 && !k.Alt:
-		g.query, g.typed = append(g.query, k.Rune), time.Now()
+		return
 	}
+	u.gsearch.edit(k)
 }
 
 // gsMouse : wheel and click in the list; a click outside the box closes it

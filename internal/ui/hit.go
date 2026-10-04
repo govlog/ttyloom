@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/govlog/ttyloom/internal/config"
-	"github.com/govlog/ttyloom/internal/i18n"
 	"github.com/govlog/ttyloom/internal/render"
 	"github.com/govlog/ttyloom/internal/term"
 )
@@ -131,6 +130,12 @@ func (u *UI) mouse(m term.MouseEvent) {
 		u.partsMouse(m, r)
 		return
 	}
+	if u.mention != nil { // the @… box too: its click is never one on the message under it
+		if r := u.mentionRect(); r.hits(m.Y, m.X, 1, 1) {
+			u.mentionMouse(m, r)
+			return
+		}
+	}
 	if r, ok := u.jumpRect(); ok && u.jumpShown && m.Press && m.Button == 0 && r.hits(m.Y, m.X, 1, 1) {
 		u.view().Scroll = 0 // pill "↓ last message"
 		return
@@ -152,8 +157,7 @@ func (u *UI) mouse(m term.MouseEvent) {
 		case h.act != nil:
 			u.actClick(u.view(), h.item, *h.act)
 		case h.url != "" && h.masked: // the text hides where the link goes: show it first
-			url := h.url
-			u.confirm(i18n.T("confirm_open_link", render.CleanLine(url)), func() { u.open(url) })
+			u.openHidden(h.url)
 		case h.url != "":
 			u.open(h.url) // xdg-open opens a URL as well as a path
 		case h.img != nil && h.item != nil && h.item.Msg != nil:
@@ -202,8 +206,8 @@ func (u *UI) hoverAt(x, y int) bool {
 	if u.hover == it {
 		return false
 	}
-	// The help line changes the height of both messages: their drawings must
-	// be made again, as on a selection change.
+	// The hover background is baked into the cached lines of both messages:
+	// they are drawn again, as on a selection change. No height changes.
 	u.hover.Invalidate()
 	it.Invalidate()
 	u.hover = it
@@ -211,20 +215,89 @@ func (u *UI) hoverAt(x, y int) bool {
 }
 
 // overlayLead tells whether an overlay has the lead on the mouse: key() routes
-// every event to it, so nothing under it is hovered nor zoned.
+// every event to it, so nothing under it is hovered nor zoned. The viewer and
+// the questions of the input line on top of the lead overlays.
 func (u *UI) overlayLead() bool {
-	return u.viewer != nil || u.picker != nil || u.themePick != nil || u.gsearch != nil || u.newChat != nil || u.form != nil || u.hub != nil ||
-		u.gifs != nil || u.mbox != nil || u.menu != nil || u.pager != nil || u.pasteAsk != "" || u.ask != nil || u.sendAsk != nil
+	return u.viewer != nil || u.lead() != nil || u.pager != nil || u.pasteAsk != "" || u.ask != nil || u.sendAsk != nil
 }
 
 // leadOverlay : an overlay that takes every event until it closes — the mouse
-// to its mouse handler, the rest to its keyboard one. It is not the same list
-// as overlayLead(): that one counts six overlays more: the picker and the
-// viewer keep their own block in key(), the other four have no mouse handler.
+// to its mouse handler, the rest to its keyboard one.
 type leadOverlay struct {
-	open  bool
-	key   func(term.Key)
-	mouse func(term.MouseEvent)
+	open  func(*UI) bool
+	key   func(*UI, term.Key)
+	mouse func(*UI, term.MouseEvent)
+	close func(*UI)            // from outside (login prompt, account change), by its own way out
+	box   func(*UI) overlayBox // what overlay() draws of it
+}
+
+// leads : the lead overlays, the one on top first — the one list every reader
+// goes by: key() gives an event to the first one open, overlay() draws them
+// from the last to the first, so the one with the keys is the one on top. The
+// hub comes last: it comes back on its own (hubBack) and must not cover a box
+// the user opened meanwhile; its page (a form) right above it. Filled by init:
+// the handlers reach back to the list (authStart closes the overlays).
+var leads []leadOverlay
+
+func init() {
+	leads = []leadOverlay{
+		{func(u *UI) bool { return u.picker != nil }, (*UI).pickerKey, (*UI).pickerMouse, func(u *UI) { u.picker = nil },
+			func(u *UI) overlayBox {
+				u.customLoad() // the images of the custom emojis on the screen
+				return overlayBox{rect: u.pickerRect(), lines: u.picker.Lines(u.th)}
+			}},
+		{func(u *UI) bool { return u.themePick != nil }, (*UI).themeKey, (*UI).themeMouse, (*UI).themeCancel, // the theme in use comes back
+			func(u *UI) overlayBox { return overlayBox{rect: u.themeRect(), lines: u.themePick.Lines(u.th)} }},
+		{func(u *UI) bool { return u.newChat != nil }, (*UI).ncKey, (*UI).ncMouse, func(u *UI) { u.newChat = nil },
+			func(u *UI) overlayBox {
+				r := u.ncRect()
+				return overlayBox{rect: r, lines: u.newChat.Lines(u.th, r.w, r.h, u.title, u.online)}
+			}},
+		{func(u *UI) bool { return u.gifs != nil }, (*UI).gifKey, (*UI).gifMouse, (*UI).gifClose,
+			func(u *UI) overlayBox { r := u.gifRect(); return overlayBox{rect: r, lines: u.gifLines(r)} }},
+		{func(u *UI) bool { return u.mbox != nil }, (*UI).mboxKey, (*UI).mboxMouse, (*UI).mboxClose,
+			func(u *UI) overlayBox { r := u.gridRect(&u.mbox.g); return overlayBox{rect: r, lines: u.mboxLines(r)} }},
+		{func(u *UI) bool { return u.gsearch != nil }, (*UI).gsKey, (*UI).gsMouse, func(u *UI) { u.gsearch = nil },
+			func(u *UI) overlayBox {
+				r := u.gsRect()
+				return overlayBox{rect: r, lines: u.gsearch.Lines(u.th, r.w, r.h, u.title)}
+			}},
+		{func(u *UI) bool { return u.menu != nil }, (*UI).menuKey, (*UI).menuMouse, (*UI).closeMenu, // its line loses its highlight
+			func(u *UI) overlayBox {
+				r := u.menuBox()
+				return overlayBox{rect: r, lines: u.menu.Lines(u.th, r.w, r.h)}
+			}},
+		{func(u *UI) bool { return u.form != nil }, (*UI).formKey, (*UI).formMouse, func(u *UI) { u.form = nil },
+			func(u *UI) overlayBox { r := u.formRect(); return overlayBox{rect: r, lines: u.form.Lines(u.th, r.w)} }},
+		{func(u *UI) bool { return u.hub != nil }, (*UI).hubKey, (*UI).hubMouse, func(u *UI) { u.hub = nil },
+			func(u *UI) overlayBox {
+				if u.form != nil {
+					return overlayBox{} // its page takes its place
+				}
+				u.hubRefresh()
+				r := u.hubRect()
+				return overlayBox{rect: r, lines: u.hub.Lines(u.th, r.w)}
+			}},
+	}
+}
+
+// lead : the lead overlay on top, nil when none is open.
+func (u *UI) lead() *leadOverlay {
+	for i := range leads {
+		if leads[i].open(u) {
+			return &leads[i]
+		}
+	}
+	return nil
+}
+
+// closeOverlays closes every lead overlay, each by its own way out.
+func (u *UI) closeOverlays() {
+	for _, o := range leads {
+		if o.open(u) {
+			o.close(u)
+		}
+	}
 }
 
 // listOverlay : the shape the list overlays share (theme picker, new chat,
@@ -243,6 +316,10 @@ type listOverlay struct {
 	enter func()      // Enter on the current entry
 	close func()      // Esc, Ctrl+C, or a click outside the box
 }
+
+// followTop : the first entry shown of a window of rows over a list, moved as
+// little as possible so that cur stays in view.
+func followTop(top, cur, rows int) int { return min(max(top, cur-rows+1), cur) }
 
 // key routes the keys every list overlay answers the same way: the two exits,
 // Enter, and the six moves. false when the key is none of them — the caller keeps its
@@ -324,18 +401,19 @@ func (u *UI) zoneOf(x, y int) zone {
 	}
 }
 
-// zoneAt stores the zone under the pointer. true when it changed — the only
-// case where a mouse move is worth a repaint, exactly like hoverAt. The
+// zoneAt stores the zone under the pointer. true when the change shows — the
+// only case where a mouse move is worth a repaint, exactly like hoverAt: the
+// sidebar entered or left, or a scrollbar on the screen to colour. The
 // keyboard follows: into the sidebar when the pointer enters it, back to the
 // input line when it leaves; Shift+Tab can move it in between.
 func (u *UI) zoneAt(x, y int) bool {
-	z := u.zoneOf(x, y)
-	if u.zone == z {
+	z, old := u.zoneOf(x, y), u.zone
+	if old == z {
 		return false
 	}
 	u.zone = z
 	u.find.keys = z == zoneSide
-	return true
+	return old == zoneSide || z == zoneSide || u.barShown
 }
 
 // hoverItem gives the message hovered at (x, y), nil outside the message area
@@ -351,10 +429,21 @@ func (u *UI) hoverItem(x, y int) *Item {
 	if r, ok := u.partsRect(); ok && r.hits(y, x, 1, 1) {
 		return nil // under the member box: no message is hovered
 	}
+	if u.mention != nil && u.mentionRect().hits(y, x, 1, 1) {
+		return nil // nor under the @… box
+	}
 	if h := hitAt(u.hits, x-x0, y); h.item != nil && selectable(h.item) {
 		return h.item
 	}
 	return nil
+}
+
+// pickerKey : the picker keeps the keys until Enter or Esc; Ctrl+C closes it
+// with no choice (Ctrl+C does not quit while it is open).
+func (u *UI) pickerKey(k term.Key) {
+	if (k.Code == term.Ctrl && k.Rune == 'c') || u.picker.Key(k) {
+		u.picker = nil
+	}
 }
 
 // pickerMouse : left click on an emoji = choice, wheel = next or previous

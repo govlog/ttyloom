@@ -64,7 +64,8 @@ func (u *UI) clearAccount(net string) {
 	u.clearNetWork(net)
 	u.closeViewer()
 	u.cancelMode()
-	u.picker, u.menu, u.mention, u.spellFix, u.pager = nil, nil, nil, nil, nil
+	u.closeOverlays()
+	u.mention, u.spellFix, u.pager = nil, nil, nil
 	u.parts, u.who, u.completion = nil, nil, nil
 	u.hits, u.placed = nil, nil
 	u.cycleHome = nil

@@ -59,10 +59,10 @@ func (u *UI) sideCol() int { return u.sideW + 1 }
 // recent (default, unknown mode included): pinned first, then from the newest
 // to the oldest — the old behaviour. alpha: pinned first (in entry order among
 // them, not alphabetical), then by title (render.Fold, case and accents
-// ignored). unread: unread first (count going down), then like recent (pinned
-// first, then entry order). Ties give 0: with slices.SortStableFunc the caller
-// keeps its own order.
-func chatLess(mode string) func(a, b *model.Chat) int {
+// ignored), read from titles (foldedTitles). unread: unread first (count going
+// down), then like recent (pinned first, then entry order). Ties give 0: with
+// slices.SortStableFunc the caller keeps its own order.
+func chatLess(mode string, titles map[*model.Chat]string) func(a, b *model.Chat) int {
 	less := func(a, b *model.Chat) int { // recent
 		if a.Pinned != b.Pinned {
 			if a.Pinned {
@@ -84,7 +84,7 @@ func chatLess(mode string) func(a, b *model.Chat) int {
 			if a.Pinned {
 				return 0
 			}
-			return strings.Compare(render.Fold(a.Title), render.Fold(b.Title))
+			return strings.Compare(titles[a], titles[b])
 		}
 	case "unread":
 		less = func(a, b *model.Chat) int {
@@ -110,8 +110,22 @@ func chatLess(mode string) func(a, b *model.Chat) int {
 // then brings the channels of one Discord guild back together.
 func sortChats(list []*model.Chat, mode string) []*model.Chat {
 	out := slices.Clone(list)
-	slices.SortStableFunc(out, chatLess(mode))
-	return groupGuilds(out)
+	var titles map[*model.Chat]string
+	if mode == "alpha" {
+		titles = foldedTitles(out)
+	}
+	slices.SortStableFunc(out, chatLess(mode, titles))
+	return groupGuilds(out, titles)
+}
+
+// foldedTitles : render.Fold of each title, once per sort — in a comparator it
+// ran O(n log n) times, ten milliseconds a frame for a thousand chats.
+func foldedTitles(list []*model.Chat) map[*model.Chat]string {
+	out := make(map[*model.Chat]string, len(list))
+	for _, c := range list {
+		out[c] = render.Fold(c.Title)
+	}
+	return out
 }
 
 // guildOf gives the group of a chat inside its network (a Discord guild),
@@ -126,8 +140,9 @@ func guildOf(c *model.Chat) string { return c.Group }
 // every sort, as an IRC client lists the channels of a server. Pinned
 // channels make a group of their own: grouping never breaks the "pinned
 // first" rule. Everything else keeps its place, so a list with no Discord
-// guild in it comes out of the pass unchanged.
-func groupGuilds(list []*model.Chat) []*model.Chat {
+// guild in it comes out of the pass unchanged. titles : the folded titles
+// when the caller has them, nil otherwise.
+func groupGuilds(list []*model.Chat, titles map[*model.Chat]string) []*model.Chat {
 	type key struct {
 		pinned bool
 		guild  string
@@ -143,9 +158,11 @@ func groupGuilds(list []*model.Chat) []*model.Chat {
 		return list
 	}
 	for _, g := range groups {
-		slices.SortStableFunc(g, func(a, b *model.Chat) int {
-			return strings.Compare(render.Fold(a.Title), render.Fold(b.Title))
-		})
+		keys := titles
+		if keys == nil {
+			keys = foldedTitles(g)
+		}
+		slices.SortStableFunc(g, func(a, b *model.Chat) int { return strings.Compare(keys[a], keys[b]) })
 	}
 	out := make([]*model.Chat, 0, len(list))
 	for _, c := range list {
@@ -379,7 +396,16 @@ func (u *UI) sideWins() []int {
 			wins = append(wins, i)
 		}
 	}
-	less := chatLess(u.cfg.SidebarSort)
+	var titles map[*model.Chat]string
+	if u.cfg.SidebarSort == "alpha" {
+		titles = make(map[*model.Chat]string, len(wins))
+		for _, i := range wins {
+			if c := u.ws.List[i].Chat; c != nil {
+				titles[c] = render.Fold(c.Title)
+			}
+		}
+	}
+	less := chatLess(u.cfg.SidebarSort, titles)
 	slices.SortStableFunc(wins, func(a, b int) int {
 		if a == 0 || b == 0 { // window 0 stays at the head
 			if a == 0 {
@@ -669,6 +695,22 @@ type sideState struct {
 	sel    *model.Chat
 	selWin *Window
 	muted  map[model.ChatKey]bool // their unread counts are dimmed
+	// shown : when not nil, takes the text and the width of the current line
+	// if the frame draws it — the only line marqueeTick scrolls.
+	shown *marqueeLine
+}
+
+// marqueeLine : the scrolling part of the current line, and its width.
+type marqueeLine struct {
+	text  string
+	width int
+}
+
+// saw notes the current line as the frame draws it.
+func (s sideState) saw(text string, width int) {
+	if s.shown != nil {
+		*s.shown = marqueeLine{text, width}
+	}
 }
 
 // ageFG : colour of a chat name in windows mode, from the text colour (last
@@ -824,6 +866,7 @@ func sidebarLines(mode sideMode, chats []*model.Chat, ws []*Window, wins []int, 
 			text := padTo(label, textW)
 			if isCur { // only the current line scrolls
 				text = marquee(label, textW, step)
+				state.saw(label, textW)
 			}
 			sp = append(sp, render.Span{Text: mark, Style: m}, render.Span{Text: unread, Style: u}, render.Span{Text: pfx, Style: m})
 			if badge != "" {
@@ -881,6 +924,8 @@ func sidebarLines(mode sideMode, chats []*model.Chat, ws []*Window, wins []int, 
 				}
 				if i != cur { // only the current line scrolls
 					k = 0
+				} else {
+					state.saw(pfx+s+act, textW)
 				}
 				return append([]render.Span{{Text: num, Style: ls}}, hitSpans(render.Span{Text: marquee(pfx+s+act, textW, k), Style: ls}, state.q, th)...), 0
 			case w.Chat != nil && w.Chat == state.menuChat: // line of the open menu
@@ -918,10 +963,18 @@ func sidebarLines(mode sideMode, chats []*model.Chat, ws []*Window, wins []int, 
 // loop of draw() reads again line by line. sepRow: line of the message
 // separator, -1 when there is none.
 func (u *UI) sideBlock(sepRow int) ([]render.Line, []sideRow) {
-	sorted := u.sideChats() // sorted and filtered once: one sort per frame
+	// The work of the mode shown only: sorted and filtered once per frame.
+	var sorted []*model.Chat
+	var wins []int
+	if u.side == sideChats {
+		sorted = u.sideChats()
+	} else {
+		wins = u.sideWins()
+	}
 	hot := u.sideHot()
 	side := sideHeader(u.side, u.cfg.SidebarSort, u.cfg.SidebarSplit, u.th, u.sideW, hot)
-	state := sideState{folded: u.foldState(), pulse: u.pulse, now: time.Now(), q: u.find.q, muted: u.muted}
+	var shown marqueeLine
+	state := sideState{folded: u.foldState(), pulse: u.pulse, now: time.Now(), q: u.find.q, muted: u.muted, shown: &shown}
 	if m := u.menu; m != nil && m.member == "" {
 		state.menuChat = m.chat // menu of a sidebar line (nil for the menu of a message)
 	}
@@ -933,11 +986,15 @@ func (u *UI) sideBlock(sepRow int) ([]render.Line, []sideRow) {
 		acc := theme.Style{FG: u.th.Color(theme.Accent), Bold: true}
 		side[1].Spans = []render.Span{{Text: padTo(text, u.sideW), Style: acc}, side[1].Spans[len(side[1].Spans)-1]}
 	}
-	side = append(side, sidebarLines(u.side, sorted, u.ws.List, u.sideWins(), u.ws.Cur, u.th, u.sideW, u.sideRows(),
+	side = append(side, sidebarLines(u.side, sorted, u.ws.List, wins, u.ws.Cur, u.th, u.sideW, u.sideRows(),
 		u.sideScroll, u.avatarsOn(), u.multiNet(), u.marquee.step, sepRow, hot, u.title, state)...)
-	if u.side == sideChats { // last line, outside the scroll
-		side = append(side, sideNewLine(u.th, u.sideW, hot))
+	if shown.text != u.marquee.title || shown.width != u.marquee.width {
+		u.marquee = marqueeState{title: shown.text, width: shown.width} // another line: a new cycle
 	}
+	if u.side != sideChats {
+		return side, nil
+	}
+	side = append(side, sideNewLine(u.th, u.sideW, hot)) // last line, outside the scroll
 	return side, sectionRows(sorted, u.ws.List, u.foldState())
 }
 
@@ -1004,107 +1061,45 @@ func marquee(title string, width, step int) string {
 	return b.String()
 }
 
-// curRowTitle gives the title and the width available of the line currently
-// selected in the sidebar (current chat in chat mode, window cur in window
-// mode) — same build as the matching line in sidebarLines. ok=false outside the
-// chat/window sidebar, with no current window (window 0 with no bound chat), or
-// when a folded section hides the line of the current chat.
-func curRowTitle(mode sideMode, rows []sideRow, ws []*Window, cur, w int, avatars, nets bool, name func(*model.Chat) string) (title string, width int, ok bool) {
-	if cur < 0 || cur >= len(ws) {
-		return "", 0, false
-	}
-	gut := 0
-	if avatars {
-		gut = 3
-	}
-	switch mode {
-	case sideChats:
-		c := ws[cur].Chat
-		if c == nil {
-			return "", 0, false
-		}
-		// The row of that chat, or nothing: a fold can hide it, and the marquee
-		// would then scroll a string nobody draws.
-		i := slices.IndexFunc(rows, func(x sideRow) bool { return x.chat == c })
-		if i < 0 {
-			return "", 0, false
-		}
-		badge := 0
-		if nets && rows[i].sec == "" {
-			badge = render.Width(netBadge(c.Net))
-		}
-		return " " + sideTitle(rows[i], name), w - 5 - gut - render.Width(kindPrefix(c.Kind)) - badge, true
-	case sideWindows:
-		pfx := ""
-		if ws[cur].Chat == nil && ws[cur].Search == "" { // status window: * marker, like sidebarLines
-			pfx = "*"
-		} else if ws[cur].Chat != nil && ws[cur].Search == "" {
-			pfx = kindPrefix(ws[cur].Chat.Kind)
-		}
-		s := render.CleanLine(winName(ws[cur], name))
-		if ws[cur].Chat != nil {
-			s = bareTitle(ws[cur].Chat, s)
-		}
-		s = pfx + s
-		if ws[cur].Act > 0 {
-			s += fmt.Sprintf(" (%d)", ws[cur].Act)
-		}
-		num := len(strconv.Itoa(max(0, len(ws)-1))) + 2 // "%*d: " like sidebarLines
-		return s, w - num, true
-	}
-	return "", 0, false
-}
-
 // marqueeState : scrolling of the title of the current sidebar line. next:
 // time of the next step (rate 300 ms). pause: 300 ms ticks left to wait at the
-// ends before going on. title/width: last line seen, to catch a change
-// (window, sidebar mode, avatars on/off during a session…) without listing
-// every caller that touches ws.Cur or u.side — one shift would slip through
-// otherwise (attach() opens a window without going through goTo).
+// end before going back. title/width: the line the last frame drew (sideBlock),
+// "" when it drew none; a change starts a new cycle, whatever changed it
+// (window, sidebar mode, sort, fold, avatars…). done: the cycle ran, the line
+// rests at its start until it changes.
 type marqueeState struct {
 	step, pause int
 	next        time.Time
 	title       string
 	width       int
+	done        bool
 }
 
 // marqueeTick moves the title of the current line on or pauses it, at a rate
 // of 300 ms — apart from the real period of the ticker of tick() (100 ms, not
 // 150: a counter was dropped for a timestamp, which does not care about that
-// setting). true when the shift shown changed (repaint worth it).
+// setting). One cycle per line: to its end, a pause, back to its start, and
+// rest — an idle client repaints nothing. true when the shift shown changed
+// (repaint worth it).
 func (u *UI) marqueeTick(now time.Time) bool {
-	var rows []sideRow
-	// ponytail: one sort per 100 ms tick with the chat sidebar open (≤ 1000
-	// chats); cache the rows of the frame if a profile ever shows it.
-	if u.side == sideChats {
-		rows = u.sideRowList()
+	m := &u.marquee
+	if x0, _ := u.layout(); x0 == 0 || m.done || render.Width(m.title) <= m.width || now.Before(m.next) {
+		return false // no panel drawn, nothing left to scroll, or not yet
 	}
-	title, width, ok := curRowTitle(u.side, rows, u.ws.List, u.ws.Cur, u.sideW, u.avatarsOn(), u.multiNet(), u.title)
-	if !ok {
-		title, width = "", 0
-	}
-	if title != u.marquee.title || width != u.marquee.width {
-		u.marquee = marqueeState{title: title, width: width}
-	}
-	if !ok || render.Width(title) <= width || now.Before(u.marquee.next) {
+	m.next = now.Add(300 * time.Millisecond)
+	if m.pause > 0 {
+		m.pause--
 		return false
 	}
-	u.marquee.next = now.Add(300 * time.Millisecond)
-	if u.marquee.pause > 0 {
-		u.marquee.pause--
-		return false
+	maxStep := marqueeMax(m.title, m.width)
+	if m.step >= maxStep {
+		m.step, m.done = 0, true
+		return true
 	}
-	maxStep := marqueeMax(title, width)
-	prev := u.marquee.step
-	if u.marquee.step >= maxStep {
-		u.marquee.step = 0
-	} else {
-		u.marquee.step++
+	if m.step++; m.step == maxStep {
+		m.pause = 5 // 5 * 300 ms = 1.5 s at the end
 	}
-	if u.marquee.step == 0 || u.marquee.step == maxStep {
-		u.marquee.pause = 5 // 5 * 300 ms = 1.5 s at the ends
-	}
-	return u.marquee.step != prev
+	return true
 }
 
 func hasWindow(ws []*Window, k model.ChatKey) bool {
@@ -1242,9 +1237,11 @@ func stepIdx(i, d, n int) int {
 }
 
 func (u *UI) sideWheel(d int) {
-	n := len(u.sideRowList()) // rows, not chats: a header scrolls, a folded line is gone
+	var n int
 	if u.side == sideWindows {
 		n = len(u.sideWins())
+	} else {
+		n = len(u.sideRowList()) // rows, not chats: a header scrolls, a folded line is gone
 	}
 	u.sideScroll = max(0, min(u.sideScroll+d, max(0, n-u.sideRows())))
 }
@@ -1267,14 +1264,7 @@ func (u *UI) sideReveal() {
 }
 
 // sideShow scrolls the sidebar list so that its line i is in view.
-func (u *UI) sideShow(i int) {
-	if i < u.sideScroll {
-		u.sideScroll = i
-	}
-	if i >= u.sideScroll+u.sideRows() {
-		u.sideScroll = i - u.sideRows() + 1
-	}
-}
+func (u *UI) sideShow(i int) { u.sideScroll = followTop(u.sideScroll, i, u.sideRows()) }
 
 // sideClick opens the window of the line y of the sidebar; the last line of
 // the chat mode opens "new chat".
@@ -1305,6 +1295,7 @@ func (u *UI) sideClick(x, y int) {
 			u.sideDone() // a pick, like Enter: the keyboard goes back to the input line
 			u.openChat(r.chat)
 		default:
+			u.sideDone()        // the filter draws every section open: the fold shows once it ends
 			u.sideToggle(r.sec) // header line: it folds its section, it opens nothing
 		}
 	case sideWindows:
@@ -1319,7 +1310,11 @@ func (u *UI) sideClick(x, y int) {
 // sideChatAt gives the chat carried by the line y of the sidebar, nil when it
 // carries none (empty line, "+ new message" line, unbound window, hidden sidebar).
 func (u *UI) sideChatAt(y int) *model.Chat {
-	return u.sideChatIn(u.sideRowList(), y)
+	var rows []sideRow
+	if u.side == sideChats { // the windows mode reads its own list
+		rows = u.sideRowList()
+	}
+	return u.sideChatIn(rows, y)
 }
 
 // sideRowIn gives the row drawn on the screen line y, ok=false when the line

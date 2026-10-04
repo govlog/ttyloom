@@ -57,7 +57,8 @@ func (u *UI) selKey(w *Window, r rune) bool {
 		return false // while editing, replying or captioning, everything goes to the input
 	}
 	m := it.Msg
-	// Same conditions as the help line: a key that is not on it is not kept.
+	// Same conditions as the entries of its menu (render.SelActs): a key that
+	// is not one of them is not kept.
 	act := render.Actionable(m)
 	switch {
 	case r == 'o' && act && render.Openable(m.Media):
@@ -368,11 +369,12 @@ func (u *UI) editLast(w *Window) bool {
 // cancelMode : Esc, window change — it leaves edit, reply, confirmation and
 // search, and empties the input that carried the text of the mode. The search
 // works on the lines of the shown window: it does not survive a view change.
+// The correction box points into the input: it closes with it.
 func (u *UI) cancelMode() {
 	if u.edit != nil || u.reply != nil {
 		u.ed.Set("")
 	}
-	u.edit, u.reply, u.ask, u.search = nil, nil, nil, nil
+	u.edit, u.reply, u.ask, u.search, u.spellFix = nil, nil, nil, nil, nil
 	u.multi = false
 	u.selCancel()
 	u.cancelSend()

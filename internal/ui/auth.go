@@ -19,18 +19,12 @@ func (u *UI) authStart(net string, prompt model.EvAuthPrompt) {
 		return
 	}
 	if u.authDraft == nil {
+		u.cancelMode() // first: an edit or a reply drops its text, never kept as the draft
 		draft := u.ed
 		u.authDraft = &draft
 		u.authWindow, u.authDebug = u.ws.Current(), u.showDebug
-		u.cancelMode()
 		u.closeViewer()
-		if u.gifs != nil {
-			u.gifClose()
-		}
-		if u.mbox != nil {
-			u.mboxClose()
-		}
-		u.picker, u.menu, u.newChat, u.gsearch, u.form, u.themePick, u.hub = nil, nil, nil, nil, nil, nil, nil
+		u.closeOverlays()
 		u.pasteAsk = ""
 	}
 	u.ed = Editor{}

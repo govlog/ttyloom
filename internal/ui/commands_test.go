@@ -242,6 +242,68 @@ func TestBotGateOrder(t *testing.T) {
 	}
 }
 
+// Tab puts a whole title of several words in the line: /msg takes the
+// longest run of words that names a chat exactly, the rest is the message —
+// never the end of the title, never a chat named like its first word.
+func TestRegressionMsgTitleOfSeveralWords(t *testing.T) {
+	u, b, room, _ := queryUI()
+	u.ed.Set("/msg Fri")
+	u.completeTab()
+	u.ed.Insert("hello")
+	u.key(term.Key{Code: term.Enter})
+	fam := &model.Chat{Net: netTelegram, ID: 3, Title: "Famille"}
+	dup := &model.Chat{Net: netTelegram, ID: 4, Title: "Famille Dupont"}
+	for _, c := range []*model.Chat{fam, dup} {
+		u.remember(c)
+		u.listChat(c)
+	}
+	input(u, "/msg Famille Dupont salut")
+	if !slices.Equal(b.sends, []model.ChatKey{room.Key(), dup.Key()}) || !slices.Equal(b.text, []string{"hello", "salut"}) {
+		t.Fatalf("sent %v %q, want hello to Friends room then salut to Famille Dupont", b.sends, b.text)
+	}
+}
+
+// /whois takes no text after its target: a name of several words is the
+// whole line, not an ambiguous first word.
+func TestRegressionWhoisNameOfSeveralWords(t *testing.T) {
+	u, b, _, _ := queryUI()
+	for i, title := range []string{"Jean Dupont", "Jean Durand"} {
+		c := &model.Chat{Net: netTelegram, ID: int64(5 + i), Title: title, Kind: model.ChatUser}
+		u.remember(c)
+		u.listChat(c)
+	}
+	input(u, "/whois Jean Dupont")
+	if b.whois != 1 {
+		t.Fatalf("whois asked %d times, last line %q", b.whois, lastSys(u.view()))
+	}
+}
+
+// histBackend : records the size asked by each LoadHistory.
+type histBackend struct {
+	fakeBackend
+	limits []int
+}
+
+func (b *histBackend) LoadHistory(_ context.Context, _ *model.Chat, _, limit int) {
+	b.limits = append(b.limits, limit)
+}
+
+// /history N asks no more than the window keeps — a typo of 50000 would page
+// the server a thousand times for messages trimmed at once — and one load at a
+// time, like the scroll.
+func TestRegressionHistoryBounded(t *testing.T) {
+	u, _, room, _ := queryUI()
+	b := &histBackend{}
+	b.caps = model.AllCaps()
+	u.nets[netTelegram] = b
+	u.goTo(u.ws.ForChat(room.Key()))
+	input(u, "/history 100000")
+	input(u, "/history 10") // the first page is still on its way
+	if !slices.Equal(b.limits, []int{defaultMaxItems}) {
+		t.Fatalf("pages asked: %v, want one of %d", b.limits, defaultMaxItems)
+	}
+}
+
 // foldUI : two networks and a Discord guild — three sections, fold state
 // loaded, as sideBlock wires it.
 func foldUI() *UI {
@@ -303,6 +365,24 @@ func TestFoldCmd(t *testing.T) {
 	}
 	if lastSys(w) != "" {
 		t.Fatalf("a fold that works says nothing: %q", lastSys(w))
+	}
+}
+
+// A fold while a sidebar filter runs ends the filter first, as a click on a
+// chat does: the filter draws every section open, a fold under it would show
+// only later. /fold then sees every section, not only the ones with hits.
+func TestRegressionFoldEndsFilter(t *testing.T) {
+	t.Setenv("TTYLOOM_DIR", t.TempDir())
+	u := foldUI()
+	u.find.q = "c"                                          // no hit under Gophers
+	u.mouse(term.MouseEvent{X: 2, Y: sideHdr, Press: true}) // first line: the discord header
+	if u.find.q != "" || !u.folded["discord"] {
+		t.Fatalf("header click: filter %q, folded %v", u.find.q, u.folded)
+	}
+	u.find.q = "c"
+	u.command("fold", []string{"goph"}, "goph")
+	if u.find.q != "" || !u.folded["discord:Gophers"] {
+		t.Fatalf("/fold: filter %q, folded %v, said %q", u.find.q, u.folded, lastSys(u.view()))
 	}
 }
 
@@ -783,6 +863,27 @@ func TestIRCArgCompletion(t *testing.T) {
 	u.ed.Set("/kick a")
 	if got := u.candidates("a", false); !slices.Contains(got, "alice") {
 		t.Fatalf("room with a query target: %v", got)
+	}
+}
+
+// evilIRC : an IRC server that put a terminal sequence in a nick (NAMES, JOIN).
+type evilIRC struct{ fakeIRC }
+
+func (*evilIRC) Members(*model.Chat) []string { return []string{"zed\x1b]0;owned\a"} }
+
+// The member list of a backend is read by a direct call, not an event: stamp
+// never sees it. Tab, in a message and after an IRC command alike, puts the
+// nick in the draft cleaned.
+func TestRegressionTabCleansMemberNicks(t *testing.T) {
+	u, _ := ircUI()
+	u.nets[ircNet("libera")] = &evilIRC{}
+	u.goTo(1)
+	for _, line := range []string{"ze", "/kick ze"} {
+		u.ed.Set(line)
+		u.completeTab()
+		if got := u.ed.String(); !strings.Contains(got, "zed") || strings.ContainsAny(got, "\x1b\a") {
+			t.Errorf("%q + Tab: draft %q, want the nick cleaned", line, got)
+		}
 	}
 }
 

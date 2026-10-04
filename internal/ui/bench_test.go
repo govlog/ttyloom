@@ -96,3 +96,39 @@ func BenchmarkReadInbox(b *testing.B) {
 		u.readInbox(c, n+1, 0, false) // a new max each time: the sweep runs
 	}
 }
+
+// benchGuildsUI : benchUI with 1000 chats on two networks — half of them
+// Discord channels in 20 guilds — 100 windows open and the sidebar sorted a→z,
+// the dearest sort.
+func benchGuildsUI() *UI {
+	u := benchUI()
+	u.cfg.SidebarSort = "alpha"
+	now := time.Now()
+	for i := 501; i <= 1000; i++ {
+		g := fmt.Sprintf("Guilde %d", i%20)
+		c := &model.Chat{Net: "discord", ID: int64(i), Kind: model.ChatGroup, Group: g, Title: fmt.Sprintf("%s / #salon-%d", g, i),
+			LastDate: now.Add(-time.Duration(i) * time.Minute)}
+		u.chats[c.Key()] = c
+		u.chatList = append(u.chatList, c)
+	}
+	for _, c := range u.chatList[1:100] {
+		u.bindChat(u.ws.New(true), c)
+	}
+	return u
+}
+
+func BenchmarkSideBlockGuilds(b *testing.B) {
+	u := benchGuildsUI()
+	b.ReportAllocs()
+	for range b.N {
+		u.sideBlock(-1)
+	}
+}
+
+func BenchmarkMarqueeTickGuilds(b *testing.B) {
+	u := benchGuildsUI()
+	b.ReportAllocs()
+	for range b.N {
+		u.marqueeTick(time.Now())
+	}
+}

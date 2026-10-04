@@ -2,7 +2,9 @@ package ui
 
 import (
 	"os/exec"
+	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/mattn/go-runewidth"
@@ -37,6 +39,28 @@ var markupEscape = strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;")
 func desktopArgs(title, body string) (string, string) {
 	t, b := notifyArgs(title, body)
 	return t, markupEscape.Replace(b)
+}
+
+// mentioned : m calls on me — a mention entity or my @name, and where the
+// name is the identity (IRC) my name as a word too ("chris: hello"). The one
+// rule of the bell, the notification, the hot window and the hooks.
+func (u *UI) mentioned(c *model.Chat, m *model.Msg) bool {
+	me := u.selfOf(c.Net)
+	return mentionsMe(m, me.ID, me.Name) || (backendCaps(u.netOf(c.Net)).NameIsID && me.Name != "" && saidWord(m.Text, me.Name))
+}
+
+// wordRes : the regexps of saidWord, by word.
+// ponytail: never emptied — one entry per name I had in the session, a few.
+var wordRes sync.Map
+
+// saidWord : word stands alone in text, case apart. Compiled once per word:
+// it runs on every message that comes in.
+func saidWord(text, word string) bool {
+	re, ok := wordRes.Load(word)
+	if !ok {
+		re, _ = wordRes.LoadOrStore(word, regexp.MustCompile(`(?i)(?:^|\W)`+regexp.QuoteMeta(word)+`(?:$|\W)`))
+	}
+	return re.(*regexp.Regexp).MatchString(text)
 }
 
 // alertGap : one bell and one notification at most in that time; the hot

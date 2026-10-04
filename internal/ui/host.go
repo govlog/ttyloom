@@ -179,11 +179,6 @@ func (h host) OpenForm(f *module.Form) {
 	}
 }
 
-func (h host) Do(f func()) {
-	select {
-	case h.u.events <- evDo{f}:
-	case <-h.u.ctx.Done():
-	}
-}
+func (h host) Do(f func()) { h.u.post(evDo{f}) }
 
 var _ module.Host = host{}

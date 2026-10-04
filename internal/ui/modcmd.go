@@ -85,6 +85,8 @@ func (u *UI) modComplete(name, tail, word string) []string {
 		return nil
 	}
 	names, typing := c.Complete(host{u}, u.win(u.view()), tail)
+	names = slices.Clone(names) // nicks of the backend among them: never stamped
+	cleanLines(names)
 	return multiWord(word, typing, names)
 }
 

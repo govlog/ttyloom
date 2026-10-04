@@ -79,3 +79,26 @@ func TestAlertBurst(t *testing.T) {
 		t.Fatalf("%d bells after the gap, want 2", n)
 	}
 }
+
+// The IRC casemapping rekey moves the keys of a network's chats: a muted room
+// stays muted under its new key, in muted.toml too.
+func TestMuteFollowsIRCRekey(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("TTYLOOM_DIR", dir)
+	u, _, _, _ := queryUI()
+	cfg, err := config.LoadFrom(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	u.cfg = cfg
+	network := ircNet("test")
+	c := &model.Chat{Net: network, ID: 20, Title: "#go["}
+	u.remember(c)
+	u.listChat(c)
+	u.muted = map[model.ChatKey]bool{c.Key(): true}
+	u.rekeyChats(network, func(string) int64 { return 30 })
+	key := model.ChatKey{Net: network, ID: 30}
+	if m, _ := loadMuted(mutedPath()); !u.muted[key] || len(u.muted) != 1 || !m[key] || len(m) != 1 {
+		t.Fatalf("muted after the rekey: %v, file %v; want only %v", u.muted, m, key)
+	}
+}

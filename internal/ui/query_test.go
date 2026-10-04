@@ -72,13 +72,18 @@ func input(u *UI, line string) {
 }
 
 // A channel key is typed with the room ("/join #priv secret") and must not be
-// shown, nor written to the log of the window.
+// shown, nor written to the log of the window — whatever the prefix of the
+// room that takes a key (& local, ! safe on IRCnet).
 func TestDisplayQueryHidesKey(t *testing.T) {
-	if got := displayQuery("#priv secret"); got != "#priv" {
-		t.Fatalf("channel key shown: %q", got)
+	for _, q := range []string{"#priv", "&ops", "!ops"} {
+		if got := displayQuery(q + " secret"); got != q {
+			t.Errorf("channel key shown: %q", got)
+		}
 	}
-	if got := displayQuery("@bob smith"); got != "@bob smith" {
-		t.Fatalf("plain query changed: %q", got)
+	for _, q := range []string{"@bob smith", "+33 6 12 34 56 78"} { // a phone number keeps its spaces
+		if got := displayQuery(q); got != q {
+			t.Errorf("plain query changed: %q", got)
+		}
 	}
 }
 
@@ -100,6 +105,26 @@ func TestQueryWaitingHidesKey(t *testing.T) {
 	input(u, "/query") // the lookup dropped: the closing line names the room only
 	if got := lastSys(u.view()); !strings.Contains(got, "#priv") || strings.Contains(got, "secret") {
 		t.Fatalf("query_closed line: %q", got)
+	}
+}
+
+// stefany : a chat whose title carries an accent, listed in u.
+func stefany(u *UI) *model.Chat {
+	c := &model.Chat{Net: netTelegram, ID: 3, Title: "Stéfany", Kind: model.ChatUser}
+	u.remember(c)
+	u.listChat(c)
+	return c
+}
+
+// A name is looked up as the sidebar filter finds it, accents apart: /q stef
+// takes Stéfany, and never asks the networks to resolve "stef" as a public
+// username — the answer could be a stranger's account.
+func TestRegressionQueryFoldsAccents(t *testing.T) {
+	u, b, _, _ := queryUI()
+	st := stefany(u)
+	input(u, "/q stef")
+	if w := u.view(); len(b.resolves) != 0 || w.Target != st {
+		t.Fatalf("/q stef: network lookups %v, target %+v; want Stéfany, found locally", b.resolves, w.Target)
 	}
 }
 

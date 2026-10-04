@@ -109,7 +109,9 @@ func TestCleanLineOnSingleLineSites(t *testing.T) {
 	// several messages with '\n' and goes out in base64, never to the screen.
 	// stamp.go: the body of a message and a link description are multiline by
 	// nature, cleaned once when the event comes in; Wrap keeps their breaks.
-	multiline := []string{"paste.go", "select.go", "stamp.go"}
+	// editor.go: the draft keeps the breaks of the expanded editor, which
+	// drawInput shows as ⏎ or as lines.
+	multiline := []string{"paste.go", "select.go", "stamp.go", "editor.go"}
 	for _, path := range goFiles(t, ".") {
 		b, err := os.ReadFile(path)
 		if err != nil {

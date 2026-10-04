@@ -2,7 +2,6 @@ package ui
 
 import (
 	"strings"
-	"time"
 
 	"github.com/govlog/ttyloom/internal/i18n"
 	"github.com/govlog/ttyloom/internal/model"
@@ -18,10 +17,9 @@ import (
 // stale answer dropped).
 
 const (
-	ncW     = 50                     // width of the box, borders included
-	ncLimit = 10                     // server results at most
-	ncDelay = 300 * time.Millisecond // typing settled before the request
-	ncMinQ  = 3                      // without an @, nothing goes below that
+	ncW     = 50 // width of the box, borders included
+	ncLimit = 10 // server results at most
+	ncMinQ  = 3  // without an @, nothing goes below that
 )
 
 // ncRow : one line of the list — a chat, or the header of the server section.
@@ -31,14 +29,10 @@ type ncRow struct {
 }
 
 type newChatBox struct {
-	query    []rune
-	rows     []ncRow
-	cur      int
-	found    []*model.Chat // server results shown
-	inflight string        // query of the call running; "" = none (only one at a time)
-	sent     string        // query of the results shown
-	typed    time.Time     // last keystroke; zero = nothing to start again
-	err      string
+	netQuery
+	rows  []ncRow
+	cur   int
+	found []*model.Chat // server results shown
 }
 
 // chat gives the chat of the current line, nil when the list is empty.
@@ -241,27 +235,23 @@ func ncWorth(q string) bool {
 // Only one at a time — the next one goes out when the one in flight comes back.
 func (u *UI) ncSend() {
 	n := u.newChat
-	q := strings.TrimSpace(string(n.query))
-	if !ncWorth(q) { // typing too short: no server section at all any more
+	if !ncWorth(strings.TrimSpace(string(n.query))) { // typing too short: no server section at all any more
 		if n.found != nil || n.err != "" {
 			n.found, n.sent, n.err = nil, "", ""
 			u.ncFilter()
 		}
 		return
 	}
-	if n.inflight != "" || q == n.sent {
+	q, ok := n.next()
+	if !ok {
 		return
 	}
-	n.inflight, n.err = q, ""
 	// ponytail: one inflight string for every network — the first answer frees
 	// the slot and the query can go out again while the others are still on
 	// their way. Fine with one backend; count the answers when there are two.
 	if !u.eachNetCap(func(c model.Caps) bool { return c.Contacts },
 		func(b model.Backend) { b.SearchContacts(u.backendContext(b), q, ncLimit) }) {
-		// Like the global search: the query is marked sent so that the next key
-		// does not ask again.
-		n.inflight, n.sent = "", q
-		n.err = i18n.T("net_unsupported", strings.Join(u.netNames(), ", "))
+		n.fail(i18n.T("net_unsupported", strings.Join(u.netNames(), ", ")))
 	}
 }
 
@@ -296,15 +286,12 @@ func (u *UI) contactsFound(e model.EvContactsFound) {
 	if n == nil || e.Query != n.inflight {
 		return // overlay closed, or answer of a query given up
 	}
-	n.inflight = ""
-	if strings.TrimSpace(string(n.query)) != e.Query {
-		u.ncSend() // the query moved during the round trip
+	if n.back(e.Query) {
+		u.ncSend()
 		return
 	}
-	n.err, n.sent, n.found = e.Err, e.Query, nil
-	if e.Err != "" {
-		n.sent = "" // the same query can go out again after an error (like the global search)
-	}
+	n.shown(e.Query, e.Err)
+	n.found = nil
 	for _, c := range e.Peers {
 		n.found = append(n.found, u.gsChat(c))
 	}
@@ -344,15 +331,7 @@ func (u *UI) ncKey(k term.Key) {
 	if u.ncList().key(k) {
 		return
 	}
-	n := u.newChat
-	switch {
-	case k.Code == term.Backspace:
-		if len(n.query) > 0 {
-			n.query, n.typed = n.query[:len(n.query)-1], time.Now()
-			u.ncFilter()
-		}
-	case k.Code == term.None && k.Rune != 0 && !k.Alt:
-		n.query, n.typed = append(n.query, k.Rune), time.Now()
+	if u.newChat.edit(k) {
 		u.ncFilter()
 	}
 }

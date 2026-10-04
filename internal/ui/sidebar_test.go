@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -249,6 +250,53 @@ func TestMarquee(t *testing.T) {
 	}
 	if end2 := strings.TrimRight(marquee(title, width, max+5), " "); end2 != end { // step above max: capped
 		t.Fatalf("step > max not capped: %q vs %q", end2, end)
+	}
+}
+
+// longUI : findUI on a terminal cols wide, the current window on a chat whose
+// title is wider than the panel.
+func longUI(cols int) *UI {
+	u := findUI()
+	u.t = term.NewOffscreen(&bytes.Buffer{}, cols, 24)
+	c := u.chatList[1]
+	c.Title = "Fabien with a much longer name than the sidebar can show"
+	u.ws.New(false).Chat = c
+	return u
+}
+
+// idleRepaints : the frames the marquee asks for in an idle minute, each one
+// drawn as Run draws it.
+func idleRepaints(u *UI) int {
+	n, now := 0, time.Now()
+	u.draw()
+	for i := range 600 {
+		if u.marqueeTick(now.Add(time.Duration(i) * 100 * time.Millisecond)) {
+			n++
+			u.draw()
+		}
+	}
+	return n
+}
+
+// The title of the current line scrolls once after the line changes, then
+// rests at its start: an idle client does not repaint for it forever.
+func TestRegressionMarqueeOneCycle(t *testing.T) {
+	// " Fabien with…" in 20 cells: 37 steps to its end, one back to its start.
+	if n := idleRepaints(longUI(80)); n != 38 {
+		t.Fatalf("%d repaints in an idle minute, want one cycle: 38", n)
+	}
+}
+
+// A line nobody draws never scrolls: the current window filtered out of the
+// windows list, the panel left out of a narrow terminal.
+func TestRegressionMarqueeUndrawnLine(t *testing.T) {
+	u := longUI(80)
+	u.side, u.find.q = sideWindows, "zzz"
+	if n := idleRepaints(u); n != 0 {
+		t.Errorf("current window filtered out: %d repaints", n)
+	}
+	if n := idleRepaints(longUI(40)); n != 0 {
+		t.Errorf("no room for the panel: %d repaints", n)
 	}
 }
 

@@ -1,11 +1,13 @@
 package ui
 
 import (
+	"bytes"
 	"errors"
 	"strings"
 	"testing"
 
 	"github.com/govlog/ttyloom/internal/config"
+	"github.com/govlog/ttyloom/internal/model"
 	"github.com/govlog/ttyloom/internal/spell"
 	"github.com/govlog/ttyloom/internal/term"
 	"github.com/govlog/ttyloom/internal/theme"
@@ -101,6 +103,25 @@ func TestSpellFixIgnoreAndTypeThrough(t *testing.T) {
 	}
 	if u.spellFix != nil {
 		t.Fatal("ordinary keystroke: box closed")
+	}
+}
+
+// A login prompt empties the input under an open correction box: the box goes
+// with the text, and the next frame draws instead of panicking on offsets of
+// the text gone.
+func TestRegressionSpellBoxPromptEmptiesInput(t *testing.T) {
+	u, _ := spellUI(strings.Repeat("ok ", 40) + "bonjor")
+	u.debug, u.th = &Window{}, theme.Terminal()
+	u.t = term.NewOffscreen(&bytes.Buffer{}, 80, 24)
+	u.draw() // a draft wider than the input: the frame shows its end only
+	u.key(term.Key{Code: term.Ctrl, Rune: 'r'})
+	if u.spellFix == nil {
+		t.Fatal("Ctrl+R opens the box on bonjor")
+	}
+	u.authStart(netTelegram, model.EvAuthPrompt{Question: "code?"})
+	u.draw()
+	if u.spellFix != nil {
+		t.Fatal("the box must close with the input it pointed into")
 	}
 }
 

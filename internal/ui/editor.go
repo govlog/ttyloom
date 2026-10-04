@@ -4,6 +4,8 @@ import (
 	"slices"
 	"strings"
 	"unicode"
+
+	"github.com/govlog/ttyloom/internal/render"
 )
 
 // Editor : input line in the readline style, ↑/↓ history, Tab completion.
@@ -18,6 +20,23 @@ type Editor struct {
 func (e *Editor) String() string { return string(e.buf) }
 func (e *Editor) Cursor() int    { return e.cur }
 func (e *Editor) Set(s string)   { e.buf = []rune(s); e.cur = len(e.buf) }
+
+// Load : the input of another window comes in. The history browse of the one
+// left ends: Down must not bring its draft back here.
+func (e *Editor) Load(s string) { e.Set(s); e.hi, e.draft = len(e.hist), nil }
+
+// Shown : the draft as the screen may show it — a control character that a
+// completion or a pick brought in blanked, rune for rune (the cursor and the
+// spell ranges stay valid); the style marks of Ctrl+B/I/U kept.
+func (e *Editor) Shown() string {
+	out := []rune(render.Clean(string(e.buf)))
+	for i, r := range e.buf {
+		if strings.ContainsRune(marks, r) {
+			out[i] = r
+		}
+	}
+	return string(out)
+}
 
 func (e *Editor) Insert(s string) {
 	r := []rune(s)
@@ -122,14 +141,13 @@ func (e *Editor) Delete() {
 }
 
 func (e *Editor) KillToEnd() { e.buf = e.buf[:e.cur] }
-func (e *Editor) KillLine()  { e.buf = slices.Delete(e.buf, 0, e.cur); e.cur = 0 }
 
 func (e *Editor) KillWord() {
 	i := e.cur
-	for i > 0 && e.buf[i-1] == ' ' {
+	for i > 0 && sep(e.buf[i-1]) {
 		i--
 	}
-	for i > 0 && e.buf[i-1] != ' ' {
+	for i > 0 && !sep(e.buf[i-1]) {
 		i--
 	}
 	e.buf = slices.Delete(e.buf, i, e.cur)
@@ -175,7 +193,7 @@ func (e *Editor) Submit() string {
 // prefix adds nothing, the matches come back so that the caller lists them.
 func (e *Editor) Complete(cands func(word string, atStart bool) []string) []string {
 	start := e.cur
-	for start > 0 && e.buf[start-1] != ' ' {
+	for start > 0 && !sep(e.buf[start-1]) {
 		start--
 	}
 	word := string(e.buf[start:e.cur])

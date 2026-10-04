@@ -28,7 +28,7 @@ type sideFind struct {
 // and no mode holds the input line (login answer, Ctrl+F, y/n question, paste
 // or send confirmation): those keep the keys, the cursor and the highlight.
 func (u *UI) sideHasKeys() bool {
-	if !u.find.keys || u.prompt != nil || u.search != nil || u.ask != nil || u.pasteAsk != "" || u.sendAsk != nil {
+	if !u.find.keys || u.inputAsks() {
 		return false
 	}
 	x0, _ := u.layout()
