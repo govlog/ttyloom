@@ -215,6 +215,21 @@ func (u *UI) hoverAt(x, y int) bool {
 	return true
 }
 
+// sideHoverAt updates the sidebar line under the pointer: it takes the
+// background of a hovered message. Same gating as hoverItem (through zoneOf);
+// the │ bar is no line. true when the line changed.
+func (u *UI) sideHoverAt(x, y int) bool {
+	hov := 0
+	if u.zoneOf(x, y) == zoneSide && x < u.sideW && y >= sideHdr && y < sideHdr+u.sideRows() {
+		hov = y - sideHdr + 1
+	}
+	if u.sideHov == hov {
+		return false
+	}
+	u.sideHov = hov
+	return true
+}
+
 // overlayLead tells whether an overlay has the lead on the mouse: key() routes
 // every event to it, so nothing under it is hovered nor zoned. The viewer and
 // the questions of the input line on top of the lead overlays.

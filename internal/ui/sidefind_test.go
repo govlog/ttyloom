@@ -244,3 +244,44 @@ func TestRegressionFocusGivesPointerKeyboardBack(t *testing.T) {
 		t.Fatal("Shift+Tab gave the keyboard to the panel: a focus round trip keeps it there")
 	}
 }
+
+// TestSideHover : the sidebar line under the pointer takes the background of
+// a hovered message, and a repaint is asked only when the line changes. The
+// current line keeps its inversion; the │ bar, the messages and hover = off
+// leave no line lit.
+func TestSideHover(t *testing.T) {
+	u := findUI()
+	u.openChat(u.chatList[0]) // christopher: the current line
+	bg := u.th.Color(theme.CodeBG)
+	lit := func() (out []string) {
+		lines, _ := u.sideBlock(-1)
+		for _, l := range lines {
+			if slices.ContainsFunc(l.Spans, func(s render.Span) bool { return s.Style.BG == bg }) {
+				out = append(out, render.LineText(l))
+			}
+		}
+		return out
+	}
+	if !u.sideHoverAt(2, sideHdr+1) {
+		t.Fatal("pointer onto Fabien: no repaint")
+	}
+	if got := lit(); len(got) != 1 || !strings.Contains(got[0], "Fabien") {
+		t.Fatalf("over Fabien, lit lines: %q", got)
+	}
+	if u.sideHoverAt(5, sideHdr+1) {
+		t.Fatal("same line: no repaint")
+	}
+	for _, p := range [][2]int{{2, sideHdr}, {u.sideW, sideHdr + 1}, {50, 5}} { // current line, │ bar, messages
+		u.sideHoverAt(2, sideHdr+1)
+		if !u.sideHoverAt(p[0], p[1]) {
+			t.Fatalf("%v: no repaint", p)
+		}
+		if got := lit(); len(got) != 0 {
+			t.Fatalf("%v, lit lines: %q", p, got)
+		}
+	}
+	u.cfg.Hover = config.HoverOff
+	if u.sideHoverAt(2, sideHdr+1) || len(lit()) != 0 {
+		t.Fatalf("hover off, lit lines: %q", lit())
+	}
+}

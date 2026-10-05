@@ -84,7 +84,7 @@ var settings = []setting{
 			// Zone dropped at once: "off" must leave nothing lit, and the mode just
 			// changed under a pointer that is not moving. zoneAt recomputes it at
 			// the next move.
-			u.zone = zoneNone
+			u.zone, u.sideHov = zoneNone, 0
 			if u.cfg.Hover == config.HoverOff {
 				u.hover = nil
 			}

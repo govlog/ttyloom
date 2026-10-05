@@ -695,6 +695,7 @@ type sideState struct {
 	sel    *model.Chat
 	selWin *Window
 	muted  map[model.ChatKey]bool // their unread counts are dimmed
+	hov    int                    // list line on the screen under the pointer, counted from 1; 0 = none
 	// shown : when not nil, takes the text and the width of the current line
 	// if the frame draws it — the only line marqueeTick scrolls.
 	shown *marqueeLine
@@ -948,6 +949,13 @@ func sidebarLines(mode sideMode, chats []*model.Chat, ws []*Window, wins []int, 
 		spans, id := []render.Span{{Text: blank}}, int64(0)
 		if k := off + i; k < n {
 			spans, id = row(k)
+			if i+1 == state.hov && (mode != sideWindows || wins[k] >= 0) { // a split header opens nothing
+				for j := range spans { // background of a hovered message; an inverted span (current line, cursor) keeps its own
+					if st := &spans[j].Style; st.BG.Kind == 0 && !st.Reverse {
+						st.BG = th.Color(theme.CodeBG)
+					}
+				}
+			}
 		}
 		s := sep
 		if i == sepRow {
@@ -974,7 +982,7 @@ func (u *UI) sideBlock(sepRow int) ([]render.Line, []sideRow) {
 	hot := u.sideHot()
 	side := sideHeader(u.side, u.cfg.SidebarSort, u.cfg.SidebarSplit, u.th, u.sideW, hot)
 	var shown marqueeLine
-	state := sideState{folded: u.foldState(), pulse: u.pulse, now: time.Now(), q: u.find.q, muted: u.muted, shown: &shown}
+	state := sideState{folded: u.foldState(), pulse: u.pulse, now: time.Now(), q: u.find.q, muted: u.muted, hov: u.sideHov, shown: &shown}
 	if m := u.menu; m != nil && m.member == "" {
 		state.menuChat = m.chat // menu of a sidebar line (nil for the menu of a message)
 	}

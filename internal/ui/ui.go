@@ -188,6 +188,7 @@ type UI struct {
 	side       sideMode               // sidebar (F2)
 	sideW      int                    // width of its content (sidebar_width, drag of the bar)
 	sideScroll int                    // first entry shown in the sidebar
+	sideHov    int                    // list line of the sidebar under the pointer, counted from 1; 0 = none
 	folded     map[string]bool        // folded sidebar sections, by key (sidebar.toml); nil = no section
 	muted      map[model.ChatKey]bool // chats with no bell nor notification (muted.toml)
 	marquee    marqueeState           // scrolling title of the current sidebar line
@@ -252,9 +253,10 @@ func Run(ctx context.Context, cancel context.CancelFunc, t *term.Term, cfg *conf
 				// Dropped by key(): only a hover, popup or zone change is worth a
 				// repaint (?1003 sends dozens of moves per second).
 				hov, who := u.hoverAt(k.Mouse.X, k.Mouse.Y), u.whoAt(k.Mouse.X, k.Mouse.Y)
+				side := u.sideHoverAt(k.Mouse.X, k.Mouse.Y)                // the sidebar line under the pointer
 				menu := u.menu != nil && u.menuHover(k.Mouse.X, k.Mouse.Y) // the entry follows the pointer
 				grid := u.gridHover(k.Mouse.X, k.Mouse.Y)                  // the picture under the pointer plays
-				if zon := u.zoneAt(k.Mouse.X, k.Mouse.Y); !k.Mouse.Motion || (!hov && !who && !zon && !menu && !grid) {
+				if zon := u.zoneAt(k.Mouse.X, k.Mouse.Y); !k.Mouse.Motion || (!hov && !side && !who && !zon && !menu && !grid) {
 					continue
 				}
 			case k.Code == term.Mouse && k.Mouse.Motion && k.Mouse.Button == 0 && u.drag == dragText:
