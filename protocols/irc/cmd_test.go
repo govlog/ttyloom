@@ -64,6 +64,24 @@ func TestJoinWithKey(t *testing.T) {
 	}
 }
 
+// /join #room key in a room one is already in (joined before its +k): no
+// JOIN goes out, but the key is saved for the next connection.
+func TestJoinKeyWhenIn(t *testing.T) {
+	c, s, events, saved := start(t, Config{Channels: []string{"#priv"}}, false)
+	s.expect("JOIN #priv")
+	s.send(":me!u@h JOIN #priv")
+	s.send("PING :sync")
+	s.expect("PONG") // the JOIN is read before the /join
+	c.Resolve(context.Background(), "#priv secret", true, 1)
+	if ev := waitFor[model.EvChat](t, events); ev.Chat == nil {
+		t.Fatalf("join of a room one is in: %+v", ev)
+	}
+	if got := saved.get(); len(got) != 1 || got[0] != "#priv secret" {
+		t.Fatalf("saved lists %q, want the room with its key", got)
+	}
+	s.never("JOIN", 200*time.Millisecond)
+}
+
 // Channel commands: sent as typed, the room of the window as default target.
 func TestModeKickPartCycle(t *testing.T) {
 	c, s, events, _ := start(t, Config{Channels: []string{"#go"}}, false)

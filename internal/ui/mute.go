@@ -24,6 +24,9 @@ type mutedFile struct {
 	Chats []string `toml:"chats"`
 }
 
+// mutedWin : w shows a muted chat.
+func (u *UI) mutedWin(w *Window) bool { return w.Chat != nil && u.muted[w.Chat.Key()] }
+
 func mutedPath() string { return filepath.Join(config.Dir(), "muted.toml") }
 
 // loadMuted gives the muted chats. A missing file mutes nothing; a key

@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- **A muted chat** keeps its unread count in its own line only: not in `[Act: …]` nor in the count of its tab.
+
+### Fixed
+
+- **`/join #room key` in a room already joined** saves the key for the next connections instead of dropping it.
+
 ## v0.12-beta — 2026-10-05
 
 ### Added

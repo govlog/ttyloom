@@ -161,10 +161,16 @@ func (c *Client) Resolve(_ context.Context, q string, _ bool, request uint64) {
 	name, key, _ := strings.Cut(q, " ") // "#room key" joins a room with a key
 	c.mu.Lock()
 	_, in := c.members[c.casefold(name)]
+	// Already in (joined before the +k): no JOIN, but the key is the one of
+	// the next connections.
+	saved := in && c.remember(name, key)
 	if !in {
 		c.joining[c.casefold(name)] = append(c.joining[c.casefold(name)], model.EvChat{Request: request, Query: q})
 	}
 	c.mu.Unlock()
+	if saved {
+		c.saveChannels()
+	}
 	if in {
 		c.Refuse("Resolve", model.EvChat{Request: request, Query: q, Chat: c.chatOf(name)})
 		return

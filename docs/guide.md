@@ -511,7 +511,7 @@ full.
 
 | Command | Effect |
 | --- | --- |
-| `/join #room [key]` | Join a room, with its channel key when it has one; the room is kept in `channels`, with its key, and becomes the send target of the window. |
+| `/join #room [key]` | Join a room, with its channel key when it has one; the room is kept in `channels`, with its key (typed again in a room one is already in, the key is saved for the next start), and becomes the send target of the window. |
 | `/part [#room] [reason]` | Leave the room, the current one by default: closes the window and drops the sidebar entry, but keeps the history file on disk, replayed when the room is joined again. This is the command other clients call `/leave`; TTYloom only knows `/part`. |
 | `/cycle [#room]` | Leave and rejoin the room, the window kept: the way to take ops back. |
 | `/topic [#room] [text]` | Show or set the topic. |
@@ -648,7 +648,7 @@ global again. A single network has no tabs.
 | `/net [network]` | Filter the sidebar and aggregate view; `telegram`, `discord`, `irc:libera`, `all`, or no argument to cycle. |
 | `/telegram [status\|login\|logout\|disconnect]`, `/discord [status\|login\|logout\|disconnect]` | One network: its status, a new login (Discord runs `token_cmd` again), a logout (Telegram ends the session on the server) or a `disconnect`, which cuts the connection and keeps the session. |
 | `/fold [section]` | Toggle a sidebar section by key, such as `telegram` or `discord:Gophers`, or a displayed-name prefix. No argument lists sections and their collapsed/expanded state. |
-| `/mute [name]`, `/unmute [name]` | Mute the conversation of the window, or the one named (exact name or prefix): no bell, no notification and no pulse in the sidebar, even on a mention; its unread count stays, dimmed. `/mute` alone in a window with no conversation lists the muted ones. Saved in `muted.toml`; the network is not told. |
+| `/mute [name]`, `/unmute [name]` | Mute the conversation of the window, or the one named (exact name or prefix): no bell, no notification and no pulse in the sidebar, even on a mention; its unread count stays, dimmed, in its own line only (not in `[Act: …]` nor in the count of its tab). `/mute` alone in a window with no conversation lists the muted ones. Saved in `muted.toml`; the network is not told. |
 | `/history N`, `/hist N` | Load N older messages, 50 by default and at most what a window keeps (2000, or `cache_messages` when higher); PgUp at the top also loads older history. |
 | `/clear`, `/c` | Clear the current window. Ctrl+L only clears the screen: the lines stay in the history. `/clear` keeps the disk history too: the next write merges the window into the file instead of replacing it. |
 | `/rename [target] name`, `/unrename [target]` | Set or remove a local chat/contact alias, saved in `aliases.toml`. It applies to the sidebar, status bar, aggregate view, completion and the DM contact’s displayed name. It is not sent to the network. |

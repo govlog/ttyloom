@@ -585,11 +585,12 @@ func (u *UI) sgr(st theme.Style) string {
 
 // actSpans : the [Act: …] list of the status bar, one span per window (a hot
 // one in hotStyle), commas between them. Only the windows of the tab in tab
-// mode: the other networks are summed up on their tab.
+// mode: the other networks are summed up on their tab. A muted chat keeps its
+// count in its own line only (/mute).
 func (u *UI) actSpans(plain, act theme.Style) []render.Span {
 	var out []render.Span
 	for i, w := range u.ws.List {
-		if w.Act == 0 || (u.tabsOn() && !u.winShown(w)) {
+		if w.Act == 0 || (u.tabsOn() && !u.winShown(w)) || u.mutedWin(w) {
 			continue
 		}
 		if len(out) > 0 {
@@ -637,7 +638,7 @@ func (u *UI) tabSpans(x0 int) ([]render.Span, []tabHit) {
 		if net != "" {
 			label = net
 			for _, w := range u.ws.List {
-				if w.Chat != nil && w.Chat.Net == net {
+				if w.Chat != nil && w.Chat.Net == net && !u.mutedWin(w) {
 					n += w.Act
 					hot = hot || w.Hot
 				}

@@ -357,6 +357,28 @@ func TestActSpansHot(t *testing.T) {
 	}
 }
 
+// A muted chat shows its unread messages in its own line only: neither the
+// [Act: …] list nor the count of its tab.
+func TestMutedOutOfStatusBar(t *testing.T) {
+	u := tabsUI()
+	u.th = theme.Terminal()
+	u.cfg.Tabs = true
+	u.ws.List[1].Act = 2 // discord
+	u.ws.List[2].Act = 1 // telegram
+	u.muted = map[model.ChatKey]bool{u.ws.List[1].Chat.Key(): true}
+	var text strings.Builder
+	for _, s := range u.actSpans(theme.Style{}, theme.Style{}) {
+		text.WriteString(s.Text)
+	}
+	spans, _ := u.tabSpans(0)
+	for _, s := range spans {
+		text.WriteString(s.Text)
+	}
+	if got, want := text.String(), "2(1)[*] [discord] [telegram(1)]"; got != want {
+		t.Fatalf("status bar: %q, want %q", got, want)
+	}
+}
+
 // The tab bar: [all] first, one tab per network in name order, the unread
 // sum of the network in brackets, the current tab in accent, and a column
 // range per tab for the click.

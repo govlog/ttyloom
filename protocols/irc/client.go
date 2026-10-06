@@ -449,6 +449,30 @@ func (c *Client) roomKey(ch string) string {
 	return ""
 }
 
+// remember puts room ch in the list. A room joined with a key keeps it, a new
+// key replaces the old one: every later connection needs it, or the server
+// answers 475. c.mu held; true when the list changed.
+func (c *Client) remember(ch, key string) bool {
+	key = strings.TrimSpace(key)
+	i := slices.IndexFunc(c.channels, func(x string) bool { return c.casefold(roomName(x)) == c.casefold(ch) })
+	entry := ch
+	if i >= 0 {
+		entry = roomName(c.channels[i])
+	}
+	if key != "" {
+		entry += " " + key
+	}
+	switch {
+	case i < 0:
+		c.channels = append(c.channels, entry)
+	case key != "" && c.channels[i] != entry:
+		c.channels[i] = entry
+	default:
+		return false
+	}
+	return true
+}
+
 func roomName(entry string) string {
 	n, _, _ := strings.Cut(entry, " ")
 	return n
@@ -633,21 +657,13 @@ func (c *Client) onJoin(e ircmsg.Message) {
 		c.mu.Lock()
 		q, waiting := c.joining[c.casefold(ch)]
 		delete(c.joining, c.casefold(ch))
-		// A room joined with a key keeps it, a new key replaces the old one:
-		// every later connection needs it, or the server answers 475.
-		entry := ch
+		key := ""
 		for _, ev := range q {
-			if _, key, _ := strings.Cut(ev.Query, " "); strings.TrimSpace(key) != "" {
-				entry = ch + " " + strings.TrimSpace(key)
+			if _, k, _ := strings.Cut(ev.Query, " "); strings.TrimSpace(k) != "" {
+				key = k
 			}
 		}
-		changed := false
-		switch i := slices.IndexFunc(c.channels, func(x string) bool { return c.casefold(roomName(x)) == c.casefold(ch) }); {
-		case i < 0:
-			c.channels, changed = append(c.channels, entry), true
-		case entry != ch && c.channels[i] != entry:
-			c.channels[i], changed = entry, true
-		}
+		changed := c.remember(ch, key)
 		c.members[c.casefold(ch)] = map[string]string{}
 		c.mu.Unlock()
 		if changed {
