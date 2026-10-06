@@ -203,7 +203,11 @@ func (u *UI) openMenu(x, y int) {
 	if c == nil {
 		return
 	}
-	u.menu = &ctxMenu{chat: c, entries: menuEntries(c.Kind, false, u.caps(c)), x: x, y: y}
+	es := menuEntries(c.Kind, false, u.caps(c))
+	if c.Undeletable { // the network would refuse it: not offered, as menuEntries does for caps
+		es = slices.DeleteFunc(es, func(e menuEntry) bool { return e.key == "delete" })
+	}
+	u.menu = &ctxMenu{chat: c, entries: es, x: x, y: y}
 }
 
 // openMemberMenu : right click on the line line of the member box, q being the

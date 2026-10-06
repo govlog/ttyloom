@@ -934,8 +934,8 @@ func sidebarLines(mode sideMode, chats []*model.Chat, ws []*Window, wins []int, 
 			}
 			name := render.Truncate(s, textW-render.Width(pfx)-render.Width(act), "")
 			sp := append([]render.Span{{Text: num, Style: st}, {Text: pfx, Style: p}}, hitSpans(render.Span{Text: name, Style: st}, state.q, th)...)
-			if act != "" {
-				sp = append(sp, render.Span{Text: act, Style: a})
+			if act != "" { // the space keeps the line style: the pulse inverts "(n)" only
+				sp = append(sp, render.Span{Text: " ", Style: st}, render.Span{Text: act[1:], Style: a})
 			}
 			pad := strings.Repeat(" ", max(0, textW-render.Width(pfx)-render.Width(name)-render.Width(act)))
 			return append(sp, render.Span{Text: pad, Style: st}), 0

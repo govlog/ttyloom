@@ -1,6 +1,7 @@
 package dsc
 
 import (
+	"encoding/json"
 	"slices"
 
 	"github.com/diamondburned/arikawa/v3/discord"
@@ -34,6 +35,7 @@ func (c *Client) wire() {
 		// messages apart by this id.
 		c.self.Store(int64(e.User.ID))
 		c.emojis.Clear() // a new session: the emojis may have changed meanwhile
+		c.dmRecipients(e.RawEventBody)
 	})
 	// A guild that comes (back) or changes its emojis is read again by the
 	// next customsOf: the state has applied the event before these handlers.
@@ -163,7 +165,7 @@ func (c *Client) guildGone(e *gateway.GuildDeleteEvent) {
 func (c *Client) chatFor(id discord.ChannelID) *model.Chat {
 	ch, err := c.state().Cabinet.Channel(id)
 	if err != nil {
-		return &model.Chat{ID: int64(id), Kind: model.ChatGroup,
+		return &model.Chat{ID: int64(id), Kind: model.ChatGroup, Undeletable: true, // DeleteChat refuses an unknown channel
 			Peer: peer{Channel: uint64(id)}, Title: "#" + id.String()}
 	}
 	chat := chatOf(ch, c.guildName(ch.GuildID))
@@ -212,6 +214,47 @@ func (c *Client) guildName(id discord.GuildID) string {
 		return g.Name
 	}
 	return ""
+}
+
+// dmRecipients gives the DMs of a READY their recipients. Discord sends
+// recipient_ids and the users apart (DedupeUserObjects). ningen joins them,
+// but its type embeds discord.Channel: under the json of Go 1.27 (jsonv2) the
+// UnmarshalJSON of Channel takes the whole object and recipient_ids is lost.
+// Without a recipient arikawa does not index a DM (one is required) and a group
+// DM has no title: the DMs left the sidebar and the completion of /m.
+// ponytail: remove once ningen decodes recipient_ids apart from the channel.
+func (c *Client) dmRecipients(raw []byte) {
+	var r struct {
+		Users    []discord.User `json:"users"`
+		Channels []struct {
+			ID         discord.ChannelID `json:"id"`
+			Recipients []discord.UserID  `json:"recipient_ids"`
+		} `json:"private_channels"`
+	}
+	if json.Unmarshal(raw, &r) != nil {
+		return
+	}
+	users := make(map[discord.UserID]discord.User, len(r.Users))
+	for _, u := range r.Users {
+		users[u.ID] = u
+	}
+	cab := c.state().Cabinet
+	for _, pc := range r.Channels {
+		ch, err := cab.Channel(pc.ID)
+		if err != nil || len(ch.DMRecipients) > 0 || len(pc.Recipients) == 0 {
+			continue
+		}
+		cp := *ch
+		cp.DMRecipients = make([]discord.User, len(pc.Recipients))
+		for i, id := range pc.Recipients {
+			u, ok := users[id]
+			if !ok {
+				u.ID = id // the id at least: the title falls back on it
+			}
+			cp.DMRecipients[i] = u
+		}
+		_ = cab.ChannelSet(&cp, true) // fails only for a DM without exactly one recipient
+	}
 }
 
 // typist : name to show in the "… typing" line. A guild event carries the

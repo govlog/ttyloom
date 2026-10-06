@@ -47,7 +47,10 @@ type Chat struct {
 	// (a megagroup keeps Kind ChatGroup). Its message ids never show up in a
 	// global delete update.
 	Channel bool
-	Unread  int
+	// Undeletable : the network cannot delete this chat (a Discord guild
+	// channel); the menu does not offer it.
+	Undeletable bool
+	Unread      int
 	// UnreadReactions : reactions to my messages not read yet — the badge of
 	// the official Telegram clients. Set by the dialog list and by a live
 	// reaction, cleared on the server when the window is looked at (markRead).

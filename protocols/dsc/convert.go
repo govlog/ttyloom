@@ -238,7 +238,7 @@ func chatOf(ch *discord.Channel, guild string) *model.Chat {
 	case discord.GroupDM:
 		c.Title = cmp.Or(ch.Name, recipients(ch.DMRecipients))
 	default:
-		c.Title = "#" + ch.Name
+		c.Title, c.Undeletable = "#"+ch.Name, true // see DeleteChat
 		if guild != "" {
 			c.Title, c.Group = guild+" / "+c.Title, guild
 		}

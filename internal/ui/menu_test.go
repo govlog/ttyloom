@@ -349,3 +349,21 @@ func TestEditStep(t *testing.T) {
 		t.Fatalf("past the newest: edit %v input %q sel %v", u.edit, u.ed.String(), w.Sel)
 	}
 }
+
+// A chat the network cannot delete (a Discord guild channel) has no "delete"
+// entry: the confirmation used to end in nothing at all.
+func TestMenuUndeletable(t *testing.T) {
+	c := &model.Chat{Net: "discord", ID: 8, Kind: model.ChatGroup, Title: "g / #general", Undeletable: true}
+	u := &UI{ws: NewWindows(), agg: &Window{}, debug: &Window{},
+		cfg: &config.Config{SidebarSort: "recent"}, t: &term.Term{Cols: 80, Rows: 24},
+		side: sideChats, sideW: 26, chatList: []*model.Chat{c},
+		chats: map[model.ChatKey]*model.Chat{c.Key(): c}, aliases: map[model.ChatKey]string{},
+		nets: map[string]model.Backend{"discord": &fakeBackend{caps: model.AllCaps()}}}
+	u.openMenu(0, sideHdr)
+	if u.menu == nil {
+		t.Fatal("no menu on the chat")
+	}
+	if slices.ContainsFunc(u.menu.entries, func(e menuEntry) bool { return e.key == "delete" }) {
+		t.Fatalf("menu of an undeletable chat: %+v", u.menu.entries)
+	}
+}

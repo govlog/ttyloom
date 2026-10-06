@@ -275,11 +275,8 @@ func (c *Client) DeleteChat(ctx context.Context, chat *model.Chat) {
 	chID, _ := ids(chat)
 	ch, err := c.state().Cabinet.Channel(chID)
 	if err != nil || (ch.Type != discord.DirectMessage && ch.Type != discord.GroupDM) {
-		// ponytail: the line of Warn lands in the debug log only (/debug),
-		// never in a window. Leave and Block no longer reach it from the menu
-		// — Caps.Leave and Caps.Block gate their entries out — so what is left
-		// is DeleteChat on a guild channel, refused with nothing but that one
-		// log line.
+		// The menu does not offer it (Chat.Undeletable): the line of Warn,
+		// in the debug log only (/debug), is a guard, not a message.
 		c.Warn(Net, "DeleteChat")
 		return
 	}
@@ -639,7 +636,16 @@ func (c *Client) Participants(_ context.Context, chat *model.Chat) {
 		// out (asynchronous, it subscribes the guild on the way) and what the
 		// cache already holds is shown at once: a first opening can be short,
 		// the next one is complete.
-		c.state().MemberState.RequestMemberList(guild, chID, 0)
+		// ningen panics (makeslice) when the list is known and under 100
+		// visible members. Only a subscription fills a list, so a known
+		// list that fits its first chunk has nothing left to ask.
+		// ponytail: the check and the request are not atomic; a list that
+		// lands between them still panics once, and Guard catches it.
+		// Remove when ningen caps the chunk count at 1.
+		mst := c.state().MemberState
+		if l, err := mst.GetMemberList(guild, chID); err != nil || l.TotalVisible() >= 100 {
+			mst.RequestMemberList(guild, chID, 0)
+		}
 		ms, err := c.state().Cabinet.Members(guild)
 		if err != nil {
 			ev.Err = err.Error()

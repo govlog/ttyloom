@@ -1,11 +1,15 @@
 package dsc
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/gateway"
+	"github.com/diamondburned/ningen/v3/states/member"
+
+	"github.com/govlog/ttyloom/internal/model"
 )
 
 // A ":name:" the guild knows goes out as the <:name:id> Discord renders; an
@@ -74,5 +78,34 @@ func TestCustomsOncePerGuild(t *testing.T) {
 	c.state().Handler.Call(&gateway.GuildEmojisUpdateEvent{GuildID: 9})
 	if got := c.chatFor(8).Customs; len(got) != 1 || got[0] != ":new:" {
 		t.Fatalf("customs after the update = %d entries, want the new one alone", len(got))
+	}
+}
+
+// A guild under 100 visible members whose list the gateway has already sent
+// (another channel opened it): the box of a new channel shows the cached
+// members. ningen used to panic there (makeslice: cap out of range).
+func TestParticipantsSmallKnownList(t *testing.T) {
+	ev := make(chan model.Event, 4)
+	c := testClient(ev)
+	st := c.state()
+	if err := st.Cabinet.ChannelSet(&discord.Channel{ID: 8, GuildID: 9, Name: "gen"}, false); err != nil {
+		t.Fatalf("channel of the test: %s", err)
+	}
+	if err := st.Cabinet.MemberSet(9, &discord.Member{User: discord.User{ID: 42, Username: "bob"}}, false); err != nil {
+		t.Fatalf("member of the test: %s", err)
+	}
+	st.State.Handler.Call(&gateway.GuildMemberListUpdateEvent{
+		GuildID: 9, ID: member.ComputeListID(nil), MemberCount: 1, OnlineCount: 1})
+	c.Participants(context.Background(), c.chatFor(8))
+	for {
+		switch e := next(t, ev).(type) {
+		case model.EvLog:
+			t.Fatalf("log instead of the members: %s", e.Msg)
+		case model.EvParticipants:
+			if e.Err != "" || len(e.Lines) != 1 || e.Lines[0].Query != "@bob" {
+				t.Fatalf("members = %+v, err %q", e.Lines, e.Err)
+			}
+			return
+		}
 	}
 }

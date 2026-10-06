@@ -19,6 +19,7 @@ import (
 
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
+	"github.com/diamondburned/arikawa/v3/gateway"
 	"github.com/diamondburned/arikawa/v3/utils/httputil/httpdriver"
 	"github.com/gorilla/websocket"
 
@@ -616,5 +617,40 @@ func TestFetchRefusesLocalAddressAndRedirect(t *testing.T) {
 	useTestCDN(t, srv.URL)
 	if err := fetch(context.Background(), "https://cdn.discordapp.com/test", path, 100); err == nil || calls.Load() != 1 {
 		t.Fatalf("redirect escaped the CDN: calls %d, error %v", calls.Load(), err)
+	}
+}
+
+// A READY sends the DMs with recipient_ids and the users apart. Both a DM and
+// a group DM with no name of its own come out of LoadDialogs titled after the
+// correspondent: under the json of Go 1.27 the join of ningen fills nothing,
+// and the DM was missing from the list.
+func TestReadyDMRecipients(t *testing.T) {
+	ev := make(chan model.Event, 4)
+	c := testClient(ev)
+	c.wire()
+	var ready gateway.ReadyEvent
+	if err := json.Unmarshal([]byte(`{"v":9,"user":{"id":"1","username":"me"},"session_id":"s","guilds":[],
+		"users":[{"id":"42","username":"bob","global_name":"Bob","discriminator":"0"}],
+		"private_channels":[{"id":"500","type":1,"recipient_ids":["42"],"last_message_id":"600"},
+			{"id":"501","type":3,"recipient_ids":["42"],"owner_id":"42","last_message_id":"601"}]}`), &ready); err != nil {
+		t.Fatalf("READY of the test: %s", err)
+	}
+	c.state().State.Session.Handler.Call(&ready)
+	// A guild in the cache: an empty one would send Guilds() to the network.
+	if err := c.state().Cabinet.GuildSet(&discord.Guild{ID: 9, Name: "g"}, false); err != nil {
+		t.Fatalf("guild of the test: %s", err)
+	}
+	c.LoadDialogs(context.Background())
+	for {
+		if d, ok := next(t, ev).(model.EvDialogs); ok {
+			got := map[int64]string{}
+			for _, ch := range d.Chats {
+				got[ch.ID] = ch.Title + "|" + ch.Username
+			}
+			if d.Err != "" || got[500] != "Bob|bob" || got[501] != "Bob|" {
+				t.Fatalf("dialogs = %v, err %q; want 500 \"Bob|bob\", 501 \"Bob|\"", got, d.Err)
+			}
+			return
+		}
 	}
 }

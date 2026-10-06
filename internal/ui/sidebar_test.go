@@ -898,21 +898,25 @@ func TestSideWindowAgeColour(t *testing.T) {
 }
 
 // A hot window of the window list shows its counter in the mention colour,
-// bold, with the pulse as reverse video.
+// bold, with the pulse as reverse video — on "(3)" only, not on the space
+// in front of it.
 func TestSidebarHotCounter(t *testing.T) {
 	th := theme.Terminal()
 	ws := []*Window{{}, {Chat: &model.Chat{ID: 1, Kind: model.ChatUser, Title: "alice"}, Act: 3, Hot: true}}
 	lines := sidebarLines(sideWindows, nil, ws, nil, 0, th, testSideW, 3, 0, false, false, 0, -1, false, nil, sideState{pulse: true})
-	var hot *render.Span
+	var hot, before *render.Span
 	for i := range lines {
 		for j := range lines[i].Spans {
-			if lines[i].Spans[j].Text == " (3)" {
-				hot = &lines[i].Spans[j]
+			if lines[i].Spans[j].Text == "(3)" && j > 0 {
+				hot, before = &lines[i].Spans[j], &lines[i].Spans[j-1]
 			}
 		}
 	}
 	if hot == nil || !hot.Style.Bold || !hot.Style.Reverse || hot.Style.FG != th.Color(theme.Mention) {
 		t.Fatalf("hot counter span: %+v (lines %+v)", hot, lines)
+	}
+	if !strings.HasSuffix(before.Text, " ") || before.Style.Reverse {
+		t.Fatalf("span before the counter: %+v, want a plain space", before)
 	}
 }
 

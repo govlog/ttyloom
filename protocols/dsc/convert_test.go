@@ -152,9 +152,9 @@ func TestChatOf(t *testing.T) {
 			DMRecipients: []discord.User{{Username: "bob"}, {Username: "eve", DisplayName: "Eve"}}}, "",
 			model.Chat{ID: 7, Kind: model.ChatGroup, Title: "bob, Eve"}},
 		{"guild channel", discord.Channel{ID: 8, GuildID: 9, Type: discord.GuildText, Name: "general"},
-			"Gophers", model.Chat{ID: 8, Kind: model.ChatGroup, Title: "Gophers / #general", Group: "Gophers"}},
+			"Gophers", model.Chat{ID: 8, Kind: model.ChatGroup, Title: "Gophers / #general", Group: "Gophers", Undeletable: true}},
 		{"guild channel, guild unknown", discord.Channel{ID: 8, GuildID: 9, Type: discord.GuildText, Name: "general"},
-			"", model.Chat{ID: 8, Kind: model.ChatGroup, Title: "#general"}},
+			"", model.Chat{ID: 8, Kind: model.ChatGroup, Title: "#general", Undeletable: true}},
 		// No name anywhere: the id is at least something to click on.
 		{"dm with no recipient", discord.Channel{ID: 9, Type: discord.DirectMessage}, "",
 			model.Chat{ID: 9, Kind: model.ChatUser, Title: "9"}},
