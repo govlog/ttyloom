@@ -20,7 +20,7 @@ var aliases = map[string]string{
 }
 
 var commandNames = []string{"/window", "/close", "/query", "/join", "/new", "/msg", "/me", "/shrug", "/away", "/chats", "/networks", "/hooks", "/net", "/fold", "/mute", "/unmute", "/history",
-	"/search", "/whois", "/rename", "/unrename", "/open", "/view", "/send", "/theme", "/set", "/clear", "/log", "/debug", "/emoji", "/gif", "/media", "/help", "/quit"}
+	"/search", "/whois", "/rename", "/unrename", "/alias", "/unalias", "/open", "/view", "/send", "/theme", "/set", "/clear", "/log", "/debug", "/emoji", "/gif", "/media", "/help", "/quit"}
 
 // cmdNames : the commands valid now. general resolve first by prefix, then
 // context — the ones a network adds in its own windows (IRC's /kick), which
@@ -192,6 +192,10 @@ func (u *UI) command(name string, args []string, text string) {
 		u.foldCmd(w, text)
 	case "mute", "unmute":
 		u.muteCmd(w, text, name == "mute")
+	case "alias":
+		u.aliasCmd(w, text)
+	case "unalias":
+		u.unaliasCmd(w, text)
 	case "history":
 		if u.botOnly() {
 			w.AddSys(i18n.T("bot_unavailable"))

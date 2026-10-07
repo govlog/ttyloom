@@ -190,6 +190,7 @@ Review `download_dir` and `log_dir` in that configuration. Caches written with e
 | GIFs / emoji | Ctrl+G / Ctrl+T |
 | Photos, videos, GIFs and files of the conversation | Ctrl+M or `/media` |
 | Mute or unmute a conversation | `/mute` / `/unmute` |
+| Your own command, its removal | `/alias ver /ctcp version` then `/ver nick` / `/unalias ver` |
 | Select a message | Alt+↑ / Alt+↓ or click |
 | Reply / edit / react / copy selection | `p` / `e` / `r` / `c`, or the right-click menu |
 | Edit my previous message, the next one | Ctrl+↑ / Ctrl+↓ |

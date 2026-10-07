@@ -52,6 +52,8 @@ var helpTopics = []topic{
 	{"/whois", "help_whois", "chats"},
 	{"/rename", "help_rename", "chats"},
 	{"/unrename", "help_unrename", "chats"},
+	{"/alias", "help_alias", "input"},
+	{"/unalias", "help_unalias", "input"},
 	{"/clear", "help_clear", "chats"},
 	{"/help", "help_help", "chats"},
 

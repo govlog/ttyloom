@@ -31,6 +31,7 @@ const (
 	complFold                            // /fold <section>
 	complPath                            // /send <path>: files of the disk
 	complWords                           // a closed list: /log <on|off>, /media <tab> (argWords)
+	complAliases                         // /alias /unalias <name>
 	complNone                            // /open /history …
 	complModule                          // a command of a module: its Complete
 )
@@ -96,6 +97,11 @@ func complContext(line string, cursor int, names cmdNames) (src complSource, tai
 		return complFold, rest, ""
 	case "log", "media":
 		return complWords, rest, name
+	case "alias", "unalias":
+		if strings.Contains(rest, " ") { // the text of the alias: free
+			return complNone, "", ""
+		}
+		return complAliases, rest, ""
 	case "send":
 		// The whole tail: a path may hold spaces (splitSendArgs allows it);
 		// once it names a file, the rest is the caption.
@@ -305,7 +311,7 @@ func (u *UI) completeTab() {
 	src, tail, _ := complContext(line, cursor, u.commandNames())
 	var list []string
 	if src == complCommands {
-		for _, name := range u.commandNames().all() {
+		for _, name := range append(u.commandNames().all(), u.aliasNames()...) {
 			if strings.HasPrefix(name, strings.ToLower(tail)) {
 				list = append(list, name)
 			}

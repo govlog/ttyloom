@@ -57,6 +57,11 @@ func newUI(ctx context.Context, cancel context.CancelFunc, t *term.Term, cfg *co
 	} else {
 		u.muted = m
 	}
+	if a, err := loadCmdAliases(cmdAliasPath()); err != nil {
+		u.status0(i18n.T("alias_error", err)) // unreadable file: no alias
+	} else {
+		u.cmdAlias = a
+	}
 	u.lastChat = loadLast(lastPath())
 	u.launch = u.launchModule
 	for _, m := range mods {

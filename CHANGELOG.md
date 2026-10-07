@@ -4,6 +4,7 @@
 
 ### Added
 
+- **`/alias` and `/unalias`**: `/alias ident /msg nickserv identify …` makes `/ident` run that line, with what follows the name appended (`/alias ver /ctcp version`, then `/ver govlog`); a text that is no command goes to the current conversation as a message. `/alias` lists them; the names of the commands of ttyloom are refused, and an alias never runs another one. Saved in `commands.toml` (0600).
 - **Reactions to your messages** made while you look elsewhere are no longer silent: the last one shows at the end of the conversation's sidebar line and in `[Act: …]` (`5🔥`), a notification names who reacted and quotes your message (no bell), and going to the window selects the message that got it. On Telegram the unread reactions of the start-up list show 👍.
 - **Emoji shortcodes**: typing `:` then a letter opens a box of matching emojis above the input, the same box as `@`, each with its shortcode (gemoji ones such as `:+1:` and `:tada:`, and one made from the Unicode name). Tab, Enter or a click inserts the emoji; Enter on a single letter sends `:D` as typed; the closing `:` of a whole shortcode converts it. On Discord, the custom emojis of the server come first.
 

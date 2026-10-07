@@ -150,6 +150,7 @@ type UI struct {
 	menu        *ctxMenu                // context menu of the sidebar (right click): it takes everything
 	parts       *partsBox               // member box shown (F3), nil = nothing to show
 	pop         *popBox                 // @… or :… box above the input, nil = closed
+	cmdAlias    map[string]string       // /alias: name → text it runs (commands.toml)
 	popMute     int                     // 1+start of the @ or :word muted by Esc; 0 = none
 	completion  *completionState        // repeated Tab on the current input
 	spell       spellChecker            // nil = off (config, error, or nospell build)
@@ -2380,6 +2381,9 @@ func (u *UI) submit() {
 		}
 		return
 	}
+	if s, ok := u.expandAlias(line); ok {
+		line = s
+	}
 	name, args, text, ok := ParseCommand(line, u.commandNames())
 	if ok {
 		if strings.Contains(line, "\n") { // a command fits on one line
@@ -2588,7 +2592,13 @@ func (u *UI) candidates(word string, atStart bool) []string {
 	src, tail, setKey := complContext(u.ed.String(), u.ed.Cursor(), u.commandNames())
 	switch src {
 	case complCommands:
-		return u.commandNames().all()
+		return append(u.commandNames().all(), u.aliasNames()...)
+	case complAliases:
+		var out []string
+		for _, n := range u.aliasNames() {
+			out = append(out, n[1:])
+		}
+		return out
 	case complModule:
 		return u.modComplete(setKey, tail, word)
 	case complChats:
