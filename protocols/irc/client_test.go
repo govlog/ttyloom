@@ -434,10 +434,17 @@ func TestIncomingMessages(t *testing.T) {
 	if !m.Msg.Notice || m.Msg.Text != "-bob- maintenance at noon" || m.Chat.Title != "#go" {
 		t.Fatalf("room notice: %+v", m.Msg)
 	}
-	// A notice to us and an invite land in window 0: /debug alone hid them.
+	// A notice to us from a person belongs to the private chat with them (the
+	// UI puts it in window 0 while that chat has no window); one from the
+	// server and an invite land in window 0: /debug alone hid them.
 	s.send(":NickServ!s@h NOTICE me :You are now identified")
-	if l := waitFor[model.EvLines](t, events); l.ChatID != 0 || len(l.Lines) != 1 || !strings.Contains(l.Lines[0], "-NickServ- You are now identified") {
-		t.Fatalf("notice: %+v", l)
+	m = waitFor[model.EvNewMessage](t, events)
+	if !m.Msg.Notice || m.Msg.Text != "-NickServ- You are now identified" || m.Chat.Kind != model.ChatUser || m.Chat.ID != chatID("nickserv") {
+		t.Fatalf("private notice: %+v %+v", m.Chat, m.Msg)
+	}
+	s.send(":irc.example.org NOTICE me :*** Looking up your hostname")
+	if l := waitFor[model.EvLines](t, events); l.ChatID != 0 || len(l.Lines) != 1 || !strings.Contains(l.Lines[0], "-irc.example.org- *** Looking up your hostname") {
+		t.Fatalf("server notice: %+v", l)
 	}
 	s.send(":carol!c@h INVITE me #secret")
 	if l := waitFor[model.EvLines](t, events); l.ChatID != 0 || len(l.Lines) != 1 || !strings.Contains(l.Lines[0], "#secret") {

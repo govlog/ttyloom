@@ -1330,6 +1330,12 @@ func (u *UI) listChat(c *model.Chat) {
 
 func (u *UI) newMessage(e model.EvNewMessage) {
 	m := e.Msg
+	// A notice to us opens no window (ircii): it joins the private chat with
+	// its sender when that one has a window, window 0 otherwise.
+	if m.Notice && e.Chat != nil && e.Chat.Kind == model.ChatUser && u.ws.ForChat(m.Key()) < 0 {
+		u.status0(m.Net + ": " + m.Text)
+		return
+	}
 	m.LiveAt = time.Now()
 	chat := u.chats[m.Key()]
 	if chat == nil {

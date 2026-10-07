@@ -66,3 +66,27 @@ func TestRegressionNoBellForAggregateShown(t *testing.T) {
 		t.Fatal("bell for a message shown in the aggregate")
 	}
 }
+
+// A notice to us (NickServ's answers) goes to the window of the private chat
+// with its sender when one is open, as its other lines do; with none, it
+// stays a line of window 0 and opens neither a window nor a sidebar entry.
+func TestPrivateNoticeRouting(t *testing.T) {
+	net := ircNet("libera")
+	u := &UI{ws: NewWindows(), agg: &Window{}, debug: &Window{}, cfg: &config.Config{},
+		t: term.NewOffscreen(&bytes.Buffer{}, 80, 24), nets: map[string]model.Backend{net: &fakeBackend{}}, conn: map[string]bool{},
+		chats: map[model.ChatKey]*model.Chat{}, dirty: map[model.ChatKey]bool{}, self: map[string]selfInfo{}}
+	notice := func(id int) {
+		dm := &model.Chat{ID: 9, Kind: model.ChatUser, Title: "NickServ"}
+		u.dispatch(model.Envelope{Net: net, Ev: model.EvNewMessage{Chat: dm,
+			Msg: model.Msg{ID: id, ChatID: 9, From: "NickServ", Text: "-NickServ- help text", Notice: true}}})
+	}
+	notice(1)
+	if got := lastSys(u.ws.List[0]); got != net+": -NickServ- help text" || len(u.ws.List) != 1 || len(u.chatList) != 0 {
+		t.Fatalf("no window: window 0 %q, %d windows, %d listed", got, len(u.ws.List), len(u.chatList))
+	}
+	w := u.winFor(&model.Chat{Net: net, ID: 9, Kind: model.ChatUser, Title: "nickserv"})
+	notice(2)
+	if n := len(w.Items); n == 0 || w.Items[n-1].Msg == nil || w.Items[n-1].Msg.Text != "-NickServ- help text" {
+		t.Fatalf("open chat: the notice is not in its window (%d items)", n)
+	}
+}

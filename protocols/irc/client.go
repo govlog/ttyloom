@@ -574,8 +574,9 @@ func (c *Client) onPrivmsg(e ircmsg.Message) {
 }
 
 // onNotice : a notice to a channel shows there as "-nick- text"; one to us
-// from a person opens no window — it goes to the status window, as ircii
-// does — and one from the server too.
+// from a person (NickServ's answers) belongs to the private chat with them —
+// the UI keeps it in window 0 while that chat has no window, as ircii does —
+// and one from the server goes to window 0.
 func (c *Client) onNotice(e ircmsg.Message) {
 	if len(e.Params) < 2 || (e.Nick() != "" && c.ignored(e)) {
 		return
@@ -597,6 +598,14 @@ func (c *Client) onNotice(e ircmsg.Message) {
 		return
 	}
 	from := e.Nick()
+	if strings.Contains(e.Source, "!") { // nick!user@host: a person, never a server
+		chat := c.chatOf(from)
+		m := c.msgOf(e, chat, e.Params[1])
+		prefix(&m, "-"+from+"- ")
+		m.Notice = true
+		c.Post(model.EvNewMessage{Msg: m, Chat: chat})
+		return
+	}
 	if from == "" {
 		from = e.Source
 	}

@@ -470,8 +470,9 @@ work: `/me` goes out as a CTCP ACTION and shows as `* nick does`, without
 `<nick>`, like the actions received. A reply (`p`) goes out as a plain message
 with no quote. Edits, reactions, read receipts, search, GIFs and the media
 browser do not exist on IRC. A notice sent to you, by a person or a service
-(NickServ), lands in window 0, as do the SASL answers and the invitations; a
-notice to a room shows in the room as `-nick- text`, and a message to its ops
+(NickServ), shows as `-nick- text` in your conversation with its sender when
+that conversation has a window, and in window 0 otherwise, as do the server
+notices, the SASL answers and the invitations; a notice to a room shows in the room as `-nick- text`, and a message to its ops
 (`@#room`) shows there marked `[@#room]`. NAMES answers are capped at 10000
 nicks, WHOIS and MOTD answers at 10000 lines.
 
