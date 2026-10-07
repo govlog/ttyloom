@@ -40,3 +40,23 @@ func TestUnreadReactionsReadOnVisit(t *testing.T) {
 		t.Fatalf("read %d, flag %v", b.readReacts, w.Chat.UnreadReactions)
 	}
 }
+
+// A message the network counts as a mention of me (Telegram: a mention or a
+// reply to me) stays unread on the server until its window is looked at:
+// then it is read there once — readHistory alone left the @ badge of the
+// phone on.
+func TestUnreadMentionsReadOnVisit(t *testing.T) {
+	u, b := gifUI()
+	u.focused, u.ws.Cur = true, 0 // the window of the chat is not the one shown
+	w := u.ws.List[1]
+	u.dispatch(model.Envelope{Net: netTelegram, Ev: model.EvNewMessage{Chat: w.Chat,
+		Msg: model.Msg{ChatID: w.Chat.ID, ID: 9, From: "bob", Text: "@me look", Mentioned: true}}})
+	if b.readMentions != 0 || !w.Chat.UnreadMentions {
+		t.Fatalf("mention in a window not shown: read %d, flag %v", b.readMentions, w.Chat.UnreadMentions)
+	}
+	u.markRead(w)
+	u.markRead(w)
+	if b.readMentions != 1 || w.Chat.UnreadMentions {
+		t.Fatalf("visit: read %d, flag %v", b.readMentions, w.Chat.UnreadMentions)
+	}
+}

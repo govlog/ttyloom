@@ -55,6 +55,11 @@ type Chat struct {
 	// the official Telegram clients. Set by the dialog list and by a live
 	// reaction, cleared on the server when the window is looked at (markRead).
 	UnreadReactions bool
+	// UnreadMentions : mentions of me not read yet — the @ badge of the
+	// official Telegram clients, which reading the history leaves on. Set by
+	// the dialog list and by a message with Msg.Mentioned, cleared on the
+	// server by markRead.
+	UnreadMentions  bool
 	ReadInboxMaxID  int
 	ReadOutboxMaxID int // last of my messages read by the chat (✓✓ tick)
 	Pinned          bool
@@ -241,6 +246,9 @@ type Msg struct {
 	Service   string // service message ("alice joined"); Text is ignored
 	// Notice : a message no program answers (IRC NOTICE): it fires no hook.
 	Notice bool
+	// Mentioned : the network counts the message as an unread mention of me
+	// (Telegram: a mention or a reply to me, not read yet).
+	Mentioned bool
 	// Action : IRC /me line; Text already reads "* nick does", so no <nick>.
 	Action  bool
 	Pending bool

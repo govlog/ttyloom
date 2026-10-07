@@ -205,7 +205,7 @@ func (c *Client) Resolve(ctx context.Context, q string, join bool, request uint6
 	}()
 }
 
-// MarkRead, ReadReactions and Typing send nothing while the FLOOD_WAIT
+// MarkRead, ReadReactions, ReadMentions and Typing send nothing while the FLOOD_WAIT
 // breaker is open: nothing waits for them.
 func (c *Client) MarkRead(ctx context.Context, chat *model.Chat, maxID int) {
 	if !c.floodOK() {
@@ -230,6 +230,19 @@ func (c *Client) ReadReactions(ctx context.Context, chat *model.Chat) {
 	go func() {
 		defer c.Guard("ReadReactions", nil)
 		c.api.MessagesReadReactions(ctx, &tg.MessagesReadReactionsRequest{Peer: c.peer(chat)})
+	}()
+}
+
+// ReadMentions marks the mentions of me in chat as read on the server —
+// readHistory leaves them on, and the @ badge of the official clients with
+// them. Fire and forget like MarkRead.
+func (c *Client) ReadMentions(ctx context.Context, chat *model.Chat) {
+	if !c.floodOK() {
+		return
+	}
+	go func() {
+		defer c.Guard("ReadMentions", nil)
+		c.api.MessagesReadMentions(ctx, &tg.MessagesReadMentionsRequest{Peer: c.peer(chat)})
 	}()
 }
 

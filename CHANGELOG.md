@@ -12,6 +12,7 @@
 
 ### Fixed
 
+- **Telegram mentions** are read on the server when you read their chat: the phone and the other clients drop their @ badge. Reading the history left them unread, as the mentions and the replies to you are read apart.
 - **A notice sent to you** (the answers of NickServ) shows in your conversation with its sender when that conversation has a window, next to what you wrote, instead of window 0. With no such window it still goes to window 0, as the server notices do.
 - **`/join #room key` in a room already joined** saves the key for the next connections instead of dropping it.
 - **Discord DMs** are back in the sidebar, titled after the correspondent, and `/m` completes their names again. Built with Go 1.27, whose JSON decoder drops the `recipient_ids` of the READY the way ningen reads them, the DMs had no recipient: arikawa left the one-to-one ones out and a group DM with no name showed its id.

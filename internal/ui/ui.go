@@ -398,6 +398,12 @@ type reactionReader interface {
 	ReadReactions(ctx context.Context, chat *model.Chat)
 }
 
+// mentionReader : the same for the mentions of me (Telegram), which reading
+// the history does not clear.
+type mentionReader interface {
+	ReadMentions(ctx context.Context, chat *model.Chat)
+}
+
 // setAway keeps the away message of net ("" = back).
 func (u *UI) setAway(net, msg string) {
 	if u.away == nil {
@@ -1306,6 +1312,7 @@ func (u *UI) remember(c *model.Chat) *model.Chat {
 		u.readInbox(old, c.ReadInboxMaxID, c.Unread, true)
 		old.TopMessage = max(old.TopMessage, c.TopMessage)
 		old.UnreadReactions = old.UnreadReactions || c.UnreadReactions // a live reaction before the list is not wiped
+		old.UnreadMentions = old.UnreadMentions || c.UnreadMentions
 		if c.LastDate.After(old.LastDate) {
 			old.LastDate = c.LastDate
 		}
@@ -1360,6 +1367,9 @@ func (u *UI) newMessage(e model.EvNewMessage) {
 	// Read on the screen: current window or aggregated view, and only when
 	// the terminal has the focus — away, nobody reads.
 	seen := u.seenNow(chat, &m)
+	if added && m.Mentioned {
+		chat.UnreadMentions = true // read on the server with the window (markRead)
+	}
 	if added && !m.Out {
 		// A muted chat counts its unread messages and nothing more.
 		hot := (chat.Kind == model.ChatUser || u.mentioned(chat, &m)) && !u.muted[chat.Key()]
@@ -1707,6 +1717,12 @@ func (u *UI) markRead(w *Window) {
 		w.Chat.UnreadReactions = false
 		if rr, ok := b.(reactionReader); ok {
 			rr.ReadReactions(u.backendContext(b), w.Chat)
+		}
+	}
+	if w.Chat.UnreadMentions {
+		w.Chat.UnreadMentions = false
+		if mr, ok := b.(mentionReader); ok {
+			mr.ReadMentions(u.backendContext(b), w.Chat)
 		}
 	}
 	if last := w.LastID(); last > w.ReadSent {

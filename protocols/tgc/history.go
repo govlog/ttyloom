@@ -40,6 +40,9 @@ func (c *Client) convert(ctx context.Context, mc tg.MessageClass, ent peer.Entit
 		chat = c.chatOf(cp)
 	}
 	m := model.Msg{ID: id, ChatID: chat.ID, Date: unixTime(date), Out: out}
+	if v, ok := mc.(*tg.Message); ok {
+		m.Mentioned = v.Mentioned && v.MediaUnread
+	}
 	if fromID != nil {
 		if fp, ok := c.peerOf(ent, fromID); ok {
 			m.From, m.FromID = nick(fp), int64(fp.TDLibPeerID())
@@ -240,6 +243,7 @@ func (c *Client) LoadDialogs(ctx context.Context) {
 			ch.Unread, ch.ReadInboxMaxID, ch.TopMessage = d.UnreadCount, d.ReadInboxMaxID, d.TopMessage
 			ch.ReadOutboxMaxID = d.ReadOutboxMaxID
 			ch.UnreadReactions = d.UnreadReactionsCount > 0
+			ch.UnreadMentions = d.UnreadMentionsCount > 0
 			ch.Pinned = d.Pinned
 			if e.Last != nil {
 				ch.LastDate = unixTime(e.Last.GetDate())
