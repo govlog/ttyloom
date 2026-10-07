@@ -69,8 +69,9 @@ const alertGap = 2 * time.Second
 
 // alertNote : a hot message waiting for its bell and notification.
 type alertNote struct {
-	chat *model.Chat
-	msg  model.Msg
+	chat  *model.Chat
+	msg   model.Msg
+	quiet bool // a reaction: the notification, never the bell
 }
 
 // alert rings and notifies for a hot message: at once when the last alert is
@@ -92,7 +93,7 @@ func (u *UI) flushAlert(now time.Time) bool {
 	if u.muted[a.chat.Key()] || u.seenNow(a.chat, &a.msg) { // muted, or read, while it waited
 		return false
 	}
-	if u.cfg.Bell {
+	if u.cfg.Bell && !a.quiet {
 		u.t.WriteString("\a") // flushed at the next draw()
 	}
 	u.notify(a.chat, &a.msg)

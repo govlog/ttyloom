@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gotd/td/telegram/message/peer"
 	"github.com/gotd/td/telegram/peers"
 	"github.com/gotd/td/tg"
 
@@ -292,6 +293,22 @@ func emojiOf(r tg.ReactionClass) string {
 		return "⭐"
 	}
 	return ""
+}
+
+// newReaction : the latest reaction of someone else to one of my messages
+// that the server still counts unread (the badge of the phone), and who made
+// it. "" when there is none.
+func (c *Client) newReaction(ent peer.Entities, recent []tg.MessagePeerReaction) (emoji, by string) {
+	date := -1
+	for _, r := range recent {
+		if !r.Unread || r.My || r.Date <= date {
+			continue
+		}
+		if e := emojiOf(r.Reaction); e != "" {
+			emoji, by, date = e, c.nameOf(ent, r.PeerID), r.Date
+		}
+	}
+	return emoji, by
 }
 
 // reactionsOf turns a Telegram ReactionCount into a model.Reaction.

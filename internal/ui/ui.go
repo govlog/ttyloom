@@ -1164,7 +1164,11 @@ func (u *UI) event(ev model.Event) {
 		}
 		fresh := make([]*model.Chat, 0, len(e.Chats))
 		for _, c := range e.Chats {
-			fresh = append(fresh, u.remember(c))
+			r := u.remember(c)
+			if c.UnreadReactions && r.LastReaction == "" {
+				r.LastReaction = genericReaction // the list says there are some, not which
+			}
+			fresh = append(fresh, r)
 		}
 		u.chatList = mergeDialogs(u.chatList, fresh)
 		net := u.dispatchNet
@@ -1705,6 +1709,7 @@ func (u *UI) markRead(w *Window) {
 	w.Act, w.Hot = 0, false
 	if w.Chat != nil {
 		w.Chat.Unread = 0
+		w.Chat.LastReaction, w.Chat.ReactedMsg = "", 0
 	}
 	if w.Chat == nil || u.selfOf(w.Chat.Net).Bot {
 		return
@@ -1818,6 +1823,9 @@ func (u *UI) goTo(n int) {
 	// markRead() moves it on (it may have stayed out of the current window
 	// while messages came).
 	u.markRefresh(w)
+	if c := w.Chat; c != nil && c.ReactedMsg != 0 {
+		u.jumpTo(c, c.ReactedMsg) // the message that got the reaction, before markRead forgets it
+	}
 	u.markRead(w)
 }
 

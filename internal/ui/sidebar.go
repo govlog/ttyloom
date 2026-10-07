@@ -795,7 +795,8 @@ func sidebarLines(mode sideMode, chats []*model.Chat, ws []*Window, wins []int, 
 	width, height, scroll int, avatars, nets bool, step int, sepRow int, hot bool, title func(*model.Chat) string, state sideState) []render.Line {
 	dim := th.Style(theme.Dim)
 	acc := theme.Style{FG: th.Color(theme.Accent), Bold: true}
-	red := theme.Style{FG: th.Color(theme.Error), Bold: true} // unread badge
+	red := theme.Style{FG: th.Color(theme.Error), Bold: true}     // unread badge
+	react := theme.Style{FG: th.Color(theme.Mention), Bold: true} // reaction to my messages not seen yet
 	sep := render.Span{Text: "│", Style: th.Style(theme.Sep)}
 	if hot { // bar grabbed: highlight while the drag lasts
 		sep.Style = acc
@@ -861,9 +862,13 @@ func sidebarLines(mode sideMode, chats []*model.Chat, ws []*Window, wins []int, 
 			if nets && r.sec == "" { // under a header the network is already named
 				badge = netBadge(c.Net)
 			}
-			// pfx and badge are outside the scrolling string: they stay fixed, only
-			// the title scrolls.
-			textW := width - 5 - gut - render.Width(pfx) - render.Width(badge)
+			rb := reactBadge(c) // last reaction to my messages, at the end of the line
+			if rb != "" {
+				rb = " " + rb
+			}
+			// pfx, badge and rb are outside the scrolling string: they stay fixed,
+			// only the title scrolls.
+			textW := width - 5 - gut - render.Width(pfx) - render.Width(badge) - render.Width(rb)
 			text := padTo(label, textW)
 			if isCur { // only the current line scrolls
 				text = marquee(label, textW, step)
@@ -873,7 +878,18 @@ func sidebarLines(mode sideMode, chats []*model.Chat, ws []*Window, wins []int, 
 			if badge != "" {
 				sp = append(sp, render.Span{Text: badge, Style: m})
 			}
-			return append(sp, hitSpans(render.Span{Text: text, Style: t}, state.q, th)...), id
+			sp = append(sp, hitSpans(render.Span{Text: text, Style: t}, state.q, th)...)
+			if rb != "" {
+				rs := react
+				switch {
+				case isCur, c == state.menuChat, c == state.sel:
+					rs = t
+				case state.muted[c.Key()]:
+					rs = dim
+				}
+				sp = append(sp, render.Span{Text: rb, Style: rs})
+			}
+			return sp, id
 		}
 	case sideWindows:
 		if wins == nil {
@@ -906,6 +922,12 @@ func sidebarLines(mode sideMode, chats []*model.Chat, ws []*Window, wins []int, 
 			if w.Act > 0 {
 				act = fmt.Sprintf(" (%d)", w.Act)
 			}
+			rb := "" // last reaction to my messages not seen yet
+			if w.Chat != nil && w.Search == "" {
+				if rb = reactBadge(w.Chat); rb != "" {
+					rb = " " + rb
+				}
+			}
 			textW := width - render.Width(num)
 			st, p, a := theme.Style{}, dim, red
 			if w.Chat != nil && state.muted[w.Chat.Key()] {
@@ -926,18 +948,25 @@ func sidebarLines(mode sideMode, chats []*model.Chat, ws []*Window, wins []int, 
 				if i != cur { // only the current line scrolls
 					k = 0
 				} else {
-					state.saw(pfx+s+act, textW)
+					state.saw(pfx+s+act+rb, textW)
 				}
-				return append([]render.Span{{Text: num, Style: ls}}, hitSpans(render.Span{Text: marquee(pfx+s+act, textW, k), Style: ls}, state.q, th)...), 0
+				return append([]render.Span{{Text: num, Style: ls}}, hitSpans(render.Span{Text: marquee(pfx+s+act+rb, textW, k), Style: ls}, state.q, th)...), 0
 			case w.Chat != nil && w.Chat == state.menuChat: // line of the open menu
 				st, p, a = on, on, on
 			}
-			name := render.Truncate(s, textW-render.Width(pfx)-render.Width(act), "")
+			name := render.Truncate(s, textW-render.Width(pfx)-render.Width(act)-render.Width(rb), "")
 			sp := append([]render.Span{{Text: num, Style: st}, {Text: pfx, Style: p}}, hitSpans(render.Span{Text: name, Style: st}, state.q, th)...)
 			if act != "" { // the space keeps the line style: the pulse inverts "(n)" only
 				sp = append(sp, render.Span{Text: " ", Style: st}, render.Span{Text: act[1:], Style: a})
 			}
-			pad := strings.Repeat(" ", max(0, textW-render.Width(pfx)-render.Width(name)-render.Width(act)))
+			if rb != "" {
+				rs := react
+				if state.muted[w.Chat.Key()] {
+					rs = dim
+				}
+				sp = append(sp, render.Span{Text: " ", Style: st}, render.Span{Text: rb[1:], Style: rs})
+			}
+			pad := strings.Repeat(" ", max(0, textW-render.Width(pfx)-render.Width(name)-render.Width(act)-render.Width(rb)))
 			return append(sp, render.Span{Text: pad, Style: st}), 0
 		}
 	}

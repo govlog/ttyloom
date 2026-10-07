@@ -963,7 +963,20 @@ actions of the message — go to the quoted message, reply, react, copy, info,
 open, view, play — with edit and delete last. The entry under the pointer is
 the current one; Enter or a click runs it, any other key closes the menu.
 Double-click a message to toggle 👍 (or the first reaction the chat allows).
-Clicking any reaction below a message also toggles it. A deleted message shows
+Clicking any reaction below a message also toggles it.
+
+When someone else reacts to one of your messages on Telegram or Discord, in a
+conversation you are not looking at, the reaction shows at the end of the
+conversation's sidebar line and next to its window in `[Act: …]` (`5🔥`,
+`5(3)🔥`), and a notification follows the `notify` setting, without the bell:
+`#room · Eve` / `🔥 « the start of your message »`. A custom emoji shows as ⭐.
+Going to the window selects the message that got the reaction (loading it
+when it is older than the page shown) and clears the mark. At start-up the
+Telegram list only says which conversations hold unread reactions, not which:
+they show 👍 until visited. A muted conversation keeps a dimmed mark and sends
+no notification.
+
+A deleted message shows
 the "(deleted)" marker alone: a click on it reveals the content the cache
 still holds, the next click hides it again.
 The active mouse area controls the wheel: sidebar navigation over the sidebar,

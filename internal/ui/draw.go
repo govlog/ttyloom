@@ -590,7 +590,11 @@ func (u *UI) sgr(st theme.Style) string {
 func (u *UI) actSpans(plain, act theme.Style) []render.Span {
 	var out []render.Span
 	for i, w := range u.ws.List {
-		if w.Act == 0 || (u.tabsOn() && !u.winShown(w)) || u.mutedWin(w) {
+		rb := "" // a reaction to my messages not seen yet: "5👍", "5(3)👍"
+		if w.Chat != nil && w.Search == "" {
+			rb = reactBadge(w.Chat)
+		}
+		if (w.Act == 0 && rb == "") || (u.tabsOn() && !u.winShown(w)) || u.mutedWin(w) {
 			continue
 		}
 		if len(out) > 0 {
@@ -600,7 +604,11 @@ func (u *UI) actSpans(plain, act theme.Style) []render.Span {
 		if w.Hot {
 			st = u.hotStyle(act)
 		}
-		out = append(out, render.Span{Text: fmt.Sprintf("%d(%d)", i, w.Act), Style: st})
+		s := fmt.Sprint(i)
+		if w.Act > 0 {
+			s += fmt.Sprintf("(%d)", w.Act)
+		}
+		out = append(out, render.Span{Text: s + rb, Style: st})
 	}
 	return out
 }

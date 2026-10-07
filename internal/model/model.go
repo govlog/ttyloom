@@ -59,7 +59,13 @@ type Chat struct {
 	// official Telegram clients, which reading the history leaves on. Set by
 	// the dialog list and by a message with Msg.Mentioned, cleared on the
 	// server by markRead.
-	UnreadMentions  bool
+	UnreadMentions bool
+	// LastReaction : the last reaction of someone else to my messages not
+	// seen yet — its emoji, or a generic one when the network only says there
+	// are some (the dialog list); ReactedMsg : the message it went to, 0 when
+	// unknown. Cleared by markRead.
+	LastReaction    string
+	ReactedMsg      int
 	ReadInboxMaxID  int
 	ReadOutboxMaxID int // last of my messages read by the chat (✓✓ tick)
 	Pinned          bool
@@ -442,6 +448,10 @@ type EvReactions struct {
 	// update. The server can answer before it applies the reaction: an empty
 	// list from there never wipes the one already shown.
 	Refetch bool
+	// New : the emoji someone else just reacted with to one of my messages —
+	// "" when the change is not that (a removal, my own, another's message);
+	// By : who, "" when unknown.
+	New, By string
 }
 
 // EvReactionsList : reactions the account can use (global Telegram list),

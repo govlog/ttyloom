@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"cmp"
 	"encoding/base64"
 	"slices"
 	"strings"
@@ -621,8 +622,8 @@ func nextReaction(rs []model.Reaction, pick string) string {
 // reactions : EvReactions replaces the reactions of the message and invalidates its drawing.
 func (u *UI) reactions(e model.EvReactions) {
 	key := u.evKey(e.ChatID)
-	found, mine := false, true         // a message not loaded may be mine: read to be safe
-	for _, w := range u.viewsOf(key) { // same as edited: each copy of the message
+	found, mine, text := false, true, "" // a message not loaded may be mine: read to be safe
+	for _, w := range u.viewsOf(key) {   // same as edited: each copy of the message
 		for _, it := range w.Items {
 			if it.Msg != nil && it.Msg.ID == e.ID && it.Msg.Key() == key {
 				// A re-read does not empty a list already filled: only an update
@@ -633,16 +634,61 @@ func (u *UI) reactions(e model.EvReactions) {
 				}
 				it.Msg.Reactions, it.lines = e.Reactions, nil
 				it.Msg.LiveAt = time.Now()
-				found, mine = true, it.Msg.Out
+				found, mine, text = true, it.Msg.Out, it.Msg.Summary()
 			}
 		}
 	}
 	if found {
 		u.markDirty(key)
 	}
+	if e.New != "" {
+		u.noteReaction(key, e, text)
+	}
 	if mine && !e.Refetch && len(e.Reactions) > 0 {
 		u.reactedTo(key)
 	}
+}
+
+// genericReaction : the badge of a chat whose network says it holds unread
+// reactions to my messages without saying which (the dialog list).
+const genericReaction = "👍"
+
+// reactExcerpt : the length of my message quoted by the notification of a
+// reaction, in cells.
+const reactExcerpt = 60
+
+// noteReaction : someone else reacted to one of my messages (e.New, by e.By).
+// The chat keeps the reaction until its window is looked at — sidebar,
+// [Act: …], and the visit shows the message — and away from it a
+// notification goes, with no bell: a group answers with many. Once per
+// reaction: the server repeats the unread ones in its later updates.
+func (u *UI) noteReaction(key model.ChatKey, e model.EvReactions, text string) {
+	c := u.chats[key]
+	if c == nil || (c.LastReaction == e.New && c.ReactedMsg == e.ID) {
+		return
+	}
+	c.LastReaction, c.ReactedMsg = e.New, e.ID
+	body := e.New
+	if text != "" {
+		body += " « " + render.Truncate(render.CleanLine(text), reactExcerpt, "…") + " »"
+	}
+	if u.alertNext == nil || u.alertNext.quiet { // a message waiting keeps its bell
+		u.alertNext = &alertNote{chat: c, quiet: true, msg: model.Msg{Net: key.Net, ChatID: key.ID, From: cmp.Or(e.By, "?"), Text: body}}
+	}
+	u.flushAlert(time.Now())
+}
+
+// reactBadge : the reaction of c not seen yet, on two cells; "" with none. A
+// custom emoji (":name:", no glyph on a terminal) shows as ⭐, as Telegram's.
+func reactBadge(c *model.Chat) string {
+	e := c.LastReaction
+	if e == "" {
+		return ""
+	}
+	if strings.HasPrefix(e, ":") {
+		e = "⭐"
+	}
+	return emojiCell(e)
 }
 
 // reactedTo : a reaction to one of my messages stays unread on the server (the

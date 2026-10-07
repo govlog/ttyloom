@@ -89,21 +89,21 @@ func (c *Client) wire() {
 	})
 	st.AddSyncHandler(func(e *gateway.MessageReactionAddEvent) {
 		defer c.Guard("MessageReactionAdd", nil)
-		c.reactions(e.ChannelID, e.MessageID)
+		c.reactions(e.ChannelID, e.MessageID, e)
 	})
 	st.AddSyncHandler(func(e *gateway.MessageReactionRemoveEvent) {
 		defer c.Guard("MessageReactionRemove", nil)
-		c.reactions(e.ChannelID, e.MessageID)
+		c.reactions(e.ChannelID, e.MessageID, nil)
 	})
 	// A moderator clears the reactions of a message, all of them or those of
 	// one emoji: the state has dropped them already.
 	st.AddSyncHandler(func(e *gateway.MessageReactionRemoveAllEvent) {
 		defer c.Guard("MessageReactionRemoveAll", nil)
-		c.reactions(e.ChannelID, e.MessageID)
+		c.reactions(e.ChannelID, e.MessageID, nil)
 	})
 	st.AddSyncHandler(func(e *gateway.MessageReactionRemoveEmojiEvent) {
 		defer c.Guard("MessageReactionRemoveEmoji", nil)
-		c.reactions(e.ChannelID, e.MessageID)
+		c.reactions(e.ChannelID, e.MessageID, nil)
 	})
 	st.AddSyncHandler(func(e *gateway.MessageAckEvent) {
 		defer c.Guard("MessageAck", nil)
@@ -262,23 +262,30 @@ func (c *Client) dmRecipients(raw []byte) {
 // name to read — a presence is only ever there for a friend, and a DM from
 // anyone else would show a bare id.
 func (c *Client) typist(e *gateway.TypingStartEvent) string {
-	if e.Member != nil {
-		if e.Member.Nick != "" {
-			return e.Member.Nick
+	return c.userName(e.Member, e.ChannelID, e.UserID)
+}
+
+// userName : the name of the user id of an event in channel ch — the member
+// the event carries in a guild, else a recipient of the DM, else a presence;
+// the bare id last.
+func (c *Client) userName(member *discord.Member, ch discord.ChannelID, id discord.UserID) string {
+	if member != nil {
+		if member.Nick != "" {
+			return member.Nick
 		}
-		return e.Member.User.DisplayOrUsername()
+		return member.User.DisplayOrUsername()
 	}
-	if ch, err := c.state().Cabinet.Channel(e.ChannelID); err == nil {
+	if ch, err := c.state().Cabinet.Channel(ch); err == nil {
 		for _, u := range ch.DMRecipients {
-			if u.ID == e.UserID {
+			if u.ID == id {
 				return u.DisplayOrUsername()
 			}
 		}
 	}
-	if p, err := c.state().Cabinet.Presence(0, e.UserID); err == nil {
+	if p, err := c.state().Cabinet.Presence(0, id); err == nil {
 		return p.User.DisplayOrUsername()
 	}
-	return e.UserID.String()
+	return id.String()
 }
 
 // reactions posts the whole reaction list of a message again: the gateway
@@ -288,12 +295,18 @@ func (c *Client) typist(e *gateway.TypingStartEvent) string {
 // remove cannot land in the wrong order. A message the cache does not hold is
 // left alone — a REST read per reaction would be neither sober nor ordered,
 // and the event alone cannot make the list (EvReactions replaces it whole).
-func (c *Client) reactions(chID discord.ChannelID, id discord.MessageID) {
+// add, the event of an added reaction (nil otherwise), names the reaction of
+// someone else to one of my messages.
+func (c *Client) reactions(chID discord.ChannelID, id discord.MessageID, add *gateway.MessageReactionAddEvent) {
 	m, err := c.state().Cabinet.Message(chID, id)
 	if err != nil {
 		return
 	}
 	// Refetch stays false: this list is the one the state holds after the
 	// update, so an empty one really means the last reaction is gone.
-	c.Post(model.EvReactions{ChatID: int64(chID), ID: int(id), Reactions: reactionsOf(m.Reactions)})
+	ev := model.EvReactions{ChatID: int64(chID), ID: int(id), Reactions: reactionsOf(m.Reactions)}
+	if self := c.self.Load(); add != nil && int64(m.Author.ID) == self && int64(add.UserID) != self {
+		ev.New, ev.By = emojiOf(add.Emoji), c.userName(add.Member, chID, add.UserID)
+	}
+	c.Post(ev)
 }

@@ -136,11 +136,13 @@ func (c *Client) registerHandlers(d tg.UpdateDispatcher) {
 			return nil
 		})
 	})
-	d.OnMessageReactions(func(_ context.Context, _ tg.Entities, u *tg.UpdateMessageReactions) error {
+	d.OnMessageReactions(func(_ context.Context, e tg.Entities, u *tg.UpdateMessageReactions) error {
 		return c.safe("OnMessageReactions", func() error {
 			// The TDLib id is computed without resolving the peer; when the chat is
 			// not open, the UI simply ignores the event.
-			c.Post(model.EvReactions{ChatID: tdlibID(u.Peer), ID: u.MsgID, Reactions: reactionsOf(u.Reactions.Results)})
+			ev := model.EvReactions{ChatID: tdlibID(u.Peer), ID: u.MsgID, Reactions: reactionsOf(u.Reactions.Results)}
+			ev.New, ev.By = c.newReaction(peer.EntitiesFromUpdate(e), u.Reactions.RecentReactions)
+			c.Post(ev)
 			return nil
 		})
 	})

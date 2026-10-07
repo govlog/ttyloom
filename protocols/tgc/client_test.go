@@ -1119,3 +1119,23 @@ func TestHistoryUsesChatSnapshot(t *testing.T) {
 		})
 	}
 }
+
+// newReaction : of the recent reactions, the newest one the server still
+// counts unread and that is not mine — the one that rings the badge.
+func TestNewReaction(t *testing.T) {
+	c := offline(nil)
+	ent := peer.NewEntities(map[int64]*tg.User{9: {ID: 9, FirstName: "Bob"}, 10: {ID: 10, FirstName: "Eve"}}, nil, nil)
+	heart, fire := &tg.ReactionEmoji{Emoticon: "❤"}, &tg.ReactionEmoji{Emoticon: "🔥"}
+	recent := []tg.MessagePeerReaction{
+		{Unread: true, PeerID: &tg.PeerUser{UserID: 9}, Reaction: heart, Date: 100},
+		{Unread: true, PeerID: &tg.PeerUser{UserID: 10}, Reaction: fire, Date: 200},
+		{Unread: true, My: true, PeerID: &tg.PeerUser{UserID: 1}, Reaction: heart, Date: 300}, // mine
+		{PeerID: &tg.PeerUser{UserID: 9}, Reaction: heart, Date: 400},                         // read already
+	}
+	if e, by := c.newReaction(ent, recent); e != "🔥" || by != "Eve" {
+		t.Fatalf("newReaction = %q by %q, want 🔥 by Eve", e, by)
+	}
+	if e, _ := c.newReaction(ent, recent[2:]); e != "" {
+		t.Fatalf("nothing unread from others: %q", e)
+	}
+}

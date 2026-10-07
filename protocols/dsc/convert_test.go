@@ -271,7 +271,7 @@ func TestReactions(t *testing.T) {
 		t.Fatalf("message of the test: %s", err)
 	}
 
-	c.reactions(5, msgID(1000))
+	c.reactions(5, msgID(1000), nil)
 	want := model.EvReactions{ChatID: 5, ID: int(msgID(1000)),
 		Reactions: []model.Reaction{{Emoji: "🔥", Count: 2, Mine: true}}}
 	select {
@@ -283,11 +283,25 @@ func TestReactions(t *testing.T) {
 		t.Fatal("reactions: no event")
 	}
 
-	c.reactions(5, msgID(999)) // never seen
+	c.reactions(5, msgID(999), nil) // never seen
 	select {
 	case got := <-ev:
 		t.Fatalf("reactions on an unknown message: %#v", got)
 	default:
+	}
+
+	// An added reaction of someone else to my message names its emoji and its
+	// author; mine to my own message names nothing.
+	c.self.Store(42)
+	fire := discord.Emoji{Name: "🔥"}
+	c.reactions(5, msgID(1000), &gateway.MessageReactionAddEvent{UserID: 7, ChannelID: 5, MessageID: msgID(1000), Emoji: fire,
+		Member: &discord.Member{User: discord.User{ID: 7, Username: "eve"}, Nick: "Eve"}})
+	if got := (<-ev).(model.EvReactions); got.New != "🔥" || got.By != "Eve" {
+		t.Fatalf("someone else's reaction: New %q By %q", got.New, got.By)
+	}
+	c.reactions(5, msgID(1000), &gateway.MessageReactionAddEvent{UserID: 42, ChannelID: 5, MessageID: msgID(1000), Emoji: fire})
+	if got := (<-ev).(model.EvReactions); got.New != "" {
+		t.Fatalf("my own reaction: New %q", got.New)
 	}
 }
 
