@@ -20,3 +20,11 @@ curl -fsSL https://unicode.org/Public/17.0.0/emoji/emoji-test.txt | awk '
 ' > emoji.txt
 
 wc -l emoji.txt
+
+# Regenerate aliases.txt from gemoji v4.1.0 (MIT): the GitHub/Slack
+# shortcodes of each emoji (":+1:", ":tada:"), for the ":" completion.
+# The original notice is in ../../licenses/gemoji/LICENSE.
+curl -fsSL https://raw.githubusercontent.com/github/gemoji/v4.1.0/db/emoji.json |
+	jq -r '.[] | select(.emoji and (.aliases | length > 0)) | "\(.emoji)\t\(.aliases | join(" "))"' > aliases.txt
+
+wc -l aliases.txt

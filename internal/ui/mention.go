@@ -11,36 +11,10 @@ import (
 	"github.com/govlog/ttyloom/internal/i18n"
 	"github.com/govlog/ttyloom/internal/model"
 	"github.com/govlog/ttyloom/internal/render"
-	"github.com/govlog/ttyloom/internal/term"
-	"github.com/govlog/ttyloom/internal/theme"
 )
 
-// Mention box: typing @… in a window bound to a chat opens a small box above
-// the input with the members whose @username matches. ↑/↓ then Tab/Enter
-// insert the username; Esc mutes the box for that word. The members come from
-// the same cache as the F3 box (partsCache, 5 min).
-
-const mentionRows = 6 // shown candidates, at most
-
-type mentionBox struct {
-	start int // rune index of the @ in the editor buffer
-	items []model.Participant
-	cur   int
-}
-
-// mentionWord gives the @word the cursor is in: start = index of the @, q =
-// what is typed between the @ and the cursor. ok=false when the cursor is not
-// right inside a word starting with @.
-func mentionWord(buf []rune, cur int) (start int, q string, ok bool) {
-	i := cur
-	for i > 0 && !sep(buf[i-1]) {
-		i--
-	}
-	if i >= len(buf) || buf[i] != '@' || cur <= i {
-		return 0, "", false
-	}
-	return i, string(buf[i+1 : cur]), true
-}
+// Mentions: the @… candidates of the completion box (popbox.go) and the
+// mention by id of a member with no username.
 
 // mentionFilter keeps the members whose @username or folded name starts with
 // q. A member with no username (Query = id) goes out as a mention by id.
@@ -156,97 +130,6 @@ func (u *UI) mentionAll(c *model.Chat) []model.Participant {
 	return e.lines
 }
 
-// mentionScan opens, refreshes or closes the box from the editor content.
-// Called after every key and when the members arrive (participants).
-func (u *UI) mentionScan() {
-	if u.inputAsks() || u.spellFix != nil {
-		u.mention = nil // the input carries a question, not a message
-		return
-	}
-	buf := u.ed.buf // read in place: after every key
-	start, q, ok := mentionWord(buf, u.ed.Cursor())
-	if !ok || (len(buf) > 0 && buf[0] == '/') { // a command completes with Tab
-		u.mention, u.mentionMute = nil, 0
-		return
-	}
-	if u.mentionMute == start+1 { // Esc on this word: stay away until it is left
-		u.mention = nil
-		return
-	}
-	c := u.inputChat(u.view())
-	if c == nil {
-		u.mention = nil
-		return
-	}
-	items := mentionFilter(u.mentionAll(c), q)
-	if len(items) == 0 {
-		u.mention = nil
-		return
-	}
-	cur := 0
-	if u.mention != nil && u.mention.start == start && u.mention.cur < len(items) {
-		cur = u.mention.cur // refine: the arrow choice survives the typing
-	}
-	u.mention = &mentionBox{start: start, items: items, cur: cur}
-}
-
-// mentionKey handles the keys while the box is open. false: the key is not
-// for the box, the normal path takes it.
-func (u *UI) mentionKey(k term.Key) bool {
-	m := u.mention
-	switch {
-	case k.Code == term.Esc:
-		u.mentionMute = m.start + 1
-		u.mention = nil
-	case k.Code == term.Up:
-		m.cur = max(0, m.cur-1)
-	case k.Code == term.Down:
-		m.cur = min(len(m.items)-1, m.cur+1)
-	case k.Code == term.Tab, k.Code == term.Enter && !k.Shift && !k.Alt:
-		u.ed.Replace(m.start, u.ed.Cursor(), mentionInsert(m.items[m.cur])+" ")
-		u.mention, u.mentionMute = nil, 0
-	default:
-		return false
-	}
-	return true
-}
-
-// mentionMouse : an event in the box — the wheel moves the current member, a
-// left click picks the one under the pointer, as Tab does.
-func (u *UI) mentionMouse(e term.MouseEvent, r rect) {
-	m := u.mention
-	switch e.Button {
-	case 64:
-		u.mentionKey(term.Key{Code: term.Up})
-	case 65:
-		u.mentionKey(term.Key{Code: term.Down})
-	case 0:
-		rows := r.h - 2
-		if y := e.Y - r.row - 1; y >= 0 && y < rows && m.top(rows)+y < len(m.items) {
-			m.cur = m.top(rows) + y
-			u.mentionKey(term.Key{Code: term.Tab})
-		}
-	}
-}
-
-// top : the first member shown in a box of rows lines — the current one stays in view.
-func (m *mentionBox) top(rows int) int { return followTop(0, m.cur, rows) }
-
-// mentionRect gives the box, stuck above the status bar, at the left edge of
-// the message area.
-func (u *UI) mentionRect() rect {
-	m := u.mention
-	x0, cols := u.layout()
-	h := min(len(m.items), mentionRows) + 2
-	w := 2
-	for _, p := range m.items {
-		w = max(w, render.Width(mentionLabel(p))+2)
-	}
-	w = min(max(12, w), min(40, cols))
-	row := max(0, u.t.Rows-u.inputRows()-1-h) // above the status line
-	return rect{row: row, col: x0, h: h, w: w}
-}
-
 // mentionLabel : "@username  Name", the name left out when it repeats the
 // username; the name alone for a member with no username. An IRC nick comes
 // with no @.
@@ -255,22 +138,4 @@ func mentionLabel(p model.Participant) string {
 		return mentionInsert(p)
 	}
 	return p.Query + "  " + p.Text
-}
-
-// Lines draws the box; cur inverted, a window of mentionRows lines keeps it
-// in view.
-func (m *mentionBox) Lines(th theme.Theme, w, h int) []render.Line {
-	body, edge, sel := boxStyles(th)
-	b := boxDraw{edge: edge, fill: body, inner: max(0, w-2)}
-	out := []render.Line{b.bar("┌", "┐")}
-	rows := max(0, h-2)
-	off := m.top(rows)
-	for i := off; i < min(len(m.items), off+rows); i++ {
-		st := body
-		if i == m.cur {
-			st = sel
-		}
-		out = append(out, b.text(" "+mentionLabel(m.items[i]), st))
-	}
-	return append(out, b.bar("└", "┘"))
 }

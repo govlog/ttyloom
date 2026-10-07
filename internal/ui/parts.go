@@ -121,7 +121,7 @@ func (u *UI) participants(e model.EvParticipants) {
 	if u.parts != nil && u.parts.chat == key {
 		u.parts.lines, u.parts.scroll = lines, 0
 	}
-	u.mentionScan() // the members the open @… box waits for
+	u.popScan() // the members the open @… box waits for
 
 }
 

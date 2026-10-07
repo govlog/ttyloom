@@ -131,9 +131,9 @@ func (u *UI) mouse(m term.MouseEvent) {
 		u.partsMouse(m, r)
 		return
 	}
-	if u.mention != nil { // the @… box too: its click is never one on the message under it
-		if r := u.mentionRect(); r.hits(m.Y, m.X, 1, 1) {
-			u.mentionMouse(m, r)
+	if u.pop != nil { // the @… or :… box too: its click is never one on the message under it
+		if r := u.popRect(); r.hits(m.Y, m.X, 1, 1) {
+			u.popMouse(m, r)
 			return
 		}
 	}
@@ -445,8 +445,8 @@ func (u *UI) hoverItem(x, y int) *Item {
 	if r, ok := u.partsRect(); ok && r.hits(y, x, 1, 1) {
 		return nil // under the member box: no message is hovered
 	}
-	if u.mention != nil && u.mentionRect().hits(y, x, 1, 1) {
-		return nil // nor under the @… box
+	if u.pop != nil && u.popRect().hits(y, x, 1, 1) {
+		return nil // nor under the @… or :… box
 	}
 	if h := hitAt(u.hits, x-x0, y); h.item != nil && selectable(h.item) {
 		return h.item

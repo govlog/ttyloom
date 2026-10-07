@@ -149,8 +149,8 @@ type UI struct {
 	ask         *confirm                // confirmation (y/n) waiting: delete, block…
 	menu        *ctxMenu                // context menu of the sidebar (right click): it takes everything
 	parts       *partsBox               // member box shown (F3), nil = nothing to show
-	mention     *mentionBox             // @… box above the input, nil = closed
-	mentionMute int                     // 1+start of the @word muted by Esc; 0 = none
+	pop         *popBox                 // @… or :… box above the input, nil = closed
+	popMute     int                     // 1+start of the @ or :word muted by Esc; 0 = none
 	completion  *completionState        // repeated Tab on the current input
 	spell       spellChecker            // nil = off (config, error, or nospell build)
 	spellText   string                  // input of the last spell scan
@@ -267,7 +267,7 @@ func Run(ctx context.Context, cancel context.CancelFunc, t *term.Term, cfg *conf
 				}
 			default:
 				u.key(k)
-				u.mentionScan() // the @… box follows the input
+				u.popScan() // the @… or :… box follows the input
 			}
 		case env := <-u.envs:
 			u.dispatch(env)
@@ -2099,7 +2099,7 @@ func (u *UI) key(k term.Key) {
 	if u.spellFix != nil && k.Code != term.Mouse && u.spellFixKey(k) {
 		return
 	}
-	if u.mention != nil && k.Code != term.Mouse && u.mentionKey(k) {
+	if u.pop != nil && k.Code != term.Mouse && u.popKey(k) {
 		return
 	}
 	if u.sideHasKeys() && u.sideKey(k) {

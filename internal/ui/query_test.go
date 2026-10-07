@@ -166,11 +166,11 @@ func TestQueryPersistentAcrossViews(t *testing.T) {
 				t.Fatalf("prompt: %s", prompt.String())
 			}
 			u.ed.Set("@b")
-			u.mentionScan()
-			if u.mention == nil || u.mention.items[0].Query != "@blop" {
+			u.popScan()
+			if u.pop == nil || u.pop.rows[0].insert != "@blop" {
 				t.Fatal("mentions used the base chat")
 			}
-			u.mention = nil
+			u.pop = nil
 			u.sendTyping(view)
 			if !slices.Equal(b.typed, []model.ChatKey{peer.Key()}) {
 				t.Fatalf("typing: %v", b.typed)
@@ -334,8 +334,8 @@ func TestQueryReplyAndEditInputContext(t *testing.T) {
 				at: time.Now(), lines: []model.Participant{{Text: "Friend", Query: "@friend"}},
 			}}
 			u.ed.Set("@f")
-			u.mentionScan()
-			if u.mention == nil || u.mention.items[0].Query != "@friend" {
+			u.popScan()
+			if u.pop == nil || u.pop.rows[0].insert != "@friend" {
 				t.Fatal("mentions followed the query instead of the selected message")
 			}
 			u.sendTyping(u.view())

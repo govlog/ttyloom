@@ -8,8 +8,8 @@ The project license does not replace them.
 
 TTYloom’s original code, documentation and artwork use the [MIT license](LICENSE.md).
 Copied code, dependencies and data retain their own licenses, including the
-LGPL-3.0-only and MIT Hunspell binding, Unicode License V3 emoji data, and MIT
-Catppuccin palette described below. The project’s MIT grant does not relicense
+LGPL-3.0-only and MIT Hunspell binding, Unicode License V3 emoji data, MIT
+gemoji shortcodes and MIT Catppuccin palette described below. The project’s MIT grant does not relicense
 those components.
 
 ## Go dependencies
@@ -103,6 +103,7 @@ external executable does not make it part of this source archive.
 | Component | Source and license | Included notice |
 | --- | --- | --- |
 | `internal/emoji/emoji.txt` | Unicode Emoji 17.0, Unicode License V3 | [Unicode license](licenses/unicode/LICENSE.txt), [source and checksum](licenses/unicode/SOURCE.md) |
+| `internal/emoji/aliases.txt` | gemoji v4.1.0 shortcodes, GitHub, MIT | [gemoji license](licenses/gemoji/LICENSE), [source and checksum](licenses/gemoji/SOURCE.md) |
 | Screenshot palette in `internal/ui/shot_test.go` | Catppuccin Mocha, MIT | [Catppuccin notice](licenses/assets/catppuccin-LICENSE) |
 | GIF frames embedded in `docs/screenshots/*.svg` | Frames of third-party GIF returned by the Discord and Telegram GIF searches, property of their authors, used for illustration only | Origins kept with the local screenshot fixtures (not published) |
 | TTYloom logo and landscape fixtures | Created for this project; project-owned artwork | Project license applies |

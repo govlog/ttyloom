@@ -1041,6 +1041,17 @@ inserted as `@Name` and sent as a mention by id, so the person is notified all
 the same. Spell correction and mention completion work without leaving the
 conversation.
 
+Typing `:` then a letter opens emoji suggestions, with their shortcode:
+GitHub and Slack ones (`:+1:`, `:tada:`, `:joy:`) and one made from each
+Unicode name (`:thumbs_up:`, `:flag_france:`). The text typed matches the start
+of a shortcode or of one of its words; an exact shortcode comes first, then
+your recent emojis, and on Discord the custom emojis of the server lead. Tab,
+Enter or a click inserts the emoji, and Escape closes. With a single letter,
+Enter sends the line as typed unless you chose with the arrows, so `:D` and
+`:P` stay text smileys. Typing the closing `:` of a whole shortcode (`:fire:`)
+turns it into the emoji at once. The box does not open in a command line, after
+a space, or on `:)`, `12:30` or a URL.
+
 ```text
 /set
 /set timestamps off

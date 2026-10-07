@@ -487,9 +487,9 @@ func (u *UI) overlay() overlays {
 	if r, ok := u.partsRect(); ok {
 		out = append(out, overlayBox{rect: r, lines: u.parts.Lines(u.th, r.w, r.h)})
 	}
-	if u.mention != nil { // @… box, above the input
-		r := u.mentionRect()
-		out = append(out, overlayBox{rect: r, lines: u.mention.Lines(u.th, r.w, r.h)})
+	if u.pop != nil { // @… or :… box, above the input
+		r := u.popRect()
+		out = append(out, overlayBox{rect: r, lines: u.pop.Lines(u.th, r.w, r.h)})
 	}
 	if u.spellFix != nil { // correction box, above the input
 		r := u.spellFixRect()

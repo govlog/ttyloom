@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- **Emoji shortcodes**: typing `:` then a letter opens a box of matching emojis above the input, the same box as `@`, each with its shortcode (gemoji ones such as `:+1:` and `:tada:`, and one made from the Unicode name). Tab, Enter or a click inserts the emoji; Enter on a single letter sends `:D` as typed; the closing `:` of a whole shortcode converts it. On Discord, the custom emojis of the server come first.
+
 ### Changed
 
 - **A muted chat** keeps its unread count in its own line only: not in `[Act: …]` nor in the count of its tab.

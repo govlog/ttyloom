@@ -47,3 +47,43 @@ func TestReactionStrip(t *testing.T) {
 		}
 	}
 }
+
+// Lookup : the gemoji aliases and the codes made from the Unicode names both
+// answer; an exact code leads, then a code that starts with the query, then a
+// word of a code; inside a rank, the recents lead.
+func TestLookup(t *testing.T) {
+	first := func(q string, recent []string) Hit {
+		t.Helper()
+		h := Lookup(q, recent)
+		if len(h) == 0 {
+			t.Fatalf("Lookup(%q): no hit", q)
+		}
+		return h[0]
+	}
+	for q, want := range map[string]Hit{
+		"+1":          {Char: "👍", Code: "+1", Exact: true},           // gemoji alias
+		"tada":        {Char: "🎉", Code: "tada", Exact: true},         // gemoji alias
+		"thumbs_up":   {Char: "👍", Code: "thumbs_up", Exact: true},    // made from "thumbs up"
+		"flag_france": {Char: "🇫🇷", Code: "flag_france", Exact: true}, // "flag: France"
+		"fire":        {Char: "🔥", Code: "fire", Exact: true},         // before fire_engine…
+		"thumbsu":     {Char: "👍", Code: "thumbsup"},                  // prefix of an alias
+	} {
+		if got := first(q, nil); got != want {
+			t.Errorf("Lookup(%q)[0] = %+v, want %+v", q, got, want)
+		}
+	}
+	if got := first("popper", nil); got.Char != "🎉" || got.Code != "party_popper" {
+		t.Errorf("a word inside a code: %+v", got)
+	}
+	// "ab": 🆎 (exact) leads; a recent 🔤 (abc, prefix) passes the prefix codes
+	// earlier in the table, but never the exact one.
+	if h := Lookup("ab", nil); len(h) < 3 || h[0].Char != "🆎" || h[1].Char == "🔤" {
+		t.Fatalf("Lookup(ab) = %+v", h[:min(3, len(h))])
+	}
+	if h := Lookup("ab", []string{"🔤"}); h[0].Char != "🆎" || h[1].Char != "🔤" {
+		t.Errorf("Lookup(ab, recent 🔤) = %+v", h[:3])
+	}
+	if Lookup("", nil) != nil || Lookup("zzznope", nil) != nil {
+		t.Error("an empty or unknown query gives no hit")
+	}
+}

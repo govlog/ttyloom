@@ -596,8 +596,8 @@ func TestRegressionMentionWithoutBoxMarks(t *testing.T) {
 	u.ws.List = append(u.ws.List, &Window{Chat: g})
 	u.ws.Cur = 1
 	u.ed.Set("yo @b")
-	u.mentionScan()
-	if u.mention == nil || !u.mentionKey(term.Key{Code: term.Enter}) || u.ed.String() != "yo @Bob " {
+	u.popScan()
+	if u.pop == nil || !u.popKey(term.Key{Code: term.Enter}) || u.ed.String() != "yo @Bob " {
 		t.Fatalf("pick: %q", u.ed.String())
 	}
 	segs, _ := u.mentionSegs(g, []model.Seg{{Text: "yo @Bob"}})

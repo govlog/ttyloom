@@ -209,16 +209,22 @@ func (p *picker) customItems(q string) []emoji.Emoji {
 
 func (p *picker) move(d int) { p.cur = max(0, min(p.cur+d, len(p.items)-1)) }
 
-// pick keeps the choice (the cache directory is made on the fly) then hands
-// it over.
+// pick keeps the choice then hands it over.
 func (p *picker) pick(char string) {
-	path := config.RecentPath()
-	// Reactions are not input emojis: outside the Ctrl+T recents.
-	if p.react == nil && os.MkdirAll(filepath.Dir(path), 0o700) == nil {
-		emoji.AddRecent(path, char)
+	if p.react == nil { // reactions are not input emojis: outside the Ctrl+T recents
+		noteRecent(char)
 	}
 	if p.onPick != nil {
 		p.onPick(char)
+	}
+}
+
+// noteRecent puts an input emoji first in the Ctrl+T recents (the cache
+// directory is made on the fly).
+func noteRecent(char string) {
+	path := config.RecentPath()
+	if os.MkdirAll(filepath.Dir(path), 0o700) == nil {
+		emoji.AddRecent(path, char)
 	}
 }
 

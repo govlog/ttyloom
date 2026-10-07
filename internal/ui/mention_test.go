@@ -30,7 +30,7 @@ func TestMentionWord(t *testing.T) {
 		{"salut", 5, 0, "", false},
 		{"", 0, 0, "", false},
 	} {
-		start, q, ok := mentionWord([]rune(c.line), c.cur)
+		start, q, ok := sigilWord([]rune(c.line), c.cur, '@')
 		if ok != c.ok || (ok && (start != c.start || q != c.q)) {
 			t.Errorf("%q cur=%d: start=%d q=%q ok=%v, want start=%d q=%q ok=%v",
 				c.line, c.cur, start, q, ok, c.start, c.q, c.ok)
@@ -80,33 +80,33 @@ func TestMentionScanAndPick(t *testing.T) {
 	u.ws.List = append(u.ws.List, &Window{Chat: g})
 	u.ws.Cur = 1
 	u.ed.Set("yo @a")
-	u.mentionScan()
-	if u.mention == nil || len(u.mention.items) != 1 || u.mention.items[0].Query != "@alice" {
-		t.Fatalf("scan: %+v", u.mention)
+	u.popScan()
+	if u.pop == nil || len(u.pop.rows) != 1 || u.pop.rows[0].insert != "@alice" {
+		t.Fatalf("scan: %+v", u.pop)
 	}
-	if !u.mentionKey(term.Key{Code: term.Esc}) || u.mention != nil {
+	if !u.popKey(term.Key{Code: term.Esc}) || u.pop != nil {
 		t.Fatal("Esc should close the box")
 	}
-	u.mentionScan()
-	if u.mention != nil {
+	u.popScan()
+	if u.pop != nil {
 		t.Fatal("silent after Esc on the same word")
 	}
 	u.ed.Set("yo @ab") // the mutated word extends: still nothing
-	u.mentionScan()
-	if u.mention != nil {
+	u.popScan()
+	if u.pop != nil {
 		t.Fatal("silent while still inside the word")
 	}
 	u.ed.Set("yo ") // leaving the word rearms the box
-	u.mentionScan()
+	u.popScan()
 	u.ed.Set("yo @b")
-	u.mentionScan()
-	if u.mention == nil {
+	u.popScan()
+	if u.pop == nil {
 		t.Fatal("new word: the box reopens")
 	}
-	if !u.mentionKey(term.Key{Code: term.Enter}) {
+	if !u.popKey(term.Key{Code: term.Enter}) {
 		t.Fatal("Enter should pick")
 	}
-	if u.ed.String() != "yo @bob " || u.mention != nil {
+	if u.ed.String() != "yo @bob " || u.pop != nil {
 		t.Fatalf("insertion: %q", u.ed.String())
 	}
 }
@@ -161,9 +161,9 @@ func TestRegressionMentionBoxTakesTheClick(t *testing.T) {
 			Entities: []model.Span{{End: len(url), Kind: model.SpanURL, URL: url}}})
 	}
 	u.ed.Set("yo @al")
-	u.mentionScan()
+	u.popScan()
 	u.draw()
-	r := u.mentionRect()
+	r := u.popRect()
 	x0, _ := u.layout()
 	y, x := r.row+1, -1 // first member of the box
 	for _, s := range u.hits[y].urls {
