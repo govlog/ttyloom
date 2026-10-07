@@ -67,14 +67,14 @@ These frames use **the actual UI renderer with fictional data** and the Catppucc
 
 ### Download a binary
 
-[Download TTYloom v0.12-beta](https://github.com/govlog/ttyloom/releases/tag/v0.12-beta) for **Linux x86-64 (`amd64`)** or **ARM64 (`arm64`)**. These portable builds need no Go installation or C library. They omit Hunspell spell checking; the source build below supports it.
+[Download TTYloom v0.13-beta](https://github.com/govlog/ttyloom/releases/tag/v0.13-beta) for **Linux x86-64 (`amd64`)** or **ARM64 (`arm64`)**. These portable builds need no Go installation or C library. They omit Hunspell spell checking; the source build below supports it.
 
 Download your architecture’s `.tar.gz` archive and `SHA256SUMS` from that release into the same directory, then:
 
 ```bash
 sha256sum --check --ignore-missing SHA256SUMS
-tar -xzf ttyloom_0.12-beta_linux_amd64.tar.gz
-cd ttyloom_0.12-beta_linux_amd64
+tar -xzf ttyloom_0.13-beta_linux_amd64.tar.gz
+cd ttyloom_0.13-beta_linux_amd64
 ./ttyloom --version
 ./ttyloom
 ```
