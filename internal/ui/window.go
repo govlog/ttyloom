@@ -610,7 +610,7 @@ func (w *Window) LineItems(o render.Opts) ([]render.Line, []*Item, int) {
 			case it.Echo != nil:
 				echoOpts := o
 				echoOpts.Images, echoOpts.ImagesHover, echoOpts.LinkPreviews = "off", false, false
-				it.lines = render.SendEcho(it.Echo, echoOpts)
+				it.lines = render.Echo(it.Echo, echoOpts)
 			case it.Msg != nil:
 				mo := o
 				mo.Reveal = it.Reveal

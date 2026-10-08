@@ -101,10 +101,13 @@ func (u *UI) flushAlert(now time.Time) bool {
 }
 
 // seenNow tells whether m of chat is on the screen of a focused terminal —
-// its window, or the aggregate showing its network.
+// its window, a window in query on it (/q echoes its replies), or the
+// aggregate showing its network.
 func (u *UI) seenNow(chat *model.Chat, m *model.Msg) bool {
 	i := u.ws.ForChat(chat.Key())
-	return u.focused && i >= 0 && (u.view() == u.ws.List[i] || (u.view() == u.agg && u.netShown(m)))
+	v := u.view()
+	query := v.Target != nil && v.Target.Key() == chat.Key()
+	return u.focused && i >= 0 && (v == u.ws.List[i] || query || (v == u.agg && u.netShown(m)))
 }
 
 // notify sends a desktop notification on a new message (same conditions as

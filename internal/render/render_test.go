@@ -891,3 +891,21 @@ func TestWrapCombiningPile(t *testing.T) {
 		t.Fatal("Wrap does not end on a word of combining marks")
 	}
 }
+
+// Echo : a local transcript in another window — [msg(target)] for what I
+// sent, *nick* for a message received, and a notice as it reads ("-nick- …").
+func TestEcho(t *testing.T) {
+	o := Opts{Width: 60, Theme: theme.Terminal(), Images: "off"}
+	for _, c := range []struct {
+		m    model.Msg
+		want string
+	}{
+		{model.Msg{Out: true, ChatLabel: "nickserv", From: "gov", Text: "help"}, "[msg(nickserv)] help"},
+		{model.Msg{ChatLabel: "nickserv", From: "NickServ", Text: "hello"}, "*NickServ* hello"},
+		{model.Msg{ChatLabel: "nickserv", From: "NickServ", Text: "-NickServ- help text", Notice: true}, "-NickServ- help text"},
+	} {
+		if got := strings.TrimRight(LineText(Echo(&c.m, o)[0]), " "); got != c.want {
+			t.Errorf("Echo(%+v) = %q, want %q", c.m, got, c.want)
+		}
+	}
+}

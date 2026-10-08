@@ -420,3 +420,38 @@ func TestQueryLocalEcho(t *testing.T) {
 		t.Fatal("/m opened the query mode")
 	}
 }
+
+// While a window is in query on a chat (/q), the replies of that chat show
+// there too, as a local echo, and count as read when that window is the one
+// looked at; with no query (/msg), they stay in the window of the chat only.
+func TestQueryShowsReplies(t *testing.T) {
+	u, b, room, peer := queryUI()
+	u.focused = true
+	u.goTo(u.ws.ForChat(room.Key()))
+	roomW, peerW := u.view(), u.ws.List[u.ws.ForChat(peer.Key())]
+	reply := func(id int) {
+		u.dispatch(model.Envelope{Net: netTelegram, Ev: model.EvNewMessage{Chat: peer,
+			Msg: model.Msg{ID: id, ChatID: peer.ID, From: "blop", Text: "pong"}}})
+	}
+	echoes := func() (n int) {
+		for _, it := range roomW.Items {
+			if it.Echo != nil && !it.Echo.Out {
+				n++
+			}
+		}
+		return n
+	}
+	reply(1) // no query: the window of the chat only
+	if echoes() != 0 || peerW.Act != 1 {
+		t.Fatalf("no query: %d echoes in the room, act %d", echoes(), peerW.Act)
+	}
+	input(u, "/q blop")
+	reads := b.markRead
+	reply(2)
+	if echoes() != 1 || itemByID(peerW, 2) == nil {
+		t.Fatalf("query: %d echoes in the room, reply in its window %v", echoes(), itemByID(peerW, 2) != nil)
+	}
+	if peerW.Act != 0 || b.markRead == reads {
+		t.Fatalf("a reply seen in the query window is read: act %d, MarkRead %d→%d", peerW.Act, reads, b.markRead)
+	}
+}

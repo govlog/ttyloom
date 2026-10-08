@@ -677,8 +677,11 @@ resolved, sends wait and ordinary unsent text stays in the editor.
 A message sent to the target from another window is echoed there as
 `[msg(alice)] text`, between the *Opening conversation with alice* and *Closing
 conversation with alice* notices, and stays in Alice's own conversation; the
-echo never enters the history, cache or log of the window. `/msg alice text`
-echoes the same way without opening the mode.
+echo never enters the history, cache or log of the window. While the mode is
+open, Alice's replies show there too, as `*alice* text` (a notice as
+`-NickServ- text`), and stay in her conversation; seen there, they count as
+read. `/msg alice text` echoes the same way without opening the mode, and her
+replies then go to her conversation only.
 
 Tab after `/m `, `/q ` or `/j `, with no letters yet, lists up to 20 targets;
 a second Tab expands to up to 100. `/join` completes channels and groups only,

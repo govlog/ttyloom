@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- **The replies of a query** (`/q nick`) show in the window where the query is open, as `*nick* text` (a notice as `-NickServ- text`), as well as in the conversation with that person; seen there, they count as read. After a `/msg` with no query, they still go to the conversation only.
+
 ## v0.13-beta — 2026-10-07
 
 ### Added

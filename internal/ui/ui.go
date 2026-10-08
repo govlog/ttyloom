@@ -1369,6 +1369,13 @@ func (u *UI) newMessage(e model.EvNewMessage) {
 		u.logMsg(w, &m)
 	}
 	u.agg.Upsert(&m) // same pointer: edits, deletes and reactions follow
+	if added && !m.Out {
+		for _, x := range u.ws.List { // a window in query on the chat (/q) shows its replies too
+			if x != w && x.Target != nil && x.Target.Key() == chat.Key() {
+				x.AddEcho(&m)
+			}
+		}
+	}
 	// Read on the screen: current window or aggregated view, and only when
 	// the terminal has the focus — away, nobody reads.
 	seen := u.seenNow(chat, &m)
