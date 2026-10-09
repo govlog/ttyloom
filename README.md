@@ -4,7 +4,7 @@
 
 <p align="center">
 <a href="https://github.com/govlog/ttyloom/actions/workflows/ci.yml"><img src="https://github.com/govlog/ttyloom/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-<a href="https://go.dev/dl/"><img src="https://img.shields.io/badge/Go-1.26.8+-00ADD8?logo=go&amp;logoColor=white" alt="Go 1.26.8 or newer"></a>
+<a href="https://go.dev/dl/"><img src="https://img.shields.io/badge/Go-1.26.9+-00ADD8?logo=go&amp;logoColor=white" alt="Go 1.26.9 or newer"></a>
 <img src="https://img.shields.io/badge/platform-Linux-FCC624?logo=linux&amp;logoColor=black" alt="Linux">
 <a href="LICENSE.md"><img src="https://img.shields.io/badge/license-MIT-89b4fa" alt="MIT license"></a><br>
 <a href="docs/guide.md">Full manual</a> · <a href="docs/authentication.md">Account setup</a>
@@ -96,7 +96,7 @@ For ARM64, replace `amd64` with `arm64`. `--version` prints the version, the bui
 
 ### Build from source
 
-Requires **Linux** and **Go 1.26.8 or newer**. The smallest build needs no C compiler or Hunspell:
+Requires **Linux** and **Go 1.26.9 or newer**. The smallest build needs no C compiler or Hunspell:
 
 ```bash
 git clone https://github.com/govlog/ttyloom.git

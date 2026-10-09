@@ -628,8 +628,8 @@
   },
   {
     "Path": "golang.org/x/net",
-    "Version": "v0.59.0",
-    "Sum": "h1:5zfYln+w5XCxwrnMMJPufRgNoXEaGxl0wo5GqPXyues="
+    "Version": "v0.60.0",
+    "Sum": "h1:79p50tfZlm0J9YfoDsSi639qSXNGVwEzOPLCxM2FsYU="
   },
   {
     "Path": "golang.org/x/sync",

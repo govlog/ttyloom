@@ -12,6 +12,7 @@
 
 - **Only the rows that changed are sent**: a frame is split by screen row and compared with the last one; typing a letter rewrites the input line instead of the whole screen. Sixel and Terminology pictures go again only when a row under them changes.
 - **Window 0 stays calm at connection**: the lines nobody waits for (connected, chats loaded, sync, MOTD, notices of the server, SASL login) no longer count as activity; window 0 shows in `[Act: …]` in the plain colour with no count until visited. Errors, disconnections, invitations and notices from people count as before.
+- **Dependencies**: Go 1.26.9 and x/net v0.60.0 fix the vulnerabilities published since v0.13-beta in `net/http`, its HTTP/2 transport, `net/textproto` and `crypto/tls` (GO-2026-6603 to GO-2026-6617), which the update check and the Discord client reached; the license bundle under `licenses/` follows. govulncheck finds no vulnerability reached.
 - **The replies of a query** (`/q nick`) show in the window where the query is open, as `*nick* text` (a notice as `-NickServ- text`), as well as in the conversation with that person; seen there, they count as read. After a `/msg` with no query, they still go to the conversation only.
 
 ## v0.13-beta — 2026-10-07

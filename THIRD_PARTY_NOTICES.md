@@ -29,7 +29,7 @@ those components.
   original license and corrected manually. Multiple rows for a library can
   reflect separate notices bundled by that library; do not assume they are
   interchangeable license choices.
-- [Go toolchain license](licenses/go-toolchain/LICENSE): Go 1.26.8 runtime and
+- [Go toolchain license](licenses/go-toolchain/LICENSE): Go 1.26.9 runtime and
   standard-library notice, with its [patent grant](licenses/go-toolchain/PATENTS).
 
 The imported Go libraries have MIT, MIT-0, ISC, BSD or Apache-2.0 notices in

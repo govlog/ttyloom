@@ -53,7 +53,7 @@ Original texts and checksums are recorded in [manifest.json](manifest.json). Kee
 | `golang.org/x/exp` | `v0.0.0-20260908205506-85c1c2202aba` | declared; not imported on this platform | [LICENSE](golang.org/x/exp@v0.0.0-20260908205506-85c1c2202aba/LICENSE), [PATENTS](golang.org/x/exp@v0.0.0-20260908205506-85c1c2202aba/PATENTS) |
 | `golang.org/x/image` | `v0.46.0` | application or tests | [LICENSE](golang.org/x/image@v0.46.0/LICENSE), [PATENTS](golang.org/x/image@v0.46.0/PATENTS) |
 | `golang.org/x/mod` | `v0.41.0` | declared; not imported on this platform | [LICENSE](golang.org/x/mod@v0.41.0/LICENSE), [PATENTS](golang.org/x/mod@v0.41.0/PATENTS) |
-| `golang.org/x/net` | `v0.59.0` | application or tests | [LICENSE](golang.org/x/net@v0.59.0/LICENSE), [PATENTS](golang.org/x/net@v0.59.0/PATENTS) |
+| `golang.org/x/net` | `v0.60.0` | application or tests | [LICENSE](golang.org/x/net@v0.60.0/LICENSE), [PATENTS](golang.org/x/net@v0.60.0/PATENTS) |
 | `golang.org/x/sync` | `v0.23.0` | application or tests | [LICENSE](golang.org/x/sync@v0.23.0/LICENSE), [PATENTS](golang.org/x/sync@v0.23.0/PATENTS) |
 | `golang.org/x/sys` | `v0.48.0` | application or tests | [LICENSE](golang.org/x/sys@v0.48.0/LICENSE), [PATENTS](golang.org/x/sys@v0.48.0/PATENTS) |
 | `golang.org/x/term` | `v0.46.0` | application or tests | [LICENSE](golang.org/x/term@v0.46.0/LICENSE), [PATENTS](golang.org/x/term@v0.46.0/PATENTS) |
