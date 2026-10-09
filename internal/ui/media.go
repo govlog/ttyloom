@@ -2,6 +2,8 @@ package ui
 
 import (
 	"context"
+	"errors"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"slices"
@@ -331,12 +333,73 @@ func (u *UI) showItem(it *Item) {
 // number and in bytes). Two at least: under that, nothing to animate.
 func (u *UI) videoFrames() int { return max(u.cfg.VideoFrames, 2) }
 
-// playPause : key "l" on a downloaded video. First press: the frames decode
-// in the background in maxW x maxH px (0x0: the box of the image block of the
-// message), and the animation starts at the first partial report. After that:
-// pause / resume.
-// ponytail: no sound — "o" opens the video with the desktop player.
+// playPause : key "l" on a downloaded video — mpv when there is one (playOut),
+// otherwise the frames of ffmpeg inline (playInline). A video playing inline
+// (autoplay, mpv fallback) keeps "l" as its pause; once stopped by "s", it is
+// at rest and "l" goes to mpv.
 func (u *UI) playPause(md *model.Media, maxW, maxH, gen int) {
+	if !u.playOut(md, maxW, maxH, gen) {
+		u.playInline(md, maxW, maxH, gen)
+	}
+}
+
+// player starts the external player; a test puts a fake one.
+var player = media.MPV
+
+// evPlayed : the external player has ended (player goroutine → UI loop).
+// W, H and Gen are the box of the "l" that started it, for the fallback.
+type evPlayed struct {
+	Media     *model.Media
+	W, H, Gen int
+	Err       error
+	back      func()
+}
+
+// playOut : mpv takes the whole terminal — sound, seek,
+// its own keys, "q" quits — until it ends; meanwhile the events keep coming
+// and nothing is drawn. false: no mpv here.
+// ponytail: the frames of the inline GIFs are still encoded for nothing while
+// mpv plays (writes dropped by the terminal); skip animate if it ever costs.
+func (u *UI) playOut(md *model.Media, maxW, maxH, gen int) bool {
+	if render.Stoppable(md) || !media.HaveMPV || md.Kind != model.MediaVideo || md.Path == "" {
+		return false
+	}
+	ct := os.Getenv("COLORTERM")
+	cmd := player(u.ctx, md.Path, media.Screen{Kitty: u.t.Kitty, Shm: u.t.KittyShm, Sixel: u.t.Sixel,
+		Ghostty:   os.Getenv("TERM_PROGRAM") == "ghostty" || strings.Contains(os.Getenv("TERM"), "ghostty"),
+		TrueColor: ct == "truecolor" || ct == "24bit"})
+	cmd.Stdin, cmd.Stdout = os.Stdin, os.Stdout
+	back := u.t.Hand()
+	go func() {
+		err := cmd.Run()
+		// Exit 4: quit by Ctrl+C (its binding "quit 4"), not a failure.
+		if ee := (*exec.ExitError)(nil); errors.As(err, &ee) && ee.ExitCode() == 4 {
+			err = nil
+		}
+		u.post(evPlayed{Media: md, W: maxW, H: maxH, Gen: gen, Err: err, back: back})
+	}()
+	return true
+}
+
+// played : the terminal comes back. The player cleared the screen and every
+// kitty image: everything is sent again, as at the first frame. A player that
+// failed (old mpv, file it cannot read) leaves the play to ffmpeg.
+func (u *UI) played(e evPlayed) {
+	e.back()
+	u.dropKitty()
+	u.kplaced = nil
+	u.clear()
+	if e.Err != nil {
+		u.sys(i18n.T("mpv_failed", e.Err))
+		u.playInline(e.Media, e.W, e.H, e.Gen)
+	}
+}
+
+// playInline : first press, the frames decode in the background in maxW x
+// maxH px (0x0: the box of the image block of the message), and the animation
+// starts at the first partial report. After that: pause / resume.
+// ponytail: no sound — mpv plays it, or "o" opens the desktop player.
+func (u *UI) playInline(md *model.Media, maxW, maxH, gen int) {
 	if render.Playing(md) {
 		md.Paused = !md.Paused
 		md.Next = time.Now().Add(md.Delay)

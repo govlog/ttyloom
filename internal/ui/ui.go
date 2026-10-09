@@ -1288,6 +1288,8 @@ func (u *UI) event(ev model.Event) {
 		u.downloaded(e)
 	case evFrames:
 		u.framesLoaded(e)
+	case evPlayed:
+		u.played(e)
 	case model.EvUpload:
 		u.flash(e.Text)
 	case evClipImage:

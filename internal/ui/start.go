@@ -41,7 +41,7 @@ func newUI(ctx context.Context, cancel context.CancelFunc, t *term.Term, cfg *co
 	if len(cfg.Unknown) > 0 {
 		u.status0(i18n.T("config_unknown_keys", strings.Join(cfg.Unknown, ", ")))
 	}
-	u.status0(i18n.T("banner_terminal", t.Cols, t.Rows, t.CellW, t.CellH, t.Kitty, t.KittyKbd, u.images, th.Name))
+	u.status0(i18n.T("banner_terminal", t.Cols, t.Rows, t.CellW, t.CellH, t.Kitty, t.KittyShm, t.Sixel, t.KittyKbd, u.images, th.Name))
 	if al, err := loadAliases(aliasPath()); err != nil {
 		u.status0(i18n.T("aliases_error", err)) // unreadable file: we start with no local names
 	} else {

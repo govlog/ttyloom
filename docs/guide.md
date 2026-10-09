@@ -53,6 +53,7 @@ OAuth login are not supported.
 - For source builds only: [Go 1.26.8 or newer](https://go.dev/dl/).
 - Optional: `ffmpeg` and `ffprobe` for videos, animated WebP and the
   metadata of a video sent with `/send`. Actual GIF files are decoded in Go.
+- Optional: `mpv` to play videos with sound over the whole terminal.
 - For source builds with spell checking: Hunspell development files and
   dictionaries. The portable release binaries use `nospell`.
 - For Telegram only: an application API ID and hash from
@@ -63,7 +64,7 @@ On Debian or Ubuntu:
 
 ```bash
 sudo apt update
-sudo apt install ffmpeg
+sudo apt install ffmpeg mpv
 sudo apt install build-essential libhunspell-dev hunspell-fr hunspell-en-us
 ```
 
@@ -213,7 +214,7 @@ update_check = false
 | `images` | `auto` detects kitty graphics; `kitty`, `halfblock` and `off` select an explicit mode. `F4` cycles modes. |
 | `images_hover` | Show images in an overlay when hovering over a message, with no reserved image rows in the conversation. `F5` toggles it. |
 | `kitty_images` | Maximum number of images retained in the terminal, including GIFs and avatars. The least recently displayed image is released and sent again when needed. |
-| `video_inline_frames` | Frames decoded for video playback, at 10 frames per second. Default 300; decoding also has a 200 MiB budget. Change this in the file and restart. |
+| `video_inline_frames` | Frames decoded for FFmpeg video playback, at 10 frames per second. Default 300; decoding also has a 200 MiB budget. Change this in the file and restart. |
 | `video` | `show`: first frame until `l` starts playback. `hidden`: label only, with `v` and `o` still available. `autoplay`: loop a downloaded video when visible; `s` stops and `l` controls playback. Frame limits still apply. |
 | `gifplay` | `always`: every animated GIF on the screen plays. `hover`: only the GIF of the message under the mouse moves, the others hold their frame. `off`: the first frame alone. |
 | `link_previews` | Display the preview the network gives of a link: on Telegram its site, title, description and thumbnail; on Discord the title and description of an embed. Off, the label stays alone. `o` or a click on the label asks before it opens the page. |
@@ -698,7 +699,7 @@ because `/quit` shares that prefix. Exact aliases take precedence when executing
 | `/open`, `/open N` | Download if needed and open the newest, or Nth-newest, media with `xdg-open`; a link preview asks before it opens its page. |
 | `/set images halfblock` | Select half blocks; `auto`, `kitty` and `off` are also available. |
 | `/view [N]`, `v` on a selected message | Open media in the full-screen viewer. |
-| `l` on a downloaded video | Play in the conversation without sound; press again to pause. |
+| `l` on a downloaded video | With mpv: play over the whole terminal with sound, mpv keys apply, `q` comes back. Otherwise: play in the conversation without sound; press again to pause. |
 | `s` | Stop playback and return to the first frame. |
 | `/set video hidden` | Keep only video labels in the conversation; `show` previews one frame and `autoplay` loops visible downloaded videos. |
 | `/send path [caption]` | Send a local file of 2 GB at most. On Telegram, PNG/JPEG goes as a photo, a video or a sound file as a playable media with its ffprobe metadata, other formats as documents; on Discord, as an attachment; in a private IRC chat, by DCC SEND. Tab completes the path: `~`, relative paths and spaces work, a directory gets its `/` and the next Tab goes on inside it. |
@@ -728,16 +729,26 @@ once to a `_full` file next to the inline one.
 | ↑/↓, Shift+←/→ | Pan the visible area. |
 | Hold the left mouse button and drag | Pan with the mouse. |
 | `0` | Center and fit to the screen again. |
-| `l` on a video | Start or pause full-screen playback, without sound. |
+| `l` on a video | With mpv: play with sound, as in the conversation. Otherwise: start or pause full-screen playback, without sound. |
 | `s` | Stop and return to the first frame. |
 | `o` | Open the file externally, or, after a question, the web page of a link preview. |
 | `c` | Copy the image to the system clipboard (`wl-copy` on Wayland, `xclip` on X11), to paste it in another application. |
 | Escape, `q`, or a click without dragging | Close the viewer. |
 
 Zoom ranges from 25% to 800% of the fitted view, by a factor of 1.25 per step.
-Other unassigned keys close the viewer. Videos require FFmpeg; playback is
-bounded by frame and memory limits. This is silent terminal playback, with
-`show`, `hidden` and `autoplay` controlling the conversation view.
+Other unassigned keys close the viewer. With mpv, `l` gives the whole
+terminal to mpv, with sound, until it ends; ttyloom keeps receiving messages
+meanwhile. The output follows what the start-up probe found (the `terminal`
+line of window 0): kitty graphics (Ghostty, kitty, WezTerm), with shared
+memory on a local kitty — faster, but black on Ghostty; then sixel (foot,
+WezTerm, xterm with sixel), falling back on text if mpv was built without it;
+then text half blocks (`--vo=tct`), in 256 colours unless `COLORTERM` says
+`truecolor`. If mpv fails (old version, unreadable file), the
+line says so and FFmpeg plays the video instead. FFmpeg playback is silent
+and bounded by frame and memory limits; `show`, `hidden` and `autoplay`
+control the conversation view. A video already playing in the conversation
+(`autoplay`, or the FFmpeg fallback) keeps `l` as pause; `s` then `l` hands it
+to mpv.
 
 Photos, stickers (animated stickers stay labels), GIFs and videos below the
 download threshold are fetched into `download_dir`; GIFs animate and a video
@@ -1137,7 +1148,7 @@ intended directory. Do not attach a complete configuration to a public issue.
 Enable images with F4, open the media with `v`, and wait for the download before
 using the wheel or `+`/`-`. Hold the left button to pan: a click without dragging
 closes the viewer. For videos, install `ffmpeg` and `ffprobe`, then press `l`.
-Playback has no audio.
+FFmpeg playback has no audio: install `mpv` for sound.
 
 ### Spell checking stays disabled
 

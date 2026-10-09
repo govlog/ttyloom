@@ -3,9 +3,11 @@ package ui
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"image"
 	"image/png"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -217,6 +219,8 @@ func TestStopThenPlayRedecodes(t *testing.T) {
 	if !media.HaveFFmpeg {
 		t.Skip("ffmpeg absent")
 	}
+	defer func(h bool) { media.HaveMPV = h }(media.HaveMPV)
+	media.HaveMPV = false // the inline play is the one under test
 	u := &UI{ws: NewWindows(), agg: &Window{}, cfg: &config.Config{VideoFrames: 8},
 		ctx: context.Background(), events: make(chan model.Event, 8), images: "halfblock",
 		t: &term.Term{Cols: 80, Rows: 24}}
@@ -232,6 +236,50 @@ func TestStopThenPlayRedecodes(t *testing.T) {
 	u.playPause(md, 100, 100, 0) // key "l"
 	if md.Want != 8 {
 		t.Fatalf("play again: %d frames asked, want video_inline_frames", md.Want)
+	}
+}
+
+// TestMPVFailureFallsBackInline : "l" on a video hands the terminal to mpv;
+// when mpv ends, the terminal comes back. Only a real failure (exit 2: a file
+// it cannot read, exit 1: an old mpv) leaves the play to the ffmpeg frames —
+// "q" (exit 0) and Ctrl+C (exit 4) are the user quitting.
+func TestMPVFailureFallsBackInline(t *testing.T) {
+	if !media.HaveFFmpeg {
+		t.Skip("ffmpeg absent")
+	}
+	defer func(h bool, p func(context.Context, string, media.Screen) *exec.Cmd) { media.HaveMPV, player = h, p }(media.HaveMPV, player)
+	media.HaveMPV = true
+	for _, tc := range []struct {
+		exit     int
+		fallback bool
+	}{{0, false}, {4, false}, {1, true}, {2, true}} {
+		player = func(ctx context.Context, _ string, _ media.Screen) *exec.Cmd {
+			return exec.CommandContext(ctx, "sh", "-c", fmt.Sprintf("exit %d", tc.exit))
+		}
+		var out bytes.Buffer
+		u := &UI{ws: NewWindows(), agg: &Window{}, debug: &Window{}, cfg: &config.Config{VideoFrames: 8},
+			ctx: context.Background(), events: make(chan model.Event, 8), images: "kitty",
+			t: term.NewOffscreen(&out, 80, 24)}
+		u.t.Kitty, u.t.CellW, u.t.CellH = true, 10, 20
+		md := &model.Media{Kind: model.MediaVideo, Path: "/nonexistent.mp4", Mime: "video/mp4", State: model.MediaReady}
+
+		u.playPause(md, 100, 100, 0) // key "l"
+		if md.Want != 0 {
+			t.Fatalf("exit %d: ffmpeg decoding started while mpv plays", tc.exit)
+		}
+		var ev model.Event
+		select {
+		case ev = <-u.events:
+		case <-time.After(5 * time.Second):
+			t.Fatalf("exit %d: mpv end never reported", tc.exit)
+		}
+		u.event(ev)
+		if got := md.Want != 0; got != tc.fallback {
+			t.Fatalf("exit %d: inline fallback = %v, want %v", tc.exit, got, tc.fallback)
+		}
+		if !strings.Contains(out.String(), "\x1b[2J") {
+			t.Fatalf("exit %d: terminal not given back: %q", tc.exit, out.String())
+		}
 	}
 }
 

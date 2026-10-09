@@ -175,7 +175,7 @@ images = "auto"       # auto | kitty | halfblock | off (F4 cycles them)
 images_hover = false  # image shown only under the mouse (F5), with no line kept free
 avatars = true        # profile photos before the names and in the sidebar (kitty only)
 kitty_images = 48     # images kept by the terminal (kitty); above that, the least recently shown are freed
-video_inline_frames = 300 # frames decoded by "l" on a video (300 = 30 s at 10 fps, 1000 at most)
+video_inline_frames = 300 # frames decoded by "l" on a video without mpv (300 = 30 s at 10 fps, 1000 at most)
 video = "show"        # inline video: show (first frame, "l" plays) | hidden (label only) | autoplay
 gifplay = "always"    # animated GIFs: always | hover (the one under the mouse only) | off (first frame alone)
 timestamps = true

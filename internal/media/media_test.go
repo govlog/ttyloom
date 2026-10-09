@@ -404,3 +404,24 @@ func TestVideoProbeDoesNotFollowNetworkPlaylist(t *testing.T) {
 		t.Fatalf("media probe made %d network requests", requests.Load())
 	}
 }
+
+// The output of mpv follows the terminal: kitty graphics first (shared memory
+// on a local kitty only — Ghostty shows black with it), then sixel, then text
+// half blocks in 24-bit colour or 256 colours.
+func TestMPVOutputFollowsTerminal(t *testing.T) {
+	for _, tc := range []struct {
+		s    Screen
+		want string
+	}{
+		{Screen{Kitty: true, Shm: true}, "--vo=kitty --vo-kitty-use-shm=yes --vo-kitty-alt-screen=no"},
+		{Screen{Kitty: true, Shm: true, Ghostty: true, Sixel: true}, "--vo=kitty --vo-kitty-use-shm=no --vo-kitty-alt-screen=no"},
+		{Screen{Kitty: true}, "--vo=kitty --vo-kitty-use-shm=no --vo-kitty-alt-screen=no"},
+		{Screen{Sixel: true, TrueColor: true}, "--vo=sixel,tct --vo-sixel-alt-screen=no"},
+		{Screen{TrueColor: true}, "--vo=tct"},
+		{Screen{}, "--vo=tct --vo-tct-256=yes"},
+	} {
+		if got := strings.Join(mpvOut(tc.s), " "); got != tc.want {
+			t.Errorf("%+v: %q, want %q", tc.s, got, tc.want)
+		}
+	}
+}

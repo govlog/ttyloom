@@ -18,7 +18,7 @@
 
 ## Built for conversations
 
-- **Play videos inside the conversation.** `l` plays or pauses, `s` stops; choose previews, hidden videos or autoplay. Silent playback also works full screen, with FFmpeg.
+- **Play videos in the terminal.** With mpv, `l` plays the video over the whole terminal with sound, through the best output the terminal has (kitty graphics, sixel, or text half blocks) (mpv keys; `q` comes back). Without mpv, FFmpeg plays it silently inside the conversation: `l` plays or pauses, `s` stops. Choose previews, hidden videos or autoplay.
 - **Open an image and explore it.** Click or press `v` for the built-in viewer. Zoom up to 8× with the wheel or `+`/`-`, **drag with the mouse to pan**, press `0` to fit again, and ←/→ to go to the previous or next media. [Viewer controls](docs/guide.md#viewer).
 - **Keep photos and GIFs in the flow.** Native pixels through kitty graphics, Unicode half blocks elsewhere. `F5` shows images only on hover; `Ctrl+G` opens a searchable GIF picker whose previews play under the mouse; `Ctrl+M` (or `/media`) browses every photo, video, GIF and file of a conversation.
 - **Move between conversations your way.** Numbered windows, a draft in each, `/query`, `/join`, `/msg`, `/me`, and a cycle through unread windows. `F6` combines conversations in window 0.
@@ -104,7 +104,8 @@ go build -trimpath -o ttyloom ./cmd/ttyloom
 
 | Optional tool | Enables |
 | --- | --- |
-| `ffmpeg` and `ffprobe` | Video previews/playback, animated WebP, video metadata |
+| `mpv` | Video playback with sound over the whole terminal (kitty graphics, sixel or text) |
+| `ffmpeg` and `ffprobe` | Video previews, silent inline playback, animated WebP, video metadata |
 | `wl-clipboard` (`wl-paste`, `wl-copy`) or `xclip` | Clipboard text and image paste, image copy from the viewer (`c`) |
 | `notify-send` | Desktop notifications |
 | Ghostty or kitty | Native inline images; other terminals can use half blocks |

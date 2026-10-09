@@ -75,6 +75,55 @@ var HaveFFmpeg = func() bool {
 	return e1 == nil && e2 == nil
 }()
 
+// HaveMPV : mpv plays a video in the terminal itself, with its sound and its
+// keys; the frames of ffmpeg stay the fallback.
+var HaveMPV = func() bool {
+	_, err := exec.LookPath("mpv")
+	return err == nil
+}()
+
+// Screen : what the terminal can show, as the probe of term found it.
+type Screen struct {
+	Kitty     bool // kitty graphics protocol
+	Shm       bool // ... read from a shared memory object (local terminal)
+	Ghostty   bool
+	Sixel     bool
+	TrueColor bool // 24-bit colour (COLORTERM)
+}
+
+// MPV gives the command that plays the file at path full screen. Fixed
+// arguments, never a shell. The file comes from the network: lavf is forced
+// and its nested opens refused, otherwise a text file sent as a video (M3U,
+// EDL, HLS) makes mpv fetch the URLs it lists.
+func MPV(ctx context.Context, path string, s Screen) *exec.Cmd {
+	args := append([]string{"--profile=sw-fast"}, mpvOut(s)...)
+	args = append(args, "--really-quiet", "--demuxer=lavf", "--access-references=no", "--", path)
+	return exec.CommandContext(ctx, "mpv", args...)
+}
+
+// mpvOut : the best video output of mpv for s — kitty graphics, then sixel,
+// then half blocks of text (tct), which every colour terminal shows. No
+// switch of screen: the alternate screen of the interface carries the video
+// (tct has no such option; Term.Hand takes the screen back after it).
+func mpvOut(s Screen) []string {
+	switch {
+	case s.Kitty:
+		// Shared memory spares the base64 of every frame. Ghostty reads it
+		// too, but mpv then shows a black screen there.
+		shm := "no"
+		if s.Shm && !s.Ghostty {
+			shm = "yes"
+		}
+		return []string{"--vo=kitty", "--vo-kitty-use-shm=" + shm, "--vo-kitty-alt-screen=no"}
+	case s.Sixel:
+		// ",tct": an mpv built without libsixel falls back on the text output.
+		return []string{"--vo=sixel,tct", "--vo-sixel-alt-screen=no"}
+	case s.TrueColor:
+		return []string{"--vo=tct"}
+	}
+	return []string{"--vo=tct", "--vo-tct-256=yes"}
+}
+
 // Load decodes a file into PNG frames fitted in maxW x maxH px (never made
 // bigger). frames = 1 for a still image or the first frame of a video,
 // maxFrames for a GIF, up to maxVideoFrames for a video being played.

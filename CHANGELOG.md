@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- **Videos with sound through mpv**: when `mpv` is installed, `l` on a video gives the whole terminal to mpv (software decoding) until it ends: sound, seeking and the other mpv keys, `q` to come back. Messages keep arriving meanwhile. mpv opens the file through libavformat with no nested access, so a text file sent as a video cannot make it fetch an address. If mpv fails, the line says so and FFmpeg plays the video silently in the conversation, as before. A video already playing in the conversation (`autoplay`) keeps `l` as pause; `s` then `l` opens it in mpv. The output follows the terminal, which the start-up probe now asks for sixel (DA1) and for shared memory (a 1-pixel `t=s` query): kitty graphics, with shared memory on a local kitty (not on Ghostty, which shows black with it); sixel; text half blocks in 24-bit or 256 colours. The `terminal` line of window 0 shows both answers.
+
 ### Changed
 
 - **The replies of a query** (`/q nick`) show in the window where the query is open, as `*nick* text` (a notice as `-NickServ- text`), as well as in the conversation with that person; seen there, they count as read. After a `/msg` with no query, they still go to the conversation only.
