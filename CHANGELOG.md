@@ -8,6 +8,7 @@
 
 ### Changed
 
+- **Window 0 stays calm at connection**: the lines nobody waits for (connected, chats loaded, sync, MOTD, notices of the server, SASL login) no longer count as activity; window 0 shows in `[Act: …]` in the plain colour with no count until visited. Errors, disconnections, invitations and notices from people count as before.
 - **The replies of a query** (`/q nick`) show in the window where the query is open, as `*nick* text` (a notice as `-NickServ- text`), as well as in the conversation with that person; seen there, they count as read. After a `/msg` with no query, they still go to the conversation only.
 
 ## v0.13-beta — 2026-10-07

@@ -78,7 +78,7 @@ func (u *UI) loadCache() {
 			windows++
 		}
 	}
-	u.status0(i18n.T("cache_loaded", loaded, windows))
+	u.info0(i18n.T("cache_loaded", loaded, windows))
 }
 
 // bindChat binds the window to the chat and, when it is still empty, plays
@@ -370,7 +370,7 @@ func (u *UI) syncStart(net string) {
 	}
 	u.syncQueue = append(u.syncQueue, q...)
 	u.syncTotal += len(q)
-	u.status0(i18n.T("sync_start", u.syncTotal))
+	u.info0(i18n.T("sync_start", u.syncTotal))
 	u.syncNext() // already in flight: syncNext gives the lead back on syncCur
 }
 
@@ -441,10 +441,10 @@ func (u *UI) syncHistory(e model.EvHistory) {
 		u.syncNew += len(e.Msgs)
 	}
 	if done := u.syncTotal - len(u.syncQueue); done%10 == 0 && done < u.syncTotal {
-		u.status0(i18n.T("sync_progress", done, u.syncTotal))
+		u.info0(i18n.T("sync_progress", done, u.syncTotal))
 	}
 	if len(u.syncQueue) == 0 {
-		u.status0(i18n.T("sync_done", u.syncNew))
+		u.info0(i18n.T("sync_done", u.syncNew))
 		return
 	}
 	time.AfterFunc(syncPause, func() { u.post(evSyncTick{}) })

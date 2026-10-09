@@ -56,6 +56,6 @@ func (u *UI) updateDone(e evUpdate) {
 	case e.newer:
 		u.status0(i18n.T("update_available", e.rel.Tag, e.rel.ID(), u.build.ID(), e.rel.URL))
 	case e.manual:
-		u.status0(i18n.T("update_none", u.build.Version, u.build.ID()))
+		u.info0(i18n.T("update_none", u.build.Version, u.build.ID()))
 	}
 }

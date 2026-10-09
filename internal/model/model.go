@@ -295,6 +295,9 @@ type Envelope struct {
 type EvLines struct {
 	ChatID int64
 	Lines  []string
+	// Quiet : lines nobody waits for (MOTD, notice of the server, login
+	// done): window 0 takes them without counting them as activity.
+	Quiet bool
 }
 
 type EvAuthPrompt struct {

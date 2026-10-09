@@ -594,15 +594,18 @@ func (u *UI) actSpans(plain, act theme.Style) []render.Span {
 		if w.Chat != nil && w.Search == "" {
 			rb = reactBadge(w.Chat)
 		}
-		if (w.Act == 0 && rb == "") || (u.tabsOn() && !u.winShown(w)) || u.mutedWin(w) {
+		if (w.Act == 0 && rb == "" && !w.Quiet) || (u.tabsOn() && !u.winShown(w)) || u.mutedWin(w) {
 			continue
 		}
 		if len(out) > 0 {
 			out = append(out, render.Span{Text: ",", Style: plain})
 		}
 		st := act
-		if w.Hot {
+		switch {
+		case w.Hot:
 			st = u.hotStyle(act)
+		case w.Act == 0 && rb == "": // Quiet alone
+			st = plain
 		}
 		s := fmt.Sprint(i)
 		if w.Act > 0 {

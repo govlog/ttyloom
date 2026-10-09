@@ -357,6 +357,22 @@ func TestActSpansHot(t *testing.T) {
 	}
 }
 
+// Window 0 lines nobody waits for (connected, MOTD) leave window 0 in the
+// plain colour of [Act: …] with no count; an error there counts as before.
+func TestWindow0QuietActivity(t *testing.T) {
+	u := &UI{ws: NewWindows(), agg: &Window{}, debug: &Window{}, cfg: &config.Config{}, th: theme.Terminal()}
+	u.ws.New(false) // window 1 shown
+	act := theme.Style{FG: u.th.Color(theme.Act)}
+	u.event(model.EvLines{Lines: []string{"- MOTD -"}, Quiet: true})
+	if sp := u.actSpans(theme.Style{}, act); len(sp) != 1 || sp[0].Text != "0" || sp[0].Style != (theme.Style{}) {
+		t.Fatalf("quiet lines: %+v", sp)
+	}
+	u.event(model.EvLines{Lines: []string{"433 nick in use"}})
+	if sp := u.actSpans(theme.Style{}, act); len(sp) != 1 || sp[0].Text != "0(1)" || sp[0].Style != act {
+		t.Fatalf("after an error: %+v", sp)
+	}
+}
+
 // A muted chat shows its unread messages in its own line only: neither the
 // [Act: …] list nor the count of its tab.
 func TestMutedOutOfStatusBar(t *testing.T) {

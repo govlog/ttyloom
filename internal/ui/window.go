@@ -59,6 +59,10 @@ type Window struct {
 	Sel    *Item // selected message (never a sys item)
 	Scroll int   // physical lines from the bottom
 	Act    int   // messages received while the window was not the current one
+	// Quiet : window 0 only — status lines nobody waits for came while it was
+	// not shown (connection, sync, MOTD). Shown in [Act: …] in the plain
+	// colour, with no count, so the status bar stays calm.
+	Quiet bool
 	// Hot : among the unread ones, a private message or a mention of me
 	// (the same test as the bell) — shown apart until the window is visited.
 	Hot bool

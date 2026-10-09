@@ -443,11 +443,11 @@ func TestIncomingMessages(t *testing.T) {
 		t.Fatalf("private notice: %+v %+v", m.Chat, m.Msg)
 	}
 	s.send(":irc.example.org NOTICE me :*** Looking up your hostname")
-	if l := waitFor[model.EvLines](t, events); l.ChatID != 0 || len(l.Lines) != 1 || !strings.Contains(l.Lines[0], "-irc.example.org- *** Looking up your hostname") {
+	if l := waitFor[model.EvLines](t, events); l.ChatID != 0 || len(l.Lines) != 1 || !strings.Contains(l.Lines[0], "-irc.example.org- *** Looking up your hostname") || !l.Quiet {
 		t.Fatalf("server notice: %+v", l)
 	}
 	s.send(":carol!c@h INVITE me #secret")
-	if l := waitFor[model.EvLines](t, events); l.ChatID != 0 || len(l.Lines) != 1 || !strings.Contains(l.Lines[0], "#secret") {
+	if l := waitFor[model.EvLines](t, events); l.ChatID != 0 || len(l.Lines) != 1 || !strings.Contains(l.Lines[0], "#secret") || l.Quiet {
 		t.Fatalf("invite: %+v", l)
 	}
 }

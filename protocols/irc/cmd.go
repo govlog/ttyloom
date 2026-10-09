@@ -440,7 +440,7 @@ func (c *Client) onMotdEnd(e ircmsg.Message) {
 	if len(e.Params) >= 2 {
 		lines = append(lines, e.Params[len(e.Params)-1])
 	}
-	c.Post(model.EvLines{ChatID: c.replyTo("motd"), Lines: lines})
+	c.Post(model.EvLines{ChatID: c.replyTo("motd"), Lines: lines, Quiet: true})
 }
 
 // whoisLabels : the numerics of a WHOIS and the label of their line.

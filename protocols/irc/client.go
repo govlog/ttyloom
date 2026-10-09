@@ -294,11 +294,11 @@ func (c *Client) wire(conn *ircevent.Connection) {
 		}
 	})
 	// The answers of SASL: a refused password must show (no IDENTIFY follows
-	// it), and the success names the account.
+	// it), and the success names the account, quietly.
 	for _, code := range []string{ircevent.RPL_LOGGEDIN, ircevent.ERR_NICKLOCKED, ircevent.ERR_SASLFAIL} {
 		conn.AddCallback(code, func(e ircmsg.Message) {
 			if len(e.Params) > 1 {
-				c.status(c.net() + ": " + e.Params[len(e.Params)-1])
+				c.Post(model.EvLines{Lines: []string{c.net() + ": " + e.Params[len(e.Params)-1]}, Quiet: code == ircevent.RPL_LOGGEDIN})
 			}
 		})
 	}
@@ -610,11 +610,13 @@ func (c *Client) onNotice(e ircmsg.Message) {
 		from = e.Source
 	}
 	clean, _ := spansOf(e.Params[1])
-	c.status(c.net() + ": -" + from + "- " + clean)
+	// A notice of the server ("*** Looking up your hostname…") is chatter of
+	// the connection: no activity for it.
+	c.Post(model.EvLines{Lines: []string{c.net() + ": -" + from + "- " + clean}, Quiet: true})
 }
 
-// status : a line of window 0, one the user has to see (a notice, an invite,
-// a refused password) — an EvLog under ERROR stays in /debug.
+// status : a line of window 0, one the user has to see (an invite, a refused
+// password) — an EvLog under ERROR stays in /debug.
 func (c *Client) status(text string) { c.Post(model.EvLines{Lines: []string{text}}) }
 
 // onAction : CTCP ACTION, "* nick does" in italics.

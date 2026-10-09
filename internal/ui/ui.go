@@ -789,7 +789,13 @@ func (u *UI) status0(s string) { u.status0Lines([]string{s}) }
 
 // status0Lines : the lines of one event in window 0, counted as a single
 // activity — a 40-line MOTD is one thing that happened, not forty.
-func (u *UI) status0Lines(lines []string) {
+func (u *UI) status0Lines(lines []string) { u.put0(lines, false) }
+
+// info0 : lines of window 0 nobody waits for (connected, synced, MOTD): no
+// count, window 0 only shows in the plain colour (Window.Quiet).
+func (u *UI) info0(lines ...string) { u.put0(lines, true) }
+
+func (u *UI) put0(lines []string, quiet bool) {
 	if len(lines) == 0 {
 		return
 	}
@@ -799,7 +805,11 @@ func (u *UI) status0Lines(lines []string) {
 		// (disconnection, fatal error) would not show there.
 		u.agg.AddSys(s)
 	}
-	if u.ws.Cur != 0 {
+	switch {
+	case u.ws.Cur == 0:
+	case quiet:
+		u.ws.List[0].Quiet = true
+	default:
 		u.ws.List[0].Act++
 	}
 }
@@ -1095,11 +1105,11 @@ func (u *UI) event(ev model.Event) {
 		if b, ok := u.nets[net].(model.ChatIDer); ok {
 			u.rekeyChats(net, b.ChatID)
 		}
-		u.status0(i18n.T("connected_as", e.SelfName))
+		u.info0(i18n.T("connected_as", e.SelfName))
 		// Only the cache of THAT network: another one keeps the account that
 		// wrote it, and its history with it.
 		if e.Bot {
-			u.status0(i18n.T("bot_mode_notice"))
+			u.info0(i18n.T("bot_mode_notice"))
 		} else if b := u.netOf(net); b != nil {
 			// Not a broadcast although the call is account-level: EvReady is
 			// per network, and each one asks for its own dialogs when it comes
@@ -1176,7 +1186,7 @@ func (u *UI) event(ev model.Event) {
 		if e.Complete {
 			u.pruneChats(net, fresh, e.Started)
 		}
-		u.status0(i18n.T("chats_count", len(u.chatList)))
+		u.info0(i18n.T("chats_count", len(u.chatList)))
 		// Automatic opening and sync fire once per network, at ITS first chat
 		// list: a network that comes up late must still get them.
 		first := !u.dialogsSeen[net]
@@ -1716,7 +1726,7 @@ func (u *UI) markRead(w *Window) {
 	if !u.focused {
 		return // away: the messages stay unread until we come back
 	}
-	w.Act, w.Hot = 0, false
+	w.Act, w.Hot, w.Quiet = 0, false, false
 	if w.Chat != nil {
 		w.Chat.Unread = 0
 		w.Chat.LastReaction, w.Chat.ReactedMsg = "", 0
@@ -1957,7 +1967,7 @@ func (u *UI) whois(e model.EvWhois) {
 // the shown one; a window that is not shown counts the lines as activity.
 func (u *UI) lines(e model.EvLines) {
 	if e.ChatID == 0 {
-		u.status0Lines(e.Lines)
+		u.put0(e.Lines, e.Quiet)
 		return
 	}
 	w := u.view()

@@ -878,7 +878,11 @@ click `[x]` to close the box.
 The message scrollbar supports clicking to jump and dragging to scroll. Its
 track highlights under the pointer, and its thumb becomes a solid block during
 mouse interaction. The status bar lists background activity as
-`[Act: 2(3),5(1)]`: window number and unread count. Private messages and mentions
+`[Act: 2(3),5(1)]`: window number and unread count. Window 0 shows with no
+count and in the plain colour when it only received lines nobody waits for
+(connected, chats loaded, sync, MOTD, notices of the server, SASL login);
+errors, disconnections, invitations and notices from people count as usual.
+Private messages and mentions
 (on IRC, your nick as a word: `chris: hello`) can trigger the bell when their
 window is not shown or the terminal is not focused; `/set bell off` disables
 it. Desktop or terminal notifications follow the same rule and `notify`. A
