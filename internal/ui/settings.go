@@ -90,7 +90,7 @@ var settings = []setting{
 			}
 			return true
 		}},
-	choiceSetting("images", []string{"auto", "kitty", "halfblock", "off"}, func() string { return i18n.T("set_images_values") },
+	choiceSetting("images", []string{"auto", "kitty", "sixel", "terminology", "halfblock", "off"}, func() string { return i18n.T("set_images_values") },
 		func(u *UI) string { return i18n.T("set_images_effective", u.cfg.Images, u.images) },
 		(*UI).applyImages),
 	boolSetting("images_hover", func(c *config.Config) *bool { return &c.ImagesHover }, (*UI).clear), // the lines kept free show or go

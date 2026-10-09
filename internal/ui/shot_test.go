@@ -50,7 +50,7 @@ func TestScreenshots(t *testing.T) {
 		"tabs":    shotTabs,
 	} {
 		var buf bytes.Buffer
-		u := shotUI(t, th, &buf)
+		u := shotUI(t, th, &buf, gif(t, "gif-telegram-7.png"))
 		scene(t, u)
 		u.draw()
 		frame := bytes.ReplaceAll(buf.Bytes(), []byte(time.Now().Format("[15:04]")), []byte("[15:42]"))
@@ -189,8 +189,10 @@ func gif(t *testing.T, name string) *model.Media {
 // shotUI builds a UI the way Run does, on an offscreen terminal, with three
 // networks, a sidebar of sections and a group window of styled messages.
 // Windows: 0 unbound, 1 Gophers (telegram), 2 #go and 3 alice (irc), then the
-// hidden windows the tab bar counts.
-func shotUI(t *testing.T, th theme.Theme, out *bytes.Buffer) *UI {
+// hidden windows the tab bar counts. pic : the GIF alice sends — a fixture for
+// the screenshots, a drawn one for the tests (the fixtures are third-party
+// frames, not in the repository).
+func shotUI(t *testing.T, th theme.Theme, out *bytes.Buffer, pic *model.Media) *UI {
 	tm := term.NewOffscreen(out, shotCols, shotRows)
 	tm.Kitty, tm.CellW, tm.CellH = true, 8, 17
 	cfg := &config.Config{SidebarSort: "recent", Hover: config.HoverMenu, Timestamps: true, LinkPreviews: true,
@@ -244,7 +246,7 @@ func shotUI(t *testing.T, th theme.Theme, out *bytes.Buffer) *UI {
 	m3.Out = true
 	m3.Entities = []model.Span{span(m3.Text, "https://github.com/govlog/ttyloom", model.SpanURL, "https://github.com/govlog/ttyloom")}
 	m4 := msg(4, "alice", 7, -31*time.Minute, "")
-	m4.Media = gif(t, "gif-telegram-7.png")
+	m4.Media = pic
 	m5 := msg(5, "carol", 11, -30*time.Minute, "")
 	m5.Service = "carol joined the group"
 	m6 := msg(6, "dave", 9, -12*time.Minute, "TTY means terminal. A loom weaves threads together. That is where the name comes from.")

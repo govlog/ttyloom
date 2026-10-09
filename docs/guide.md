@@ -29,11 +29,13 @@ do not need Go. Building from source requires **Go 1.26.8 or newer**.
 **TTYloom** is a terminal client for **Telegram, Discord and IRC**, inspired by
 **ircii** and **BitchX**: numbered message windows, a status bar and an input
 line. The kitty graphics protocol displays photos, stickers, GIFs and video
-frames inside Ghostty or kitty. Unicode half blocks provide a fallback in other
+frames inside Ghostty or kitty; sixel shows them in foot, WezTerm or xterm, and
+Terminology draws them itself. Unicode half blocks provide a fallback in other
 terminals. It supports message formatting, clickable OSC 8 links and Ghostty
 color themes. Each frame goes to the terminal as one synchronized update (DEC
 mode 2026), so the screen never shows a half-drawn frame; a terminal without
-that mode ignores it.
+that mode ignores it. Only the screen rows that changed are sent: a key typed
+rewrites the input line, not the screen.
 
 Automated checks run on Ubuntu; the ARM64 binary gets a startup check under
 QEMU. These checks do not cover every terminal combination or live account login.
@@ -211,7 +213,7 @@ update_check = false
 | `theme` | Ghostty theme name. Empty reads the `theme` setting in `~/.config/ghostty/config`; `terminal` uses the terminal’s ANSI colors. |
 | `download_dir` | Downloaded media directory. Names include date, network, chat ID, title and message ID. |
 | `auto_media_max_kb` | Automatic download threshold in KiB, from 0 to 524288. **0 disables all automatic downloads of message media**, including unknown sizes; avatars and the pictures of the GIF picker and media browser still load. `/open`, `/view`, `v`, `o` and a click remain explicit requests. |
-| `images` | `auto` detects kitty graphics; `kitty`, `halfblock` and `off` select an explicit mode. `F4` cycles modes. |
+| `images` | `auto` takes the best the terminal has — kitty graphics, then sixel, then Terminology —, else half blocks; `kitty`, `sixel`, `terminology`, `halfblock` and `off` select an explicit mode. `F4` cycles modes. |
 | `images_hover` | Show images in an overlay when hovering over a message, with no reserved image rows in the conversation. `F5` toggles it. |
 | `kitty_images` | Maximum number of images retained in the terminal, including GIFs and avatars. The least recently displayed image is released and sent again when needed. |
 | `video_inline_frames` | Frames decoded for FFmpeg video playback, at 10 frames per second. Default 300; decoding also has a 200 MiB budget. Change this in the file and restart. |
@@ -594,7 +596,7 @@ Every open conversation has a numbered window.
 | Shift+F2 | Cycle the network filter. |
 | Shift+Tab | Give the keyboard to the sidebar, or back to the input line. |
 | F3 | Open the member box in the upper-right corner. |
-| F4 | Cycle kitty images, half blocks and images off. |
+| F4 | Cycle the terminal's images (kitty, sixel or Terminology), half blocks and images off. |
 | F5 | Toggle images on hover only. |
 | F6 | Toggle aggregate window 0. |
 | F7 | Sidebar order: recent, alphabetical, unread. |
@@ -697,7 +699,7 @@ because `/quit` shares that prefix. Exact aliases take precedence when executing
 | Command or key | Effect |
 | --- | --- |
 | `/open`, `/open N` | Download if needed and open the newest, or Nth-newest, media with `xdg-open`; a link preview asks before it opens its page. |
-| `/set images halfblock` | Select half blocks; `auto`, `kitty` and `off` are also available. |
+| `/set images halfblock` | Select half blocks; `auto`, `kitty`, `sixel`, `terminology` and `off` are also available. |
 | `/view [N]`, `v` on a selected message | Open media in the full-screen viewer. |
 | `l` on a downloaded video | With mpv: play over the whole terminal with sound, mpv keys apply, `q` comes back. Otherwise: play in the conversation without sound; press again to pause. |
 | `s` | Stop playback and return to the first frame. |
@@ -716,8 +718,8 @@ Click an inline image, select a message and press `v`, use `/view [N]`, or
 open a media from the media browser (Ctrl+M). ←/→ show the media before and
 after: in the conversation, in the order of the window, skipping messages
 without a picture; from the media browser, in the order of its grid.
-Images must be enabled with F4. The viewer works with kitty pixels and Unicode
-half blocks. A Telegram photo is shown at up to 800 px in the conversation; the
+Images must be enabled with F4. The viewer works with kitty pixels, sixel,
+Terminology and Unicode half blocks. A Telegram photo is shown at up to 800 px in the conversation; the
 viewer, `o` and `/open` take its largest size (1280 or 2560 px), downloaded
 once to a `_full` file next to the inline one.
 
@@ -1191,6 +1193,27 @@ support, keyboard support and the selected image mode.
 If graphics support is true but the cell size is `0x0`, the terminal may not
 have supplied dimensions yet. Resizing supplies them and restores the selected
 mode, with visible media decoded again. F4 can also change mode manually.
+
+### Sixel and Terminology images
+
+The probe reads sixel support in the answer to DA1 (attribute 4) and
+recognises Terminology by its answer to DA3; the `terminal` line of window 0
+shows both. Sixel needs the cell size in pixels, which foot and xterm give
+through the terminal size; xterm also needs a sixel terminal type and enough
+colour registers, in `~/.Xresources`:
+
+```
+XTerm*decTerminalID: vt340
+XTerm*numColorRegisters: 256
+```
+
+Sixel and Terminology pictures are drawn in the cells: they go again only when
+a row under them changes (a scroll, a hover), not at each key. They do not
+animate: a GIF shows one frame, and a video plays in mpv. Terminology draws a
+file and can neither crop nor enlarge it, so it gets a PNG of what the cells
+show (the zoomed region of the viewer, the visible part of a picture cut by
+the view), written to a private directory under `XDG_RUNTIME_DIR` and removed
+at exit; it works on the same machine only.
 
 ### Shift+Enter does not insert a newline
 

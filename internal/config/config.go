@@ -171,7 +171,7 @@ const defaultFile = `# ttyloom
 theme = ""            # empty = current Ghostty theme, "terminal" = the colours of the terminal, otherwise a theme name
 download_dir = "~/Downloads/ttyloom"
 auto_media_max_kb = 5120 # media downloaded on their own up to this size, in KiB (0 = none; 524288 at most)
-images = "auto"       # auto | kitty | halfblock | off (F4 cycles them)
+images = "auto"       # auto | kitty | sixel | terminology | halfblock | off (F4 cycles them)
 images_hover = false  # image shown only under the mouse (F5), with no line kept free
 avatars = true        # profile photos before the names and in the sidebar (kitty only)
 kitty_images = 48     # images kept by the terminal (kitty); above that, the least recently shown are freed

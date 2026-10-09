@@ -39,6 +39,7 @@ type Term struct {
 	Kitty        bool   // kitty graphics protocol supported
 	KittyShm     bool   // ... and read a shared memory object: a terminal on this machine
 	Sixel        bool   // sixel graphics (attribute 4 of the DA1 answer)
+	Terminology  bool   // Terminology (its DA3 unit id): pictures shown from their path
 	Panic        string // panic of the read loop, shown by main after Close
 	KittyKbd     bool   // kitty keyboard protocol on (answer to CSI ? u)
 	Curly        bool   // undercurl (SGR 4:3) supported
@@ -205,8 +206,9 @@ var reKbd = regexp.MustCompile(`\x1b\[\?\d+u`)
 var reDA1 = regexp.MustCompile(`\x1b\[\?([0-9;]*)c`)
 
 // probe asks for kitty (a=q, also through shared memory), the cell size
-// (CSI 16 t), the state of the keyboard protocol (CSI ? u), then DA1 (CSI c)
-// which marks the end because the answers come in order.
+// (CSI 16 t), the state of the keyboard protocol (CSI ? u), the unit id (DA3,
+// Terminology), then DA1 (CSI c) which marks the end because the answers come
+// in order.
 func (t *Term) probe() {
 	q := "\x1b_Gi=31,s=1,v=1,a=q,t=d,f=24;AAAA\x1b\\"
 	// The same query read from a shared memory object, which only a terminal
@@ -216,7 +218,39 @@ func (t *Term) probe() {
 		q += "\x1b_Gi=32,s=1,v=1,a=q,t=s,f=24;" + base64.StdEncoding.EncodeToString([]byte(shm)) + "\x1b\\"
 		defer os.Remove("/dev/shm" + shm)
 	}
-	t.WriteString(q + "\x1b[16t\x1b[?u\x1b[c")
+	resp := t.ask(q + "\x1b[16t\x1b[?u\x1b[=c\x1b[c")
+	t.Kitty = strings.Contains(string(resp), "_Gi=31;OK")
+	t.KittyShm = strings.Contains(string(resp), "_Gi=32;OK")
+	if m := reDA1.FindSubmatch(resp); m != nil {
+		t.Sixel = slices.Contains(strings.Split(string(m[1]), ";")[1:], "4") // the first one is the class
+	}
+	// Only a terminal that speaks the keyboard protocol answers CSI ? u: safer
+	// than the TERM list, a false positive would block Esc (no timeout left).
+	t.KittyKbd = reKbd.Match(resp)
+	if m := reCell.FindSubmatch(resp); m != nil {
+		t.CellH, _ = strconv.Atoi(string(m[1]))
+		t.CellW, _ = strconv.Atoi(string(m[2]))
+	}
+	// Terminology answers DA3 with the unit id "~~TY" in hex, and gives its
+	// cell size to its own query only ("cols;rows;w;h\n", no pixels in
+	// TIOCGWINSZ). Asked of Terminology alone: ESC } means something else to
+	// the other terminals.
+	t.Terminology = strings.Contains(string(resp), "\x1bP!|7E7E5459")
+	if t.Terminology && t.CellW == 0 {
+		if m := reTyCell.FindSubmatch(t.ask("\x1b}qs\x00\x1b[c")); m != nil {
+			t.CellW, _ = strconv.Atoi(string(m[1]))
+			t.CellH, _ = strconv.Atoi(string(m[2]))
+		}
+	}
+}
+
+// reTyCell : answer of Terminology to ESC } q s — columns;rows;cell w;cell h.
+var reTyCell = regexp.MustCompile(`\d+;\d+;(\d+);(\d+)\n`)
+
+// ask writes q, which must end with DA1, and reads the answers up to the one
+// of DA1 (they come in order), 500 ms at most between two reads.
+func (t *Term) ask(q string) []byte {
+	t.WriteString(q)
 	t.Flush()
 	var resp []byte
 	buf := make([]byte, 256)
@@ -233,18 +267,7 @@ func (t *Term) probe() {
 			break
 		}
 	}
-	t.Kitty = strings.Contains(string(resp), "_Gi=31;OK")
-	t.KittyShm = strings.Contains(string(resp), "_Gi=32;OK")
-	if m := reDA1.FindSubmatch(resp); m != nil {
-		t.Sixel = slices.Contains(strings.Split(string(m[1]), ";")[1:], "4") // the first one is the class
-	}
-	// Only a terminal that speaks the keyboard protocol answers CSI ? u: safer
-	// than the TERM list, a false positive would block Esc (no timeout left).
-	t.KittyKbd = reKbd.Match(resp)
-	if m := reCell.FindSubmatch(resp); m != nil {
-		t.CellH, _ = strconv.Atoi(string(m[1]))
-		t.CellW, _ = strconv.Atoi(string(m[2]))
-	}
+	return resp
 }
 
 // shmProbe writes one RGB pixel to a new POSIX shared memory object and gives

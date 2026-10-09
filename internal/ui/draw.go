@@ -55,7 +55,6 @@ func (u *UI) draw() {
 	hovRow := 0
 	var b strings.Builder
 	bg := theme.Style{FG: u.th.FG, BG: u.th.BG}.SGR()
-	b.WriteString("\x1b[?25l")
 	u.placed = u.placed[:0]
 	u.hits = make([]rowHit, max(0, view)) // map of the clicks, made again at each repaint
 	for r := 0; r < view; r++ {
@@ -156,6 +155,7 @@ func (u *UI) draw() {
 		curRow = sideHdr
 	}
 	var cur map[kplace]bool
+	var g strings.Builder // kitty commands, apart from the rows of text (paint)
 	if u.images == "kitty" {
 		// The cap never goes under what is on the screen: an image that shows
 		// is never dropped by another one of the same repaint.
@@ -167,24 +167,25 @@ func (u *UI) draw() {
 				continue
 			}
 			u.redecode(md) // zoom: decode again only the images on the screen
-			fmt.Fprintf(&b, "\x1b[%d;%dH", p.row+1, x0+p.img.Col+1)
-			u.placeKitty(&b, cur, p.pid, md, md.Frames[md.Frame%len(md.Frames)], p.img.Cols, p.img.Rows, p.crop)
+			fmt.Fprintf(&g, "\x1b[%d;%dH", p.row+1, x0+p.img.Col+1)
+			u.placeKitty(&g, cur, p.pid, md, md.Frames[md.Frame%len(md.Frames)], p.img.Cols, p.img.Rows, p.crop)
 		}
 		for _, a := range avs {
 			u.redecode(a.md)
-			fmt.Fprintf(&b, "\x1b[%d;%dH", a.row+1, a.col+1)
-			u.placeKitty(&b, cur, avatarPID(a.row, a.col), a.md, a.md.Frames[0], 2, 1)
+			fmt.Fprintf(&g, "\x1b[%d;%dH", a.row+1, a.col+1)
+			u.placeKitty(&g, cur, avatarPID(a.row, a.col), a.md, a.md.Frames[0], 2, 1)
 		}
 		// The QR after all the rest: its overlay already covers the text, and
 		// the placement (z=0) covers the white cells kept free.
 		if row, col, cols, rows, ok := u.qrImage(); ok {
-			fmt.Fprintf(&b, "\x1b[%d;%dH", row+1, col+1)
-			u.placeKitty(&b, cur, qrPID, u.qr.md, u.qr.png, cols, rows)
+			fmt.Fprintf(&g, "\x1b[%d;%dH", row+1, col+1)
+			u.placeKitty(&g, cur, qrPID, u.qr.md, u.qr.png, cols, rows)
 		}
 	}
 	if u.t.Kitty {
-		u.endFrameKitty(&b, cur) // after every placement: never a hole
+		u.endFrameKitty(&g, cur) // after every placement: never a hole
 	}
+	pics := u.cellPics(x0)
 	// The pill "↓ last message" gives way to an image placed over its cells:
 	// an image goes above the text, and dropping the block for a pill would
 	// leave its label alone with blank lines.
@@ -206,18 +207,12 @@ func (u *UI) draw() {
 			u.writeLine(&b, l, u.t.Cols-box.col, nil)
 		}
 	}
-	fmt.Fprintf(&b, "\x1b[%d;%dH", curRow, curX+1)
+	trail := fmt.Sprintf("\x1b[%d;%dH", curRow, curX+1)
 	if u.cursorShown() {
-		b.WriteString("\x1b[?25h")
+		trail += "\x1b[?25h"
 	}
 	u.noteShown()
-	// A frame byte for byte the same as the last one changes nothing on the
-	// screen: not sent again (what other code queued still goes, Flush).
-	if frame := b.String(); frame != u.lastFrame {
-		u.lastFrame = frame
-		u.t.WriteString(frame)
-	}
-	u.t.Flush()
+	u.paint(frame{text: b.String(), gfx: g.String(), pics: pics, trail: trail})
 }
 
 // cursorShown : the input cursor is drawn; an open overlay keeps it hidden.

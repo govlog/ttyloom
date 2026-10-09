@@ -4,10 +4,13 @@
 
 ### Added
 
+- **Sixel images**: foot, WezTerm, xterm and the other terminals that answer sixel to DA1 show photos, stickers and GIF frames in pixels, in the conversation, the GIF picker, the media browser and the viewer (with its zoom). The encoder is in Go (adaptive palette of 256 colours, dithering), each picture encoded once per size and kept. `/set images sixel`, or `auto` when the terminal has no kitty graphics.
+- **Terminology images (first version)**: Terminology, recognised by its answer to DA3, draws the pictures itself from a file (`ESC } i c`, as `tycat` does); its cell size comes from its own query. As it can neither crop nor enlarge, it gets a PNG of what the cells show — the frame as it is, or the zoomed region of the viewer, or the visible part of a picture cut by the view — in a private directory (0700, under `XDG_RUNTIME_DIR`) removed at exit. Same machine only. `/set images terminology`, or `auto` after kitty and sixel.
 - **Videos with sound through mpv**: when `mpv` is installed, `l` on a video gives the whole terminal to mpv (software decoding) until it ends: sound, seeking and the other mpv keys, `q` to come back. Messages keep arriving meanwhile. mpv opens the file through libavformat with no nested access, so a text file sent as a video cannot make it fetch an address. If mpv fails, the line says so and FFmpeg plays the video silently in the conversation, as before. A video already playing in the conversation (`autoplay`) keeps `l` as pause; `s` then `l` opens it in mpv. The output follows the terminal, which the start-up probe now asks for sixel (DA1) and for shared memory (a 1-pixel `t=s` query): kitty graphics, with shared memory on a local kitty (not on Ghostty, which shows black with it); sixel; text half blocks in 24-bit or 256 colours. The `terminal` line of window 0 shows both answers.
 
 ### Changed
 
+- **Only the rows that changed are sent**: a frame is split by screen row and compared with the last one; typing a letter rewrites the input line instead of the whole screen. Sixel and Terminology pictures go again only when a row under them changes.
 - **Window 0 stays calm at connection**: the lines nobody waits for (connected, chats loaded, sync, MOTD, notices of the server, SASL login) no longer count as activity; window 0 shows in `[Act: …]` in the plain colour with no count until visited. Errors, disconnections, invitations and notices from people count as before.
 - **The replies of a query** (`/q nick`) show in the window where the query is open, as `*nick* text` (a notice as `-NickServ- text`), as well as in the conversation with that person; seen there, they count as read. After a `/msg` with no query, they still go to the conversation only.
 

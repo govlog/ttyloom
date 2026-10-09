@@ -20,7 +20,7 @@
 
 - **Play videos in the terminal.** With mpv, `l` plays the video over the whole terminal with sound, through the best output the terminal has (kitty graphics, sixel, or text half blocks) (mpv keys; `q` comes back). Without mpv, FFmpeg plays it silently inside the conversation: `l` plays or pauses, `s` stops. Choose previews, hidden videos or autoplay.
 - **Open an image and explore it.** Click or press `v` for the built-in viewer. Zoom up to 8× with the wheel or `+`/`-`, **drag with the mouse to pan**, press `0` to fit again, and ←/→ to go to the previous or next media. [Viewer controls](docs/guide.md#viewer).
-- **Keep photos and GIFs in the flow.** Native pixels through kitty graphics, Unicode half blocks elsewhere. `F5` shows images only on hover; `Ctrl+G` opens a searchable GIF picker whose previews play under the mouse; `Ctrl+M` (or `/media`) browses every photo, video, GIF and file of a conversation.
+- **Keep photos and GIFs in the flow.** Native pixels through kitty graphics, sixel or Terminology, Unicode half blocks elsewhere. `F5` shows images only on hover; `Ctrl+G` opens a searchable GIF picker whose previews play under the mouse; `Ctrl+M` (or `/media`) browses every photo, video, GIF and file of a conversation.
 - **Move between conversations your way.** Numbered windows, a draft in each, `/query`, `/join`, `/msg`, `/me`, and a cycle through unread windows. `F6` combines conversations in window 0.
 - **Make the sidebar work for you.** Fold networks and Discord servers, filter with `/net` or by typing over it, sort by recent activity, name or unread messages, split the windows into channels and direct messages, and drag the border to resize. The wheel switches between open conversations.
 - **Find a message, then jump to it.** `Ctrl+F` searches locally; press it twice to search across networks. Click a reply’s quote to return to its original message, loading the surrounding history when needed.
@@ -108,7 +108,7 @@ go build -trimpath -o ttyloom ./cmd/ttyloom
 | `ffmpeg` and `ffprobe` | Video previews, silent inline playback, animated WebP, video metadata |
 | `wl-clipboard` (`wl-paste`, `wl-copy`) or `xclip` | Clipboard text and image paste, image copy from the viewer (`c`) |
 | `notify-send` | Desktop notifications |
-| Ghostty or kitty | Native inline images; other terminals can use half blocks |
+| Ghostty or kitty; foot, WezTerm or xterm (sixel); Terminology | Native inline images; other terminals can use half blocks |
 
 GIF decoding works in Go without FFmpeg. macOS, Windows and other terminal combinations are not validated in this release.
 
@@ -217,7 +217,7 @@ Use `/set key value` to change supported settings live. The generated configurat
 
 ```toml
 lang = "en"                  # en, fr, or a fallback chain such as fr+en
-images = "auto"              # auto, kitty, halfblock, off
+images = "auto"              # auto, kitty, sixel, terminology, halfblock, off
 video = "show"               # first frame; l plays the selected video
 gifplay = "always"           # always, hover (the GIF under the mouse only), off
 sidebar_sort = "recent"      # recent, alpha, unread

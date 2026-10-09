@@ -47,8 +47,16 @@ type UI struct {
 	t         *term.Term
 	cfg       *config.Config
 	th        theme.Theme
-	build     update.Build                  // what this binary was built from (banner, update check)
-	lastFrame string                        // bytes of the last frame sent: the same frame again is not sent
+	build     update.Build // what this binary was built from (banner, update check)
+	// prevRows, prevPics, prevTrail : what the last frame put on the screen,
+	// by row (paint); nil after repaint, so the next frame goes whole.
+	prevRows  map[int]string
+	prevPics  []cellPic
+	prevTrail string
+	pics      map[picKey]string             // sixel or file of the pictures shown in the cells (picOf)
+	picDir    string                        // private directory of the files of Terminology, made at first use
+	picN      int                           // last file number there
+	picBytes  int                           // size of the files there (tmpfs: memory)
 	alertNext *alertNote                    // hot message waiting for its bell and notification (alert)
 	alertAt   time.Time                     // last bell and notification given
 	sgrs      map[theme.Style]string        // SGR sequence of each style drawn (sgr)
@@ -239,6 +247,7 @@ func Run(ctx context.Context, cancel context.CancelFunc, t *term.Term, cfg *conf
 	// before main gives the terminal back.
 	defer u.flushCache(true)
 	defer u.saveLast() // the chat shown comes back at the next start
+	defer u.dropPics(true)
 	tick := time.NewTicker(100 * time.Millisecond)
 	defer tick.Stop()
 	for {
@@ -733,44 +742,62 @@ func nextNet(names []string, cur string) string {
 	return ""
 }
 
+// resolveImages gives the mode drawn for the mode asked: auto takes the best
+// the terminal has — kitty, sixel, Terminology —, else half blocks. Each of
+// the three needs the cell size in pixels.
 func (u *UI) resolveImages(mode string) string {
+	has := map[string]bool{"kitty": u.t.Kitty, "sixel": u.t.Sixel, "terminology": u.t.Terminology}
+	cells := u.t.CellW > 0 && u.t.CellH > 0
 	switch mode {
 	case "off", "halfblock":
 		return mode
-	case "kitty":
-		if u.t.Kitty && u.t.CellW > 0 && u.t.CellH > 0 {
+	case "kitty", "sixel", "terminology":
+		if has[mode] && cells {
 			u.cellWait = false
-			return "kitty"
+			return mode
 		}
-		u.cellWait = u.t.Kitty
-		u.status0(i18n.T("kitty_unavailable"))
+		u.cellWait = has[mode]
+		u.status0(i18n.T("images_unavailable", mode))
 		return "halfblock"
 	}
-	if u.t.Kitty && u.t.CellW > 0 && u.t.CellH > 0 {
+	if best := u.bestImages(); best != "" && cells {
 		u.cellWait = false
-		return "kitty"
+		return best
 	}
-	u.cellWait = u.t.Kitty
+	u.cellWait = u.bestImages() != ""
 	return "halfblock"
 }
 
-// nextImages gives the next mode for F4 (cycle of the resolved mode, kitty
-// there or not). kitty→halfblock→off→kitty; without kitty: halfblock↔off.
-func nextImages(cur string, kitty bool) string {
-	if !kitty {
+// bestImages : the best picture protocol of the terminal, "" for none.
+func (u *UI) bestImages() string {
+	switch {
+	case u.t.Kitty:
+		return "kitty"
+	case u.t.Sixel:
+		return "sixel"
+	case u.t.Terminology:
+		return "terminology"
+	}
+	return ""
+}
+
+// nextImages gives the next mode for F4 (cycle of the resolved mode; best:
+// the protocol of the terminal, "" for none). best→halfblock→off→best;
+// without one: halfblock↔off.
+func nextImages(cur, best string) string {
+	if best == "" {
 		if cur == "off" {
 			return "halfblock"
 		}
 		return "off"
 	}
 	switch cur {
-	case "kitty":
-		return "halfblock"
 	case "halfblock":
 		return "off"
-	default:
-		return "kitty"
+	case "off":
+		return best
 	}
+	return "halfblock"
 }
 
 // applyImages changes the display mode, a path shared by /set images and F4.
@@ -834,7 +861,7 @@ func (u *UI) flash(s string) {
 // repaint : the next frame is sent whole even when it looks like the last
 // one — the screen carried something else (the preview, the QR box) or the
 // user asks for a repair (Ctrl+L).
-func (u *UI) repaint() { u.lastFrame = "" }
+func (u *UI) repaint() { u.prevRows, u.prevPics, u.prevTrail = nil, nil, "" }
 
 // view gives the shown window. In window 0, the log (/debug) wins over the
 // aggregate (Alt+A).
@@ -1047,7 +1074,7 @@ func (u *UI) readInboxOf(m *model.Msg) int {
 
 func (u *UI) cells() (cellW, cellH, maxCols, maxRows int) {
 	cellW, cellH = 1, 2
-	if u.images == "kitty" {
+	if pixelMode(u.images) {
 		cellW, cellH = u.t.CellW, u.t.CellH
 	}
 	return cellW, cellH, min(60, u.width()-8), max(u.viewRows()*40/100, 3)
@@ -2177,7 +2204,7 @@ func (u *UI) key(k term.Key) {
 	case k.Code == term.F9: // tab mode, like /set tabs
 		u.tabNext()
 	case k.Code == term.F4: // cycle of the image display mode, like /set images
-		u.applyImages(nextImages(u.images, u.t.Kitty))
+		u.applyImages(nextImages(u.images, u.bestImages()))
 		u.saveCfg()
 	case k.Code == term.F5: // image on hover, like /set images_hover
 		u.cfg.ImagesHover = !u.cfg.ImagesHover

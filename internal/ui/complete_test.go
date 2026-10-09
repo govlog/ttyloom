@@ -50,7 +50,7 @@ func TestComplContext(t *testing.T) {
 }
 
 func TestSetValueCandidates(t *testing.T) {
-	if got := setValues("images"); len(got) != 4 || got[0] != "auto" {
+	if got := setValues("images"); len(got) != 6 || got[0] != "auto" {
 		t.Fatalf("%v", got)
 	}
 	if got := setValues("timestamps"); len(got) != 2 {

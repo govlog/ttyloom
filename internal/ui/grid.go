@@ -380,7 +380,7 @@ func (u *UI) gridCells(t thumbs, fill theme.Style, text func(i int) []string) fu
 // position of the top left cell, x0: first column of the message area (Col
 // is relative to it). animate() moves them like the images of the messages.
 func (u *UI) gridPlacements(t thumbs, row0, col0, x0 int) []placed {
-	if u.images != "kitty" {
+	if !pixelMode(u.images) {
 		return nil
 	}
 	g := t.grid()

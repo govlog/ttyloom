@@ -433,9 +433,8 @@ func (v *viewer) status() string {
 func (u *UI) drawViewer() {
 	v := u.viewer
 	cols, rows := u.t.Cols, u.t.Rows
-	var b strings.Builder
+	var b, g strings.Builder // text, kitty commands (paint)
 	bg := theme.Style{FG: u.th.FG, BG: u.th.BG}.SGR()
-	b.WriteString("\x1b[?25l")
 	for r := 1; r <= rows; r++ {
 		fmt.Fprintf(&b, "\x1b[%d;1H%s\x1b[K", r, bg)
 	}
@@ -449,14 +448,17 @@ func (u *UI) drawViewer() {
 		frame := md.Frames[md.Frame%len(md.Frames)]
 		switch {
 		case imgCols < 1 || imgRows < 1: // tiny screen: nothing to place
-		case u.images == "kitty":
-			u.kittyLRU.cap = max(u.cfg.KittyImages, 1) // the preview counts in the LRU
-			cur = map[kplace]bool{}
-			fmt.Fprintf(&b, "\x1b[%d;%dH", y+1, x+1)
-			// Same rule as draw() (line + 1): animate() animates the preview from
-			// u.placed and must land on the same pid.
-			u.placeKitty(&b, cur, uint32(y+1), md, frame, imgCols, imgRows, v.crop)
-			// animate() animates the GIF from u.placed, at x0+Col+1: hence the shift.
+		case pixelMode(u.images):
+			if u.images == "kitty" {
+				u.kittyLRU.cap = max(u.cfg.KittyImages, 1) // the preview counts in the LRU
+				cur = map[kplace]bool{}
+				fmt.Fprintf(&g, "\x1b[%d;%dH", y+1, x+1)
+				// Same rule as draw() (line + 1): animate() animates the preview from
+				// u.placed and must land on the same pid.
+				u.placeKitty(&g, cur, uint32(y+1), md, frame, imgCols, imgRows, v.crop)
+			}
+			// animate() animates the GIF from u.placed, at x0+Col+1: hence the
+			// shift; cellPics reads it too.
 			x0, _ := u.layout()
 			u.placed = append(u.placed, placed{row: y, pid: uint32(y + 1), crop: v.crop,
 				img: &render.Img{Media: md, Col: x - x0, Cols: imgCols, Rows: imgRows}})
@@ -483,8 +485,8 @@ func (u *UI) drawViewer() {
 	fmt.Fprintf(&b, "\x1b[%d;%dH", rows, col+1)
 	u.writeLine(&b, render.Line{Spans: []render.Span{{Text: s, Style: st}}}, cols-col, nil)
 	if u.t.Kitty {
-		u.endFrameKitty(&b, cur)
+		u.endFrameKitty(&g, cur)
 	}
-	u.t.WriteString(b.String())
-	u.t.Flush()
+	x0, _ := u.layout()
+	u.paint(frame{text: b.String(), gfx: g.String(), pics: u.cellPics(x0)}) // no trail: the cursor stays hidden
 }

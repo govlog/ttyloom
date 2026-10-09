@@ -536,19 +536,19 @@ func TestKeyEndOfLine(t *testing.T) {
 
 func TestImagesCycle(t *testing.T) {
 	cases := []struct {
-		cur   string
-		kitty bool
-		want  string
+		cur, best, want string
 	}{
-		{"kitty", true, "halfblock"},
-		{"halfblock", true, "off"},
-		{"off", true, "kitty"},
-		{"halfblock", false, "off"},
-		{"off", false, "halfblock"},
+		{"kitty", "kitty", "halfblock"},
+		{"halfblock", "kitty", "off"},
+		{"off", "kitty", "kitty"},
+		{"sixel", "sixel", "halfblock"},
+		{"off", "sixel", "sixel"},
+		{"halfblock", "", "off"},
+		{"off", "", "halfblock"},
 	}
 	for _, c := range cases {
-		if got := nextImages(c.cur, c.kitty); got != c.want {
-			t.Errorf("nextImages(%q, %v) = %q, want %q", c.cur, c.kitty, got, c.want)
+		if got := nextImages(c.cur, c.best); got != c.want {
+			t.Errorf("nextImages(%q, %q) = %q, want %q", c.cur, c.best, got, c.want)
 		}
 	}
 }
