@@ -1,6 +1,6 @@
 <p align="center"><img src="docs/logo.svg" alt="TTYloom — Many networks. One terminal." width="800"></p>
 
-<p align="center"><b>Telegram, Discord and IRC, woven into your terminal.</b><br>Inline videos. Zoomable images. IRC-style windows and conversations in one place.</p>
+<p align="center"><b>Telegram, Discord and IRC, woven into your terminal.</b><br>Real pixels in Ghostty, kitty, foot, xterm and Terminology. Videos with sound through mpv.<br>IRC-style windows and conversations in one place.</p>
 
 <p align="center">
 <a href="https://github.com/govlog/ttyloom/actions/workflows/ci.yml"><img src="https://github.com/govlog/ttyloom/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
@@ -18,9 +18,9 @@
 
 ## Built for conversations
 
-- **Play videos in the terminal.** With mpv, `l` plays the video over the whole terminal with sound, through the best output the terminal has (kitty graphics, sixel, or text half blocks) (mpv keys; `q` comes back). Without mpv, FFmpeg plays it silently inside the conversation: `l` plays or pauses, `s` stops. Choose previews, hidden videos or autoplay.
+- **Play videos in the terminal, with sound.** With mpv, `l` hands the whole terminal to mpv through the best output the terminal has — kitty graphics, sixel or text — with mpv's own keys; `q` comes back, and messages keep arriving meanwhile. Without mpv, FFmpeg plays it silently inside the conversation: `l` plays or pauses, `s` stops. Choose previews, hidden videos or autoplay.
 - **Open an image and explore it.** Click or press `v` for the built-in viewer. Zoom up to 8× with the wheel or `+`/`-`, **drag with the mouse to pan**, press `0` to fit again, and ←/→ to go to the previous or next media. [Viewer controls](docs/guide.md#viewer).
-- **Keep photos and GIFs in the flow.** Native pixels through kitty graphics, sixel or Terminology, Unicode half blocks elsewhere. `F5` shows images only on hover; `Ctrl+G` opens a searchable GIF picker whose previews play under the mouse; `Ctrl+M` (or `/media`) browses every photo, video, GIF and file of a conversation.
+- **Keep photos and GIFs in the flow.** Real pixels in Ghostty and kitty (kitty graphics), foot and xterm (sixel) and Terminology, Unicode half blocks elsewhere — [see the table](#pictures-in-your-terminal). `F5` shows images only on hover; `Ctrl+G` opens a searchable GIF picker whose previews play under the mouse; `Ctrl+M` (or `/media`) browses every photo, video, GIF and file of a conversation.
 - **Move between conversations your way.** Numbered windows, a draft in each, `/query`, `/join`, `/msg`, `/me`, and a cycle through unread windows. `F6` combines conversations in window 0.
 - **Make the sidebar work for you.** Fold networks and Discord servers, filter with `/net` or by typing over it, sort by recent activity, name or unread messages, split the windows into channels and direct messages, and drag the border to resize. The wheel switches between open conversations.
 - **Find a message, then jump to it.** `Ctrl+F` searches locally; press it twice to search across networks. Click a reply’s quote to return to its original message, loading the surrounding history when needed.
@@ -40,6 +40,19 @@ Capabilities depend on the network. Unsupported actions are hidden.
 | IRC | As many networks as wanted, no bouncer: channels, private chats, `/whois`, members, mIRC styles, DCC SEND/GET | No history on the server (the disk cache is the scrollback); no edits, reactions, read receipts, search, GIFs or media browser; no DCC resume or DCC CHAT |
 
 Discord user-token access is unsupported by Discord and can lead to account suspension. Read the [authentication guide](docs/authentication.md#discord) before enabling it.
+
+## Pictures in your terminal
+
+TTYloom asks the terminal what it can draw when it starts, and picks the best: the `terminal` line of window 0 says what it found, and `/set images` or `F4` overrides it.
+
+| Terminal | Photos, stickers, GIFs | Videos (`l`, with mpv) |
+| --- | --- | --- |
+| **Ghostty**, **kitty** | kitty graphics protocol: pixels placed over the text, animated GIFs, zoom and pan in the viewer | kitty graphics; shared memory on a local kitty |
+| **foot**, **xterm** (as a `vt340`), other sixel terminals | sixel, encoded in Go with an adaptive 256-colour palette, zoom and pan in the viewer | sixel |
+| **Terminology** | its own protocol: the terminal draws the picture from a file, zoom and pan in the viewer | text half blocks |
+| Any other terminal | Unicode half blocks in 24-bit colour, animated | text half blocks |
+
+Without mpv, FFmpeg plays videos silently inside the conversation, in kitty graphics or half blocks. Sixel and Terminology pictures do not animate: a GIF or a video shows one frame. Only the screen rows that changed are sent, so a key typed never redraws the pictures. [Image settings and troubleshooting](docs/guide.md#sixel-and-terminology-images).
 
 ## Take a look
 
@@ -108,7 +121,7 @@ go build -trimpath -o ttyloom ./cmd/ttyloom
 | `ffmpeg` and `ffprobe` | Video previews, silent inline playback, animated WebP, video metadata |
 | `wl-clipboard` (`wl-paste`, `wl-copy`) or `xclip` | Clipboard text and image paste, image copy from the viewer (`c`) |
 | `notify-send` | Desktop notifications |
-| Ghostty or kitty; foot, WezTerm or xterm (sixel); Terminology | Native inline images; other terminals can use half blocks |
+| Ghostty, kitty, foot, xterm or Terminology | Native inline images ([which protocol where](#pictures-in-your-terminal)); other terminals use half blocks |
 
 GIF decoding works in Go without FFmpeg. macOS, Windows and other terminal combinations are not validated in this release.
 
