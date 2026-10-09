@@ -2,7 +2,7 @@
 
 [Overview](../README.md) · [Account setup](authentication.md)
 
-Manual for **0.13-beta**, checked against the code on **October 5, 2026** and
+Manual for **0.14-beta**, checked against the code on **October 5, 2026** and
 updated with each change since.
 
 <details>
@@ -77,12 +77,12 @@ Install only the optional components you intend to use.
 ### Ready-to-run binary
 
 Download the Linux archive for your CPU (`amd64` for x86-64, `arm64` for ARM64)
-and `SHA256SUMS` from [v0.13-beta](https://github.com/govlog/ttyloom/releases/tag/v0.13-beta).
+and `SHA256SUMS` from [v0.14-beta](https://github.com/govlog/ttyloom/releases/tag/v0.14-beta).
 
 ```bash
 sha256sum --check --ignore-missing SHA256SUMS
-tar -xzf ttyloom_0.13-beta_linux_amd64.tar.gz
-cd ttyloom_0.13-beta_linux_amd64
+tar -xzf ttyloom_0.14-beta_linux_amd64.tar.gz
+cd ttyloom_0.14-beta_linux_amd64
 ./ttyloom --version
 ./ttyloom
 ```
@@ -1109,9 +1109,9 @@ anything. The file, the variables, the guards and four examples:
 
 ## Version and limits
 
-This manual describes **0.13-beta**. See the [changelog](../CHANGELOG.md) and
+This manual describes **0.14-beta**. See the [changelog](../CHANGELOG.md) and
 the [planned work](../TODO.md).
-Videos play without sound. Portable binaries omit Hunspell. Discord threads,
+Videos have sound only through mpv. Portable binaries omit Hunspell. Discord threads,
 forums, voice and bot tokens are not supported; IRC has no server history, no
 DCC resume and no DCC CHAT; WhatsApp is not implemented. One configuration
 directory holds one account per network. Use separate `TTYLOOM_DIR` paths for
