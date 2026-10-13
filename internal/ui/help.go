@@ -65,6 +65,7 @@ var helpTopics = []topic{
 	{"e", "help_key_e", "messages"},
 	{"d", "help_key_d", "messages"},
 	{"p", "help_key_p", "messages"},
+	{"f", "help_key_f", "messages"},
 	{"r", "help_key_r", "messages"},
 	{"i", "help_key_i", "messages"},
 	{"o", "help_key_o", "messages"},

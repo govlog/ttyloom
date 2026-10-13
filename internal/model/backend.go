@@ -87,6 +87,7 @@ type Caps struct {
 	Leave        bool // leaving a room (a private chat only closes its window)
 	Block        bool // blocking or reporting a chat or a member of a room
 	Gifs         bool // GIF search and send (Ctrl+G)
+	Forward      bool // forwarding a message to a chat of the same network (Forwarder)
 	// History : the server keeps the history, the disk cache is a copy of it.
 	// Off (IRC), the cache is the only copy: the UI never drops or replaces
 	// it as a side effect — account change, chat gone, older cache format.
@@ -115,6 +116,13 @@ type Actioner interface {
 	SendAction(ctx context.Context, chat *Chat, segs []Seg, tmpID int64)
 }
 
+// Forwarder : a backend that forwards a message natively — the network shows
+// its origin. Message id of chat from goes to chat to, both of this network;
+// EvSent back like a text send.
+type Forwarder interface {
+	Forward(ctx context.Context, from *Chat, id int, to *Chat, tmpID int64)
+}
+
 // MediaSearcher : a backend that lists the media of a chat (Ctrl+M).
 // SearchMedia posts one EvMedia: a page of the media of tab f older than the
 // message before (0: from the newest).
@@ -126,7 +134,7 @@ type MediaSearcher interface {
 // with nothing gated off.
 func AllCaps() Caps {
 	return Caps{ReadReceipts: true, Reactions: true, Edit: true, Delete: true, Whois: true, Search: true,
-		GlobalSearch: true, Contacts: true, Resolve: true, Sync: true, Leave: true, Block: true, Gifs: true, History: true}
+		GlobalSearch: true, Contacts: true, Resolve: true, Sync: true, Leave: true, Block: true, Gifs: true, History: true, Forward: true}
 }
 
 // Poster : how a backend talks to the UI — the event channel, a blocking and

@@ -30,12 +30,13 @@ import (
 // The backend contract holds at compile time: every method of model.Backend
 // is there.
 var _ model.Backend = (*Client)(nil)
+var _ model.Forwarder = (*Client)(nil) // Caps.Forward is on: the UI finds the method by assertion
 
 // Discord has reactions, edits and deletes, nothing else of what the UI gates —
 // leaving a room and blocking included, so the context menu offers neither.
 func TestCaps(t *testing.T) {
 	got := New(Config{}, make(chan model.Event, 1)).Caps()
-	want := model.Caps{Reactions: true, AnyReaction: true, Edit: true, Delete: true, Gifs: true, Search: true, GlobalSearch: true, History: true}
+	want := model.Caps{Reactions: true, AnyReaction: true, Edit: true, Delete: true, Gifs: true, Search: true, GlobalSearch: true, History: true, Forward: true}
 	if got != want {
 		t.Fatalf("Caps: %+v, want %+v", got, want)
 	}

@@ -981,7 +981,7 @@ or shifting text.
 
 A right click on a message opens its context menu at the pointer: the quick
 reactions the chat allows on the first row (click one to toggle it), then the
-actions of the message — go to the quoted message, reply, react, copy, info,
+actions of the message — go to the quoted message, reply, forward, react, copy, info,
 open, view, play — with edit and delete last. The entry under the pointer is
 the current one; Enter or a click runs it, any other key closes the menu.
 Double-click a message to toggle 👍 (or the first reaction the chat allows).
@@ -1010,6 +1010,7 @@ sidebar wheel switching; normal message scrolling remains available.
 | `e` | Edit your message; Enter sends, Escape cancels. |
 | `d` | Delete your message after confirmation. |
 | `p` | Reply to the selected message. |
+| `f` | Forward the message to another conversation of the same network (Telegram, Discord): the new chat box opens on that network only, Enter forwards and opens the conversation. The receiver sees where it comes from. A Discord private conversation must already be in the sidebar. |
 | `r` | Choose a supported reaction; choosing it again removes it. Telegram chats can restrict the available set; Discord takes any emoji, so the picker is the whole table with the search, and `:name:` sends a custom emoji of the server. |
 | `i` | Show message details: dates, ID, views, reaction participants and, where supported, read receipts. |
 | `o` | Open the message’s media externally; a link preview asks before it opens its page. |

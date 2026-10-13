@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Forward a message**: `f` on a selected message, or "forward" in its right-click menu, opens the new chat box limited to the conversations of the same network; Enter forwards the message there and opens that conversation, ready for a comment. Telegram and Discord forward natively, so the receiver sees where the message comes from; IRC has no forward and does not offer it.
+
 ## v0.14-beta — 2026-10-09
 
 ### Added

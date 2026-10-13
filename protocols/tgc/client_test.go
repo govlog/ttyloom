@@ -25,6 +25,8 @@ import (
 	"github.com/govlog/ttyloom/internal/model"
 )
 
+var _ model.Forwarder = (*Client)(nil) // Caps.Forward is on: the UI finds the method by assertion
+
 // withName : a user whose @username flag is really set (SetUsername, not the
 // raw field: peers.User.Username reads the flag).
 func withName(id int64, name string) *tg.User {

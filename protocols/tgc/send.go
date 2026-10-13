@@ -38,6 +38,13 @@ func (c *Client) Send(ctx context.Context, chat *model.Chat, text string, tmpID 
 	c.sent("Send", chat, tmpID, func() (tg.UpdatesClass, error) { return c.sender.To(c.peer(chat)).Text(ctx, text) })
 }
 
+// Forward : messages.forwardMessages of id, from chat from to chat to.
+func (c *Client) Forward(ctx context.Context, from *model.Chat, id int, to *model.Chat, tmpID int64) {
+	c.sent("Forward", to, tmpID, func() (tg.UpdatesClass, error) {
+		return c.sender.To(c.peer(to)).ForwardIDs(c.peer(from), id).Send(ctx)
+	})
+}
+
 // SendStyled : like Send, with formatting on the segments (pre, italic…).
 func (c *Client) SendStyled(ctx context.Context, chat *model.Chat, segs []model.Seg, tmpID int64) {
 	c.sent("SendStyled", chat, tmpID, func() (tg.UpdatesClass, error) {

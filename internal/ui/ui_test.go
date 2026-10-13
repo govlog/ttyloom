@@ -2,6 +2,7 @@ package ui
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 	"regexp"
 	"slices"
@@ -632,6 +633,7 @@ type fakeBackend struct {
 	gifsSent   []model.Gif
 	downloads  []string
 	sends      []string // Send calls: "<chat title>: <text>"
+	forwards   []string // Forward calls: "<from title>:<id>><to title>"
 }
 
 func (f *fakeBackend) Caps() model.Caps { return f.caps }
@@ -1019,4 +1021,8 @@ func TestDialogsKeepChatActiveDuringRead(t *testing.T) {
 	if u.chats[model.ChatKey{Net: netTelegram, ID: 2}] == nil {
 		t.Fatal("a chat active during the read was dropped as gone")
 	}
+}
+
+func (f *fakeBackend) Forward(_ context.Context, from *model.Chat, id int, to *model.Chat, _ int64) {
+	f.forwards = append(f.forwards, fmt.Sprintf("%s:%d>%s", from.Title, id, to.Title))
 }

@@ -125,6 +125,28 @@ func (c *Client) SendReply(ctx context.Context, chat *model.Chat, text string, r
 		Reference: &discord.MessageReference{MessageID: discord.MessageID(replyTo)}})
 }
 
+// Forward : a message with no content and a forward reference to id. Not
+// through send: SendMessageComplex refuses a message with no content.
+func (c *Client) Forward(ctx context.Context, from *model.Chat, id int, to *model.Chat, tmpID int64) {
+	go func() {
+		ev := model.EvSent{ChatID: to.ID, TmpID: tmpID}
+		defer c.Guard("Forward", func(err string) { c.Post(model.EvSent{ChatID: to.ID, TmpID: tmpID, Err: err}) })
+		fromCh, fromGuild := ids(from)
+		toCh, _ := ids(to)
+		var m *discord.Message
+		err := c.rest(ctx).RequestJSON(&m, http.MethodPost, api.EndpointChannels+toCh.String()+"/messages",
+			httputil.WithJSONBody(api.SendMessageData{Reference: &discord.MessageReference{
+				Type: discord.MessageReferenceTypeForward, MessageID: discord.MessageID(id), ChannelID: fromCh, GuildID: fromGuild}}))
+		switch {
+		case err != nil:
+			ev.Err = err.Error()
+		case m != nil:
+			ev.ID = int(m.ID)
+		}
+		c.Post(ev)
+	}()
+}
+
 // SendStyled : like Send, the segments rendered back into Discord markdown.
 func (c *Client) SendStyled(ctx context.Context, chat *model.Chat, segs []model.Seg, tmpID int64) {
 	c.send(ctx, "SendStyled", chat, tmpID, api.SendMessageData{Content: render(segs)})

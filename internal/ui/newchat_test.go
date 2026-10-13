@@ -102,3 +102,37 @@ func TestNewChatRect(t *testing.T) {
 		t.Fatalf("Clean not applied: %q", render.LineText(lines[4]))
 	}
 }
+
+// "f" on a message opens the chat picker on the network of the message only;
+// Enter forwards it to the chat chosen, opens that chat and shows the forward
+// there as a pending line until the receipt.
+func TestForward(t *testing.T) {
+	u, b, w := msgUI(t)
+	bob := &model.Chat{Net: netTelegram, ID: 6, Kind: model.ChatUser, Title: "bob"}
+	other := &model.Chat{Net: netDiscord, ID: 7, Kind: model.ChatUser, Title: "carol"}
+	u.chatList = []*model.Chat{w.Chat, bob, other}
+	u.chats[bob.Key()], u.chats[other.Key()] = bob, other
+	u.gotContacts = true // no address book to ask for
+	alice := w.Items[1]
+	u.setSel(w, alice)
+	u.selKey(w, 'f')
+	n := u.newChat
+	if n == nil || n.fwd != alice.Msg {
+		t.Fatalf("picker: %+v", n)
+	}
+	for _, r := range n.rows {
+		if r.chat.Net != netTelegram {
+			t.Fatalf("chat of another network offered: %+v", r.chat)
+		}
+	}
+	n.cur = ncFirst(n.rows, bob)
+	u.ncKey(term.Key{Code: term.Enter})
+	if u.newChat != nil || len(b.forwards) != 1 || b.forwards[0] != "grp:2>bob" {
+		t.Fatalf("forward: box %v, calls %v", u.newChat != nil, b.forwards)
+	}
+	shown := u.ws.Current()
+	last := shown.Items[len(shown.Items)-1].Msg
+	if shown.Chat != bob || last == nil || !last.Pending || last.Text != "deux" || last.FwdFrom != "grp" {
+		t.Fatalf("window %v, pending line %+v", shown.Chat, last)
+	}
+}

@@ -540,6 +540,9 @@ func SelActs(m *model.Msg, own, jump bool, caps model.Caps) []Act {
 			}
 		}
 		out = append(out, Act{'p', i18n.T("act_reply"), "", 0})
+		if caps.Forward {
+			out = append(out, Act{'f', i18n.T("act_forward"), "", 0})
+		}
 		if caps.Reactions {
 			out = append(out, Act{'r', i18n.T("act_react"), "", 0})
 		}

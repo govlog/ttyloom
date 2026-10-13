@@ -206,7 +206,7 @@ Review `download_dir` and `log_dir` in that configuration. Caches written with e
 | Mute or unmute a conversation | `/mute` / `/unmute` |
 | Your own command, its removal | `/alias ver /ctcp version` then `/ver nick` / `/unalias ver` |
 | Select a message | Alt+↑ / Alt+↓ or click |
-| Reply / edit / react / copy selection | `p` / `e` / `r` / `c`, or the right-click menu |
+| Reply / forward / edit / react / copy selection | `p` / `f` / `e` / `r` / `c`, or the right-click menu |
 | Edit my previous message, the next one | Ctrl+↑ / Ctrl+↓ |
 | Paste / send a file | Ctrl+V / `/send path [caption]` |
 | Bold / italic / underline in the draft | Ctrl+B / Ctrl+I / Ctrl+U |

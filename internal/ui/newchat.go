@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/govlog/ttyloom/internal/i18n"
@@ -33,6 +34,9 @@ type newChatBox struct {
 	rows  []ncRow
 	cur   int
 	found []*model.Chat // server results shown
+	// fwd : message to forward ("f"); the list keeps the chats of its
+	// network and Enter forwards it rather than opening the chat.
+	fwd *model.Msg
 }
 
 // chat gives the chat of the current line, nil when the list is empty.
@@ -116,6 +120,9 @@ func (n *newChatBox) Lines(th theme.Theme, w, h int, title func(*model.Chat) str
 	inner, rows := max(1, w-2), gsRows(h) // same geometry as the global search
 	b := boxDraw{edge: edge, fill: box, inner: inner}
 	head := i18n.T("new_chat_head", render.CleanLine(string(n.query)))
+	if n.fwd != nil {
+		head = i18n.T("fwd_head", render.CleanLine(string(n.query)))
+	}
 	switch {
 	case n.err != "":
 		head += "  (" + n.err + ")"
@@ -204,7 +211,12 @@ func (u *UI) online(c *model.Chat) bool { return u.presence[c.Key()] == i18n.T("
 func (u *UI) ncFilter() {
 	n := u.newChat
 	sel := n.chat()
-	n.rows = newChatFilter(u.ncLocal(), n.found, string(n.query), u.title)
+	local, found := u.ncLocal(), n.found
+	if n.fwd != nil { // a native forward does not leave its network
+		other := func(c *model.Chat) bool { return c.Net != n.fwd.Net }
+		local, found = slices.DeleteFunc(local, other), slices.DeleteFunc(slices.Clone(found), other)
+	}
+	n.rows = newChatFilter(local, found, string(n.query), u.title)
 	n.cur = ncFirst(n.rows, sel)
 }
 
@@ -302,12 +314,38 @@ func (u *UI) contactsFound(e model.EvContactsFound) {
 // it has one, in a new one otherwise. The chat already carries its peer
 // (entities of the answer): nothing to resolve.
 func (u *UI) ncOpen() {
-	c := u.newChat.chat()
+	c, fwd := u.newChat.chat(), u.newChat.fwd
 	if c == nil {
 		return
 	}
 	u.newChat = nil
 	u.openChat(c)
+	if fwd != nil {
+		u.forward(fwd, c)
+	}
+}
+
+// openForward : "f" on a message — the "new chat" overlay picks where it goes.
+func (u *UI) openForward(m *model.Msg) {
+	u.openNewChat()
+	if u.newChat != nil {
+		u.newChat.fwd = m
+		u.ncFilter()
+	}
+}
+
+// forward sends m to the chat to, opened by ncOpen: a pending line there
+// until the receipt, the echo of the network replaces it.
+func (u *UI) forward(m *model.Msg, to *model.Chat) {
+	from, b := u.chatOf(m), u.net(to)
+	f, ok := b.(model.Forwarder)
+	if from == nil || !ok || to.Net != m.Net {
+		return
+	}
+	p := u.pendingMsg(to, m.Summary())
+	p.FwdFrom = u.title(from)
+	u.insertPending(u.winFor(to), p)
+	f.Forward(u.backendContext(b), from, m.ID, to, p.TmpID)
 }
 
 // ncList : the new chat overlay seen as a list overlay. A separator line

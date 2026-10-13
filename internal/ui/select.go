@@ -81,6 +81,8 @@ func (u *UI) selKey(w *Window, r rune) bool {
 		})
 	case r == 'p' && act:
 		u.reply = it
+	case r == 'f' && act && u.capsOf(m).Forward:
+		u.openForward(m)
 	case r == 'c' && act:
 		u.copySel(it, it) // same path as the drag: OSC 52 + status
 	case r == 'i' && act:
