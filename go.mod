@@ -14,8 +14,8 @@ require (
 	github.com/gotd/td v0.162.0
 	github.com/mattn/go-runewidth v0.0.30
 	golang.org/x/image v0.46.0
-	golang.org/x/sys v0.48.0
-	golang.org/x/term v0.46.0
+	golang.org/x/sys v0.49.0
+	golang.org/x/term v0.47.0
 	golang.org/x/text v0.42.0
 	rsc.io/qr v0.2.0
 )
