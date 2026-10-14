@@ -12,7 +12,7 @@ require (
 	github.com/gotd/contrib v0.25.0
 	github.com/gotd/log v0.1.0
 	github.com/gotd/td v0.162.0
-	github.com/mattn/go-runewidth v0.0.30
+	github.com/mattn/go-runewidth v0.0.31
 	golang.org/x/image v0.46.0
 	golang.org/x/sys v0.48.0
 	golang.org/x/term v0.46.0
