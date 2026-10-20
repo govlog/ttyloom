@@ -737,3 +737,21 @@ func TestRegressionSideMenuHighlight(t *testing.T) {
 		t.Fatalf("menu dropped by the prompt: menu %v, line still highlighted", u.menu != nil)
 	}
 }
+
+// Discord sends MESSAGE_UPDATE for old messages too (a link unfurled again, a
+// thread under the message): an edit is applied in place, and one of a message
+// the window does not hold must not show up as a new line at its bottom.
+func TestRegressionEditOfUnheldMessage(t *testing.T) {
+	u, _, room, _ := queryUI()
+	u.dispatch(model.Envelope{Net: room.Net, Ev: model.EvNewMessage{Chat: room, Msg: model.Msg{ID: 100, ChatID: room.ID, Text: "held", Date: time.Now()}}})
+	u.dispatch(model.Envelope{Net: room.Net, Ev: model.EvEditMessage{Msg: model.Msg{ID: 100, ChatID: room.ID, Text: "held, edited"}}})
+	u.dispatch(model.Envelope{Net: room.Net, Ev: model.EvEditMessage{Msg: model.Msg{ID: 7, ChatID: room.ID, Text: "old one"}}})
+	w := u.winFor(room)
+	if len(w.Items) != 1 || w.Items[0].Msg.Text != "held, edited" {
+		var got []string
+		for _, it := range w.Items {
+			got = append(got, it.Msg.Text)
+		}
+		t.Fatalf("window holds %q; want only the edited message", got)
+	}
+}

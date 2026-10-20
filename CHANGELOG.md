@@ -6,6 +6,10 @@
 
 - **Forward a message**: `f` on a selected message, or "forward" in its right-click menu, opens the new chat box limited to the conversations of the same network; Enter forwards the message there and opens that conversation, ready for a comment. Telegram and Discord forward natively, so the receiver sees where the message comes from; IRC has no forward and does not offer it.
 
+### Fixed
+
+- **Ghost lines on Discord**: Discord also updates old messages (a link unfurled again, a thread started under one); such an update showed the old message again as a new line at the bottom of the window, gone after a restart. An edit now only changes a message that is already shown.
+
 ## v0.14-beta — 2026-10-09
 
 ### Added

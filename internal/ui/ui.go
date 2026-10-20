@@ -971,12 +971,14 @@ func (u *UI) viewsOf(k model.ChatKey) []*Window {
 }
 
 // updateShared replaces m everywhere it shows: a remote edit comes with a new
-// pointer, and each view must take it.
-func (u *UI) updateShared(m *model.Msg) {
+// pointer, and each view must take it. false when no view holds it.
+func (u *UI) updateShared(m *model.Msg) bool {
 	m.LiveAt = time.Now()
+	held := false
 	for _, w := range u.viewsOf(m.Key()) {
-		w.Update(m)
+		held = w.Update(m) || held
 	}
+	return held
 }
 
 // touchShared does the same for a change in place (reaction, edit receipt) —
@@ -1247,10 +1249,13 @@ func (u *UI) event(ev model.Event) {
 			if c := u.chats[m.Key()]; c != nil {
 				m.ChatLabel = c.Title
 			}
-			u.ws.List[i].Upsert(&m)
-			u.updateShared(&m) // never Upsert: an edited history message does not enter the aggregate
-			u.autoMedia(&m, false)
-			u.markDirty(m.Key())
+			// Never Upsert: Discord also updates old messages (a link unfurled
+			// again, a thread under it), and one no view holds would show up as
+			// a new line at the bottom of the window.
+			if u.updateShared(&m) {
+				u.autoMedia(&m, false)
+				u.markDirty(m.Key())
+			}
 		}
 	case model.EvQuote:
 		u.quoted(e)
