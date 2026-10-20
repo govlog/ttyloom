@@ -6,6 +6,11 @@
 
 - **Forward a message**: `f` on a selected message, or "forward" in its right-click menu, opens the new chat box limited to the conversations of the same network; Enter forwards the message there and opens that conversation, ready for a comment. Telegram and Discord forward natively, so the receiver sees where the message comes from; IRC has no forward and does not offer it.
 
+### Changed
+
+- **Go 1.27**: building from source now needs Go 1.27.3 or newer, and the release binaries are built with it. Go 1.27.3 fixes a vulnerability in `crypto/x509`, which every TLS connection reaches. The two defaults Go 1.27 changes do not touch ttyloom on Linux: `SSL_CERT_FILE` overriding the system roots concerns Windows and macOS only, and goroutine labels in crash traces are only an addition.
+- **Dependencies**: klauspost/compress v1.20.3 fixes a crafted zstd frame that crashed its decoder (GHSA-fpmh-frq8-7rj8; ttyloom links the decoder but never feeds it). x/text v0.43.0 makes the bidi algorithm linear instead of quadratic on long runs. go-runewidth v0.0.31 counts 39 invisible format characters as zero cells, as terminals draw them. x/crypto, x/image, x/net, x/sync, x/sys, x/term and murmur3 follow, with no change that reaches ttyloom. The CI moves to govulncheck v1.9.0, upload-artifact v7.0.2 and download-artifact v8.0.2. Each diff was read before the update, and the license bundle under `licenses/` follows. govulncheck finds no vulnerability reached.
+
 ### Fixed
 
 - **Ghost lines on Discord**: Discord also updates old messages (a link unfurled again, a thread started under one); such an update showed the old message again as a new line at the bottom of the window, gone after a restart. An edit now only changes a message that is already shown.
