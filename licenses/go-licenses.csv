@@ -1,5 +1,5 @@
 github.com/BurntSushi/toml,https://github.com/BurntSushi/toml/blob/v1.6.0/COPYING,MIT
-github.com/andybalholm/brotli,https://github.com/andybalholm/brotli/blob/v1.2.6/LICENSE,MIT
+github.com/andybalholm/brotli,https://github.com/andybalholm/brotli/blob/v1.2.7/LICENSE,MIT
 github.com/cenkalti/backoff/v4,https://github.com/cenkalti/backoff/blob/v4.3.0/LICENSE,MIT
 github.com/cespare/xxhash/v2,https://github.com/cespare/xxhash/blob/v2.3.0/LICENSE.txt,MIT
 github.com/clipperhouse/uax29/v2/graphemes,https://github.com/clipperhouse/uax29/blob/v2.7.0/LICENSE,MIT
@@ -15,7 +15,7 @@ github.com/gotd/contrib/middleware/floodwait,https://github.com/gotd/contrib/blo
 github.com/gotd/ige,https://github.com/gotd/ige/blob/v0.3.0/LICENSE,MIT
 github.com/gotd/log,https://github.com/gotd/log/blob/v0.1.0/LICENSE,Apache-2.0
 github.com/gotd/neo,https://github.com/gotd/neo/blob/v0.1.5/LICENSE,BSD-3-Clause
-github.com/gotd/td,https://github.com/gotd/td/blob/v0.162.0/LICENSE,MIT
+github.com/gotd/td,https://github.com/gotd/td/blob/v0.163.0/LICENSE,MIT
 github.com/klauspost/compress,https://github.com/klauspost/compress/blob/v1.20.3/LICENSE,MIT
 github.com/klauspost/compress,https://github.com/klauspost/compress/blob/v1.20.3/LICENSE,Apache-2.0
 github.com/klauspost/compress,https://github.com/klauspost/compress/blob/v1.20.3/LICENSE,BSD-3-Clause
@@ -41,7 +41,7 @@ go.uber.org/atomic,https://github.com/uber-go/atomic/blob/v1.12.0/LICENSE.txt,MI
 go.uber.org/multierr,https://github.com/uber-go/multierr/blob/v1.11.0/LICENSE.txt,MIT
 golang.org/x/crypto,https://cs.opensource.google/go/x/crypto/+/v0.58.0:LICENSE,BSD-3-Clause
 golang.org/x/image,https://cs.opensource.google/go/x/image/+/v0.47.0:LICENSE,BSD-3-Clause
-golang.org/x/net,https://cs.opensource.google/go/x/net/+/v0.61.0:LICENSE,BSD-3-Clause
+golang.org/x/net,https://cs.opensource.google/go/x/net/+/v0.62.0:LICENSE,BSD-3-Clause
 golang.org/x/sync,https://cs.opensource.google/go/x/sync/+/v0.24.0:LICENSE,BSD-3-Clause
 golang.org/x/sys,https://cs.opensource.google/go/x/sys/+/v0.49.0:LICENSE,BSD-3-Clause
 golang.org/x/term,https://cs.opensource.google/go/x/term/+/v0.47.0:LICENSE,BSD-3-Clause

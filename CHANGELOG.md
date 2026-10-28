@@ -14,6 +14,8 @@
 - **GIF box and media browser load in order, with a state per cell**: the previews on the screen were all asked at once, queued in no order behind the backend's three download slots, ahead of the media of the conversation, with "loading" on every cell. They now download three at a time in the order of the grid, so the first cells show first and a cell scrolled away before its turn is never fetched. Each cell shows where it stands, in grey: its download fills it with vertical bars, left to right, as the bytes come (Telegram and Discord now report them); when the size is unknown, a band of bars sweeps it back and forth; decoding, it stays full with "decoding" on its middle line; a cell waiting for its turn says so.
 - **mpv through shared memory on Ghostty 1.4**: Ghostty before 1.4 showed mpv's shared memory frames as a black screen, so ttyloom never asked for it there. From 1.4 on (told apart by its animation support), mpv reads its frames from shared memory, as on kitty: no base64 for every frame.
 
+- **Dependencies**: gotd/td v0.163.0 follows Telegram's layer 232 (generated code only, regenerated from the schema and identical; TON addresses and the new wallet messages show as plain text). brotli v1.2.7 rejects an invalid stream earlier in its decoder, which utls reaches. x/net v0.62.0 fixes two flaws of its `html` package (GO-2026-6866, GO-2026-6860), which ttyloom does not use. Each diff was read before the update; govulncheck finds no vulnerability reached.
+
 ### Fixed
 
 - **Discord channel mentions show the channel name**: a message linking a channel (`<#id>`) showed the raw id (`#1561746994798661694`); it now shows `#name` when the channel is known, so the name can be joined or found in the sidebar. An unknown channel keeps the id, as before.

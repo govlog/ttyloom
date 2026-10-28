@@ -25,16 +25,16 @@
   },
   {
     "module": "github.com/andybalholm/brotli",
-    "version": "v1.2.6",
-    "sum": "h1:ftYnfj6usCp+UGV5kSJ3+chpMQgU+gJf/AxsUQ52REI=",
+    "version": "v1.2.7",
+    "sum": "h1:UgafRPGMam5ySHfRkhthMqOFA6IFoeF3D7mWIDLjG5A=",
     "scope": "application or tests",
     "notices": [
       {
-        "file": "licenses/go/github.com/andybalholm/brotli@v1.2.6/LICENSE",
+        "file": "licenses/go/github.com/andybalholm/brotli@v1.2.7/LICENSE",
         "sha256": "3d180008e36922a4e8daec11c34c7af264fed5962d07924aea928c38e8663c94"
       },
       {
-        "file": "licenses/go/github.com/andybalholm/brotli@v1.2.6/flate/LICENSE",
+        "file": "licenses/go/github.com/andybalholm/brotli@v1.2.7/flate/LICENSE",
         "sha256": "2d36597f7117c38b006835ae7f537487207d8ec407aa9d9980794b2030cbc067"
       }
     ]
@@ -329,12 +329,12 @@
   },
   {
     "module": "github.com/gotd/td",
-    "version": "v0.162.0",
-    "sum": "h1:3pUzBsEbb0I5QquvfSkXihkVBXI+QTtdd/upijjUbkw=",
+    "version": "v0.163.0",
+    "sum": "h1:A/QHpyMmYaQgyOY//vySoKa1wQP8NCAo3/5OcgfZVnU=",
     "scope": "application or tests",
     "notices": [
       {
-        "file": "licenses/go/github.com/gotd/td@v0.162.0/LICENSE",
+        "file": "licenses/go/github.com/gotd/td@v0.163.0/LICENSE",
         "sha256": "1eeb0cd3ebdaf6d391806a704a97c4b0bf3714d7b33a52398345c335821e49ad"
       }
     ]
@@ -653,16 +653,16 @@
   },
   {
     "module": "golang.org/x/net",
-    "version": "v0.61.0",
-    "sum": "h1:RR+6j/BTBCrggOLugxa+66R8FvoN6MHlzDlZIbN9YFw=",
+    "version": "v0.62.0",
+    "sum": "h1:18ELalfM5+XNRwzM2nYqXsZQ9ByS1uhj2O/U7+5jqRY=",
     "scope": "application or tests",
     "notices": [
       {
-        "file": "licenses/go/golang.org/x/net@v0.61.0/LICENSE",
+        "file": "licenses/go/golang.org/x/net@v0.62.0/LICENSE",
         "sha256": "911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad"
       },
       {
-        "file": "licenses/go/golang.org/x/net@v0.61.0/PATENTS",
+        "file": "licenses/go/golang.org/x/net@v0.62.0/PATENTS",
         "sha256": "96f408bfae65bf137fc2525d3ecb030271c50c1e90799f87abf8846d8dd505cc"
       }
     ]

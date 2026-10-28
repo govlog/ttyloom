@@ -14,8 +14,8 @@
   },
   {
     "Path": "github.com/andybalholm/brotli",
-    "Version": "v1.2.6",
-    "Sum": "h1:ftYnfj6usCp+UGV5kSJ3+chpMQgU+gJf/AxsUQ52REI="
+    "Version": "v1.2.7",
+    "Sum": "h1:UgafRPGMam5ySHfRkhthMqOFA6IFoeF3D7mWIDLjG5A="
   },
   {
     "Path": "github.com/andybalholm/cascadia",
@@ -245,8 +245,8 @@
   },
   {
     "Path": "github.com/gotd/td",
-    "Version": "v0.162.0",
-    "Sum": "h1:3pUzBsEbb0I5QquvfSkXihkVBXI+QTtdd/upijjUbkw="
+    "Version": "v0.163.0",
+    "Sum": "h1:A/QHpyMmYaQgyOY//vySoKa1wQP8NCAo3/5OcgfZVnU="
   },
   {
     "Path": "github.com/gotd/tl",
@@ -628,8 +628,8 @@
   },
   {
     "Path": "golang.org/x/net",
-    "Version": "v0.61.0",
-    "Sum": "h1:RR+6j/BTBCrggOLugxa+66R8FvoN6MHlzDlZIbN9YFw="
+    "Version": "v0.62.0",
+    "Sum": "h1:18ELalfM5+XNRwzM2nYqXsZQ9ByS1uhj2O/U7+5jqRY="
   },
   {
     "Path": "golang.org/x/sync",
