@@ -115,24 +115,28 @@ func Wrap(spans []Span, width int) []Line {
 		}
 		curW += runesWidth(runes[lo:hi])
 	}
-	flush := func() {
+	// flush ends the line; next is what the copy joins the following one with.
+	join := "\n"
+	flush := func(next string) {
 		for len(cur) > 0 {
 			last := &cur[len(cur)-1]
-			last.Text = strings.TrimRight(last.Text, " ")
+			t := strings.TrimRight(last.Text, " ")
+			curW -= len(last.Text) - len(t)
+			last.Text = t
 			if last.Text != "" {
 				break
 			}
 			cur = cur[:len(cur)-1]
 		}
-		lines = append(lines, Line{Spans: cur})
-		cur, curW = nil, 0
+		lines = append(lines, Line{Spans: cur, Text: true, TextW: curW, Join: join})
+		cur, curW, join = nil, 0, next
 	}
 
 	i := 0
 	for i < len(runes) {
 		switch runes[i] {
 		case '\n':
-			flush()
+			flush("\n")
 			i++
 		case ' ':
 			if curW == 0 {
@@ -142,7 +146,7 @@ func Wrap(spans []Span, width int) []Line {
 			if curW+1 <= width {
 				add(i, i+1)
 			} else {
-				flush()
+				flush(" ")
 			}
 			i++
 		default:
@@ -157,7 +161,7 @@ func Wrap(spans []Span, width int) []Line {
 				continue
 			}
 			if curW > 0 {
-				flush()
+				flush(" ") // the space before the word was added, then trimmed
 			}
 			for w > width && i < j {
 				// A row never holds more than 8 runes per cell: cutting from a
@@ -168,7 +172,7 @@ func Wrap(spans []Span, width int) []Line {
 				end := min(j, i+8*width)
 				n, cw := hardCut(runes[i:end], width)
 				add(i, i+n)
-				flush()
+				flush("")
 				i += n
 				if i == end {
 					w = runesWidth(runes[i:j])
@@ -183,7 +187,7 @@ func Wrap(spans []Span, width int) []Line {
 		}
 	}
 	if len(cur) > 0 || len(lines) == 0 {
-		flush()
+		flush("\n")
 	}
 	return lines
 }

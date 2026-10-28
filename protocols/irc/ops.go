@@ -118,6 +118,9 @@ func (c *Client) EditStyled(_ context.Context, chat *model.Chat, id int, _ []mod
 
 func (c *Client) Delete(context.Context, *model.Chat, int) { c.Warn(c.net(), "Delete") }
 
+// Pin : IRC has no pinned messages (Caps.Pin false, the UI never offers it).
+func (c *Client) Pin(context.Context, *model.Chat, int, bool) { c.Warn(c.net(), "Pin") }
+
 func (c *Client) React(_ context.Context, chat *model.Chat, id int, e string) {
 	c.Refuse("React", model.EvReactionFailed{ChatID: chat.ID, ID: id, Emoji: e, Reason: c.unsupported()})
 }

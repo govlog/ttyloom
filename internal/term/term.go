@@ -38,6 +38,7 @@ type Term struct {
 	CellW, CellH int    // pixels; 0 = unknown
 	Kitty        bool   // kitty graphics protocol supported
 	KittyShm     bool   // ... and read a shared memory object: a terminal on this machine
+	KittyAnim    bool   // ... and play an animation on their side (a=f, a=a): kitty, Ghostty 1.4
 	Sixel        bool   // sixel graphics (attribute 4 of the DA1 answer)
 	Terminology  bool   // Terminology (its DA3 unit id): pictures shown from their path
 	Panic        string // panic of the read loop, shown by main after Close
@@ -195,6 +196,10 @@ const maxProbe = 4 << 10
 
 var reCell = regexp.MustCompile(`\x1b\[6;(\d+);(\d+)t`)
 
+// reAnim : answer to the frame of the probe (a=f), which may carry the frame
+// number it got (r=2).
+var reAnim = regexp.MustCompile(`\x1b_Gi=33(,[a-zA-Z]=\d+)*;OK`)
+
 // reKbd : answer to CSI ? u (flags of the kitty keyboard protocol).
 var reKbd = regexp.MustCompile(`\x1b\[\?\d+u`)
 
@@ -205,12 +210,14 @@ var reKbd = regexp.MustCompile(`\x1b\[\?\d+u`)
 // start, and dropped the answers it had already read.
 var reDA1 = regexp.MustCompile(`\x1b\[\?([0-9;]*)c`)
 
-// probe asks for kitty (a=q, also through shared memory), the cell size
+// probe asks for kitty (a=q, also through shared memory, and a frame added
+// to a pixel sent for it, then freed: the animations), the cell size
 // (CSI 16 t), the state of the keyboard protocol (CSI ? u), the unit id (DA3,
 // Terminology), then DA1 (CSI c) which marks the end because the answers come
 // in order.
 func (t *Term) probe() {
-	q := "\x1b_Gi=31,s=1,v=1,a=q,t=d,f=24;AAAA\x1b\\"
+	q := "\x1b_Gi=31,s=1,v=1,a=q,t=d,f=24;AAAA\x1b\\" +
+		"\x1b_Ga=t,i=33,s=1,v=1,t=d,f=24,q=2;AAAA\x1b\\\x1b_Ga=f,i=33,s=1,v=1,t=d,f=24;AAAA\x1b\\\x1b_Ga=d,d=I,i=33,q=2\x1b\\"
 	// The same query read from a shared memory object, which only a terminal
 	// on this machine reaches (not through ssh). The terminal unlinks it once
 	// read; the Remove is for the one that does not.
@@ -221,6 +228,7 @@ func (t *Term) probe() {
 	resp := t.ask(q + "\x1b[16t\x1b[?u\x1b[=c\x1b[c")
 	t.Kitty = strings.Contains(string(resp), "_Gi=31;OK")
 	t.KittyShm = strings.Contains(string(resp), "_Gi=32;OK")
+	t.KittyAnim = reAnim.Match(resp)
 	if m := reDA1.FindSubmatch(resp); m != nil {
 		t.Sixel = slices.Contains(strings.Split(string(m[1]), ";")[1:], "4") // the first one is the class
 	}

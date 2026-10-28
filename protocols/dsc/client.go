@@ -50,6 +50,12 @@ type Client struct {
 	// emojis : the custom emojis of each guild (customsOf), by guild id —
 	// one read-only copy shared by all its chats, dropped when they change.
 	emojis sync.Map
+	// runCtx : the ctx of Run, set before wire(): the pins handler starts a
+	// REST read under it (fetchPins).
+	runCtx context.Context
+	// pinFetched : channels whose pin list was read at opening (fetchPins),
+	// once per session. UI goroutine only (LoadHistory before its goroutine).
+	pinFetched map[int64]bool
 }
 
 // New builds the state at once (ningen.New opens nothing): a chat replayed
@@ -59,7 +65,7 @@ func New(cfg Config, events chan<- model.Event) *Client {
 	// DefaultIdentifier: the identify properties belong to ningen, they are
 	// never touched here.
 	c := &Client{Poster: model.Poster{Events: events}, cfg: cfg,
-		dlSem: make(chan struct{}, 3), ulSem: make(chan struct{}, 2)}
+		dlSem: make(chan struct{}, 3), ulSem: make(chan struct{}, 2), pinFetched: map[int64]bool{}}
 	c.st.Store(ningen.New(cfg.Token))
 	return c
 }
@@ -72,7 +78,7 @@ func (c *Client) state() *ningen.State { return c.st.Load() }
 // and no name resolution: a pseudo that no dialog carries cannot become a chat
 // (/query, /join).
 func (c *Client) Caps() model.Caps {
-	return model.Caps{Reactions: true, AnyReaction: true, Edit: true, Delete: true, Gifs: true, Search: true, GlobalSearch: true, History: true, Forward: true}
+	return model.Caps{Reactions: true, AnyReaction: true, Edit: true, Delete: true, Gifs: true, Search: true, GlobalSearch: true, History: true, Forward: true, Pin: true}
 }
 
 // Run blocks: QR login when there is no token yet, gateway connection, then
@@ -90,7 +96,8 @@ func (c *Client) Run(ctx context.Context) error {
 		c.st.Store(ningen.New(tok))
 	}
 	st := c.state()
-	c.wire() // before Open: the events of the connection itself are not lost
+	c.runCtx = ctx // before wire(): the pins handler reads it
+	c.wire()       // before Open: the events of the connection itself are not lost
 	// The network is named in every error: main turns it into an EvStopped, and
 	// with two backends the bare arikawa message says nothing about which one died.
 	if err := st.Open(ctx); err != nil { // gives the hand back on READY

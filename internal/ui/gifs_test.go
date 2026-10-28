@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/govlog/ttyloom/internal/config"
+	"github.com/govlog/ttyloom/internal/i18n"
 	"github.com/govlog/ttyloom/internal/model"
 	"github.com/govlog/ttyloom/internal/render"
 	"github.com/govlog/ttyloom/internal/term"
@@ -38,6 +39,75 @@ func gifUI() (*UI, *fakeBackend) {
 	return u, b
 }
 
+// The box asks gridDownloads previews at a time, in the order of the grid,
+// and a landing lets the next one go. While some are on their way, the tick
+// draws again: their cells move.
+func TestGridDownloadQueue(t *testing.T) {
+	u, b := gifUI()
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel) // the decoding of the test file ends with the test
+	u.ctx = ctx
+	u.ws.Cur = 1
+	u.openGifs("cat")
+	u.dispatch(model.Envelope{Net: netTelegram, Ev: model.EvGifs{Query: "cat", Gifs: gifList(12)}})
+	g := u.gifs.gifs
+	box := func() string {
+		var s strings.Builder
+		for _, l := range u.gifLines(u.gifRect()) {
+			s.WriteString(render.LineText(l) + "\n")
+		}
+		return s.String()
+	}
+	box()
+	if len(b.downloads) != gridDownloads || !strings.HasSuffix(b.downloads[0], thumbName(g[0].Preview)) ||
+		!strings.HasSuffix(b.downloads[gridDownloads-1], thumbName(g[gridDownloads-1].Preview)) {
+		t.Fatalf("first drawing: downloads %v, want the first %d cells", b.downloads, gridDownloads)
+	}
+	if !u.tick() {
+		t.Fatal("no repaint while the downloads run")
+	}
+	u.dispatch(model.Envelope{Net: netTelegram, Ev: model.EvDownloaded{Media: g[0].Preview, Path: b.downloads[0]}})
+	box()
+	if len(b.downloads) != gridDownloads+1 || !strings.HasSuffix(b.downloads[gridDownloads], thumbName(g[gridDownloads].Preview)) {
+		t.Fatalf("after a landing: downloads %v, want the next cell", b.downloads)
+	}
+}
+
+// A cell with no picture yet draws its state in grey: waiting, on its middle
+// line; a download of known size fills it with bars to its share, to the
+// eighth of a column; of unknown size, a band of bars sweeps it; decoding, it
+// stays full with the word cut into its middle line.
+func TestGridCellStates(t *testing.T) {
+	u, _ := gifUI()
+	cell := func(md *model.Media, ln int) string {
+		return render.LineText(render.Line{Spans: u.thumbCell(md, ln, 16, 7, theme.Style{})})
+	}
+	md := &model.Media{Kind: model.MediaGIF, Loc: 1}
+	if got := cell(md, 3); strings.TrimSpace(got) != i18n.T("grid_waiting") || strings.TrimSpace(cell(md, 0)) != "" {
+		t.Fatalf("waiting: %q", got)
+	}
+	md.State, md.DLDone, md.DLTotal = model.MediaLoading, 50, 100
+	for _, ln := range []int{0, 3, 6} {
+		if got := cell(md, ln); got != strings.Repeat("█", 8)+strings.Repeat(" ", 8) {
+			t.Fatalf("half downloaded, line %d: %q", ln, got)
+		}
+	}
+	md.DLDone = 53 // 16 cells x 8 eighths x 53 % = 67.8: 8 cells and 3 eighths
+	if got := cell(md, 0); got != strings.Repeat("█", 8)+"▍"+strings.Repeat(" ", 7) {
+		t.Fatalf("53 %%: %q", got)
+	}
+	md.DLTotal = 0
+	now := time.Now()
+	a, b := sweepBar(now, 16), sweepBar(now.Add(100*time.Millisecond), 16)
+	if a == b || !strings.Contains(a, "████") || strings.Count(a, "█") != 4 || render.Width(a) != 16 || cell(md, 0) == strings.Repeat(" ", 16) {
+		t.Fatalf("unknown size: %q then %q, cell %q", a, b, cell(md, 0))
+	}
+	u.decodes = map[*model.Media]context.CancelFunc{md: func() {}}
+	if got := cell(md, 0); got != strings.Repeat("█", 16) || !strings.Contains(cell(md, 3), i18n.T("grid_decoding")) {
+		t.Fatalf("decoding: %q / %q", got, cell(md, 3))
+	}
+}
+
 func gifList(n int) []model.Gif {
 	gifs := make([]model.Gif, n)
 	for i := range gifs {
@@ -61,9 +131,8 @@ func TestGifOpen(t *testing.T) {
 	}
 }
 
-// The answer fills the grid, the previews on the screen (and only those)
-// start their download at the first drawing, Enter sends the current one as
-// a pending line of the conversation and closes the box.
+// The answer fills the grid, Enter sends the current preview as a pending
+// line of the conversation and closes the box.
 func TestGifSend(t *testing.T) {
 	u, b := gifUI()
 	u.ws.Cur = 1
@@ -72,10 +141,6 @@ func TestGifSend(t *testing.T) {
 	g := u.gifs
 	if len(g.gifs) != 12 || g.g.perRow != gridCols || g.g.rows != gridRows {
 		t.Fatalf("grid: %d gifs, %dx%d", len(g.gifs), g.g.perRow, g.g.rows)
-	}
-	u.overlay() // a frame: the visible cells ask for their file
-	if want := min(gridCols*gridRows, 12); len(b.downloads) != want {
-		t.Fatalf("downloads: %d, want the %d cells on the screen", len(b.downloads), want)
 	}
 	u.gifKey(term.Key{Code: term.Right})
 	u.gifKey(term.Key{Code: term.Enter})
@@ -244,5 +309,24 @@ func TestGifLivePreview(t *testing.T) {
 	}
 	if u.gridHover(0, 0); !u.gifStill(b) {
 		t.Error("the pointer off the grid must stop the play")
+	}
+}
+
+// The reports of a download move its count forward only — the parts of a
+// parallel download post out of order — and leave a picture already decoding
+// alone.
+func TestDownloadProgressForwardOnly(t *testing.T) {
+	u, _ := gifUI()
+	md := &model.Media{State: model.MediaLoading}
+	for _, done := range []int64{40, 20} {
+		u.event(model.EvDownloadProgress{Media: md, Done: done, Total: 100})
+	}
+	if md.DLDone != 40 || md.DLTotal != 100 {
+		t.Fatalf("out of order: %d/%d, want 40/100", md.DLDone, md.DLTotal)
+	}
+	u.decodes = map[*model.Media]context.CancelFunc{md: func() {}}
+	u.event(model.EvDownloadProgress{Media: md, Done: 90, Total: 100})
+	if md.DLDone != 40 {
+		t.Fatalf("report during the decoding: %d", md.DLDone)
 	}
 }

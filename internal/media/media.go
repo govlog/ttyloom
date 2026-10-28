@@ -86,6 +86,7 @@ var HaveMPV = func() bool {
 type Screen struct {
 	Kitty     bool // kitty graphics protocol
 	Shm       bool // ... read from a shared memory object (local terminal)
+	Anim      bool // ... play an animation on their side (Ghostty: 1.4 and later)
 	Ghostty   bool
 	Sixel     bool
 	TrueColor bool // 24-bit colour (COLORTERM)
@@ -108,10 +109,13 @@ func MPV(ctx context.Context, path string, s Screen) *exec.Cmd {
 func mpvOut(s Screen) []string {
 	switch {
 	case s.Kitty:
-		// Shared memory spares the base64 of every frame. Ghostty reads it
-		// too, but mpv then shows a black screen there.
+		// Shared memory spares the base64 of every frame. Ghostty before 1.4
+		// took each frame of mpv (a=T,t=s,m=1) for a chunk of the one before:
+		// black screen. 1.4 brought the animations too, which the probe sees.
+		// ponytail: a main build between 21/08 and 22/10/2026 has the
+		// animations and not the fix; probe the chunks if one ever matters.
 		shm := "no"
-		if s.Shm && !s.Ghostty {
+		if s.Shm && (!s.Ghostty || s.Anim) {
 			shm = "yes"
 		}
 		return []string{"--vo=kitty", "--vo-kitty-use-shm=" + shm, "--vo-kitty-alt-screen=no"}

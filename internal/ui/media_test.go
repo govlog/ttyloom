@@ -525,4 +525,87 @@ func TestAnimateHidesCursor(t *testing.T) {
 	if hide < 0 || show < 0 || hide < strings.Index(s, "a=t") || hide > strings.Index(s, "a=p") || show < strings.LastIndex(s, "\x1b[u") {
 		t.Fatalf("cursor not hidden around the placement alone: %q", s)
 	}
+	// The preview draws no input line: the cursor stays hidden after the frame.
+	out.Reset()
+	u.viewer = &viewer{src: md, md: md}
+	u.animate(time.Now().Add(2 * time.Second))
+	if s := out.String(); !strings.Contains(s, "a=p") || strings.Contains(s, "\x1b[?25h") {
+		t.Fatalf("preview: frame %q shows the cursor", s)
+	}
+}
+
+// animUI : a terminal that plays animations, with a message carrying md drawn.
+func animUI(md *model.Media) (*UI, *bytes.Buffer) {
+	u := hoverUI()
+	u.images, u.cfg.KittyImages, u.cfg.GifPlay = "kitty", 48, "always"
+	var out bytes.Buffer
+	u.t = term.NewOffscreen(&out, 80, 24)
+	u.t.Kitty, u.t.KittyAnim, u.t.CellW, u.t.CellH = true, true, 10, 20
+	u.view().Upsert(&model.Msg{ID: 1, From: "alice", Date: time.Now(), Media: md})
+	u.draw()
+	return u, &out
+}
+
+// A terminal that plays animations (kitty, Ghostty 1.4) gets a GIF once: the
+// root frame with its placement, the other frames after it, then the loop
+// with the gap of the GIF — and nothing more at the next ticks. gifplay off
+// stops it where it is.
+func TestKittyPlaysGif(t *testing.T) {
+	md := &model.Media{Kind: model.MediaGIF, Loc: 1, State: model.MediaReady, Frames: [][]byte{{1}, {2}, {3}},
+		FrameW: 40, FrameH: 40, Delay: 50 * time.Millisecond}
+	u, out := animUI(md)
+	if s := out.String(); !strings.Contains(s, "a=T,f=100,i=1,") || !strings.Contains(s, ";AQ==") {
+		t.Fatalf("root frame not placed: %q", s)
+	}
+	out.Reset()
+	u.animate(time.Now().Add(time.Second))
+	s := out.String()
+	f2, f3, loop := strings.Index(s, "a=f,f=100,i=1,X=1,z=50,q=2,m=0;Ag=="), strings.Index(s, ";Aw=="), strings.Index(s, "a=a,i=1,r=1,z=50,s=3")
+	if f2 < 0 || f3 < f2 || loop < f3 || strings.Contains(s, "a=t") {
+		t.Fatalf("frames then loop: %q", s)
+	}
+	out.Reset()
+	u.animate(time.Now().Add(2 * time.Second))
+	if out.Len() != 0 {
+		t.Fatalf("next tick writes %q", out.String())
+	}
+	u.cfg.GifPlay = "off"
+	u.animate(time.Now().Add(3 * time.Second))
+	if s := out.String(); !strings.Contains(s, "a=a,i=1,r=1,z=50,s=1") || strings.Contains(s, "a=f") {
+		t.Fatalf("off: %q", s)
+	}
+}
+
+// A GIF whose frames would take more than animBudget in the terminal is
+// animated by ttyloom, one frame sent a tick: the terminal would evict other
+// images to make room for it.
+func TestKittyAnimBudget(t *testing.T) {
+	md := &model.Media{Kind: model.MediaGIF, Loc: 1, State: model.MediaReady, Frames: [][]byte{{1}, {2}, {3}},
+		FrameW: 4000, FrameH: 4000, Delay: 50 * time.Millisecond}
+	u, out := animUI(md)
+	out.Reset()
+	u.animate(time.Now().Add(time.Second))
+	if s := out.String(); !strings.Contains(s, "a=t,f=100,i=2,") || strings.Contains(s, "a=f") {
+		t.Fatalf("over the budget: %q", s)
+	}
+}
+
+// A long GIF goes out over several ticks (kittyStream a tick), never in one
+// burst that would hold the screen; it plays what it has meanwhile (s=2,
+// waiting on its last frame) and loops once whole.
+func TestKittyStreamsLongGif(t *testing.T) {
+	big := bytes.Repeat([]byte{7}, kittyStream*3/4)
+	md := &model.Media{Kind: model.MediaGIF, Loc: 1, State: model.MediaReady, Frames: [][]byte{big, big, big, big},
+		FrameW: 40, FrameH: 40, Delay: 50 * time.Millisecond}
+	u, out := animUI(md)
+	out.Reset()
+	u.animate(time.Now().Add(time.Second))
+	if s := out.String(); strings.Count(s, "a=f,") != 2 || !strings.Contains(s, "a=a,i=1,r=1,z=50,s=2") {
+		t.Fatalf("1st tick: %d frames, %q", strings.Count(s, "a=f,"), s[strings.LastIndex(s, "\x1b_G"):])
+	}
+	out.Reset()
+	u.animate(time.Now().Add(2 * time.Second))
+	if s := out.String(); strings.Count(s, "a=f,") != 1 || !strings.Contains(s, "a=a,i=1,r=1,z=50,s=3") {
+		t.Fatalf("2nd tick: %d frames, %q", strings.Count(s, "a=f,"), s[strings.LastIndex(s, "\x1b_G"):])
+	}
 }

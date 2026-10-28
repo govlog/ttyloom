@@ -634,6 +634,7 @@ type fakeBackend struct {
 	downloads  []string
 	sends      []string // Send calls: "<chat title>: <text>"
 	forwards   []string // Forward calls: "<from title>:<id>><to title>"
+	pins       []string // Pin calls: "<id>:<pin>"
 }
 
 func (f *fakeBackend) Caps() model.Caps { return f.caps }
@@ -652,6 +653,10 @@ func (f *fakeBackend) React(_ context.Context, _ *model.Chat, _ int, e string) {
 }
 
 func (f *fakeBackend) WhoRead(context.Context, *model.Chat, int, int) { f.whoRead++ }
+
+func (f *fakeBackend) Pin(_ context.Context, _ *model.Chat, id int, pin bool) {
+	f.pins = append(f.pins, fmt.Sprintf("%d:%v", id, pin))
+}
 
 func (f *fakeBackend) LoadHistorySince(context.Context, *model.Chat, int, int) { f.since++ }
 

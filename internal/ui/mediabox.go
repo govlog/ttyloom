@@ -153,9 +153,9 @@ func (u *UI) cellPicture(it *model.MediaItem) *model.Media {
 	return nil
 }
 
-// mboxLoad starts the downloads of the pictures on the screen, lets the
-// frames far from the view go, and asks the next page when the grid nears
-// the end of the list. Called at each drawing.
+// mboxLoad starts the downloads of the pictures on the screen, a few at a
+// time (gridLoad), lets the frames far from the view go, and asks the next
+// page when the grid nears the end of the list. Called at each drawing.
 func (u *UI) mboxLoad() {
 	b := u.mbox
 	be := u.net(b.chat)
@@ -163,19 +163,15 @@ func (u *UI) mboxLoad() {
 		return
 	}
 	u.gridRelease(b)
-	lo, hi := b.g.visible()
-	for i := lo; i < hi; i++ {
-		md := b.pics[i]
-		if md == nil || md.State != model.MediaNone || !md.Previewable() {
-			continue
-		}
+	u.gridLoad(b, func(i int, md *model.Media) {
 		if md == b.items[i].Msg.Media { // the file of the message, where the chat would put it
 			u.download(&b.items[i].Msg)
-			continue
+			return
 		}
 		md.State = model.MediaLoading
 		be.Download(u.backendContext(be), md, filepath.Join(config.CacheDir(), "thumbs", b.chat.Net, thumbName(md)))
-	}
+	})
+	_, hi := b.g.visible()
 	if b.asked < 0 && b.next != 0 && b.err == "" && b.auto < mediaAuto && hi+b.g.perRow*b.g.rows >= len(b.items) {
 		u.mboxAsk(b.next)
 	}

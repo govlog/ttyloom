@@ -1,5 +1,24 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Pinned messages**: the newest pinned message of a conversation shows in a red banner at the top of its window; a click on the banner jumps to it. `n` on a selected message, or "pin" in its right-click menu, pins it; `n` again unpins. Live pins and unpins follow the server. Telegram and Discord (a Discord server needs the Manage Messages right); IRC has no pins and does not offer it.
+- **Local note**: `/note text` puts a one-line note on the conversation of the window, shown in the same red banner and over the pinned message while it is there; `/unnote` removes it. Local to ttyloom (`notes.toml`, next to `config.toml`): the network is not told.
+
+### Changed
+
+- **Mouse selection of text**: a drag now selects text cell by cell, like a terminal, and shows the selected cells in reverse video while the button is held. Only the text is taken: never the time, the `<nick>` nor the indent of a message, nor the reactions, images or day separators, also when the range goes over several lines or messages. Held on the top or the bottom row of the message area, the drag scrolls the view while there is more on that side (older history loads at the top, like PgUp), and the selection follows. A paragraph cut by the wrap is copied back as one line; a line break or a new message stays a break. On release the text goes to the clipboard (OSC 52) and the status bar says "copied to the clipboard". It works on every line of the message area: conversations, window 0, system lines and `/help`. A click with no move still selects the message.
+- **GIFs played by the terminal**: on kitty and Ghostty 1.4, which play animations themselves, a GIF is sent once — its first frame, then the others over a few ticks — and the terminal loops it at the speed of the GIF. ttyloom no longer sends every frame again ten times a second, so a screen of GIFs costs almost nothing in CPU or bandwidth (ssh included), and GIFs faster than 10 frames a second play at their real speed. `gifplay` and the pause still stop them where they are. Videos, and the GIFs that would take more than 160 MB of terminal memory, keep the frames sent one by one. Other terminals are unchanged; the startup banner says `animation true` when the terminal answers.
+- **GIF box and media browser load in order, with a state per cell**: the previews on the screen were all asked at once, queued in no order behind the backend's three download slots, ahead of the media of the conversation, with "loading" on every cell. They now download three at a time in the order of the grid, so the first cells show first and a cell scrolled away before its turn is never fetched. Each cell shows where it stands, in grey: its download fills it with vertical bars, left to right, as the bytes come (Telegram and Discord now report them); when the size is unknown, a band of bars sweeps it back and forth; decoding, it stays full with "decoding" on its middle line; a cell waiting for its turn says so.
+- **mpv through shared memory on Ghostty 1.4**: Ghostty before 1.4 showed mpv's shared memory frames as a black screen, so ttyloom never asked for it there. From 1.4 on (told apart by its animation support), mpv reads its frames from shared memory, as on kitty: no base64 for every frame.
+
+### Fixed
+
+- **Discord channel mentions show the channel name**: a message linking a channel (`<#id>`) showed the raw id (`#1561746994798661694`); it now shows `#name` when the channel is known, so the name can be joined or found in the sidebar. An unknown channel keeps the id, as before.
+- **A disconnection no longer lights window 0**: the gateway drops at every sleep of the laptop, and each drop counted in `[Act: 0(N)]` although the status bar already says `disconnected` live. The line still shows in window 0; a network that stops with an error counts as before.
+
 ## v0.15-beta — 2026-10-20
 
 ### Added

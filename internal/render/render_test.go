@@ -393,10 +393,10 @@ func TestSelActs(t *testing.T) {
 		return s
 	}
 	m := &model.Msg{ID: 1, Text: "salut", Media: &model.Media{Label: "[photo]", Loc: &tg.InputPhotoFileLocation{}}}
-	if got := keys(SelActs(m, true, false, model.AllCaps())); got != "edpfrciov" {
+	if got := keys(SelActs(m, true, false, model.AllCaps())); got != "edpfrnciov" {
 		t.Fatalf("mine: %q", got)
 	}
-	if got := keys(SelActs(m, false, false, model.AllCaps())); got != "pfrciov" {
+	if got := keys(SelActs(m, false, false, model.AllCaps())); got != "pfrnciov" {
 		t.Fatalf("someone else's: %q", got)
 	}
 	if got := keys(SelActs(&model.Msg{ID: 1, Text: "x"}, true, false, model.Caps{})); got != "pci" { // IRC: my line stays
@@ -780,14 +780,20 @@ func TestCapsGating(t *testing.T) {
 	if !strings.Contains(all, " ✓") || !has(acts, KeyTicks) {
 		t.Fatalf("every capability on: %q %+v", all, acts)
 	}
-	if got := keys(model.AllCaps()); got != "edpfrci" {
+	if got := keys(model.AllCaps()); got != "edpfrnci" {
 		t.Fatalf("every capability on, menu: %q", got)
 	}
 
 	caps := model.AllCaps()
 	caps.Reactions = false
-	if got := keys(caps); got != "edpfci" {
+	if got := keys(caps); got != "edpfnci" {
 		t.Fatalf("no reactions, menu: %q", got)
+	}
+
+	caps = model.AllCaps()
+	caps.Pin = false
+	if got := keys(caps); got != "edpfrci" {
+		t.Fatalf("no pin, menu: %q", got)
 	}
 
 	caps = model.AllCaps()
@@ -799,13 +805,13 @@ func TestCapsGating(t *testing.T) {
 
 	caps = model.AllCaps()
 	caps.Edit = false
-	if got := keys(caps); got != "dpfrci" {
+	if got := keys(caps); got != "dpfrnci" {
 		t.Fatalf("no edit, menu: %q", got)
 	}
 
 	caps = model.AllCaps()
 	caps.Forward = false
-	if got := keys(caps); got != "edprci" {
+	if got := keys(caps); got != "edprnci" {
 		t.Fatalf("no forward, menu: %q", got)
 	}
 }

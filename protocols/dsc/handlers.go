@@ -105,6 +105,13 @@ func (c *Client) wire() {
 		defer c.Guard("MessageReactionRemoveEmoji", nil)
 		c.reactions(e.ChannelID, e.MessageID, nil)
 	})
+	st.AddSyncHandler(func(e *gateway.ChannelPinsUpdateEvent) {
+		defer c.Guard("ChannelPinsUpdate", nil)
+		// The event does not say which message moved: the pin list is re-read
+		// in a goroutine of its own — the handler itself never waits on the
+		// network (the rule above).
+		c.fetchPins(c.runCtx, int64(e.ChannelID), e.ChannelID, e.GuildID)
+	})
 	st.AddSyncHandler(func(e *gateway.MessageAckEvent) {
 		defer c.Guard("MessageAck", nil)
 		// An ack, ours or from another device, means read up to there: the

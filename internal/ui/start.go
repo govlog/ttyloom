@@ -28,6 +28,8 @@ func newUI(ctx context.Context, cancel context.CancelFunc, t *term.Term, cfg *co
 		side:        sideModeOf(cfg.Sidebar), // F2 and F3 as the last session left them
 		partsOn:     cfg.Members,
 		aliases:     map[model.ChatKey]string{},
+		notes:       map[model.ChatKey]string{},
+		pins:        map[model.ChatKey]pinInfo{},
 		folded:      map[string]bool{},
 		self:        map[string]selfInfo{},
 		conn:        map[string]bool{},
@@ -41,7 +43,7 @@ func newUI(ctx context.Context, cancel context.CancelFunc, t *term.Term, cfg *co
 	if len(cfg.Unknown) > 0 {
 		u.status0(i18n.T("config_unknown_keys", strings.Join(cfg.Unknown, ", ")))
 	}
-	u.status0(i18n.T("banner_terminal", t.Cols, t.Rows, t.CellW, t.CellH, t.Kitty, t.KittyShm, t.Sixel, t.Terminology, t.KittyKbd, u.images, th.Name))
+	u.status0(i18n.T("banner_terminal", t.Cols, t.Rows, t.CellW, t.CellH, t.Kitty, t.KittyShm, t.KittyAnim, t.Sixel, t.Terminology, t.KittyKbd, u.images, th.Name))
 	if al, err := loadAliases(aliasPath()); err != nil {
 		u.status0(i18n.T("aliases_error", err)) // unreadable file: we start with no local names
 	} else {
@@ -51,6 +53,11 @@ func newUI(ctx context.Context, cancel context.CancelFunc, t *term.Term, cfg *co
 		u.status0(i18n.T("sidebar_error", err)) // unreadable file: we start with everything unfolded
 	} else {
 		u.folded = f
+	}
+	if n, err := loadNotes(notesPath()); err != nil {
+		u.status0(i18n.T("note_error", err)) // unreadable file: we start with no note
+	} else {
+		u.notes = n
 	}
 	if m, err := loadMuted(mutedPath()); err != nil {
 		u.status0(i18n.T("mute_error", err)) // unreadable file: nothing muted, the bell rings as before

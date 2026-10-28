@@ -26,7 +26,7 @@
 - **Find a message, then jump to it.** `Ctrl+F` searches locally; press it twice to search across networks. Click a reply’s quote to return to its original message, loading the surrounding history when needed.
 - **React without a detour.** A right-click menu with quick reactions, double-click 👍, replies, edits (`Ctrl+↑` walks your previous messages), custom Discord emojis and message details. `F3` shows members and presence; click a member to open a conversation.
 - **Give your draft some room.** Expand the multiline editor, paste a code block, complete an `@mention` or a `:shortcode:`, pick an emoji or paste an image with `Ctrl+V`. `Ctrl+B`, `Ctrl+I` and `Ctrl+U` style the draft in bold, italic and underline, sent as Discord Markdown, Telegram entities or mIRC codes. Optional Hunspell underlines misspellings; `Ctrl+R` offers corrections.
-- **Keep the useful little details.** Drag to copy several messages, preview themes live, show seconds in timestamps, spot the unread divider, and keep a local history cache. Typing indicators, focus-aware read state, configurable notifications that merge a burst into one, and `/mute` for a noisy conversation complete the flow.
+- **Keep the useful little details.** Drag to select and copy text, without timestamps or nicks, preview themes live, show seconds in timestamps, spot the unread divider, and keep a local history cache. Typing indicators, focus-aware read state, configurable notifications that merge a burst into one, and `/mute` for a noisy conversation complete the flow.
 - **Answer with your own programs.** Hooks run a script when a message matches a network, a chat, a sender or a pattern; its output is sent, proposed in the input line or shown. [Hooks](docs/hooks.md).
 - **Switch languages while chatting.** French and English interface: `/set lang fr` or `/set lang en` applies immediately.
 
@@ -34,10 +34,10 @@ Capabilities depend on the network. Unsupported actions are hidden.
 
 | Network | Available now | Limits |
 | --- | --- | --- |
-| Telegram | User and bot login, DMs, groups, channels, media, search, reactions, read state | Bot mode receives new messages; no account history or dialog list |
-| Discord | User accounts, DMs, group DMs, server text channels, media, search, reactions, GIFs | No threads, forums, voice, read receipts or bot-account mode |
+| Telegram | User and bot login, DMs, groups, channels, media, search, reactions, pinned messages, read state | Bot mode receives new messages; no account history or dialog list |
+| Discord | User accounts, DMs, group DMs, server text channels, media, search, reactions, pinned messages, GIFs | No threads, forums, voice, read receipts or bot-account mode |
 | WhatsApp | Planned | No implementation yet |
-| IRC | As many networks as wanted, no bouncer: channels, private chats, `/whois`, members, mIRC styles, DCC SEND/GET | No history on the server (the disk cache is the scrollback); no edits, reactions, read receipts, search, GIFs or media browser; no DCC resume or DCC CHAT |
+| IRC | As many networks as wanted, no bouncer: channels, private chats, `/whois`, members, mIRC styles, DCC SEND/GET | No history on the server (the disk cache is the scrollback); no edits, reactions, pinned messages, read receipts, search, GIFs or media browser; no DCC resume or DCC CHAT |
 
 Discord user-token access is unsupported by Discord and can lead to account suspension. Read the [authentication guide](docs/authentication.md#discord) before enabling it.
 
@@ -47,7 +47,7 @@ TTYloom asks the terminal what it can draw when it starts, and picks the best: t
 
 | Terminal | Photos, stickers, GIFs | Videos (`l`, with mpv) |
 | --- | --- | --- |
-| **Ghostty**, **kitty** | kitty graphics protocol: pixels placed over the text, animated GIFs, zoom and pan in the viewer | kitty graphics; shared memory on a local kitty |
+| **Ghostty**, **kitty** | kitty graphics protocol: pixels placed over the text, animated GIFs, zoom and pan in the viewer | kitty graphics; shared memory on a local kitty or Ghostty 1.4 |
 | **foot**, **xterm** (as a `vt340`), other sixel terminals | sixel, encoded in Go with an adaptive 256-colour palette, zoom and pan in the viewer | sixel |
 | **Terminology** | its own protocol: the terminal draws the picture from a file, zoom and pan in the viewer | text half blocks |
 | Any other terminal | Unicode half blocks in 24-bit colour, animated | text half blocks |
@@ -204,6 +204,8 @@ Review `download_dir` and `log_dir` in that configuration. Caches written with e
 | GIFs / emoji | Ctrl+G / Ctrl+T |
 | Photos, videos, GIFs and files of the conversation | Ctrl+M or `/media` |
 | Mute or unmute a conversation | `/mute` / `/unmute` |
+| Pin or unpin a message (banner at the top) | `n` or the right-click menu; click the banner to jump |
+| Local note in the same banner | `/note text` / `/unnote` |
 | Your own command, its removal | `/alias ver /ctcp version` then `/ver nick` / `/unalias ver` |
 | Select a message | Alt+↑ / Alt+↓ or click |
 | Reply / forward / edit / react / copy selection | `p` / `f` / `e` / `r` / `c`, or the right-click menu |

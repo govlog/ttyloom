@@ -1,6 +1,7 @@
 # TODO
 
 ## Planned
+- Pinned messages: an unpin shows the next pin only when it is already loaded; the server is not asked for the one before. Telegram bot mode has no banner at opening (a bot cannot search); the live updates still show.
 - Discord: threads and forums (listing then sending), voice channels and categories, resolving a nickname (`/query @name`, `/join`), `/whois`, contact book, read receipts, stickers, location cards.
 - `/set lang`: the “seen <date>” presence keeps the previous language until the next event (accepted ceiling).
 - Telegram: a media kept in the cache whose file reference expired downloads again only after its message is reloaded (on FILE_REFERENCE_EXPIRED, reload the message once).

@@ -211,6 +211,10 @@ func stripped(md *model.Media) *model.Media {
 	mc.Next = time.Time{}
 	mc.KittyID = 0
 	mc.KittyAlt = 0
+	mc.KittyAnim = 0
+	mc.KittyRun = 0
+	mc.DLDone = 0
+	mc.DLTotal = 0
 	if mc.Full != nil {
 		mc.Full = stripped(mc.Full)
 	}

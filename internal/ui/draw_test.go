@@ -373,6 +373,23 @@ func TestWindow0QuietActivity(t *testing.T) {
 	}
 }
 
+// A disconnection is quiet too: the gateway drops at every sleep of the
+// laptop and the status bar already says it live (connStatus). The line
+// still shows in window 0.
+func TestWindow0DisconnectQuiet(t *testing.T) {
+	u := &UI{ws: NewWindows(), agg: &Window{}, debug: &Window{}, cfg: &config.Config{},
+		th: theme.Terminal(), conn: map[string]bool{}}
+	u.ws.New(false) // window 1 shown
+	u.event(model.EvDisconnected{})
+	act := theme.Style{FG: u.th.Color(theme.Act)}
+	if sp := u.actSpans(theme.Style{}, act); len(sp) != 1 || sp[0].Text != "0" || sp[0].Style != (theme.Style{}) {
+		t.Fatalf("a disconnection counts: %+v", sp)
+	}
+	if n := len(u.ws.List[0].Items); n != 1 {
+		t.Fatalf("line missing from window 0: %d items", n)
+	}
+}
+
 // A muted chat shows its unread messages in its own line only: neither the
 // [Act: …] list nor the count of its tab.
 func TestMutedOutOfStatusBar(t *testing.T) {

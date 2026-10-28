@@ -36,7 +36,8 @@ func mediaItems(from, n int) []model.MediaItem {
 }
 
 // Ctrl+M lists the photos and videos of the conversation, newest first: the
-// cells on the screen fetch their small picture into the cache, the next page
+// cells on the screen fetch their small picture into the cache (a few at a
+// time, gridLoad), the next page
 // is asked from the oldest id once the grid nears the end, a page listed
 // again adds nothing, Tab starts the next tab from its newest, and j goes to
 // the message.
@@ -54,8 +55,8 @@ func TestMediaBox(t *testing.T) {
 	}
 	u.dispatch(model.Envelope{Net: netTelegram, Ev: model.EvMedia{ChatID: 1, Filter: model.TabMedia, Items: mediaItems(100, 8), Next: 93}})
 	u.overlay() // a frame: the cells on the screen ask for their picture, the end is near
-	if len(fb.downloads) != 8 || !strings.Contains(fb.downloads[0], "thumbs") {
-		t.Fatalf("downloads %v: want the 8 small pictures in the cache", fb.downloads)
+	if len(fb.downloads) != gridDownloads || !strings.Contains(fb.downloads[0], "thumbs") {
+		t.Fatalf("downloads %v: want the first small pictures in the cache", fb.downloads)
 	}
 	if len(b.asks) != 2 || b.asks[1] != (mediaAsk{model.TabMedia, 93}) {
 		t.Fatalf("asks %v: want the page before 93", b.asks)

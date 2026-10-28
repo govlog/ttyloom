@@ -146,6 +146,14 @@ type Media struct {
 	Want     int
 	KittyID  uint32 // current image in the terminal (0 = not sent)
 	KittyAlt uint32 // second animation buffer: the next frame goes there
+	// KittyAnim : frames of Frames the terminal holds under KittyID and plays
+	// itself (kitty, Ghostty 1.4); 0 = ttyloom sends each frame (KittyAlt).
+	// KittyRun : play state last sent for KittyID (media.KittyAnimate), 0 none.
+	KittyAnim int
+	KittyRun  int
+	// DLDone/DLTotal : bytes of the download on its way and bytes expected
+	// (EvDownloadProgress), 0 when the network gives no size.
+	DLDone, DLTotal int64
 	// CellW/CellH : cell size used to decode the frames. Different from the cell
 	// size of the terminal (font zoom) = stale frames, to decode again.
 	CellW int
@@ -248,6 +256,9 @@ type Msg struct {
 	FwdFrom   string
 	Edited    bool
 	Deleted   bool
+	// Pinned : the message is pinned in its chat. Set by the backends from the
+	// server data; a live change comes through EvPinned.
+	Pinned    bool
 	Reactions []Reaction
 	Service   string // service message ("alice joined"); Text is ignored
 	// Notice : a message no program answers (IRC NOTICE): it fires no hook.
@@ -416,6 +427,25 @@ type EvContactsFound struct {
 	Query string
 	Peers []*Chat
 	Err   string
+}
+
+// EvDownloadProgress : bytes of a download received so far, posted at each
+// whole percent of Total (Progress).
+type EvDownloadProgress struct {
+	Media       *Media
+	Done, Total int64
+}
+
+// EvPinned : the pinned messages of a chat changed. A live update names the
+// messages (IDs) and their new state. A fetch (chat opened, pin list re-read)
+// posts Fetched true with the newest pinned message whole (Top), nil when the
+// chat has none; IDs is then empty.
+type EvPinned struct {
+	ChatID  int64
+	IDs     []int
+	Pinned  bool
+	Fetched bool
+	Top     *Msg
 }
 
 type EvEdited struct {

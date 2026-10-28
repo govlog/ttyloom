@@ -73,6 +73,7 @@ func (c *Client) convert(ctx context.Context, mc tg.MessageClass, ent peer.Entit
 		m.Service = m.From + " " + describeAction(v.Action)
 	case *tg.Message:
 		m.Text, m.Entities, m.Edited = v.Message, spansOf(v.Message, v.Entities), v.EditDate != 0
+		m.Pinned = v.Pinned
 		if a, ok := v.GetPostAuthor(); ok && fromID == nil {
 			m.From = a
 		}
@@ -259,6 +260,9 @@ func (c *Client) LoadDialogs(ctx context.Context) {
 func (c *Client) LoadHistory(ctx context.Context, chat *model.Chat, beforeID, limit int) {
 	snapshot := *chat // The UI can update chat fields while the request runs.
 	chat = &snapshot
+	if beforeID == 0 {
+		c.fetchPins(ctx, chat)
+	}
 	go c.history(ctx, chat, beforeID, 0, limit, false)
 }
 

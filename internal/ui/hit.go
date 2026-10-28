@@ -12,6 +12,7 @@ import (
 // rowHit : what is drawn on one screen line of the message area.
 type rowHit struct {
 	item *Item
+	sub  int             // rank of the line in the drawing of item
 	img  *render.Img     // line of a kitty image block
 	urls []urlSpan       // column ranges of the links
 	acts []render.Action // palette of the selected message, reactions
@@ -57,7 +58,7 @@ type dragMode int
 const (
 	dragNone dragMode = iota
 	dragBar           // scrollbar cursor grabbed
-	dragText          // selection of messages to copy
+	dragText          // selection of text to copy
 	dragSide          // │ bar of the sidebar: resizing
 	dragView          // left button held in the preview: the image pans
 	dragGrid          // scrollbar of a picture box (GIF box, media browser) grabbed
@@ -141,6 +142,14 @@ func (u *UI) mouse(m term.MouseEvent) {
 		u.view().Scroll = 0 // pill "↓ last message"
 		return
 	}
+	// Banner of the pinned message or of the note: a click jumps to the pin;
+	// the wheel (64, 65) still scrolls, like over the pill.
+	if r, ok := u.pinRect(); ok && m.Press && m.Button < 64 && r.hits(m.Y, m.X, 1, 1) {
+		if _, id, _ := u.pinBanner(u.view()); id != 0 && m.Button == 0 {
+			u.jumpTo(u.view().Chat, id)
+		}
+		return // the banner covers the row: never a click on the line under it
+	}
 	if m.Press && m.Button == 2 && m.Y < u.viewRows() { // right click: the menu of the message
 		if h := hitAt(u.hits, m.X-x0, m.Y); h.item != nil && selectable(h.item) {
 			u.openMsgMenu(h.item, m.X, m.Y)
@@ -165,23 +174,27 @@ func (u *UI) mouse(m term.MouseEvent) {
 			// Click on the image: full screen preview, the same as "v". "o"
 			// and /open keep the desktop viewer (xdg-open).
 			u.viewMsg(h.item.Msg)
-		case h.item != nil && selectable(h.item):
-			now := time.Now()
-			// lastClick.item may have left the window since (trim, /clear,
-			// chatGone): a pointer found by chance on an item outside the view
-			// does not count as a second click.
-			if isDoubleClick(u.lastClick.item, h.item, u.lastClick.at, now) && slices.Contains(u.view().Items, u.lastClick.item) {
-				u.lastClick.item, u.lastClick.at = nil, time.Time{} // a triple click does not toggle back
-				if w := u.view(); w.Sel != h.item {
-					u.setSel(w, h.item) // the message stays selected as after the first click
+		case h.item != nil:
+			if selectable(h.item) {
+				now := time.Now()
+				// lastClick.item may have left the window since (trim, /clear,
+				// chatGone): a pointer found by chance on an item outside the view
+				// does not count as a second click.
+				if isDoubleClick(u.lastClick.item, h.item, u.lastClick.at, now) && slices.Contains(u.view().Items, u.lastClick.item) {
+					u.lastClick.item, u.lastClick.at = nil, time.Time{} // a triple click does not toggle back
+					if w := u.view(); w.Sel != h.item {
+						u.setSel(w, h.item) // the message stays selected as after the first click
+					}
+					u.reactDouble(h.item)
+					return
 				}
-				u.reactDouble(h.item)
-				return
+				u.lastClick.item, u.lastClick.at = h.item, now
 			}
-			u.lastClick.item, u.lastClick.at = h.item, now
-			// Anchor of a selection drag: nothing is selected nor copied before
-			// the release, which tells a click from a copy.
-			u.drag, u.selAnchor, u.selEnd, u.selY = dragText, h.item, nil, m.Y
+			// Anchor of a selection drag, on any line (message, system line,
+			// /help): nothing is selected nor copied before the release, which
+			// tells a click from a copy.
+			u.drag, u.selA, u.selB = dragText, selPos{h.item, u.hits[m.Y].sub, m.X - x0}, selPos{}
+			u.selX, u.selY = m.X, m.Y
 		}
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"image"
 	"strings"
+	"time"
 )
 
 const chunk = 4096
@@ -31,6 +32,23 @@ func KittyPlace(id, pid uint32, cols, rows int, crop ...image.Rectangle) string 
 	return fmt.Sprintf("\x1b_Ga=p,i=%d,p=%d,c=%d,r=%d%s,q=2\x1b\\",
 		id, pid, cols, rows, cropKeys(crop))
 }
+
+// KittyFrame adds png as the next frame of the animation of image id, shown
+// gap long. Whole frames: X=1 writes it over the canvas, with no blending.
+func KittyFrame(id uint32, png []byte, gap time.Duration) string {
+	return kittyChunks(fmt.Sprintf("a=f,f=100,i=%d,X=1,z=%d,q=2", id, gapMS(gap)), png)
+}
+
+// KittyAnimate sets the play of image id: s = 1 stopped on the frame shown, 2
+// running and waiting on the last frame for the next ones, 3 running in a
+// loop. It gives the root frame (r=1, the image itself) its gap: the terminal
+// makes it with none, and a frame with no gap is skipped.
+func KittyAnimate(id uint32, s int, gap time.Duration) string {
+	return fmt.Sprintf("\x1b_Ga=a,i=%d,r=1,z=%d,s=%d,q=2\x1b\\", id, gapMS(gap), s)
+}
+
+// gapMS : a gap in ms, 1 at least — z=0 means the default gap (40 ms).
+func gapMS(d time.Duration) int64 { return max(d.Milliseconds(), 1) }
 
 // cropKeys : x,y,w,h of the kitty protocol — left edge, top edge, width and
 // height of the SOURCE rectangle to show, in pixels of the image sent. The

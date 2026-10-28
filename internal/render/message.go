@@ -39,8 +39,6 @@ type Opts struct {
 	// with the "(deleted)" marker after it, instead of the marker alone.
 	Reveal bool
 	Hover  *model.Msg // message under the mouse: background, no marker
-	// TextSel : messages covered by a selection drag. Background only.
-	TextSel map[*model.Msg]bool
 	// ReadOutbox : last of my messages read by the chat of the message. nil: no
 	// "read" tick (a function and not an integer: the aggregated view mixes
 	// chats). The whole message is handed over and not its ChatID: the chat is
@@ -116,7 +114,6 @@ func Message(m *model.Msg, o Opts) []Line {
 	// Hover: same background as the selection, without the marker. The selection
 	// wins.
 	hov := !sel && o.Hover == m
-	tsel := !sel && !hov && o.TextSel[m]
 	if sel {
 		o.Width-- // column of the marker
 	}
@@ -138,6 +135,12 @@ func Message(m *model.Msg, o Opts) []Line {
 	if md := m.Media; md != nil && md.Kind == model.MediaWebPage {
 		o.MaxImgRows = min(o.MaxImgRows, MaxLinkRows) // link thumbnail: never a big picture, inline or on hover
 	}
+	for i := range lines {
+		lines[i].TextCol = indent // the prefix and the padding below are put in front
+	}
+	for i := mk.reactFirst; i < mk.reactLast; i++ {
+		lines[i].Text = false // the reactions are buttons, not text to copy
+	}
 	img, hoverMedia := msgImage(m, o, indent)
 	lines = append(lines, img...)
 	// --- avatar, padding and tick ---
@@ -157,7 +160,7 @@ func Message(m *model.Msg, o Opts) []Line {
 		lines[0].Spans = append(lines[0].Spans, Span{tick, tickStyle})
 	}
 	// --- selection mark ---
-	if sel || hov || tsel {
+	if sel || hov {
 		paintMark(lines, th, sel)
 	}
 	// --- actions ---
@@ -408,7 +411,7 @@ func msgImage(m *model.Msg, o Opts, indent int) (lines []Line, hover *model.Medi
 	return lines, hover
 }
 
-// paintMark : background of a selected, hovered or dragged-over message, and the
+// paintMark : background of a selected or hovered message, and the
 // ▌ column of the selected one alone. The image blocks and the avatars move with
 // it. Half block spans keep their own background: it carries the bottom pixel.
 func paintMark(lines []Line, th theme.Theme, sel bool) {
@@ -425,6 +428,7 @@ func paintMark(lines []Line, th theme.Theme, sel bool) {
 			continue // hover: the background is enough, the marker stays for the selection
 		}
 		lines[i].Spans = append([]Span{mark}, lines[i].Spans...)
+		lines[i].TextCol++
 		if lines[i].Img != nil {
 			lines[i].Img.Col++ // the image block moves with the rest
 		}
@@ -545,6 +549,13 @@ func SelActs(m *model.Msg, own, jump bool, caps model.Caps) []Act {
 		}
 		if caps.Reactions {
 			out = append(out, Act{'r', i18n.T("act_react"), "", 0})
+		}
+		if caps.Pin {
+			if m.Pinned {
+				out = append(out, Act{'n', i18n.T("act_unpin"), "", 0})
+			} else {
+				out = append(out, Act{'n', i18n.T("act_pin"), "", 0})
+			}
 		}
 		// "i info" stays whatever the network: every backend answers what it can.
 		out = append(out, Act{'c', i18n.T("act_copy"), "", 0}, Act{'i', i18n.T("act_info"), "", 0})

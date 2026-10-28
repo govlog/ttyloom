@@ -57,17 +57,25 @@ func (u *UI) draw() {
 	bg := theme.Style{FG: u.th.FG, BG: u.th.BG}.SGR()
 	u.placed = u.placed[:0]
 	u.hits = make([]rowHit, max(0, view)) // map of the clicks, made again at each repaint
+	lo, hi, selOn := u.selBounds(items)
 	for r := 0; r < view; r++ {
 		fmt.Fprintf(&b, "\x1b[%d;%dH%s\x1b[K", r+1, x0+1, bg)
 		i := start + r
 		if i >= end {
 			continue
 		}
-		u.hits[r] = rowHit{item: items[i], img: lines[i].Img, acts: lines[i].Actions}
+		u.hits[r] = rowHit{item: items[i], sub: lineRank(items, i), img: lines[i].Img, acts: lines[i].Actions}
 		u.showItem(items[i]) // the line shows: its media loads (again) here
 		line := lines[i]
 		if u.search != nil { // highlight when shown only: never in the cache
 			line = highlight(line, string(u.search.q), theme.Style{Reverse: true})
+		}
+		if c0, c1, ok := selCols(lines[i], i, lo, hi); selOn && ok && c0 < c1 { // same: the drag paints at each frame
+			before, mid, after := render.Cut(line, c0, c1)
+			for k := range mid {
+				mid[k].Style.Reverse = true
+			}
+			line = render.Line{Spans: slices.Concat(before, mid, after)}
 		}
 		u.writeLine(&b, line, cols, &u.hits[r])
 		if img := lines[i].Img; img != nil {
@@ -215,8 +223,9 @@ func (u *UI) draw() {
 	u.paint(frame{text: b.String(), gfx: g.String(), pics: pics, trail: trail})
 }
 
-// cursorShown : the input cursor is drawn; an open overlay keeps it hidden.
-func (u *UI) cursorShown() bool { return u.lead() == nil }
+// cursorShown : the input cursor is drawn; the preview or an open overlay
+// keeps it hidden.
+func (u *UI) cursorShown() bool { return u.viewer == nil && u.lead() == nil }
 
 // drawScrollbar : column kept free at the right of the message area. Always
 // written, with a space when there is no bar: no 2J clears the screen.
@@ -259,6 +268,10 @@ func (u *UI) placeKitty(b *strings.Builder, cur map[kplace]bool, pid uint32, md 
 	if md.KittyID == 0 {
 		u.kittyID++
 		md.KittyID = u.kittyID
+		md.KittyAnim, md.KittyRun = 0, 0
+		if u.animNative(md) {
+			png, md.KittyAnim = md.Frames[0], 1 // the root frame: animate() sends the others
+		}
 		b.WriteString(media.KittyDisplay(md.KittyID, pid, png, cols, rows, crop...))
 	} else {
 		b.WriteString(media.KittyPlace(md.KittyID, pid, cols, rows, crop...))
@@ -474,6 +487,11 @@ func (o overlays) hits(row, col, h, w int) bool {
 // overlap.
 func (u *UI) overlay() overlays {
 	var out overlays
+	// Banner of the pinned message or of the note, first: every other box
+	// draws over it, and no image is placed under it.
+	if r, ok := u.pinRect(); ok {
+		out = append(out, overlayBox{rect: r, lines: u.pinLines(r.w)})
+	}
 	// Hover popup (who read, who reacted): its message must still be shown.
 	if u.who != nil && slices.Contains(u.view().Items, u.who.item) {
 		r := u.whoRect()

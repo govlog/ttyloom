@@ -84,7 +84,7 @@ func (u *UI) selKey(w *Window, r rune) bool {
 	case r == 'f' && act && u.capsOf(m).Forward:
 		u.openForward(m)
 	case r == 'c' && act:
-		u.copySel(it, it) // same path as the drag: OSC 52 + status
+		u.copyText(msgText(m)) // same path as the drag: OSC 52 + status
 	case r == 'i' && act:
 		c := u.chatOf(m)
 		if b := u.net(c); b != nil {
@@ -92,6 +92,11 @@ func (u *UI) selKey(w *Window, r rune) bool {
 		}
 	case r == 'r' && act && u.capsOf(m).Reactions:
 		u.openReactPicker(it)
+	case r == 'n' && act && u.capsOf(m).Pin:
+		c := u.chatOf(m)
+		if b := u.net(c); b != nil {
+			b.Pin(u.backendContext(b), c, m.ID, !m.Pinned)
+		}
 	case r == 'g' && w.Search != "" && m.ID != 0:
 		u.jumpTo(u.chatOf(m), m.ID) // search result: join the chat
 	case r == 'g' && m.Reply != nil && m.Reply.ID != 0:
@@ -125,138 +130,216 @@ func (u *UI) actClick(w *Window, it *Item, a render.Action) {
 	}
 }
 
-// --- selection drag: copy of messages to the clipboard ---
+// --- selection drag: copy of text to the clipboard ---
+
+// selPos : a cell of the message area, held by the line of an item and not by
+// the screen: a scroll or a message that comes during the drag leaves the
+// range on its text.
+type selPos struct {
+	item *Item
+	row  int // rank of the line in the drawing of the item
+	col  int // column in the message area
+}
+
+// selAt : a cell in the lines of the window (Visible) of the frame.
+type selAt struct{ line, col int }
+
+// at : the cell in the lines of the frame; false when the item is no longer
+// drawn (trim, /clear).
+func (p selPos) at(items []*Item) (selAt, bool) {
+	first, last := blockOf(items, p.item)
+	if first < 0 {
+		return selAt{}, false
+	}
+	return selAt{min(first+p.row, last), p.col}, true
+}
 
 // selCancel : end of a drag with no copy (new press, lost release).
 func (u *UI) selCancel() {
-	u.drag = dragNone
-	if u.selAnchor != nil {
-		u.selInvalidate()
-		u.selAnchor, u.selEnd = nil, nil
-	}
+	u.drag, u.selA, u.selB = dragNone, selPos{}, selPos{}
 }
 
-// selDragTo : the message under the cursor becomes the end of the range. As
-// long as we stay on the line of the press and on its message, it is still a
-// click (selEnd nil). true: the range changed, the screen must be drawn again.
+// selDragTo : the cell under the pointer becomes the end of the range. As long
+// as the pointer stays on the cell of the press, it is still a click (selB
+// unset). Under the message area, the last row; on a row with no item (day
+// separator, empty rows), the end stays where it was. true: the range
+// changed, the screen must be drawn again.
 func (u *UI) selDragTo(m term.MouseEvent) bool {
+	u.selX, u.selY = m.X, m.Y
 	x0, _ := u.layout()
-	it := hitAt(u.hits, m.X-x0, m.Y).item
-	if m.Y == u.selY && it == u.selAnchor {
-		return false // neither line nor message: a shaky click stays a click
+	y := min(max(m.Y, 0), len(u.hits)-1)
+	if y < 0 || u.hits[y].item == nil {
+		return false
 	}
-	end := u.selEnd
-	if it != nil && selectable(it) {
-		end = it
+	p := selPos{u.hits[y].item, u.hits[y].sub, max(m.X-x0, 0)}
+	if p == u.selB || (u.selB.item == nil && p == u.selA) {
+		return false
 	}
-	if end == nil {
-		end = u.selAnchor // outside the messages: the range stops at the anchor
-	}
-	if end == u.selEnd {
-		return false // range unchanged: no drawing to make again
-	}
-	u.selInvalidate() // old range
-	u.selEnd = end
-	u.selInvalidate() // new one
+	u.selB = p
 	return true
 }
 
-// selRelease : release of a selection drag. With no move it is a click
-// (selection, or toggle on a second click); otherwise the range is copied.
+// selEdge : while a selection drag holds the pointer on the first or the last
+// row of the message area (or under it), each tick scrolls the view one line
+// that way as long as there is buffer on that side — at the top, scroll()
+// loads the older history like PgUp — and the end of the range follows the
+// line that comes under the pointer. true: the view moved.
+func (u *UI) selEdge() bool {
+	view := u.viewRows()
+	d := 0
+	switch {
+	case u.drag != dragText || u.selB.item == nil || view < 1:
+		return false // no drag, or still a click
+	case u.selY <= 0:
+		d = 1
+	case u.selY >= view-1:
+		d = -1
+	default:
+		return false
+	}
+	w := u.view()
+	old := w.Scroll
+	u.scroll(w, d)
+	if w.Scroll == old {
+		return false // nothing more on that side
+	}
+	// The line the next frame draws under the pointer: draw() cuts the same way.
+	lines, items := w.Visible(u.opts())
+	start, end := viewSlice(lines, w.Scroll, view)
+	if i := start + min(max(u.selY, 0), view-1); i < end && items[i] != nil { // a day separator: the end waits for the next line
+		x0, _ := u.layout()
+		u.selB = selPos{items[i], lineRank(items, i), max(u.selX-x0, 0)}
+	}
+	return true
+}
+
+// lineRank : rank of line i in the drawing of its item.
+func lineRank(items []*Item, i int) int {
+	k := i
+	for k > 0 && items[k-1] == items[i] {
+		k--
+	}
+	return i - k
+}
+
+// selRelease : release of a selection drag. With no move it is a click on a
+// message (selection, or toggle on a second click); otherwise the text of the
+// range goes to the clipboard.
 func (u *UI) selRelease() {
-	u.drag = dragNone
-	anchor, end := u.selAnchor, u.selEnd
-	u.selInvalidate()
-	u.selAnchor, u.selEnd = nil, nil
-	if end == nil {
-		w := u.view()
-		if anchor != nil && anchor.Msg != nil && anchor.Msg.Deleted { // deleted: the click shows its content, the next one hides it
-			anchor.Reveal, anchor.lines = !anchor.Reveal, nil
-		}
-		if w.Sel == anchor {
-			anchor = nil // second click on the selected message: toggle
-		}
-		u.setSel(w, anchor)
+	anchor, moved := u.selA.item, u.selB.item != nil
+	if moved {
+		u.copyText(u.selText())
+	}
+	u.selCancel()
+	if moved || anchor == nil || !selectable(anchor) {
 		return
 	}
-	u.copySel(anchor, end)
+	w := u.view()
+	if anchor.Msg.Deleted { // deleted: the click shows its content, the next one hides it
+		anchor.Reveal, anchor.lines = !anchor.Reveal, nil
+	}
+	if w.Sel == anchor {
+		anchor = nil // second click on the selected message: toggle
+	}
+	u.setSel(w, anchor)
 }
 
-// selInvalidate : the background of the range is not part of the cache key,
-// so the drawings it touches must be made again.
-func (u *UI) selInvalidate() {
-	for _, it := range rangeItems(u.view().Items, u.selAnchor, u.selEnd) {
-		it.Invalidate()
+// selBounds : the two ends of the drag in the lines of the window, in reading
+// order. ok false: no drag past a click, or an end no longer drawn.
+func (u *UI) selBounds(items []*Item) (lo, hi selAt, ok bool) {
+	if u.selB.item == nil {
+		return lo, hi, false
 	}
+	lo, okA := u.selA.at(items)
+	hi, okB := u.selB.at(items)
+	if !okA || !okB {
+		return lo, hi, false
+	}
+	if hi.line < lo.line || (hi.line == lo.line && hi.col < lo.col) {
+		lo, hi = hi, lo
+	}
+	return lo, hi, true
 }
 
-// copySel copies the range [a..b] to the clipboard of the terminal (OSC 52),
-// with a note in the status bar.
-func (u *UI) copySel(a, b *Item) {
-	blocks := selBlocks(u.view().Items, a, b)
-	if len(blocks) == 0 {
-		return // nothing to copy in the range
+// selCols : the cells of line i that the range [lo, hi] covers, [c0, c1), on
+// the text of the line alone: never the prefix (time, nick) nor the indent.
+// ok false: the line is out of the range or holds no text (image, reactions,
+// separator). c0 >= c1 on a text line the range only crosses (empty line,
+// pointer in the indent).
+func selCols(l render.Line, i int, lo, hi selAt) (c0, c1 int, ok bool) {
+	if !l.Text || i < lo.line || i > hi.line {
+		return 0, 0, false
 	}
-	text := strings.Join(blocks, "\n")
-	msg := i18n.T("copied_one", len(blocks))
-	if len(blocks) > 1 {
-		msg = i18n.T("copied_many", len(blocks))
+	c0, c1 = l.TextCol, l.TextCol+l.TextW
+	if i == lo.line {
+		c0 = max(c0, lo.col)
 	}
-	if len(text) > maxOSC52 {
+	if i == hi.line {
+		c1 = min(c1, hi.col+1)
+	}
+	return c0, c1, true
+}
+
+// selText : the text of the range as drawn. A break between two items or two
+// lines of a message stays; the lines of one paragraph cut by the wrap join
+// back with the space they lost (none inside a cut word).
+func (u *UI) selText() string {
+	lines, items := u.view().Visible(u.opts())
+	lo, hi, ok := u.selBounds(items)
+	if !ok {
+		return ""
+	}
+	var b strings.Builder
+	var prev *Item
+	for i := lo.line; i <= hi.line; i++ {
+		c0, c1, ok := selCols(lines[i], i, lo, hi)
+		if !ok {
+			continue
+		}
+		switch {
+		case prev == nil: // first line
+		case items[i] != prev:
+			b.WriteByte('\n')
+		default:
+			b.WriteString(lines[i].Join)
+		}
+		prev = items[i]
+		if c0 < c1 {
+			_, mid, _ := render.Cut(lines[i], c0, c1)
+			for _, sp := range mid {
+				b.WriteString(sp.Text)
+			}
+		}
+	}
+	return b.String()
+}
+
+// msgText : what "c" copies — the text of the message, or the label of its
+// media when it has no text.
+func msgText(m *model.Msg) string {
+	if m.Text == "" && m.Media != nil {
+		return m.Media.Label
+	}
+	return m.Text
+}
+
+// copyText copies s to the clipboard of the terminal (OSC 52), with a note in
+// the status bar. Nothing when s is empty.
+func (u *UI) copyText(s string) {
+	if s == "" {
+		return
+	}
+	// base64 protects the terminal, not the clipboard: without Clean the
+	// control characters of a remote message land there as they are, and a
+	// later paste in a shell with no bracketed paste runs the line. The breaks
+	// stay, hence Clean and not CleanLine.
+	s = render.Clean(s)
+	msg := i18n.T("copied")
+	if len(s) > maxOSC52 {
 		msg += i18n.T("copied_truncated")
 	}
-	u.t.WriteString(osc52(text)) // the buffer goes out with the frame that follows
+	u.t.WriteString(osc52(s)) // the buffer goes out with the frame that follows
 	u.flash(msg)
-}
-
-// rangeItems gives the items between a and b included, bounds taken in either
-// order. nil when one of the two is missing (window changed, message dropped).
-func rangeItems(items []*Item, a, b *Item) []*Item {
-	i, j := slices.Index(items, a), slices.Index(items, b)
-	if i < 0 || j < 0 {
-		return nil
-	}
-	if i > j {
-		i, j = j, i
-	}
-	return items[i : j+1]
-}
-
-// selBlocks gives one block per copyable message of the range, in display
-// order, prefixed with "<nick>" as soon as there are several. The messages
-// with no text are skipped — unless the range holds media only: their label is
-// better than an empty copy.
-func selBlocks(items []*Item, a, b *Item) []string {
-	var msgs []*model.Msg
-	labels := true
-	for _, it := range rangeItems(items, a, b) {
-		if !selectable(it) { // system line, info, service message
-			continue
-		}
-		msgs = append(msgs, it.Msg)
-		labels = labels && it.Msg.Text == ""
-	}
-	var out, from []string
-	for _, m := range msgs {
-		t := m.Text
-		if t == "" && labels && m.Media != nil {
-			t = m.Media.Label
-		}
-		if t == "" {
-			continue
-		}
-		// base64 protects the terminal, not the clipboard: without this the
-		// control characters of a remote message land there as they are, and
-		// a later paste in a shell with no bracketed paste runs the line.
-		// The breaks between blocks stay, hence Clean and not CleanLine.
-		out, from = append(out, render.Clean(t)), append(from, render.CleanLine(m.From))
-	}
-	if len(out) > 1 { // only one message: its text as it is, with no prefix
-		for i := range out {
-			out[i] = "<" + from[i] + "> " + out[i]
-		}
-	}
-	return out
 }
 
 // maxOSC52 : cap of the copied text. base64 grows it by a third: the sequence

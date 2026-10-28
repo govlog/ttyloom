@@ -654,6 +654,7 @@ global again. A single network has no tabs.
 | `/telegram [status\|login\|logout\|disconnect]`, `/discord [status\|login\|logout\|disconnect]` | One network: its status, a new login (Discord runs `token_cmd` again), a logout (Telegram ends the session on the server) or a `disconnect`, which cuts the connection and keeps the session. |
 | `/fold [section]` | Toggle a sidebar section by key, such as `telegram` or `discord:Gophers`, or a displayed-name prefix. No argument lists sections and their collapsed/expanded state. |
 | `/mute [name]`, `/unmute [name]` | Mute the conversation of the window, or the one named (exact name or prefix): no bell, no notification and no pulse in the sidebar, even on a mention; its unread count stays, dimmed, in its own line only (not in `[Act: …]` nor in the count of its tab). `/mute` alone in a window with no conversation lists the muted ones. Saved in `muted.toml`; the network is not told. |
+| `/note [text]`, `/unnote` | A local one-line note on the conversation of the window, shown in a red banner at the top like a pinned message — and over one while it is there. `/note` alone shows it, a new `/note` replaces it, `/unnote` removes it. Saved in `notes.toml`; the network is not told. |
 | `/history N`, `/hist N` | Load N older messages, 50 by default and at most what a window keeps (2000, or `cache_messages` when higher); PgUp at the top also loads older history. |
 | `/clear`, `/c` | Clear the current window. Ctrl+L only clears the screen: the lines stay in the history. `/clear` keeps the disk history too: the next write merges the window into the file instead of replacing it. |
 | `/rename [target] name`, `/unrename [target]` | Set or remove a local chat/contact alias, saved in `aliases.toml`. It applies to the sidebar, status bar, aggregate view, completion and the DM contact’s displayed name. It is not sent to the network. |
@@ -706,7 +707,7 @@ because `/quit` shares that prefix. Exact aliases take precedence when executing
 | `/set video hidden` | Keep only video labels in the conversation; `show` previews one frame and `autoplay` loops visible downloaded videos. |
 | `/send path [caption]` | Send a local file of 2 GB at most. On Telegram, PNG/JPEG goes as a photo, a video or a sound file as a playable media with its ffprobe metadata, other formats as documents; on Discord, as an attachment; in a private IRC chat, by DCC SEND. Tab completes the path: `~`, relative paths and spaces work, a directory gets its `/` and the next Tab goes on inside it. |
 | Ctrl+V | Paste an image through `wl-paste` or `xclip`, then `e` sends it, `l` adds a caption first, `a` or Escape cancels. Plain text goes into the editor. |
-| Ctrl+G, `/gif [query]` | Search animated GIF previews: Telegram’s `@gif` bot or Discord’s GIF provider (currently KLIPY). Images must be on (F4). Trends appear immediately; typing searches. Up to 24 previews show at a time, six by four rows; a smaller terminal shrinks the previews first, then shows fewer columns or rows. A scrollbar on the right, thicker under the pointer, shows the others: click it or drag its thumb. Only the preview under the mouse, or the one the arrows reached, plays. Arrows, PgUp/PgDn, Home/End, the wheel or the scrollbar move; Enter or a click sends; Escape closes. |
+| Ctrl+G, `/gif [query]` | Search animated GIF previews: Telegram’s `@gif` bot or Discord’s GIF provider (currently KLIPY). Images must be on (F4). Trends appear immediately; typing searches. Up to 24 previews show at a time, six by four rows; they download three at a time in grid order. Until its preview appears, a cell fills with grey bars as its bytes arrive (a band sweeps it when the size is unknown), stays full while it decodes, and says "waiting" before its turn; a smaller terminal shrinks the previews first, then shows fewer columns or rows. A scrollbar on the right, thicker under the pointer, shows the others: click it or drag its thumb. Only the preview under the mouse, or the one the arrows reached, plays. Arrows, PgUp/PgDn, Home/End, the wheel or the scrollbar move; Enter or a click sends; Escape closes. |
 | Ctrl+M, `/media [media\|gifs\|files]` | Browse the media of the conversation of the window, sent by anyone, newest first: photos and videos, GIFs, or files (Telegram, Discord; not for a bot account). Same grid as the GIF picker: up to six by four, with the same scrollbar; older ones load as you scroll. Tab and Shift+Tab, or a click on a tab, change tab; Enter or a click shows the media in the viewer, where ←/→ go through the list (a file opens with its program); `j` goes to its message, `o` opens it, Escape or Ctrl+M closes. Only the GIF under the mouse plays. A cell shows the small picture the network gives (kept in the cache directory), a small GIF itself, or the name, size, sender and date of a file; a GIF or a media with no small picture downloads to `download_dir`, like the ones of the conversation, when it is under `auto_media_max_kb`. Ctrl+M needs the kitty keyboard protocol (Ghostty, kitty, WezTerm, foot); elsewhere it is Enter, so use `/media`. |
 | `/set auto_media_max_kb 20480` | Raise the automatic download threshold to 20 MiB. |
 
@@ -754,7 +755,10 @@ to mpv.
 
 Photos, stickers (animated stickers stay labels), GIFs and videos below the
 download threshold are fetched into `download_dir`; GIFs animate and a video
-shows its first frame. A link preview shows a clickable label (site and title
+shows its first frame. On kitty and Ghostty 1.4, the terminal plays the GIFs
+itself: ttyloom sends their frames once, a few at a time, and only controls
+play and pause. Videos, and GIFs that would take more than 160 MB of terminal
+memory, are sent one frame at a time, as on other terminals. A link preview shows a clickable label (site and title
 on Telegram, title on Discord) and a description, with a thumbnail on
 Telegram. Only HTTP and HTTPS links, and mailto links without a `?` or `#`
 part, are made clickable and passed to `xdg-open`. Larger media stay as labels
@@ -882,8 +886,9 @@ track highlights under the pointer, and its thumb becomes a solid block during
 mouse interaction. The status bar lists background activity as
 `[Act: 2(3),5(1)]`: window number and unread count. Window 0 shows with no
 count and in the plain colour when it only received lines nobody waits for
-(connected, chats loaded, sync, MOTD, notices of the server, SASL login);
-errors, disconnections, invitations and notices from people count as usual.
+(connected, disconnected — the status bar says it live —, chats loaded, sync,
+MOTD, notices of the server, SASL login); errors, invitations and notices
+from people count as usual.
 Private messages and mentions
 (on IRC, your nick as a word: `chris: hello`) can trigger the bell when their
 window is not shown or the terminal is not focused; `/set bell off` disables
@@ -981,8 +986,8 @@ or shifting text.
 
 A right click on a message opens its context menu at the pointer: the quick
 reactions the chat allows on the first row (click one to toggle it), then the
-actions of the message — go to the quoted message, reply, forward, react, copy, info,
-open, view, play — with edit and delete last. The entry under the pointer is
+actions of the message — go to the quoted message, reply, forward, react, pin
+or unpin, copy, info, open, view, play — with edit and delete last. The entry under the pointer is
 the current one; Enter or a click runs it, any other key closes the menu.
 Double-click a message to toggle 👍 (or the first reaction the chat allows).
 Clicking any reaction below a message also toggles it.
@@ -1012,6 +1017,7 @@ sidebar wheel switching; normal message scrolling remains available.
 | `p` | Reply to the selected message. |
 | `f` | Forward the message to another conversation of the same network (Telegram, Discord): the new chat box opens on that network only, Enter forwards and opens the conversation. The receiver sees where it comes from. A Discord private conversation must already be in the sidebar. |
 | `r` | Choose a supported reaction; choosing it again removes it. Telegram chats can restrict the available set; Discord takes any emoji, so the picker is the whole table with the search, and `:name:` sends a custom emoji of the server. |
+| `n` | Pin the message in its conversation, or unpin it when it is already pinned (Telegram, Discord; a Discord server needs the Manage Messages right). The newest pinned message shows in a red banner at the top of the window; a click on the banner jumps to it, and `/note` puts a local line in the same banner. |
 | `i` | Show message details: dates, ID, views, reaction participants and, where supported, read receipts. |
 | `o` | Open the message’s media externally; a link preview asks before it opens its page. |
 | `v` | Open the built-in full-screen viewer. |
@@ -1021,9 +1027,15 @@ sidebar wheel switching; normal message scrolling remains available.
 | Escape | Deselect. |
 
 Up on an empty input edits your last message when no other editing/selection
-mode is active. Drag across messages to copy a range through OSC 52 on
-release: the text of each message, without timestamps or indentation, prefixed
-with `<nick>` when there are several.
+mode is active. Drag with the left button to select text: the selected cells
+show in reverse video, and the release copies them through OSC 52, with "copied
+to the clipboard" in the status bar. The selection takes the text alone, never
+the time, the `<nick>` or the indent of a message, nor reactions or images,
+across as many lines and messages as the drag covers. Hold the pointer on the
+top or the bottom row of the message area to scroll that way while there is
+more to see; older history loads at the top, as with PgUp. Lines cut by the wrap
+join back; line breaks and message boundaries stay breaks. It works the same in
+window 0, on system lines and in `/help`.
 
 On Telegram, outgoing messages show sent and read markers, and incoming
 messages distinguish unread from read. `i` can show who read a group message,

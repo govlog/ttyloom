@@ -6,6 +6,7 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/clipperhouse/uax29/v2/graphemes"
 	"golang.org/x/text/unicode/norm"
 
 	"github.com/govlog/ttyloom/internal/model"
@@ -31,6 +32,45 @@ type Line struct {
 	// by Message or by the sidebar). 0 = none.
 	Avatar    int64
 	AvatarCol int
+	// Text : the line holds text a mouse drag selects, TextW cells from column
+	// TextCol on (after the prefix or the indent of a message). Join : what the
+	// copy puts between the line before and this one — "\n" at a break, " "
+	// where Wrap cut at a space, "" inside a word cut in two.
+	Text           bool
+	TextCol, TextW int
+	Join           string
+}
+
+// Cut splits the spans of l at the columns c0 and c1: what is drawn before
+// c0, in [c0, c1) and after c1. A wide cluster across a bound goes with the
+// middle.
+// ponytail: one string concatenation per cluster; a line is at most as wide
+// as the terminal, and only the lines of a mouse selection go through it.
+func Cut(l Line, c0, c1 int) (before, mid, after []Span) {
+	add := func(out *[]Span, s string, st theme.Style) {
+		if n := len(*out); n > 0 && (*out)[n-1].Style == st {
+			(*out)[n-1].Text += s
+		} else {
+			*out = append(*out, Span{s, st})
+		}
+	}
+	col := 0
+	for _, sp := range l.Spans {
+		g := graphemes.FromString(sp.Text)
+		for g.Next() {
+			w := clusterWidth(g.Value())
+			switch {
+			case col < c0 && col+w <= c0:
+				add(&before, g.Value(), sp.Style)
+			case col >= c1:
+				add(&after, g.Value(), sp.Style)
+			default:
+				add(&mid, g.Value(), sp.Style)
+			}
+			col += w
+		}
+	}
+	return before, mid, after
 }
 
 // Action : clickable area [Col0, Col1). Key is the matching key of the

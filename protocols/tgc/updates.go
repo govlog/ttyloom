@@ -136,6 +136,20 @@ func (c *Client) registerHandlers(d tg.UpdateDispatcher) {
 			return nil
 		})
 	})
+	d.OnPinnedMessages(func(_ context.Context, _ tg.Entities, u *tg.UpdatePinnedMessages) error {
+		return c.safe("OnPinnedMessages", func() error {
+			c.Post(model.EvPinned{ChatID: tdlibID(u.Peer), IDs: u.Messages, Pinned: u.Pinned})
+			return nil
+		})
+	})
+	d.OnPinnedChannelMessages(func(_ context.Context, _ tg.Entities, u *tg.UpdatePinnedChannelMessages) error {
+		return c.safe("OnPinnedChannelMessages", func() error {
+			var id constant.TDLibPeerID
+			id.Channel(u.ChannelID)
+			c.Post(model.EvPinned{ChatID: int64(id), IDs: u.Messages, Pinned: u.Pinned})
+			return nil
+		})
+	})
 	d.OnMessageReactions(func(_ context.Context, e tg.Entities, u *tg.UpdateMessageReactions) error {
 		return c.safe("OnMessageReactions", func() error {
 			// The TDLib id is computed without resolving the peer; when the chat is

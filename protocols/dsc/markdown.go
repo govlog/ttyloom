@@ -38,11 +38,12 @@ var markers = []struct {
 var reURL = regexp.MustCompile(`^https?://[^\s<>` + "`" + `]+`)
 
 // parse turns Discord markdown into plain text plus neutral spans, offsets
-// in runes over the text returned. names resolves <@id> to a display name;
-// nil or unknown gives "@<id>". The spans come out in closing order, the
-// inner one first — Runs paints rune by rune, the order does not matter.
-func parse(md string, names func(id uint64) string) (text string, spans []model.Span) {
-	p := parser{names: names}
+// in runes over the text returned. names resolves <@id> to a display name and
+// chans resolves <#id> to a channel name; nil or unknown keeps the id. The
+// spans come out in closing order, the inner one first — Runs paints rune by
+// rune, the order does not matter.
+func parse(md string, names, chans func(id uint64) string) (text string, spans []model.Span) {
+	p := parser{names: names, chans: chans}
 	p.scan(md, true)
 	return string(p.out), p.spans
 }
@@ -51,6 +52,7 @@ type parser struct {
 	out   []rune
 	spans []model.Span
 	names func(id uint64) string
+	chans func(id uint64) string
 }
 
 // scan walks s. styled false = already inside a run: the markers are text
@@ -157,10 +159,10 @@ func fence(body string) (text, lang string) {
 }
 
 // mention reads <@id> and <@!id> (a Mention span over "@name"), <#id>
-// (plain "#id": the channel names are not known here) or a custom emoji
-// <:name:id> / <a:name:id> (plain ":name:", the convention of emojiOf: a
-// text client has no glyph for it). Anything else, a role <@&id> among them,
-// stays text.
+// (plain "#name", the id when the state does not know the channel) or a
+// custom emoji <:name:id> / <a:name:id> (plain ":name:", the convention of
+// emojiOf: a text client has no glyph for it). Anything else, a role <@&id>
+// among them, stays text.
 func (p *parser) mention(s string) int {
 	if len(s) < 4 || s[0] != '<' {
 		return 0
@@ -181,7 +183,14 @@ func (p *parser) mention(s string) int {
 		return 0
 	}
 	if s[1] == '#' {
-		p.out = append(p.out, []rune("#"+strconv.FormatUint(id, 10))...)
+		name := ""
+		if p.chans != nil {
+			name = p.chans(id)
+		}
+		if name == "" {
+			name = strconv.FormatUint(id, 10)
+		}
+		p.out = append(p.out, []rune("#"+name)...)
 		return end + 1
 	}
 	name := ""

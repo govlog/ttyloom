@@ -64,12 +64,15 @@ type Client struct {
 	fills   map[[2]int64]uint64
 	fillSem chan struct{} // quote reads running (fillLater)
 	fillSeq uint64
+	// pinFetched : chats whose newest pinned message was read (fetchPins),
+	// once per session. UI goroutine only (LoadHistory before its goroutine).
+	pinFetched map[int64]bool
 }
 
 func New(cfg Config, events chan<- model.Event) *Client {
 	c := &Client{Poster: model.Poster{Events: events}, cfg: cfg, dl: downloader.NewDownloader(),
 		dlSem: make(chan struct{}, 3), ulSem: make(chan struct{}, 2), seen: map[int64]peers.Peer{}, fills: map[[2]int64]uint64{},
-		fillSem: make(chan struct{}, 2)}
+		fillSem: make(chan struct{}, 2), pinFetched: map[int64]bool{}}
 	lg := logger{c}
 	// The gap handler is built before the client (it is its UpdateHandler); it
 	// hands over to c.hook, wired after the peers are made.

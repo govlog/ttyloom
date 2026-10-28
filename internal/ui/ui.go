@@ -124,9 +124,8 @@ type UI struct {
 	placed     []placed
 	hits       []rowHit            // map of the clicks of the message area, made again at each draw
 	drag       dragMode            // drag running: scrollbar or text selection
-	selAnchor  *Item               // message of the press that opened the selection drag
-	selEnd     *Item               // end of the selected range; nil = mouse not moved yet (click)
-	selY       int                 // line of the press: a drag starts when it leaves it
+	selA, selB selPos              // text selection drag: press cell and pointer cell; selB.item nil = not moved yet (click)
+	selX, selY int                 // last pointer cell of the drag, on screen: the tick scrolls while it sits on an edge row
 	hover      *Item               // message under the pointer (hover), window shown
 	zone       zone                // area under the pointer: what the wheel acts on (follow-mouse)
 	barShown   bool                // the last frame drew a scrollbar, which the zone colours
@@ -194,15 +193,17 @@ type UI struct {
 	tabLast map[string]*Window
 	// tabHits : column range of each tab of the bar, made again at each repaint.
 	tabHits    []tabHit
-	side       sideMode               // sidebar (F2)
-	sideW      int                    // width of its content (sidebar_width, drag of the bar)
-	sideScroll int                    // first entry shown in the sidebar
-	sideHov    int                    // list line of the sidebar under the pointer, counted from 1; 0 = none
-	folded     map[string]bool        // folded sidebar sections, by key (sidebar.toml); nil = no section
-	muted      map[model.ChatKey]bool // chats with no bell nor notification (muted.toml)
-	marquee    marqueeState           // scrolling title of the current sidebar line
-	find       sideFind               // typing in the sidebar: keyboard, filter, cursor
-	lastChat   model.ChatKey          // chat left at the last exit (last.toml), until its network lists its chats
+	side       sideMode                  // sidebar (F2)
+	sideW      int                       // width of its content (sidebar_width, drag of the bar)
+	sideScroll int                       // first entry shown in the sidebar
+	sideHov    int                       // list line of the sidebar under the pointer, counted from 1; 0 = none
+	folded     map[string]bool           // folded sidebar sections, by key (sidebar.toml); nil = no section
+	muted      map[model.ChatKey]bool    // chats with no bell nor notification (muted.toml)
+	notes      map[model.ChatKey]string  // local note per chat (/note), saved in notes.toml
+	pins       map[model.ChatKey]pinInfo // newest pinned message known per chat (EvPinned)
+	marquee    marqueeState              // scrolling title of the current sidebar line
+	find       sideFind                  // typing in the sidebar: keyboard, filter, cursor
+	lastChat   model.ChatKey             // chat left at the last exit (last.toml), until its network lists its chats
 	// dialogsSeen : networks whose first chat list has come. It fires the
 	// once-per-session triggers (automatic opening, sync) per network, and not
 	// once for the whole session.
@@ -1023,14 +1024,6 @@ func (u *UI) opts() render.Opts {
 	if u.hover != nil && slices.Contains(v.Items, u.hover) {
 		o.Hover = u.hover.Msg
 	}
-	if u.selEnd != nil { // selection drag: background only on the range
-		o.TextSel = map[*model.Msg]bool{}
-		for _, it := range rangeItems(v.Items, u.selAnchor, u.selEnd) {
-			if it.Msg != nil {
-				o.TextSel[it.Msg] = true
-			}
-		}
-	}
 	return o
 }
 
@@ -1039,7 +1032,7 @@ func (u *UI) opts() render.Opts {
 // view (the read position when a background window loads, say).
 func (u *UI) optsFor(w *Window) render.Opts {
 	o := u.opts()
-	o.ShowChat, o.Selected, o.Hover, o.TextSel = w == u.agg, nil, nil, nil
+	o.ShowChat, o.Selected, o.Hover = w == u.agg, nil, nil
 	if w.Sel != nil {
 		o.Selected = w.Sel.Msg
 	}
@@ -1168,11 +1161,14 @@ func (u *UI) event(ev model.Event) {
 		}
 	case model.EvDisconnected:
 		u.conn[u.dispatchNet] = false
+		// Quiet: the gateway drops at every sleep of the laptop, and the
+		// status bar says "disconnected" live (connStatus). The line stays in
+		// window 0 for the record; a network that stops counts (EvStopped).
 		if u.multiNet() { // with two networks, "disconnected" alone says nothing
-			u.status0(i18n.T("disconnected_net", u.dispatchNet))
+			u.info0(i18n.T("disconnected_net", u.dispatchNet))
 			return
 		}
-		u.status0(i18n.T("disconnected"))
+		u.info0(i18n.T("disconnected"))
 	case model.EvStopped:
 		// Run is over, on its own or after /<net> logout: the network leaves
 		// the live map (every call site treats a missing one as gone) and
@@ -1303,6 +1299,8 @@ func (u *UI) event(ev model.Event) {
 		u.edited(e)
 	case model.EvReactions:
 		u.reactions(e)
+	case model.EvPinned:
+		u.pinned(e)
 	case model.EvReactionsList:
 		u.reactList[u.dispatchNet] = baseAll(e.Emojis)
 	case model.EvChatReactions:
@@ -1328,6 +1326,12 @@ func (u *UI) event(ev model.Event) {
 		u.chatResolved(e)
 	case model.EvDownloaded:
 		u.downloaded(e)
+	case model.EvDownloadProgress:
+		// Late reports of a parallel download (out of order, or past the
+		// landing) never move the count back nor touch a decoding.
+		if md := e.Media; md.State == model.MediaLoading && u.decodes[md] == nil {
+			md.DLDone, md.DLTotal = max(md.DLDone, e.Done), e.Total
+		}
 	case evFrames:
 		u.framesLoaded(e)
 	case evPlayed:
@@ -2726,6 +2730,12 @@ func (u *UI) tick() bool {
 	}
 	if u.flashMsg != "" && now.After(u.flashUntil) {
 		u.flashMsg, redraw = "", true
+	}
+	if u.selEdge() { // the terminal sends no event while the pointer rests on the edge
+		redraw = true
+	}
+	if t := u.thumbBox(); t != nil && gridBusy(t) { // the spinners of its cells turn
+		redraw = true
 	}
 	if u.flushAlert(now) { // the bell goes out with a frame
 		redraw = true

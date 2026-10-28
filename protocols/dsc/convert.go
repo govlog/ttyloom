@@ -43,6 +43,7 @@ func (c *Client) msgOf(m *discord.Message) model.Msg {
 		FromID:  int64(m.Author.ID),
 		Out:     int64(m.Author.ID) == c.self.Load(),
 		Edited:  m.EditedTimestamp.IsValid(),
+		Pinned:  m.Pinned,
 		Media:   mediaOf(body),
 		FwdFrom: fwd,
 	}
@@ -53,12 +54,12 @@ func (c *Client) msgOf(m *discord.Message) model.Msg {
 		msg.Service = s
 		return msg // no text, no reaction, no quote: the line is the whole message
 	}
-	msg.Text, msg.Entities = parse(body.Content, mentionNames(body.Mentions))
+	msg.Text, msg.Entities = parse(body.Content, mentionNames(body.Mentions), c.chanName)
 	msg.Reactions = reactionsOf(m.Reactions)
 	if r := m.ReferencedMessage; r != nil {
 		// The quote is one line: the markers only get in the way, and a line
 		// break would show the quoted lines as the text of the reply.
-		text, _ := parse(r.Content, nil)
+		text, _ := parse(r.Content, nil, c.chanName)
 		// The quoted message often carries no guild of its own; it lives in the
 		// same channel, so the guild of the message that quotes it is the right
 		// one to read the nickname with.
@@ -106,6 +107,20 @@ func (c *Client) nameOf(guild discord.GuildID, u discord.User) string {
 		}
 	}
 	return u.DisplayOrUsername()
+}
+
+// chanName resolves <#id> for parse: the name of the channel when the state
+// holds it ("You're in! Head to #welcome"), "" otherwise — parse then keeps
+// the id, all there is to show.
+func (c *Client) chanName(id uint64) string {
+	if c.state() == nil {
+		return ""
+	}
+	ch, err := c.state().Cabinet.Channel(discord.ChannelID(id))
+	if err != nil {
+		return ""
+	}
+	return ch.Name
 }
 
 // mentionNames resolves <@id> for parse. Every user a message mentions travels

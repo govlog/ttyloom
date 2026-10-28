@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"runtime/debug"
+	"sync/atomic"
 
 	"github.com/govlog/ttyloom/internal/i18n"
 )
@@ -27,6 +28,9 @@ type Backend interface {
 	EditStyled(ctx context.Context, chat *Chat, id int, segs []Seg)
 	Delete(ctx context.Context, chat *Chat, id int)
 	React(ctx context.Context, chat *Chat, id int, e string)
+	// Pin pins (pin true) or unpins a message on the server. The state up to
+	// date comes back through EvPinned, like a reaction does.
+	Pin(ctx context.Context, chat *Chat, id int, pin bool)
 	Typing(ctx context.Context, chat *Chat, cancel bool)
 	MarkRead(ctx context.Context, chat *Chat, maxID int)
 	Search(ctx context.Context, chat *Chat, q string, limit int)
@@ -88,6 +92,7 @@ type Caps struct {
 	Block        bool // blocking or reporting a chat or a member of a room
 	Gifs         bool // GIF search and send (Ctrl+G)
 	Forward      bool // forwarding a message to a chat of the same network (Forwarder)
+	Pin          bool // pinning a message of a chat (menu entry, key "n", banner)
 	// History : the server keeps the history, the disk cache is a copy of it.
 	// Off (IRC), the cache is the only copy: the UI never drops or replaces
 	// it as a side effect — account change, chat gone, older cache format.
@@ -134,7 +139,7 @@ type MediaSearcher interface {
 // with nothing gated off.
 func AllCaps() Caps {
 	return Caps{ReadReceipts: true, Reactions: true, Edit: true, Delete: true, Whois: true, Search: true,
-		GlobalSearch: true, Contacts: true, Resolve: true, Sync: true, Leave: true, Block: true, Gifs: true, History: true, Forward: true}
+		GlobalSearch: true, Contacts: true, Resolve: true, Sync: true, Leave: true, Block: true, Gifs: true, History: true, Forward: true, Pin: true}
 }
 
 // Poster : how a backend talks to the UI — the event channel, a blocking and
@@ -161,6 +166,32 @@ func (p Poster) PostNB(e Event) {
 	select {
 	case p.Events <- e:
 	default:
+	}
+}
+
+// Progress counts the bytes of a download and posts EvDownloadProgress at
+// each whole percent of Total, without blocking: a report lost is caught up
+// by the next one, and EvDownloaded ends it anyway. Safe for the parts of a
+// parallel download; Total <= 0 posts nothing.
+type Progress struct {
+	Poster
+	Media     *Media
+	Total     int64
+	done, pct atomic.Int64
+}
+
+// Add counts n bytes written.
+func (p *Progress) Add(n int) {
+	if p == nil || p.Total <= 0 {
+		return
+	}
+	done := p.done.Add(int64(n))
+	pct := done * 100 / p.Total
+	for last := p.pct.Load(); pct > last; last = p.pct.Load() {
+		if p.pct.CompareAndSwap(last, pct) {
+			p.PostNB(EvDownloadProgress{Media: p.Media, Done: done, Total: p.Total})
+			return
+		}
 	}
 }
 

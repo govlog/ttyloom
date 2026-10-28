@@ -406,8 +406,9 @@ func TestVideoProbeDoesNotFollowNetworkPlaylist(t *testing.T) {
 }
 
 // The output of mpv follows the terminal: kitty graphics first (shared memory
-// on a local kitty only — Ghostty shows black with it), then sixel, then text
-// half blocks in 24-bit colour or 256 colours.
+// on a local terminal — on Ghostty from 1.4 only, the one that animates:
+// black before), then sixel, then text half blocks in 24-bit colour or 256
+// colours.
 func TestMPVOutputFollowsTerminal(t *testing.T) {
 	for _, tc := range []struct {
 		s    Screen
@@ -415,6 +416,7 @@ func TestMPVOutputFollowsTerminal(t *testing.T) {
 	}{
 		{Screen{Kitty: true, Shm: true}, "--vo=kitty --vo-kitty-use-shm=yes --vo-kitty-alt-screen=no"},
 		{Screen{Kitty: true, Shm: true, Ghostty: true, Sixel: true}, "--vo=kitty --vo-kitty-use-shm=no --vo-kitty-alt-screen=no"},
+		{Screen{Kitty: true, Shm: true, Ghostty: true, Anim: true}, "--vo=kitty --vo-kitty-use-shm=yes --vo-kitty-alt-screen=no"},
 		{Screen{Kitty: true}, "--vo=kitty --vo-kitty-use-shm=no --vo-kitty-alt-screen=no"},
 		{Screen{Sixel: true, TrueColor: true}, "--vo=sixel,tct --vo-sixel-alt-screen=no"},
 		{Screen{TrueColor: true}, "--vo=tct"},

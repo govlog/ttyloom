@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/govlog/ttyloom/internal/i18n"
 	"github.com/govlog/ttyloom/internal/model"
@@ -26,6 +27,13 @@ const (
 	gridRows = 4
 	gridPID  = 1 << 21 // kitty placements of the cells: gridPID | rank of the cell
 	gridKeep = 2       // pages of cells kept decoded on each side of the view
+	// gridDownloads : pictures of a box on their way at once. The backends
+	// let 3 downloads through at a time anyway: a box that asked the whole
+	// screen at once queued them there in no order, ahead of the media of the
+	// conversation, with "loading" on every cell. Asked here in the order of
+	// the grid, the first cells show first, and a cell scrolled away before
+	// its turn is never asked.
+	gridDownloads = 3
 )
 
 type grid struct {
@@ -359,19 +367,112 @@ func (u *UI) gridCells(t thumbs, fill theme.Style, text func(i int) []string) fu
 		if md != nil && len(md.Frames) > 0 {
 			return blank // kitty: the image covers the cell
 		}
+		if md != nil { // no picture yet
+			return u.thumbCell(md, ln, g.cellCols, g.cellRows, dim)
+		}
 		var lines []string
-		switch {
-		case md == nil && text != nil:
+		if text != nil {
 			lines = text(i)
-		case md != nil && md.State == model.MediaFailed:
-			lines = []string{render.CleanLine(md.Err)}
-		case md != nil:
-			lines = []string{i18n.T("loading")}
 		}
 		if ln >= len(lines) {
 			return blank
 		}
 		return []render.Span{{Text: padTo(render.Truncate(lines[ln], g.cellCols, "…"), g.cellCols), Style: dim}}
+	}
+}
+
+// thumbCell : line ln of a cell whose picture has not come yet, in grey (dim).
+// Its download fills the cell with bars, left to right, as its bytes come; of
+// no known size, a band of bars sweeps it back and forth (tick() moves it).
+// Decoding, the cell stays full with the word cut into its middle line.
+// Otherwise its state on the middle line: waiting for its turn (gridLoad), or
+// its error.
+func (u *UI) thumbCell(md *model.Media, ln, cols, rows int, dim theme.Style) []render.Span {
+	mid := ln == (rows-1)/2
+	label := ""
+	switch {
+	case u.decodes[md] != nil && mid:
+		dim.Reverse = true
+		label = spinner(time.Now()) + " " + i18n.T("grid_decoding")
+	case u.decodes[md] != nil:
+		return []render.Span{{Text: fillBar(1, 1, cols), Style: dim}}
+	case md.State == model.MediaLoading && md.DLTotal > 0:
+		return []render.Span{{Text: fillBar(md.DLDone, md.DLTotal, cols), Style: dim}}
+	case md.State == model.MediaLoading:
+		return []render.Span{{Text: sweepBar(time.Now(), cols), Style: dim}}
+	case !mid:
+	case md.State == model.MediaFailed:
+		label = render.CleanLine(md.Err)
+	case md.State == model.MediaNone && md.Previewable():
+		label = i18n.T("grid_waiting")
+	}
+	label = render.Truncate(label, cols, "…")
+	return []render.Span{{Text: padTo(strings.Repeat(" ", (cols-render.Width(label))/2)+label, cols), Style: dim}}
+}
+
+// sweepBar : a band of a quarter of cols going back and forth over cols
+// cells, one cell a tick (100 ms) — what stands for a download whose end
+// cannot be told.
+func sweepBar(t time.Time, cols int) string {
+	w := max(2, cols/4)
+	span := cols - w
+	if span <= 0 {
+		return strings.Repeat("█", cols)
+	}
+	x := int(t.UnixMilli()/100) % (2 * span)
+	if x > span {
+		x = 2*span - x
+	}
+	return strings.Repeat(" ", x) + strings.Repeat("█", w) + strings.Repeat(" ", span-x)
+}
+
+// fillBar : done of total as a bar of cols cells, to the eighth of a cell.
+func fillBar(done, total int64, cols int) string {
+	e := int(min(done, total) * int64(cols) * 8 / total)
+	s := strings.Repeat("█", e/8)
+	if r := e % 8; r > 0 {
+		s += string([]rune("▏▎▍▌▋▊▉")[r-1])
+	}
+	return padTo(s, cols)
+}
+
+var spinFrames = []rune("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏")
+
+// spinner : the frame of a spinner at t, one step a tick (100 ms).
+func spinner(t time.Time) string {
+	return string(spinFrames[t.UnixMilli()/100%int64(len(spinFrames))])
+}
+
+// gridBusy : a cell of t on the screen is downloading or decoding — tick()
+// draws again so that its spinner turns.
+func gridBusy(t thumbs) bool {
+	lo, hi := t.grid().visible()
+	for i := lo; i < hi; i++ {
+		if md := t.thumb(i); md != nil && md.State == model.MediaLoading && len(md.Frames) == 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// gridLoad starts the downloads of the cells of t on the screen that have no
+// file yet, in the order of the grid, while fewer than gridDownloads of its
+// pictures are on their way (loading, not decoding yet). start asks for the
+// one of cell i. Called at each drawing: a landing lets the next one go.
+func (u *UI) gridLoad(t thumbs, start func(i int, md *model.Media)) {
+	g := t.grid()
+	busy := 0
+	for i := range g.n {
+		if md := t.thumb(i); md != nil && md.State == model.MediaLoading && u.decodes[md] == nil {
+			busy++
+		}
+	}
+	lo, hi := g.visible()
+	for i := lo; i < hi && busy < gridDownloads; i++ {
+		if md := t.thumb(i); md != nil && md.State == model.MediaNone && md.Previewable() {
+			start(i, md)
+			busy++
+		}
 	}
 }
 

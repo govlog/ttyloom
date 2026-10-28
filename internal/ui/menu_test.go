@@ -270,7 +270,7 @@ func TestMsgMenu(t *testing.T) {
 	for _, e := range m.entries {
 		keys += e.key
 	}
-	if keys != "pfrcied" || !m.entries[len(m.entries)-1].danger || !slices.Equal(m.reacts, []string{"👍", "❤", "🔥"}) {
+	if keys != "pfrncied" || !m.entries[len(m.entries)-1].danger || !slices.Equal(m.reacts, []string{"👍", "❤", "🔥"}) {
 		t.Fatalf("entries %q reacts %v", keys, m.reacts)
 	}
 	lines := m.Lines(u.th, u.menuBox().w, u.menuBox().h)
@@ -296,7 +296,7 @@ func TestMsgMenu(t *testing.T) {
 	for _, e := range u.menu.entries {
 		keys += e.key
 	}
-	if keys != "pfrci" {
+	if keys != "pfrnci" {
 		t.Fatalf("alice's entries: %q", keys)
 	}
 }

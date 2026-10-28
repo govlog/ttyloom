@@ -36,7 +36,7 @@ var _ model.Forwarder = (*Client)(nil) // Caps.Forward is on: the UI finds the m
 // leaving a room and blocking included, so the context menu offers neither.
 func TestCaps(t *testing.T) {
 	got := New(Config{}, make(chan model.Event, 1)).Caps()
-	want := model.Caps{Reactions: true, AnyReaction: true, Edit: true, Delete: true, Gifs: true, Search: true, GlobalSearch: true, History: true, Forward: true}
+	want := model.Caps{Reactions: true, AnyReaction: true, Edit: true, Delete: true, Gifs: true, Search: true, GlobalSearch: true, History: true, Forward: true, Pin: true}
 	if got != want {
 		t.Fatalf("Caps: %+v, want %+v", got, want)
 	}
@@ -428,13 +428,13 @@ func TestFetchCapped(t *testing.T) {
 	defer srv.Close()
 	useTestCDN(t, srv.URL)
 	path := filepath.Join(t.TempDir(), "f")
-	if err := fetch(context.Background(), "https://cdn.discordapp.com/test", path, 50); err == nil {
+	if err := fetch(context.Background(), "https://cdn.discordapp.com/test", path, 50, nil); err == nil {
 		t.Fatal("body over the cap: no error")
 	}
 	if _, err := os.Stat(path); err == nil {
 		t.Fatal("body over the cap: file kept")
 	}
-	if err := fetch(context.Background(), "https://cdn.discordapp.com/test", path, 100); err != nil {
+	if err := fetch(context.Background(), "https://cdn.discordapp.com/test", path, 100, nil); err != nil {
 		t.Fatalf("body at the cap: %v", err)
 	}
 }
@@ -471,7 +471,11 @@ func TestDownloadRefreshesExpiredURL(t *testing.T) {
 	useTestAPI(t, c, rest)
 	path := filepath.Join(t.TempDir(), "a.png")
 	c.Download(context.Background(), &model.Media{Loc: fileURL(old), Size: 3}, path)
-	if e := next(t, ev).(model.EvDownloaded); e.Err != "" || e.Path != path {
+	e := next(t, ev)
+	for _, ok := e.(model.EvDownloadProgress); ok; _, ok = e.(model.EvDownloadProgress) {
+		e = next(t, ev) // the bytes as they come, before the end
+	}
+	if e := e.(model.EvDownloaded); e.Err != "" || e.Path != path {
 		t.Fatalf("download of an expired URL: %+v", e)
 	}
 }
@@ -501,11 +505,11 @@ func TestFetchIdleNotTotal(t *testing.T) {
 	defer close(stop)
 	useTestCDN(t, srv.URL)
 	path := filepath.Join(t.TempDir(), "f")
-	if err := fetch(context.Background(), "https://cdn.discordapp.com/slow", path, 1<<20); err != nil {
+	if err := fetch(context.Background(), "https://cdn.discordapp.com/slow", path, 1<<20, nil); err != nil {
 		t.Fatalf("transfer longer than the idle delay, still moving: %v", err)
 	}
 	done := make(chan error, 1)
-	go func() { done <- fetch(context.Background(), "https://cdn.discordapp.com/stall", path+"2", 1<<20) }()
+	go func() { done <- fetch(context.Background(), "https://cdn.discordapp.com/stall", path+"2", 1<<20, nil) }()
 	select {
 	case err := <-done:
 		if !errors.Is(err, errStalled) {
@@ -612,11 +616,11 @@ func TestFetchRefusesLocalAddressAndRedirect(t *testing.T) {
 	}))
 	defer srv.Close()
 	path := filepath.Join(t.TempDir(), "f")
-	if err := fetch(context.Background(), srv.URL, path, 100); err == nil || calls.Load() != 0 {
+	if err := fetch(context.Background(), srv.URL, path, 100, nil); err == nil || calls.Load() != 0 {
 		t.Fatal("direct local media request was not refused")
 	}
 	useTestCDN(t, srv.URL)
-	if err := fetch(context.Background(), "https://cdn.discordapp.com/test", path, 100); err == nil || calls.Load() != 1 {
+	if err := fetch(context.Background(), "https://cdn.discordapp.com/test", path, 100, nil); err == nil || calls.Load() != 1 {
 		t.Fatalf("redirect escaped the CDN: calls %d, error %v", calls.Load(), err)
 	}
 }
@@ -653,5 +657,39 @@ func TestReadyDMRecipients(t *testing.T) {
 			}
 			return
 		}
+	}
+}
+
+// fetch counts the bytes as they come, against the length the CDN announces
+// (the size of the message may be missing): reports at whole percents only,
+// never going back, the last one at the full length.
+func TestFetchReportsProgress(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Length", "4000")
+		for range 4 {
+			w.Write(bytes.Repeat([]byte("x"), 1000))
+			w.(http.Flusher).Flush()
+		}
+	}))
+	defer srv.Close()
+	useTestCDN(t, srv.URL)
+	events := make(chan model.Event, 200)
+	md := &model.Media{}
+	p := &model.Progress{Poster: model.Poster{Events: events}, Media: md}
+	if err := fetch(context.Background(), "https://cdn.discordapp.com/test", filepath.Join(t.TempDir(), "f"), 1<<20, p); err != nil {
+		t.Fatal(err)
+	}
+	close(events)
+	var last int64
+	n := 0
+	for ev := range events {
+		e := ev.(model.EvDownloadProgress)
+		if e.Media != md || e.Total != 4000 || e.Done <= last {
+			t.Fatalf("report %+v after %d", e, last)
+		}
+		last, n = e.Done, n+1
+	}
+	if last != 4000 || n > 100 {
+		t.Fatalf("%d reports, last at %d", n, last)
 	}
 }

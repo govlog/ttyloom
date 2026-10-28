@@ -560,6 +560,11 @@ func page(limit int) uint { return uint(max(limit, 1)) }
 
 // LoadHistory loads limit messages before beforeID (0 = the newest ones).
 func (c *Client) LoadHistory(ctx context.Context, chat *model.Chat, beforeID, limit int) {
+	if beforeID == 0 && !c.pinFetched[chat.ID] {
+		c.pinFetched[chat.ID] = true
+		chID, guild := ids(chat)
+		c.fetchPins(ctx, chat.ID, chID, guild)
+	}
 	c.history(ctx, "LoadHistory", chat, model.EvHistory{Started: time.Now(), ChatID: chat.ID, Older: beforeID > 0}, limit, 0,
 		func(a *api.Client, ch discord.ChannelID) ([]discord.Message, error) {
 			return a.MessagesBefore(ch, discord.MessageID(beforeID), page(limit))
@@ -824,6 +829,18 @@ func (m moving) Read(p []byte) (int, error) {
 	return n, err
 }
 
+// counted : the file of a download, counting what it writes (p may be nil).
+type counted struct {
+	io.Writer
+	p *model.Progress
+}
+
+func (w counted) Write(b []byte) (int, error) {
+	n, err := w.Writer.Write(b)
+	w.p.Add(n)
+	return n, err
+}
+
 // Download downloads m.Loc to path (3 in parallel at most). A file already
 // there = success at once.
 func (c *Client) Download(ctx context.Context, m *model.Media, path string) {
@@ -850,7 +867,8 @@ func (c *Client) Download(ctx context.Context, m *model.Media, path string) {
 		if size == 0 {
 			limit = unknownFetch
 		}
-		if err := fetch(ctx, c.fresh(ctx, string(u)), path, limit); err != nil {
+		p := &model.Progress{Poster: c.Poster, Media: m, Total: size}
+		if err := fetch(ctx, c.fresh(ctx, string(u)), path, limit, p); err != nil {
 			c.Post(model.EvDownloaded{Media: m, Err: err.Error()})
 			return
 		}
@@ -886,8 +904,9 @@ func (c *Client) fresh(ctx context.Context, u string) string {
 // fetch writes url to path, max bytes at most. 0700 on the directory and a
 // temp file of its own like tgc: a private media must not be readable by the
 // other accounts of the machine, two downloads of the same media no longer
-// walk on each other, and no pre-existing symbolic link is followed.
-func fetch(ctx context.Context, url, path string, max int64) error {
+// walk on each other, and no pre-existing symbolic link is followed. p counts
+// the bytes as they come (nil: no count).
+func fetch(ctx context.Context, url, path string, max int64, p *model.Progress) error {
 	ctx, cancel := context.WithCancelCause(ctx)
 	defer cancel(nil)
 	idle := time.AfterFunc(dlIdle, func() { cancel(errStalled) })
@@ -917,7 +936,10 @@ func fetch(ctx context.Context, url, path string, max int64) error {
 		return err
 	}
 	tmp := f.Name()
-	n, cerr := io.Copy(f, io.LimitReader(moving{resp.Body, idle}, max+1))
+	if p != nil && resp.ContentLength > 0 {
+		p.Total = resp.ContentLength // what the CDN sends, better than the size of the message
+	}
+	n, cerr := io.Copy(counted{f, p}, io.LimitReader(moving{resp.Body, idle}, max+1))
 	switch {
 	case n > max:
 		cerr = fmt.Errorf(i18n.T("download_too_big"), rend.HumanSize(max))

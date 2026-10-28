@@ -210,6 +210,7 @@ func (u *UI) invalidateMedia(md *model.Media) {
 
 func (u *UI) downloaded(e model.EvDownloaded) {
 	md := e.Media
+	md.DLDone, md.DLTotal = 0, 0
 	if u.gridOrphan[md] { // picture of a box closed meanwhile: nobody waits for it
 		delete(u.gridOrphan, md)
 		return
@@ -365,7 +366,7 @@ func (u *UI) playOut(md *model.Media, maxW, maxH, gen int) bool {
 		return false
 	}
 	ct := os.Getenv("COLORTERM")
-	cmd := player(u.ctx, md.Path, media.Screen{Kitty: u.t.Kitty, Shm: u.t.KittyShm, Sixel: u.t.Sixel,
+	cmd := player(u.ctx, md.Path, media.Screen{Kitty: u.t.Kitty, Shm: u.t.KittyShm, Anim: u.t.KittyAnim, Sixel: u.t.Sixel,
 		Ghostty:   os.Getenv("TERM_PROGRAM") == "ghostty" || strings.Contains(os.Getenv("TERM"), "ghostty"),
 		TrueColor: ct == "truecolor" || ct == "24bit"})
 	cmd.Stdin, cmd.Stdout = os.Stdin, os.Stdout
@@ -601,14 +602,19 @@ func (u *UI) framesLoaded(e evFrames) {
 }
 
 // animate moves the visible GIFs of the current window on. true when a repaint is needed (halfblock).
-// In kitty the frame is sent straight to its position, on the second buffer
-// (Ghostty does not animate on the terminal side: a=f/a=a not supported).
+// In kitty the frame is sent straight to its position, on the second buffer —
+// unless the terminal plays the animation itself (animKitty).
 func (u *UI) animate(now time.Time) bool {
 	redraw := false
 	wrote := false
 	x0, _ := u.layout()
+	stream := kittyStream
 	for _, p := range u.placed {
 		md := p.img.Media
+		if md.KittyAnim > 0 && u.images == "kitty" {
+			wrote = u.animKitty(md, &stream) || wrote
+			continue
+		}
 		if len(md.Frames) < 2 || md.Paused || now.Before(md.Next) || u.gifStill(md) {
 			continue
 		}
@@ -693,6 +699,66 @@ func (u *UI) animate(now time.Time) bool {
 		u.t.Flush()
 	}
 	return redraw
+}
+
+// kittyStream : bytes of frames sent a tick to the terminals that animate,
+// every media together: a long GIF goes out over a few ticks and never holds
+// the screen (ssh), while it plays what it already has.
+const kittyStream = 256 << 10
+
+// animBudget : RGBA bytes the animations played by the terminal may take
+// there. Ghostty composes every frame whole (W x H x 4) and keeps 320 MB of
+// images a screen, evicting others to make room for a frame: half of it
+// leaves the still images their place. Over it, a GIF goes back to the frames
+// sent one at a time.
+const animBudget = 160 << 20
+
+// animNative tells whether the terminal can play md itself, as its image is
+// sent. Videos stay on the frames sent one at a time: hundreds of frames, and
+// they grow while they decode.
+func (u *UI) animNative(md *model.Media) bool {
+	if len(md.Frames) < 2 || md.Kind == model.MediaVideo || !u.t.KittyAnim {
+		return false
+	}
+	used := 0
+	for _, o := range u.kittyLRU.list {
+		if o != md && o.KittyAnim > 0 {
+			used += animSize(o)
+		}
+	}
+	return used+animSize(md) <= animBudget
+}
+
+// animSize : what the frames of md take in the terminal, in RGBA.
+func animSize(md *model.Media) int { return md.FrameW * md.FrameH * 4 * len(md.Frames) }
+
+// animKitty : a media the terminal plays itself. Its frames follow the root
+// one within the stream budget, only while it plays (gifplay off or hover:
+// nothing sent for a GIF that holds), and the play state follows gifStill and
+// the pause. true when something was written.
+func (u *UI) animKitty(md *model.Media, stream *int) bool {
+	wrote := false
+	play := !md.Paused && !u.gifStill(md)
+	for play && md.KittyAnim < len(md.Frames) && *stream > 0 {
+		f := md.Frames[md.KittyAnim]
+		u.t.WriteString(media.KittyFrame(md.KittyID, f, md.Delay))
+		*stream -= len(f)
+		md.KittyAnim++
+		wrote = true
+	}
+	run := 1 // stopped: the terminal holds the frame shown
+	switch {
+	case !play:
+	case md.KittyAnim < len(md.Frames):
+		run = 2 // plays what it has, waits on the last frame for the rest
+	default:
+		run = 3
+	}
+	if run != md.KittyRun {
+		u.t.WriteString(media.KittyAnimate(md.KittyID, run, md.Delay))
+		md.KittyRun, wrote = run, true
+	}
+	return wrote
 }
 
 // gifStill : /set gifplay — a GIF of the messages holds its frame: off, or
@@ -972,7 +1038,7 @@ func (u *UI) kittyFree(md *model.Media) string {
 			u.forgetKitty(id) // d=I took the placements: nothing left to drop
 		}
 	}
-	md.KittyID, md.KittyAlt = 0, 0
+	md.KittyID, md.KittyAlt, md.KittyAnim, md.KittyRun = 0, 0, 0, 0
 	u.kittyLRU.drop(md)
 	return s
 }
@@ -995,7 +1061,7 @@ func (u *UI) retireKitty(md *model.Media) {
 			u.kittyOld = append(u.kittyOld, id)
 		}
 	}
-	md.KittyID, md.KittyAlt = 0, 0
+	md.KittyID, md.KittyAlt, md.KittyAnim, md.KittyRun = 0, 0, 0, 0
 }
 
 // forgetKitty drops from the set of the placements the ones of an image the

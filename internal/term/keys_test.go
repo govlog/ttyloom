@@ -269,6 +269,14 @@ func TestProbeAnswers(t *testing.T) {
 	if reDA1.Match([]byte("\x1b[6;36;18t")) {
 		t.Error("CSI 16 t response mistaken for a DA1")
 	}
+	// The frame of the probe: OK with or without the frame number it got; an
+	// error (a terminal with images but no animation) is no.
+	for in, want := range map[string]bool{"\x1b_Gi=33,r=2;OK\x1b\\": true, "\x1b_Gi=33;OK\x1b\\": true,
+		"\x1b_Gi=33;EINVAL: unsupported action\x1b\\": false, "\x1b_Gi=31;OK\x1b\\": false} {
+		if reAnim.MatchString(in) != want {
+			t.Errorf("animation answer %q: want %v", in, want)
+		}
+	}
 }
 
 // A bare \n (terminal keybind like Ghostty shift+enter=text:\n) must keep

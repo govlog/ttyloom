@@ -94,8 +94,8 @@ func (u *UI) gifsResult(e model.EvGifs) {
 }
 
 // gifLoad starts the download of the previews on the screen that have none
-// yet, and lets the frames of the ones far from the view go. Called at each
-// drawing: a cell that scrolls into view asks then.
+// yet, a few at a time (gridLoad), and lets the frames of the ones far from
+// the view go. Called at each drawing: a cell that scrolls into view asks then.
 func (u *UI) gifLoad() {
 	g := u.gifs
 	b := u.net(g.chat)
@@ -103,15 +103,10 @@ func (u *UI) gifLoad() {
 		return
 	}
 	u.gridRelease(g)
-	lo, hi := g.g.visible()
-	for i := lo; i < hi; i++ {
-		md := g.gifs[i].Preview
-		if md.State != model.MediaNone || !md.Previewable() {
-			continue
-		}
+	u.gridLoad(g, func(_ int, md *model.Media) {
 		md.State = model.MediaLoading
 		b.Download(u.backendContext(b), md, filepath.Join(config.CacheDir(), "gifs", g.chat.Net, thumbName(md)))
-	}
+	})
 }
 
 func (u *UI) gifClose() {

@@ -1,10 +1,14 @@
 package ui
 
 import (
+	"bytes"
+	"encoding/base64"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/govlog/ttyloom/internal/i18n"
 	"github.com/govlog/ttyloom/internal/media"
 	"github.com/govlog/ttyloom/internal/model"
 	"github.com/govlog/ttyloom/internal/render"
@@ -125,44 +129,136 @@ func TestReactionsAllViews(t *testing.T) {
 	}
 }
 
-func TestSelectionText(t *testing.T) {
-	d := time.Date(2026, 8, 30, 12, 0, 0, 0, time.UTC)
-	w := &Window{}
-	w.Upsert(&model.Msg{ID: 1, Date: d, From: "alice", Text: "un"})
-	w.Upsert(&model.Msg{ID: 2, Date: d, From: "bob", Media: &model.Media{Label: "[photo]"}})
-	w.Upsert(&model.Msg{ID: 3, Date: d, From: "bob", Text: "deux"})
-	w.AddSys("système")
-	it := w.Items
+// "c" copies the text of the selected message, or the label of a media with
+// no text. The control characters of a remote message never reach the
+// clipboard (a later paste in a shell with no bracketed paste would run the
+// line); its breaks stay.
+func TestCopyKey(t *testing.T) {
+	for _, c := range []struct {
+		m    model.Msg
+		want string
+	}{
+		{model.Msg{ID: 1, From: "alice", Text: "rm -rf /\rok\x07\nnext"}, "rm -rf / ok \nnext"},
+		{model.Msg{ID: 2, From: "bob", Media: &model.Media{Label: "[photo]"}}, "[photo]"},
+	} {
+		u := hoverUI()
+		var out bytes.Buffer
+		u.t = term.NewOffscreen(&out, 80, 10)
+		w := u.view()
+		c.m.Date = time.Now()
+		w.Upsert(&c.m)
+		w.Sel = w.Items[0]
+		u.selKey(w, 'c')
+		u.t.Flush()
+		if got := copied(t, out.String()); got != c.want {
+			t.Errorf("%q: copied %q, want %q", c.m.Text, got, c.want)
+		}
+	}
+}
 
-	// Only one message copied: its text as it is, with no prefix.
-	if got := selectionText(it, it[0], it[0]); got != "un" {
-		t.Fatalf("one message: %q", got)
+// copied : the text of the last OSC 52 sequence written, "" when none.
+func copied(t *testing.T, out string) string {
+	t.Helper()
+	i := strings.LastIndex(out, "\x1b]52;c;")
+	if i < 0 {
+		return ""
 	}
-	// Range reversed: display order, nick as a prefix, media and sys skipped.
-	want := "<alice> un\n<bob> deux"
-	if got := selectionText(it, it[3], it[0]); got != want {
-		t.Fatalf("reversed range: %q", got)
+	s := out[i+len("\x1b]52;c;"):]
+	s = s[:strings.IndexByte(s, '\a')]
+	b, err := base64.StdEncoding.DecodeString(s)
+	if err != nil {
+		t.Fatal(err)
 	}
-	// Media only: the label rather than an empty copy.
-	if got := selectionText(it, it[1], it[1]); got != "[photo]" {
-		t.Fatalf("media only: %q", got)
+	return string(b)
+}
+
+// dragUI : two messages drawn 39 columns wide — the first one wraps at a
+// space, the second one cuts a long word and has a line break. at gives the
+// cell of the first drawn occurrence of s.
+func dragUI(t *testing.T) (u *UI, out *bytes.Buffer, at func(s string) term.MouseEvent) {
+	u = hoverUI()
+	u.side = sideHidden
+	out = &bytes.Buffer{}
+	u.t = term.NewOffscreen(out, 40, 12)
+	w := u.view()
+	d := time.Now()
+	w.Upsert(&model.Msg{ID: 1, From: "alice", FromID: 7, Date: d, Text: "one two three four five six seven eight nine ten"})
+	w.Upsert(&model.Msg{ID: 2, From: "bob", FromID: 8, Date: d, Text: "https://example.org/" + strings.Repeat("x", 40) + "\nend of it"})
+	u.draw()
+	if len(w.Items[0].lines) < 2 || len(w.Items[1].lines) < 3 {
+		t.Fatalf("setup: no wrap (%d, %d lines)", len(w.Items[0].lines), len(w.Items[1].lines))
 	}
-	// Bound missing from the window (message dropped, view changed).
-	if got := selectionText(it, it[0], &Item{}); got != "" {
-		t.Fatalf("missing bound: %q", got)
+	return u, out, func(s string) term.MouseEvent { t.Helper(); return cellAt(t, u, s) }
+}
+
+// cellAt : a press on the first occurrence of s drawn at the last frame.
+func cellAt(t *testing.T, u *UI, s string) term.MouseEvent {
+	t.Helper()
+	x0, _ := u.layout()
+	for y, h := range u.hits {
+		if h.item == nil {
+			continue
+		}
+		txt := render.LineText(h.item.lines[h.sub])
+		if i := strings.Index(txt, s); i >= 0 {
+			return term.MouseEvent{X: x0 + render.Width(txt[:i]), Y: y, Press: true}
+		}
 	}
-	// The copy goes to the clipboard of the system: the control characters of
-	// a remote message must not survive there (a later paste in a shell with
-	// no bracketed paste would run the line). The breaks between blocks stay.
-	w2 := &Window{}
-	w2.Upsert(&model.Msg{ID: 1, Date: d, From: "ev\x1b[31mil", Text: "rm -rf /\rok\x07"})
-	w2.Upsert(&model.Msg{ID: 2, Date: d, From: "bob", Text: "a\nb"})
-	got := selectionText(w2.Items, w2.Items[0], w2.Items[1])
-	if strings.ContainsAny(got, "\x1b\r\x07") {
-		t.Fatalf("control characters copied: %q", got)
+	t.Fatalf("%q not drawn", s)
+	return term.MouseEvent{}
+}
+
+// A drag copies on release the text it covers, from the cell of the press to
+// the one of the release: never the <nick> nor the indent of a message; a
+// paragraph cut by the wrap joins back with its space, a cut word with none;
+// a new message or a line break stays a break. The status bar says so.
+func TestSelDragCopiesText(t *testing.T) {
+	u, out, at := dragUI(t)
+	u.key(term.Key{Code: term.Mouse, Mouse: at("two")})
+	end := at("end of")
+	end.X += len("end of") - 1
+	end.Motion = true
+	u.selDragTo(end)
+	end.Press, end.Motion = false, false
+	u.key(term.Key{Code: term.Mouse, Mouse: end})
+	u.t.Flush()
+	want := "two three four five six seven eight nine ten\nhttps://example.org/" + strings.Repeat("x", 40) + "\nend of"
+	if got := copied(t, out.String()); got != want {
+		t.Fatalf("copied %q, want %q", got, want)
 	}
-	if !strings.Contains(got, "a\nb") {
-		t.Fatalf("body line breaks lost: %q", got)
+	if u.flashMsg != i18n.T("copied") {
+		t.Fatalf("status note %q", u.flashMsg)
+	}
+	if u.view().Sel != nil {
+		t.Fatal("a drag selects no message")
+	}
+}
+
+// While the button is held, the cells of the range show in reverse video, the
+// ones before the press do not.
+func TestSelDragShows(t *testing.T) {
+	u, out, at := dragUI(t)
+	u.key(term.Key{Code: term.Mouse, Mouse: at("two")})
+	end := at("three")
+	end.X += len("three") - 1
+	end.Motion = true
+	u.selDragTo(end)
+	out.Reset()
+	u.draw()
+	frame := out.String()
+	sgrBefore := func(s string) string {
+		t.Helper()
+		i := strings.Index(frame, s)
+		if i < 0 {
+			t.Fatalf("%q not in the frame", s)
+		}
+		return frame[strings.LastIndex(frame[:i], "\x1b["):i]
+	}
+	if sgr := sgrBefore("two three"); !strings.Contains(sgr, ";7") {
+		t.Fatalf("range not in reverse video: %q", sgr)
+	}
+	if sgr := sgrBefore("one "); strings.Contains(sgr, ";7") {
+		t.Fatalf("text before the press in reverse video: %q", sgr)
 	}
 }
 
@@ -172,26 +268,75 @@ func TestOSC52(t *testing.T) {
 	}
 }
 
-// selDragTo : a move on the line of the press and on its message stays a
-// click; changing line or message opens the drag.
+// A drag held on the top row of the message area scrolls the view up one
+// line a tick while there is buffer above, and the range follows: the copy
+// takes the lines that came in. Held under the area, the view scrolls back
+// down to the bottom.
+func TestSelDragScrollsAtEdge(t *testing.T) {
+	u := hoverUI()
+	u.side = sideHidden
+	var out bytes.Buffer
+	u.t = term.NewOffscreen(&out, 40, 8)
+	w := u.view()
+	var want []string
+	for i := 1; i <= 20; i++ {
+		want = append(want, fmt.Sprintf("line %02d", i))
+		w.Upsert(&model.Msg{ID: i, From: "alice", FromID: 7, Date: time.Now(), Text: want[i-1]})
+	}
+	u.draw()
+	text := cellAt(t, u, "line 20") // first column of the text
+	press := text
+	press.X += len("line 20") - 1
+	u.key(term.Key{Code: term.Mouse, Mouse: press})
+	top := term.MouseEvent{X: text.X, Y: 0, Press: true, Motion: true}
+	u.selDragTo(top)
+	for range 40 {
+		u.tick()
+	}
+	if w.Scroll == 0 {
+		t.Fatal("no scroll at the top edge")
+	}
+	top.Press, top.Motion = false, false
+	u.key(term.Key{Code: term.Mouse, Mouse: top})
+	u.t.Flush()
+	if got := copied(t, out.String()); got != strings.Join(want, "\n") {
+		t.Fatalf("copied %q, want lines 01 to 20", got)
+	}
+
+	u.draw()
+	u.key(term.Key{Code: term.Mouse, Mouse: cellAt(t, u, "line 01")})
+	u.selDragTo(term.MouseEvent{X: press.X, Y: u.t.Rows - 1, Press: true, Motion: true}) // on the input line
+	for range 40 {
+		u.tick()
+	}
+	if w.Scroll != 0 {
+		t.Fatalf("scroll %d after the bottom edge, want 0", w.Scroll)
+	}
+}
+
+// selDragTo : a move inside the cell of the press stays a click; another cell
+// starts the range; a row with no item (day separator) keeps its end; under
+// the message area the last row counts; the same cell again asks no repaint.
 func TestSelDragThreshold(t *testing.T) {
 	it1, it2 := &Item{Msg: &model.Msg{ID: 1}}, &Item{Msg: &model.Msg{ID: 2}}
 	u := &UI{ws: NewWindows(), agg: &Window{}, t: &term.Term{Cols: 80, Rows: 6}}
-	u.view().Items = []*Item{it1, it2}
-	u.hits = []rowHit{{item: it1}, {item: it1}, {item: it2}}
-	u.drag, u.selAnchor, u.selY = dragText, it1, 0
+	u.hits = []rowHit{{item: it1}, {item: it1, sub: 1}, {}, {item: it2}}
+	u.drag, u.selA = dragText, selPos{it1, 0, 20}
 
-	if u.selDragTo(term.MouseEvent{X: 20, Y: 0}) || u.selEnd != nil {
-		t.Fatalf("same line, same message: %v", u.selEnd)
+	if u.selDragTo(term.MouseEvent{X: 20, Y: 0}) || u.selB.item != nil {
+		t.Fatalf("cell of the press: %+v", u.selB)
 	}
-	if !u.selDragTo(term.MouseEvent{X: 20, Y: 1}) || u.selEnd != it1 {
-		t.Fatalf("next line: %v", u.selEnd)
+	if !u.selDragTo(term.MouseEvent{X: 20, Y: 1}) || u.selB != (selPos{it1, 1, 20}) {
+		t.Fatalf("next line: %+v", u.selB)
 	}
-	if !u.selDragTo(term.MouseEvent{X: 20, Y: 2}) || u.selEnd != it2 {
-		t.Fatalf("next message: %v", u.selEnd)
+	if u.selDragTo(term.MouseEvent{X: 5, Y: 2}) || u.selB != (selPos{it1, 1, 20}) {
+		t.Fatalf("separator row: %+v", u.selB)
 	}
-	if u.selDragTo(term.MouseEvent{X: 21, Y: 2}) {
-		t.Fatal("unchanged range: no repaint")
+	if !u.selDragTo(term.MouseEvent{X: 3, Y: 9}) || u.selB != (selPos{it2, 0, 3}) {
+		t.Fatalf("under the area: %+v", u.selB)
+	}
+	if u.selDragTo(term.MouseEvent{X: 3, Y: 3}) {
+		t.Fatal("same cell: no repaint")
 	}
 }
 
@@ -388,11 +533,6 @@ func TestAskKeys(t *testing.T) {
 	}
 }
 
-// selectionText : the copy as one string, what copySel hands to the clipboard.
-func selectionText(items []*Item, a, b *Item) string {
-	return strings.Join(selBlocks(items, a, b), "\n")
-}
-
 // TestClickRevealsDeleted : a click on a deleted message shows its content,
 // the next click hides it again.
 func TestClickRevealsDeleted(t *testing.T) {
@@ -401,7 +541,7 @@ func TestClickRevealsDeleted(t *testing.T) {
 	w.Upsert(&model.Msg{ID: 1, From: "alice", FromID: 7, Text: "oups", Deleted: true})
 	it := w.Items[0]
 	for _, want := range []bool{true, false} {
-		u.drag, u.selAnchor, u.selEnd = dragText, it, nil
+		u.drag, u.selA = dragText, selPos{item: it}
 		u.selRelease()
 		if it.Reveal != want {
 			t.Fatalf("after a click: reveal %v, want %v", it.Reveal, want)

@@ -3,6 +3,7 @@ package tgc
 import (
 	"cmp"
 	"context"
+	"io"
 	"os"
 	"path/filepath"
 
@@ -16,6 +17,7 @@ import (
 // Download downloads m.Loc to path (3 in parallel at most). A file already there = success at once.
 func (c *Client) Download(ctx context.Context, m *model.Media, path string) {
 	loc, ok := m.Loc.(tg.InputFileLocationClass)
+	p := &model.Progress{Poster: c.Poster, Media: m, Total: m.Size}
 	go func() {
 		defer c.Guard("Download", func(err string) { c.Post(model.EvDownloaded{Media: m, Err: err}) })
 		select {
@@ -51,7 +53,7 @@ func (c *Client) Download(ctx context.Context, m *model.Media, path string) {
 			c.Post(model.EvDownloaded{Media: m, Err: i18n.T("media_foreign")})
 			return
 		}
-		_, derr := c.dl.Download(c.api, loc).Parallel(ctx, f)
+		_, derr := c.dl.Download(c.api, loc).Parallel(ctx, countedAt{f, p})
 		cerr := f.Close()
 		if derr != nil || cerr != nil {
 			os.Remove(tmp)
@@ -65,6 +67,18 @@ func (c *Client) Download(ctx context.Context, m *model.Media, path string) {
 		}
 		c.Post(model.EvDownloaded{Media: m, Path: path})
 	}()
+}
+
+// countedAt : the file of a parallel download, counting what its parts write.
+type countedAt struct {
+	io.WriterAt
+	p *model.Progress
+}
+
+func (w countedAt) WriteAt(b []byte, off int64) (int, error) {
+	n, err := w.WriterAt.WriteAt(b, off)
+	w.p.Add(n)
+	return n, err
 }
 
 // DownloadMap gets the OSM map of m (Lat/Long); there is no Telegram Loc — an

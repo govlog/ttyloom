@@ -15,6 +15,14 @@ func testNames(id uint64) string {
 	return ""
 }
 
+// channels of the test: 99 is known, everything else is not.
+func testChans(id uint64) string {
+	if id == 99 {
+		return "general"
+	}
+	return ""
+}
+
 // parse: the markers leave the text and become spans over what is left,
 // offsets in runes.
 func TestParse(t *testing.T) {
@@ -36,7 +44,8 @@ func TestParse(t *testing.T) {
 		{"pre without lang", "x ```\ncode\n```", "x code", []model.Span{{Start: 2, End: 6, Kind: model.SpanPre}}},
 		{"mention", "x <@42> y", "x @bob y", []model.Span{{Start: 2, End: 6, Kind: model.SpanMention, UserID: 42}}},
 		{"mention unknown", "<@!7>", "@7", []model.Span{{Start: 0, End: 2, Kind: model.SpanMention, UserID: 7}}},
-		{"channel has no span", "see <#99> now", "see #99 now", nil},
+		{"channel resolved has no span", "see <#99> now", "see #general now", nil},
+		{"channel unknown keeps the id", "<#7> x", "#7 x", nil},
 		{"role mention stays text", "<@&5> hi", "<@&5> hi", nil},
 		{"custom emoji", "hi <:emoji_7:1488279885599473847>", "hi :emoji_7:", nil},
 		{"animated custom emoji", "<a:wave:12> x", ":wave: x", nil},
@@ -64,7 +73,7 @@ func TestParse(t *testing.T) {
 		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			text, spans := parse(tc.md, testNames)
+			text, spans := parse(tc.md, testNames, testChans)
 			if text != tc.text {
 				t.Fatalf("text: %q, want %q", text, tc.text)
 			}
@@ -78,7 +87,7 @@ func TestParse(t *testing.T) {
 // Without a resolver a mention falls back on the id, and the span still
 // carries it.
 func TestParseNilNames(t *testing.T) {
-	text, spans := parse("<@42> hi", nil)
+	text, spans := parse("<@42> hi", nil, nil)
 	want := []model.Span{{Start: 0, End: 3, Kind: model.SpanMention, UserID: 42}}
 	if text != "@42 hi" || !slices.Equal(spans, want) {
 		t.Fatalf("nil names: %q %+v", text, spans)
@@ -93,7 +102,7 @@ func TestRenderRoundTrip(t *testing.T) {
 	if md != "a\n```go\ncode\nmore\n```\n*c*" {
 		t.Fatalf("render: %q", md)
 	}
-	text, spans := parse(md, nil)
+	text, spans := parse(md, nil, nil)
 	if text != "a\ncode\nmore\nc" {
 		t.Fatalf("round trip text: %q", text)
 	}

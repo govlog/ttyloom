@@ -85,7 +85,7 @@ func TestKlipyPreviewDownload(t *testing.T) {
 	defer srv.Close()
 	useTestCDN(t, srv.URL)
 	path := filepath.Join(t.TempDir(), "preview.mp4")
-	if err := fetch(context.Background(), string(gs[0].Preview.Loc.(fileURL)), path, 100); err != nil {
+	if err := fetch(context.Background(), string(gs[0].Preview.Loc.(fileURL)), path, 100, nil); err != nil {
 		t.Fatalf("KLIPY preview (with redirect) refused: %v", err)
 	}
 	if b, err := os.ReadFile(path); err != nil || string(b) != "preview bytes" {

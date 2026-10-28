@@ -14,7 +14,7 @@ import (
 // old keys folded ASCII only.
 func (u *UI) rekeyChats(net string, idFor func(string) int64) {
 	u.bgWait.Wait()
-	aliasesChanged, mutedChanged := false, false
+	aliasesChanged, mutedChanged, notesChanged := false, false, false
 	for _, c := range slices.Collect(maps.Values(u.chats)) {
 		if c.Net != net {
 			continue
@@ -96,6 +96,13 @@ func (u *UI) rekeyChats(net string, idFor func(string) int64) {
 			delete(u.muted, old)
 			u.muted[key], mutedChanged = true, true
 		}
+		if note := u.notes[old]; note != "" {
+			if u.notes[key] == "" {
+				u.notes[key] = note
+			}
+			delete(u.notes, old)
+			notesChanged = true
+		}
 		u.dialogsDirty = true
 	}
 	listed := map[model.ChatKey]bool{}
@@ -135,5 +142,8 @@ func (u *UI) rekeyChats(net string, idFor func(string) int64) {
 	}
 	if mutedChanged {
 		_ = saveMuted(mutedPath(), u.muted)
+	}
+	if notesChanged {
+		_ = saveNotes(notesPath(), u.notes)
 	}
 }
