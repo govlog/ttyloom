@@ -10,6 +10,8 @@
 <a href="docs/guide.md">Full manual</a> · <a href="docs/authentication.md">Account setup</a>
 </p>
 
+<p align="center"><sub>Fully vibe-coded: the code, the tests and the documentation were written by <a href="https://claude.com/claude-code">Claude Code</a>.</sub></p>
+
 ![TTYloom: Telegram messages, Discord channels, replies, reactions, an inline GIF and one tab per network](docs/screenshots/main.svg)
 
 ## Why “TTYloom”?
@@ -296,6 +298,8 @@ See the [changelog](CHANGELOG.md), [full manual](docs/guide.md) and [TODO](TODO.
 To prepare another release, follow the [release instructions](docs/releases.md). Tagged versions build Linux archives, checksums and matching source in GitHub Actions, then create a draft release for review.
 
 ## Licenses and credits
+
+TTYloom is fully vibe-coded. Main author: Claude ([Claude Code](https://claude.com/claude-code), by Anthropic), under the direction of Christopher Amiaud.
 
 TTYloom’s original code, documentation and artwork are [MIT licensed](LICENSE.md). Third-party components retain their own licenses; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for dependency versions, license texts, copied code, Unicode data and native-library requirements.
 
