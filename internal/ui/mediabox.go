@@ -116,12 +116,14 @@ func (u *UI) mediaResult(e model.EvMedia) {
 	}
 	n := len(b.items)
 	for _, it := range e.Items {
-		if b.seen[it.Msg.ID] {
+		if b.seen[it.Msg.ID] { // listed by a page before
 			continue
 		}
-		b.seen[it.Msg.ID] = true
 		b.items = append(b.items, it)
 		b.pics = append(b.pics, u.cellPicture(&b.items[len(b.items)-1]))
+	}
+	for _, it := range e.Items { // after the page: the cells of one message all stay
+		b.seen[it.Msg.ID] = true
 	}
 	b.next, b.g.n = e.Next, len(b.items)
 	if len(b.items) == n {
@@ -226,7 +228,8 @@ func (u *UI) mboxNav(cur *model.Msg, d int) *model.Msg {
 	if b == nil {
 		return nil
 	}
-	i := slices.IndexFunc(b.items, func(it model.MediaItem) bool { return it.Msg.ID == cur.ID })
+	// The cells of one message share its id: the media tells them apart.
+	i := slices.IndexFunc(b.items, func(it model.MediaItem) bool { return it.Msg.ID == cur.ID && it.Msg.Media == cur.Media })
 	if i < 0 {
 		return nil
 	}

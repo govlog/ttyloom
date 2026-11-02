@@ -71,7 +71,7 @@ func (u *UI) selKey(w *Window, r rune) bool {
 	case r == 's' && act && render.Stoppable(m.Media):
 		u.stopVideo(m.Media)
 	case r == 'e' && act && u.own(m):
-		u.startEdit(it)
+		u.startEdit(w.msgItem(it))
 	case r == 'd' && act && u.own(m) && u.capsOf(m).Delete:
 		u.confirm(i18n.T("confirm_delete_message", m.ID), func() {
 			c := u.chatOf(m)
@@ -363,6 +363,9 @@ func (u *UI) info(e model.EvInfo) {
 		if it.Msg == nil || it.Msg.ID != e.ID || it.Msg.Key() != key {
 			continue
 		}
+		for i+1 < len(w.Items) && w.Items[i+1].part {
+			i++ // below the parts: syncParts drops a part cut from its message
+		}
 		items := make([]*Item, 0, len(e.Lines))
 		for _, l := range e.Lines {
 			items = append(items, &Item{Sys: l, Info: true})
@@ -545,7 +548,7 @@ func (u *UI) edited(e model.EvEdited) {
 			it.Msg.Pending, it.Msg.Err, it.lines = false, e.Err, nil
 			it.Msg.LiveAt = time.Now()
 			found = true
-			if w == view {
+			if w == view && !it.part {
 				cur = it
 			}
 		}
@@ -802,9 +805,10 @@ func lastOwn(w *Window, own func(*model.Msg) bool) *Item {
 	return nil
 }
 
-// editable : a message of mine that can still be changed, and that is drawn.
+// editable : a message of mine that can still be changed, and that is drawn
+// — the message, not one of its parts: Ctrl+↑ walks messages.
 func editable(w *Window, it *Item, own func(*model.Msg) bool) bool {
-	return selectable(it) && w.shown(it) && render.Actionable(it.Msg) && own(it.Msg)
+	return selectable(it) && !it.part && w.shown(it) && render.Actionable(it.Msg) && own(it.Msg)
 }
 
 // editStep : Ctrl+↑ / Ctrl+↓ — walks my messages in edit mode. From an empty

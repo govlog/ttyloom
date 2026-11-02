@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"context"
+	"fmt"
 	"github.com/govlog/ttyloom/internal/config"
 	"github.com/govlog/ttyloom/internal/term"
 	"slices"
@@ -320,8 +322,11 @@ func TestMsgMenuHover(t *testing.T) {
 
 // Ctrl+↑ / Ctrl+↓: my messages in edit mode, from the last one up, then down
 // again; past the newest the edit is left, input emptied. A draft is kept.
+// The pictures of a message are not steps of their own.
 func TestEditStep(t *testing.T) {
 	u, _, w := msgUI(t)
+	w.Upsert(&model.Msg{Net: netTelegram, ChatID: 5, ID: 3, Date: w.Items[2].Msg.Date, From: "moi", Out: true, Text: "trois",
+		Media: &model.Media{Kind: model.MediaPhoto, Label: "[photo a]"}, More: []*model.Media{{Kind: model.MediaPhoto, Label: "[photo b]"}}})
 	u.ed.Set("brouillon")
 	u.editStep(w, -1)
 	if u.edit != nil || u.ed.String() != "brouillon" {
@@ -347,6 +352,40 @@ func TestEditStep(t *testing.T) {
 	u.editStep(w, 1)
 	if u.edit != nil || u.ed.String() != "" || w.Sel != nil {
 		t.Fatalf("past the newest: edit %v input %q sel %v", u.edit, u.ed.String(), w.Sel)
+	}
+}
+
+// editBackend : records each Edit, "<id>:<text>".
+type editBackend struct {
+	*fakeBackend
+	edits []string
+}
+
+func (b *editBackend) Edit(_ context.Context, _ *model.Chat, id int, text string) {
+	b.edits = append(b.edits, fmt.Sprintf("%d:%s", id, text))
+}
+
+// An edit started on a picture of my message edits the message: the network
+// gets its id, and "… " shows in front of its text while the edit is in
+// flight.
+func TestEditFromAttachmentPending(t *testing.T) {
+	u, fb := gifUI()
+	b := &editBackend{fakeBackend: fb}
+	u.nets[netTelegram] = b
+	u.ws.Cur = 1
+	w := u.ws.List[1]
+	m := album(1)
+	m.Out = true
+	w.Upsert(m)
+	u.setSel(w, w.Items[len(w.Items)-1]) // picture c
+	u.selKey(w, 'e')
+	u.ed.Set("new text")
+	u.submit()
+	if len(b.edits) != 1 || b.edits[0] != "1:new text" {
+		t.Fatalf("Edit calls %v, want [1:new text]", b.edits)
+	}
+	if text := viewText(u, w); !strings.Contains(text, "… look") {
+		t.Fatalf("no \"… \" in front of the text while the edit is in flight:\n%s", text)
 	}
 }
 

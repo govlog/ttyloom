@@ -322,6 +322,60 @@ func TestStopReleasesPartialFrames(t *testing.T) {
 	}
 }
 
+// Each picture of a message downloads to a file of its own: the network gives
+// the lead back at once on a file already there, so one name for the message
+// would show its first picture three times. The first keeps the name a single
+// media has always had, so the files already downloaded still match.
+func TestAttachmentsDownloadApart(t *testing.T) {
+	u, b := gifUI()
+	u.cfg.AutoMediaMaxKB = 1
+	m := album(1)
+	u.ws.List[1].Upsert(m)
+	u.goTo(1)
+	files := map[string]bool{}
+	for _, p := range b.downloads {
+		files[p] = true
+	}
+	if len(b.downloads) != 3 || len(files) != 3 {
+		t.Fatalf("downloads %v, want one file per picture (3)", b.downloads)
+	}
+	if want := media.FileName(m.Key(), "Alice", m.ID, m.Date, ".jpg"); filepath.Base(b.downloads[0]) != want {
+		t.Fatalf("first picture to %s, want the name of a single media %s", b.downloads[0], want)
+	}
+}
+
+// An edit that removes a picture from a message keeps the file of each other
+// picture: shown again after its frames were freed, the next one loads its
+// own file, not the file of the picture removed.
+func TestAttachmentKeepsItsFileAfterEdit(t *testing.T) {
+	u, b := gifUI()
+	u.cfg.AutoMediaMaxKB = 1
+	w := u.ws.List[1]
+	m := album(1)
+	w.Upsert(m)
+	u.goTo(1)
+	if len(b.downloads) != 3 {
+		t.Fatalf("downloads %v, want one per picture (3)", b.downloads)
+	}
+	for i, md := range []*model.Media{m.Media, m.More[0], m.More[1]} {
+		md.Path, md.State, md.Frames = b.downloads[i], model.MediaReady, [][]byte{{1}} // the fake Download records the path only
+	}
+	c, own, gone := m.More[1], b.downloads[2], b.downloads[1]
+	edit := album(1)
+	edit.More = edit.More[1:] // the sender removes picture b
+	u.dispatch(model.Envelope{Net: netTelegram, Ev: model.EvEditMessage{Msg: *edit}})
+	u.dropFrames(c) // framesBudget
+	viewText(u, w)  // a frame: the part takes its message again
+	last := w.Items[len(w.Items)-1]
+	if last.Msg.Media != c {
+		t.Fatalf("last line of the window: %+v, want picture c", last.Msg.Media)
+	}
+	u.showItem(last)
+	if len(b.downloads) != 4 || b.downloads[3] != own {
+		t.Fatalf("c shown again: downloads %v, want its own file %s, not %s of picture b", b.downloads[3:], filepath.Base(own), filepath.Base(gone))
+	}
+}
+
 // The avatar file lives under its network: ids collide between networks, and
 // "file already there" would otherwise hand one network the photo of another.
 func TestAvatarPathPerNet(t *testing.T) {

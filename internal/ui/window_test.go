@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -406,5 +407,197 @@ func TestHideBacklog(t *testing.T) {
 	w.AddSys("fresh")
 	if lines, _ := w.Visible(o); len(lines) != 1 || w.hidden != nil {
 		t.Fatalf("after /clear: %d lines, hidden=%v", len(lines), w.hidden)
+	}
+}
+
+// Ctrl+L right after a message with several pictures hides them all, and the
+// screen stays clear when that message is then deleted, as with a message of
+// one picture.
+func TestClearKeepsAlbumHidden(t *testing.T) {
+	u, _ := gifUI()
+	u.ws.Cur = 1
+	w := u.ws.List[1]
+	w.AddSys("old line")
+	u.dispatch(model.Envelope{Net: netTelegram, Ev: model.EvNewMessage{Msg: *album(1), Chat: w.Chat}})
+	w.HideBacklog()
+	if lines, _ := w.Visible(u.optsFor(w)); len(lines) != 0 {
+		t.Fatalf("after Ctrl+L: %d lines", len(lines))
+	}
+	u.dispatch(model.Envelope{Net: netTelegram, Ev: model.EvDeleted{ChatID: 1, IDs: []int{1}}})
+	if lines, _ := w.Visible(u.optsFor(w)); len(lines) != 0 {
+		t.Fatalf("after the delete: %d lines back, want the screen still clear", len(lines))
+	}
+}
+
+// album : one message with three pictures (Media, then More), as Discord
+// gives several photos sent at once; labels "[photo a]" to "[photo c]".
+func album(id int) *model.Msg {
+	m := &model.Msg{Net: netTelegram, ChatID: 1, ID: id, From: "bob", Text: "look",
+		Date: time.Date(2026, 10, 30, 12, 0, 0, 0, time.Local)}
+	for _, n := range []string{"a", "b", "c"} {
+		md := &model.Media{Kind: model.MediaPhoto, Label: "[photo " + n + "]", Name: n + ".jpg",
+			Mime: "image/jpeg", Ext: ".jpg", Loc: n, Size: 100, W: 10, H: 10}
+		if m.Media == nil {
+			m.Media = md
+		} else {
+			m.More = append(m.More, md)
+		}
+	}
+	return m
+}
+
+// shownText : the drawing of w with images off, as the screen reads it.
+func shownText(w *Window) string {
+	var sb strings.Builder
+	for _, l := range w.Lines(render.Opts{Width: 80, Theme: theme.Terminal(), Images: "off"}) {
+		sb.WriteString(render.LineText(l) + "\n")
+	}
+	return sb.String()
+}
+
+// onceEach fails unless each of want shows exactly once in text.
+func onceEach(t *testing.T, where, text string, want ...string) {
+	t.Helper()
+	for _, s := range want {
+		if n := strings.Count(text, s); n != 1 {
+			t.Fatalf("%s: %q shown %d times, want once:\n%s", where, s, n, text)
+		}
+	}
+}
+
+// Several photos sent at once are one message: the window shows the label of
+// each under it, and the author, the quote, the text and the reactions once.
+func TestWindowShowsEveryAttachment(t *testing.T) {
+	m := album(1)
+	m.Reply = &model.Quote{ID: 5, From: "eve", Text: "pics?"}
+	m.Reactions = []model.Reaction{{Emoji: "🔥", Count: 2}}
+	w := &Window{}
+	w.Upsert(m)
+	onceEach(t, "window", shownText(w), "<bob>", "eve: pics?", "look", "🔥 2", "[photo a]", "[photo b]", "[photo c]")
+}
+
+// An edit of the text, then a page of history with the message edited once
+// more, leave each picture of the message once under the newest text, in the
+// window of the chat and in the aggregate; the pictures already loaded stay
+// loaded.
+func TestAttachmentsOnceAfterEdit(t *testing.T) {
+	u, _ := gifUI()
+	w := u.ws.List[1]
+	m := album(1)
+	loaded := append([]*model.Media{m.Media}, m.More...)
+	for _, md := range loaded {
+		md.State = model.MediaReady
+	}
+	u.dispatch(model.Envelope{Net: netTelegram, Ev: model.EvNewMessage{Msg: *m, Chat: w.Chat}})
+	shows := func(text, gone string) {
+		t.Helper()
+		for _, v := range []*Window{w, u.agg} {
+			got := viewText(u, v)
+			onceEach(t, v.Name(), got, text, "[photo a]", "[photo b]", "[photo c]")
+			if strings.Contains(got, gone) {
+				t.Fatalf("%s: %q still shows:\n%s", v.Name(), gone, got)
+			}
+		}
+	}
+	edit := album(1)
+	edit.Text = "edited once"
+	u.dispatch(model.Envelope{Net: netTelegram, Ev: model.EvEditMessage{Msg: *edit}})
+	shows("edited once", "look")
+	page := album(1)
+	page.Text = "edited twice"
+	u.dispatch(model.Envelope{Net: netTelegram, Ev: model.EvHistory{ChatID: 1, Msgs: []model.Msg{*page}}})
+	shows("edited twice", "edited once")
+	for _, v := range []*Window{w, u.agg} {
+		var shown []*model.Media
+		for _, it := range v.Items {
+			if it.Msg != nil && it.Msg.Media != nil {
+				shown = append(shown, it.Msg.Media)
+			}
+		}
+		if !slices.Equal(shown, loaded) {
+			t.Fatalf("%s: media %v shown, want the loaded ones %v", v.Name(), shown, loaded)
+		}
+	}
+}
+
+// A deleted message hides its pictures with its text, in the window of the
+// chat and in the aggregate.
+func TestAttachmentsHiddenWithDeletedMessage(t *testing.T) {
+	u, _ := gifUI()
+	w := u.ws.List[1]
+	u.dispatch(model.Envelope{Net: netTelegram, Ev: model.EvNewMessage{Msg: *album(1), Chat: w.Chat}})
+	labels := []string{"[photo a]", "[photo b]", "[photo c]"}
+	for _, v := range []*Window{w, u.agg} {
+		onceEach(t, v.Name()+" before the delete", viewText(u, v), labels...)
+	}
+	u.dispatch(model.Envelope{Net: netTelegram, Ev: model.EvDeleted{ChatID: 1, IDs: []int{1}}})
+	for _, v := range []*Window{w, u.agg} {
+		if text := viewText(u, v); strings.Contains(text, "[photo") {
+			t.Fatalf("%s: a picture of the deleted message still shows:\n%s", v.Name(), text)
+		}
+	}
+}
+
+// A message cut by the cap of the window takes its pictures with it: none is
+// left at the top without its message.
+func TestTrimTakesAttachments(t *testing.T) {
+	w := &Window{max: 4}
+	w.Upsert(album(1)) // the message and its two parts: 3 items
+	w.AddSys("one")
+	w.AddSys("two") // 5 items: the message goes
+	if text := shownText(w); strings.Contains(text, "[photo") {
+		t.Fatalf("a picture outlived its message:\n%s", text)
+	}
+}
+
+// The lines of "i" go under the pictures of the message, not between the
+// message and them.
+func TestInfoUnderAttachments(t *testing.T) {
+	u, _ := gifUI()
+	u.ws.Cur = 1
+	w := u.ws.List[1]
+	w.Upsert(album(1))
+	u.dispatch(model.Envelope{Net: netTelegram, Ev: model.EvInfo{ChatID: 1, ID: 1, Lines: []string{"sent at noon"}}})
+	text := viewText(u, w)
+	if i, c := strings.Index(text, "sent at noon"), strings.Index(text, "[photo c]"); i < 0 || c < 0 || i < c {
+		t.Fatalf("info lines not under the last picture:\n%s", text)
+	}
+}
+
+// A /search result that holds a message the window already has shows its
+// pictures once each: the ones the window already loaded.
+func TestSearchKeepsAttachments(t *testing.T) {
+	u, _ := gifUI()
+	w := u.ws.List[1]
+	m := album(1)
+	loaded := append([]*model.Media{m.Media}, m.More...)
+	w.Upsert(m)
+	u.dispatch(model.Envelope{Net: netTelegram, Ev: model.EvSearch{ChatID: 1, Query: "look", Msgs: []model.Msg{*album(1)}}})
+	found := u.ws.List[len(u.ws.List)-1]
+	var shown []*model.Media
+	for _, it := range found.Items {
+		if it.Msg != nil && it.Msg.Media != nil {
+			shown = append(shown, it.Msg.Media)
+		}
+	}
+	if found.Search == "" || !slices.Equal(shown, loaded) {
+		t.Fatalf("search result %q shows media %v, want the window's %v", found.Search, shown, loaded)
+	}
+}
+
+// A picture selected on its own acts on its whole message: the network gets
+// the id of the message.
+func TestAttachmentActsOnMessage(t *testing.T) {
+	u, b := gifUI()
+	w := u.ws.List[1]
+	w.Upsert(album(7))
+	last := w.Items[len(w.Items)-1]
+	if last.Msg.Media == nil || last.Msg.Media.Label != "[photo c]" {
+		t.Fatalf("last line of the window: %+v, want the third picture", last.Msg.Media)
+	}
+	u.setSel(w, last)
+	u.selKey(w, 'n')
+	if len(b.pins) != 1 || b.pins[0] != "7:true" {
+		t.Fatalf("Pin calls: %v, want [7:true]", b.pins)
 	}
 }

@@ -44,9 +44,9 @@ func (c *Client) msgOf(m *discord.Message) model.Msg {
 		Out:     int64(m.Author.ID) == c.self.Load(),
 		Edited:  m.EditedTimestamp.IsValid(),
 		Pinned:  m.Pinned,
-		Media:   mediaOf(body),
 		FwdFrom: fwd,
 	}
+	msg.Media, msg.More = mediaOf(body)
 	if u := m.Author.AvatarURL(); u != "" {
 		msg.FromPhoto = fileURL(u)
 	}
@@ -161,21 +161,30 @@ func emojiOf(e discord.Emoji) string {
 	return e.Name
 }
 
-// mediaOf : the first attachment, or failing that the first embed that has a
-// link. Discord takes several of each, the UI shows one media per message.
-func mediaOf(m *discord.Message) *model.Media {
+// mediaOf : every attachment, in the order sent (several photos sent at once
+// from the phone are one message): the first as Media, the others as More.
+// With none, the first embed that has a link.
+//
+// ponytail: one link preview per message — several embeds (a tweet with
+// several pictures) show the first. Walk the embeds like the attachments if
+// that ever matters.
+func mediaOf(m *discord.Message) (*model.Media, []*model.Media) {
 	if len(m.Attachments) > 0 {
-		return attachMedia(m.Attachments[0])
+		var more []*model.Media
+		for _, a := range m.Attachments[1:] {
+			more = append(more, attachMedia(a))
+		}
+		return attachMedia(m.Attachments[0]), more
 	}
 	for _, e := range m.Embeds {
 		if md := gifvMedia(e); md != nil {
-			return md
+			return md, nil
 		}
 		if e.URL != "" {
-			return embedMedia(e)
+			return embedMedia(e), nil
 		}
 	}
-	return nil
+	return nil, nil
 }
 
 // gifvMedia : a Tenor or Giphy link unfurled by Discord (what SendGif posts)

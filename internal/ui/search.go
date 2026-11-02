@@ -188,7 +188,7 @@ const searchLimit = 50
 func reuseMsgs(origin *Window, msgs []model.Msg, started ...time.Time) []*model.Msg {
 	have := make(map[int]*model.Msg, len(origin.Items))
 	for _, it := range origin.Items {
-		if it.Msg != nil && it.Msg.ID != 0 {
+		if it.Msg != nil && it.Msg.ID != 0 && !it.part {
 			have[it.Msg.ID] = it.Msg
 		}
 	}
@@ -227,6 +227,7 @@ func (u *UI) searchResult(e model.EvSearch) {
 	msgs := reuseMsgs(origin, e.Msgs, e.Started)
 	w.Merge(msgs)
 	for _, v := range u.viewsOf(origin.Chat.Key()) { // the messages reconciled show there: drawn again
+		v.syncParts() // their More may have changed
 		v.Invalidate()
 	}
 	for _, m := range msgs {

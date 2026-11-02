@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **Every attachment of a Discord message shows**: several photos sent at once (from the phone app, say) are one Discord message, and only the first one showed. Each attachment now shows under the message with its own label and picture, and works like any media: it downloads to a file of its own, plays, opens in the viewer (`v`, a click, ←/→) and with `o`, and stays after a restart. Alt+↑/↓ or a click selects one; edit, delete, reply, react and pin act on the whole message. The media browser (Ctrl+M) gives each attachment a cell of its own. A message already in the disk cache gets its other attachments when Discord sends it again (the recent history of a conversation, when it opens). A message with several link previews still shows the first.
+
 ## v0.16-beta — 2026-10-28
 
 ### Added

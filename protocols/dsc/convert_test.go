@@ -113,6 +113,27 @@ func TestMsgOfForward(t *testing.T) {
 	}
 }
 
+// Several photos sent at once (the phone app) come as one message with one
+// attachment each: every one is a media of the message, in the order sent.
+func TestMsgOfAttachments(t *testing.T) {
+	var as []discord.Attachment
+	for _, n := range []string{"a.jpg", "b.jpg", "c.jpg"} {
+		as = append(as, discord.Attachment{Filename: n, ContentType: "image/jpeg", Size: 2048,
+			Width: 640, Height: 480, URL: "https://cdn.discordapp.com/attachments/1/2/" + n})
+	}
+	got := (&Client{}).msgOf(&discord.Message{ID: msgID(10), ChannelID: 55,
+		Author: discord.User{ID: 42, Username: "bob"}, Attachments: as})
+	mds := append([]*model.Media{got.Media}, got.More...)
+	if len(mds) != len(as) {
+		t.Fatalf("%d media, want one per attachment (%d)", len(mds), len(as))
+	}
+	for i, md := range mds {
+		if md == nil || md.Kind != model.MediaPhoto || md.Name != as[i].Filename || md.Loc != fileURL(as[i].URL) {
+			t.Fatalf("media %d = %+v, want the photo %s", i, md, as[i].Filename)
+		}
+	}
+}
+
 // A message received from someone else is not Out, and its lone embed becomes
 // the link preview — no attachment, so nothing to download.
 func TestMsgOfEmbed(t *testing.T) {

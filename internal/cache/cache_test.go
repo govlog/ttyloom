@@ -200,6 +200,33 @@ func TestSaveHistoryResetsFullVariant(t *testing.T) {
 	}
 }
 
+// The other media of a message (Msg.More) are saved like the media of the
+// line: handle and path kept, runtime state reset, the caller's copies
+// untouched.
+func TestSaveHistoryResetsMore(t *testing.T) {
+	c := New(t.TempDir(), 10)
+	more := &model.Media{Kind: model.MediaPhoto, Loc: &tg.InputPhotoFileLocation{ID: 43},
+		Path: "/dl/b.jpg", State: model.MediaReady, Frames: [][]byte{{1}}, KittyID: 3}
+	msg := model.Msg{ID: 1, ChatID: 100, Media: &model.Media{Kind: model.MediaPhoto}, More: []*model.Media{more}}
+	if err := c.SaveHistory(100, []model.Msg{msg}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := c.LoadHistory(100)
+	if err != nil || len(got) != 1 || len(got[0].More) != 1 {
+		t.Fatalf("%v, %+v", err, got)
+	}
+	gm := got[0].More[0]
+	if gm.Path != "/dl/b.jpg" || gm.State != model.MediaNone || gm.Frames != nil || gm.KittyID != 0 {
+		t.Fatalf("More read back: %+v", gm)
+	}
+	if loc, ok := gm.Loc.(*tg.InputPhotoFileLocation); !ok || loc.ID != 43 {
+		t.Fatalf("More loc read back: %#v", gm.Loc)
+	}
+	if msg.More[0] != more || more.State != model.MediaReady || more.Frames == nil || more.KittyID != 3 {
+		t.Fatalf("caller's More mutated: %+v", msg.More[0])
+	}
+}
+
 // A file of an older format that still decodes: read as a cache when the
 // files are the only copy (KeepOld), read as no cache at all otherwise.
 func TestLoadHistoryOlderVersion(t *testing.T) {

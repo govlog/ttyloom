@@ -79,6 +79,33 @@ func TestMediaBox(t *testing.T) {
 	}
 }
 
+// The pictures of one message each take a cell of the box, and the arrows of
+// the preview opened from it step through them, the current cell following.
+func TestMediaBoxCellPerAttachment(t *testing.T) {
+	u, fb := gifUI()
+	u.nets[netTelegram] = &mediaBackend{fakeBackend: fb}
+	u.ws.Cur = 1
+	u.openMediaBox("")
+	m := album(7)
+	var items []model.MediaItem
+	for _, md := range append([]*model.Media{m.Media}, m.More...) {
+		cell := *m
+		cell.Media = md
+		items = append(items, model.MediaItem{Msg: cell})
+	}
+	u.dispatch(model.Envelope{Net: netTelegram, Ev: model.EvMedia{ChatID: 1, Filter: model.TabMedia, Items: items}})
+	if len(u.mbox.items) != len(items) {
+		t.Fatalf("%d cells, want one per picture (%d)", len(u.mbox.items), len(items))
+	}
+	u.mboxKey(term.Key{Code: term.Enter})
+	for i := 1; i < len(items); i++ {
+		u.viewerKey(term.Key{Code: term.Right})
+		if u.viewer == nil || u.viewer.msg.Media != items[i].Msg.Media || u.mbox.g.cur != i {
+			t.Fatalf("→ %d: preview open %v, cell %d; want picture %d and its cell", i, u.viewer != nil, u.mbox.g.cur, i)
+		}
+	}
+}
+
 // A network with no media search (IRC) says so and opens nothing.
 func TestMediaBoxUnsupported(t *testing.T) {
 	u, _ := gifUI()

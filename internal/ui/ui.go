@@ -1658,6 +1658,7 @@ func (u *UI) history(e model.EvHistory) {
 	// messages Merge refreshed in place are drawn again, in each view that
 	// shares them (aggregate, /search results).
 	for _, v := range u.viewsOf(key) {
+		v.syncParts() // a More changed by a reconcile in place shows in each view
 		for _, it := range v.Items {
 			if it.Msg != nil && ids[it.Msg.ID] && it.Msg.Key() == key {
 				it.Invalidate()

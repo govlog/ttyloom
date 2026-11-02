@@ -108,9 +108,16 @@ func stampMsg(net string, m *model.Msg) {
 	m.Date = m.Date.Local() // IRC server-time comes in UTC: the clock and the day separators are local
 	m.Text, m.Service = render.Clean(m.Text), render.Clean(m.Service)
 	m.From, m.ChatLabel = render.CleanLine(m.From), render.CleanLine(m.ChatLabel)
-	if md := m.Media; md != nil {
-		md.Label, md.Name, md.Err = render.CleanLine(md.Label), render.Clean(md.Name), render.CleanLine(md.Err)
+	if m.Media != nil {
+		cleanMedia(m.Media)
 	}
+	for _, md := range m.More { // each is drawn like Media: the same cleaning
+		cleanMedia(md)
+	}
+}
+
+func cleanMedia(md *model.Media) {
+	md.Label, md.Name, md.Err = render.CleanLine(md.Label), render.Clean(md.Name), render.CleanLine(md.Err)
 }
 
 func stampMsgs(net string, ms []model.Msg) {

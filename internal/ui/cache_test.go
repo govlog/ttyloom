@@ -46,7 +46,8 @@ func TestWindowMsgs(t *testing.T) {
 	w := &Window{}
 	w.AddSys("ligne système")
 	m := &model.Msg{ID: 7, Text: "salut", Media: &model.Media{
-		Label: "[photo]", Frames: [][]byte{{1, 2}}, State: model.MediaReady}}
+		Label: "[photo]", Frames: [][]byte{{1, 2}}, State: model.MediaReady},
+		More: []*model.Media{{Label: "[photo 2]", Frames: [][]byte{{3}}, State: model.MediaReady}}}
 	w.Upsert(m)
 	w.Upsert(&model.Msg{TmpID: 1, Text: "en attente"}) // never confirmed: outside the cache
 
@@ -57,14 +58,34 @@ func TestWindowMsgs(t *testing.T) {
 	if msgs[0].Media == m.Media {
 		t.Fatal("Media shared with the item")
 	}
-	if msgs[0].Media.Frames != nil {
+	if len(msgs[0].More) != 1 || msgs[0].More[0] == m.More[0] {
+		t.Fatalf("More shared with the item: %v", msgs[0].More)
+	}
+	if msgs[0].Media.Frames != nil || msgs[0].More[0].Frames != nil {
 		t.Fatal("frames copied into the cache")
 	}
 	msgs[0].Text = "modifié"
 	msgs[0].Media.Label = "modifié"
-	if m.Text != "salut" || m.Media.Label != "[photo]" || len(m.Media.Frames) != 1 {
-		t.Fatalf("the item followed the copy: %+v %+v", m, m.Media)
+	msgs[0].More[0].Label = "modifié"
+	if m.Text != "salut" || m.Media.Label != "[photo]" || len(m.Media.Frames) != 1 ||
+		m.More[0].Label != "[photo 2]" || len(m.More[0].Frames) != 1 {
+		t.Fatalf("the item followed the copy: %+v %+v %+v", m, m.Media, m.More[0])
 	}
+}
+
+// The pictures of a message come back with it from the disk cache (a
+// restart), each once.
+func TestAttachmentsSurviveCache(t *testing.T) {
+	c := cache.New(t.TempDir(), 20)
+	w := &Window{}
+	w.Upsert(album(1))
+	if err := c.SaveHistory(1, w.Msgs()); err != nil {
+		t.Fatal(err)
+	}
+	u := newCacheUI(t, c)
+	back := u.ws.New(true)
+	u.bindChat(back, &model.Chat{Net: netTelegram, ID: 1, Title: "Alice"})
+	onceEach(t, "after the restart", shownText(back), "[photo a]", "[photo b]", "[photo c]")
 }
 
 func TestFinalCacheFlushWaitsForOlderWrite(t *testing.T) {

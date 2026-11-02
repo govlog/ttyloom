@@ -38,6 +38,9 @@ type Item struct {
 	Choices bool
 	// Reveal : deleted message whose content is shown (click on it).
 	Reveal bool
+	// part : one more media of the message right above it (Msg.More); Msg is
+	// a copy of that message whose Media is this one. Never in the cache.
+	part bool
 	// gap : hole marker of the history — the two ids the hole lies between
 	// (see markGap). Zero on every other item.
 	gap   [2]int
@@ -120,6 +123,9 @@ func (w *Window) Name() string {
 func (w *Window) Update(m *model.Msg) bool {
 	for i := len(w.Items) - 1; i >= 0; i-- {
 		it := w.Items[i]
+		if it.part {
+			continue // the parts come after their message, with its id
+		}
 		if it.Msg == nil || it.Msg.Key() != m.Key() {
 			continue // message ids are per chat, and the aggregate mixes chats and networks
 		}
@@ -131,7 +137,9 @@ func (w *Window) Update(m *model.Msg) bool {
 				refreshMedia(it.Msg.Media, m.Media)
 				m.Media = it.Msg.Media // keeps the media already loaded
 			}
+			m.More = keepMore(it.Msg.More, m.More)
 			it.Msg, it.lines = m, nil
+			w.syncParts()
 			return true
 		}
 	}
@@ -168,7 +176,33 @@ func reconcileMsg(old, fresh *model.Msg, started ...time.Time) {
 		refreshMedia(old.Media, next.Media)
 		next.Media = old.Media
 	}
+	next.More = keepMore(old.More, next.More)
 	*old = next
+}
+
+// keepMore : the media of fresh that old already has (same ident) stay the
+// loaded ones, as Media does. It changes nothing but the media of old and
+// never writes into fresh: mergeHistory runs it on copies, off the UI
+// goroutine.
+func keepMore(old, fresh []*model.Media) []*model.Media {
+	if len(old) == 0 || len(fresh) == 0 {
+		return fresh
+	}
+	out := slices.Clone(fresh)
+	used := make([]bool, len(old)) // two attachments alike keep one media each
+	for k, md := range fresh {
+		for j, o := range old {
+			if used[j] || identOf(o) != identOf(md) {
+				continue
+			}
+			if o != md { // one Msg goes to every view (updateShared): the next ones already hold o
+				refreshMedia(o, md)
+			}
+			out[k], used[j] = o, true
+			break
+		}
+	}
+	return out
 }
 
 func refreshMedia(old, fresh *model.Media) {
@@ -190,6 +224,7 @@ func (w *Window) Upsert(m *model.Msg) bool {
 	}
 	w.Items = append(w.Items, &Item{Msg: m})
 	w.trim()
+	w.syncParts()
 	return true
 }
 
@@ -244,7 +279,7 @@ func (w *Window) Sent(tmpID int64, id int, errText string) bool {
 func (w *Window) Merge(ms []*model.Msg, started ...time.Time) {
 	have := map[int]*Item{}
 	for _, it := range w.Items {
-		if it.Msg != nil {
+		if it.Msg != nil && !it.part {
 			have[it.Msg.ID] = it
 		}
 	}
@@ -274,6 +309,7 @@ func (w *Window) Merge(ms []*model.Msg, started ...time.Time) {
 	}
 	w.dropFilledGaps()
 	w.trim()
+	w.syncParts()
 }
 
 // idRange gives the smallest and the largest message id of the window; 0, 0
@@ -338,9 +374,10 @@ func (w *Window) hasBetween(loID, hiID int) bool {
 // page falls in the middle of the window, not at its edges). ms is sorted from
 // the oldest to the newest; the items with no message (system lines) stay put.
 func (w *Window) MergeAround(ms []*model.Msg, started ...time.Time) {
+	defer w.syncParts() // the messages reconciled in place too
 	have := map[int]*Item{}
 	for _, it := range w.Items {
-		if it.Msg != nil {
+		if it.Msg != nil && !it.part {
 			have[it.Msg.ID] = it
 		}
 	}
@@ -398,30 +435,43 @@ func (w *Window) MergeAround(ms []*model.Msg, started ...time.Time) {
 }
 
 // Msgs gives a copy of the messages of the window for the cache. The sends
-// never confirmed (zero ID) are left aside. The copy shares nothing with the
-// item any more: the Media is copied without its frames, because the goroutine
-// that writes the cache reads it while the UI goes on changing it (animation,
-// download).
+// never confirmed (zero ID) are left aside, and so are the parts: More of
+// their message holds their media. The copy shares nothing with the item any
+// more: Media and the media of More are copied without their frames, because
+// the goroutine that writes the cache reads them while the UI goes on
+// changing them (animation, download).
 func (w *Window) Msgs() []model.Msg {
 	out := make([]model.Msg, 0, len(w.Items))
 	for _, it := range w.Items {
-		if it.Msg == nil || it.Msg.ID == 0 {
+		if it.part || it.Msg == nil || it.Msg.ID == 0 {
 			continue
 		}
 		m := *it.Msg
 		if m.Media != nil {
-			md := *m.Media
-			md.Frames = nil
-			if md.Full != nil { // the larger variant too: a download fills it meanwhile
-				f := *md.Full
-				f.Frames = nil
-				md.Full = &f
+			m.Media = cacheCopy(m.Media)
+		}
+		if m.More != nil {
+			more := make([]*model.Media, len(m.More))
+			for k, md := range m.More {
+				more[k] = cacheCopy(md)
 			}
-			m.Media = &md
+			m.More = more
 		}
 		out = append(out, m)
 	}
 	return out
+}
+
+// cacheCopy : md without its frames, for Msgs.
+func cacheCopy(md *model.Media) *model.Media {
+	c := *md
+	c.Frames = nil
+	if c.Full != nil { // the larger variant too: a download fills it meanwhile
+		f := *c.Full
+		f.Frames = nil
+		c.Full = &f
+	}
+	return &c
 }
 
 func (w *Window) AddSys(s string)           { w.Items = append(w.Items, &Item{Sys: s, At: time.Now()}); w.trim() }
@@ -469,8 +519,13 @@ func (w *Window) InvalidateMedia(md *model.Media) {
 }
 
 // ponytail: trim does not free the kitty images of the dropped items; the terminal clears them.
+// ponytail: the parts count against the cap, so a window of albums holds
+// fewer messages; count the messages alone if that ever shows.
 func (w *Window) trim() {
 	if n := len(w.Items) - cmp.Or(w.max, defaultMaxItems); n > 0 {
+		for n < len(w.Items) && w.Items[n].part {
+			n++ // a part goes with its message
+		}
 		w.Items = w.Items[n:]
 		if w.Sel != nil && !slices.Contains(w.Items, w.Sel) {
 			w.Sel = nil
@@ -481,11 +536,63 @@ func (w *Window) trim() {
 // selectable : a shown message, neither a sys item nor a service message.
 func selectable(it *Item) bool { return it.Msg != nil && it.Msg.Service == "" }
 
-// shown : the item is drawn — Filter (/net on the aggregate) keeps it. The
-// walks over w.Items (selection, last message of mine) go through it: a
-// message the user cannot see is no target for an edit or a reaction.
+// shown : the item is drawn — Filter (/net on the aggregate) keeps it, and a
+// part of a deleted message shows only with its content (Reveal). The walks
+// over w.Items (selection, last message of mine) go through it: a message the
+// user cannot see is no target for an edit or a reaction.
 func (w *Window) shown(it *Item) bool {
+	if it != nil && it.part && it.Msg.Deleted && !it.Reveal {
+		return false
+	}
 	return it == nil || w.Filter == nil || it.Msg == nil || w.Filter(it.Msg)
+}
+
+// syncParts keeps, right after each message, one part per media of its More,
+// in order. A part already there stays: the selection, the hover, the edit,
+// the reply and the preview hold its pointers. Any other part goes (message
+// trimmed, media no longer in More).
+func (w *Window) syncParts() {
+	if !slices.ContainsFunc(w.Items, func(it *Item) bool { return it.part || it.Msg != nil && len(it.Msg.More) > 0 }) {
+		return // no message with several media: Telegram and IRC windows pay nothing
+	}
+	out := make([]*Item, 0, len(w.Items))
+	for i := 0; i < len(w.Items); i++ {
+		it := w.Items[i]
+		if it.part {
+			continue // its message is not right above it any more
+		}
+		out = append(out, it)
+		if it.Msg == nil || it.Msg.Service != "" { // a service line shows no media
+			continue
+		}
+		j := i + 1
+		for j < len(w.Items) && w.Items[j].part {
+			j++
+		}
+		had := w.Items[i+1 : j] // the parts right after it
+		for _, md := range it.Msg.More {
+			if k := slices.IndexFunc(had, func(p *Item) bool { return p.Msg.Media == md }); k >= 0 {
+				out = append(out, had[k])
+				continue
+			}
+			p := *it.Msg
+			p.Media = md
+			out = append(out, &Item{Msg: &p, part: true})
+		}
+		i = j - 1
+	}
+	w.Items = out
+	if w.Sel != nil && w.Sel.part && !slices.Contains(w.Items, w.Sel) {
+		w.Sel = nil
+	}
+}
+
+// msgItem : the message of it — it itself, or the item above its parts.
+func (w *Window) msgItem(it *Item) *Item {
+	for i := slices.Index(w.Items, it); i > 0 && w.Items[i].part; i-- {
+		it = w.Items[i-1]
+	}
+	return it
 }
 
 // SelectNext moves Sel one message up (dir < 0) or down (dir > 0). From
@@ -545,6 +652,9 @@ func (w *Window) LastID() int {
 // window and in the history.
 func (w *Window) HideBacklog() {
 	if n := len(w.Items); n > 0 {
+		for n > 1 && w.Items[n-1].part {
+			n-- // the parts go with their message
+		}
 		w.hidden = w.Items[n-1]
 	}
 }
@@ -559,6 +669,9 @@ func (w *Window) Visible(o render.Opts) ([]render.Line, []*Item) {
 	}
 	for i := len(items) - 1; i >= 0; i-- {
 		if items[i] == w.hidden {
+			for i+1 < len(items) && items[i+1] != nil && items[i+1].part {
+				i++ // the parts of hidden go with it
+			}
 			return lines[i+1:], items[i+1:]
 		}
 	}
@@ -584,7 +697,22 @@ func (w *Window) LineItems(o render.Opts) ([]render.Line, []*Item, int) {
 	markIdx := -1
 	lang := i18n.Lang()
 	sep := func(l render.Line) { out, items = append(out, l), append(items, nil) }
+	var msg *Item   // the last message: its parts take its state again
+	redraw := false // msg is drawn again: its parts with it
 	for _, it := range w.Items {
+		switch {
+		case it.part && msg != nil:
+			// A delete marks the copies of the chat window by id; the aggregate,
+			// and a reconcile in place, reach the message alone.
+			md := it.Msg.Media
+			*it.Msg = *msg.Msg
+			it.Msg.Media, it.Reveal = md, msg.Reveal
+			if redraw {
+				it.lines = nil
+			}
+		case it.Msg != nil && !it.part:
+			msg, redraw = it, it.lines == nil
+		}
 		if !w.shown(it) {
 			continue
 		}
@@ -617,7 +745,7 @@ func (w *Window) LineItems(o render.Opts) ([]render.Line, []*Item, int) {
 				it.lines = render.Echo(it.Echo, echoOpts)
 			case it.Msg != nil:
 				mo := o
-				mo.Reveal = it.Reveal
+				mo.Reveal, mo.Part = it.Reveal, it.part
 				it.lines = render.Message(it.Msg, mo)
 			case it.Text != nil:
 				it.lines = it.Text

@@ -56,11 +56,12 @@ func TestRegressionStampCleansRemoteText(t *testing.T) {
 	chat := func() *model.Chat { return &model.Chat{ID: 1, Title: "t\n" + bad, Username: bad} }
 	msg := func() model.Msg {
 		return model.Msg{ID: 1, Text: "a\nb" + bad, From: bad, ChatLabel: bad, Service: bad,
-			Media: &model.Media{Label: bad, Name: bad, Err: bad}}
+			Media: &model.Media{Label: bad, Name: bad, Err: bad}, More: []*model.Media{{Label: bad, Name: bad, Err: bad}}}
 	}
 	chatStrings := func(c *model.Chat) []string { return []string{c.Title, c.Username} }
 	msgStrings := func(m model.Msg) []string {
-		return []string{m.Text, m.From, m.ChatLabel, m.Service, m.Media.Label, m.Media.Name, m.Media.Err}
+		return []string{m.Text, m.From, m.ChatLabel, m.Service, m.Media.Label, m.Media.Name, m.Media.Err,
+			m.More[0].Label, m.More[0].Name, m.More[0].Err}
 	}
 	cases := []struct {
 		name string

@@ -3,6 +3,8 @@ package ui
 import (
 	"context"
 	"errors"
+	"fmt"
+	"hash/fnv"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -179,6 +181,20 @@ func (u *UI) fetch(b model.Backend, m *model.Msg, md *model.Media, suffix string
 	title := ""
 	if c := u.chats[m.Key()]; c != nil {
 		title = c.Title
+	}
+	// A media of m.More takes a file of its own, and so does its larger
+	// variant: Download gives the lead back at once on a file already there,
+	// and the name of the message alone would hand each one the file of the
+	// first. Named by what the media is, not by its rank: an edit that drops
+	// an attachment moves the ones after it a rank up.
+	// ponytail: the first attachment keeps the name of the message, so an
+	// edit that drops it gives its file to the new first one — as before this
+	// change. Put the id of the attachment on Media and name every file by it
+	// if that ever shows.
+	if slices.Contains(m.More, m.Media) {
+		h := fnv.New32a()
+		fmt.Fprint(h, identOf(m.Media))
+		suffix = "_" + strconv.FormatUint(uint64(h.Sum32()), 36) + suffix
 	}
 	path := filepath.Join(config.Expand(u.cfg.DownloadDir), media.FileName(m.Key(), title, m.ID, m.Date, suffix+md.Ext))
 	md.State = model.MediaLoading

@@ -252,10 +252,13 @@ type Msg struct {
 	Text      string
 	Entities  []Span
 	Media     *Media
-	Reply     *Quote
-	FwdFrom   string
-	Edited    bool
-	Deleted   bool
+	// More : the media after Media, for a network that sends several with one
+	// message (Discord attachments). The UI shows each on lines of its own.
+	More    []*Media
+	Reply   *Quote
+	FwdFrom string
+	Edited  bool
+	Deleted bool
 	// Pinned : the message is pinned in its chat. Set by the backends from the
 	// server data; a live change comes through EvPinned.
 	Pinned    bool

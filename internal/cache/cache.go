@@ -27,6 +27,12 @@ import (
 // photos, and the start-up sync (messages newer than the cache only) would
 // never bring one back: the old files are read as no cache at all, unless
 // KeepOld says the files are the only copy there is.
+//
+// ponytail: Msg.More (the other attachments of a Discord message) came with no
+// new version — gob reads an older file with More nil. A message cached before
+// keeps its first attachment alone until the network sends it again (the
+// recent page of a conversation does at its opening). Bump to 4 if they must
+// all show at once.
 const cacheVersion = 3
 
 // defaultMaxHistory : messages kept per chat when New gets max <= 0 (older
@@ -189,6 +195,13 @@ func (c *Cache) SaveHistory(chatID int64, msgs []model.Msg) error {
 		m.Err = ""
 		if m.Media != nil {
 			m.Media = stripped(m.Media)
+		}
+		if m.More != nil { // a new slice: the one of the caller is shared too
+			more := make([]*model.Media, len(m.More))
+			for k, md := range m.More {
+				more[k] = stripped(md)
+			}
+			m.More = more
 		}
 		clean[i] = m
 	}

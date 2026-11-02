@@ -53,9 +53,19 @@ func (c *Client) SearchMedia(ctx context.Context, chat *model.Chat, f model.Medi
 		for i := range ms {
 			// A GIF upload plays (MediaGIF) but is a file: it stays with the
 			// pictures, the GIFs tab asks for the embeds of the providers.
+			// Each attachment takes a cell: the message with that one as its
+			// Media, More kept (the UI names the file of each with it).
 			m := c.msgOf(&ms[i])
-			if f.Keeps(m.Media) || f == model.TabMedia && m.Media != nil && m.Media.Mime == "image/gif" {
-				ev.Items = append(ev.Items, model.MediaItem{Msg: m, Thumb: thumbOf(&ms[i])})
+			for k, md := range append([]*model.Media{m.Media}, m.More...) {
+				if f.Keeps(md) || f == model.TabMedia && md != nil && md.Mime == "image/gif" {
+					cell := m
+					cell.Media = md
+					var thumb *model.Media
+					if k < len(ms[i].Attachments) { // the media of rank k is attachment k
+						thumb = thumbOf(ms[i].Attachments[k])
+					}
+					ev.Items = append(ev.Items, model.MediaItem{Msg: cell, Thumb: thumb})
+				}
 			}
 		}
 		if len(ms) == searchPage { // a full page: there may be more
@@ -67,11 +77,7 @@ func (c *Client) SearchMedia(ctx context.Context, chat *model.Chat, f model.Medi
 
 // thumbOf : an image attachment resized for its cell by the media proxy of
 // Discord; nil for anything else.
-func thumbOf(m *discord.Message) *model.Media {
-	if len(m.Attachments) == 0 {
-		return nil
-	}
-	a := m.Attachments[0]
+func thumbOf(a discord.Attachment) *model.Media {
 	mime, _, _ := strings.Cut(a.ContentType, ";")
 	if !strings.HasPrefix(mime, "image/") || a.Width == 0 || a.Height == 0 || !rend.SafeURL(string(a.Proxy)) {
 		return nil

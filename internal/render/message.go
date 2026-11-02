@@ -39,6 +39,9 @@ type Opts struct {
 	// with the "(deleted)" marker after it, instead of the marker alone.
 	Reveal bool
 	Hover  *model.Msg // message under the mouse: background, no marker
+	// Part : m is one more media of a message (Msg.More), drawn under it — its
+	// label and its image alone, at the indent of the text.
+	Part bool
 	// ReadOutbox : last of my messages read by the chat of the message. nil: no
 	// "read" tick (a function and not an integer: the aggregated view mixes
 	// chats). The whole message is handed over and not its ChatID: the chat is
@@ -125,12 +128,17 @@ func Message(m *model.Msg, o Opts) []Line {
 	}
 	tick, tickStyle := msgTick(m, o, caps)
 	prefix, indent, avCol := msgPrefix(m, o, fromID, own)
+	body := m
+	if o.Part { // blanks in place of the prefix: the label lines up with the text
+		tick, body = "", &model.Msg{Media: m.Media}
+		prefix = []Span{{strings.Repeat(" ", indent), theme.Style{}}}
+	}
 	bw := o.Width - indent - Width(tick)
 	if bw < 10 { // screen too narrow: no prefix
 		bw, indent, prefix = o.Width-Width(tick), 0, nil
 	}
 
-	lines, mk, ra, quote := msgBody(m, o, bw)
+	lines, mk, ra, quote := msgBody(body, o, bw)
 	// --- image block ---
 	if md := m.Media; md != nil && md.Kind == model.MediaWebPage {
 		o.MaxImgRows = min(o.MaxImgRows, MaxLinkRows) // link thumbnail: never a big picture, inline or on hover
@@ -144,7 +152,7 @@ func Message(m *model.Msg, o Opts) []Line {
 	img, hoverMedia := msgImage(m, o, indent)
 	lines = append(lines, img...)
 	// --- avatar, padding and tick ---
-	if o.Avatars && len(prefix) > 0 { // screen not too narrow
+	if o.Avatars && len(prefix) > 0 && !o.Part { // screen not too narrow
 		lines[0].Avatar, lines[0].AvatarCol = fromID, avCol
 	}
 	pad := Span{strings.Repeat(" ", indent), theme.Style{}}
