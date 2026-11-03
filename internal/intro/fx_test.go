@@ -104,3 +104,17 @@ func TestCompositeDarkensThenTints(t *testing.T) {
 		t.Fatalf("A = 1 gives the tint: %+v", bg)
 	}
 }
+
+// A glyph of the effect on a reverse cell whose colours are unknown keeps the
+// background the cell shows (the text colour of the terminal).
+func TestCompositeGlyphOnUnknownReverse(t *testing.T) {
+	unknown := func(theme.Color, bool) (theme.RGB, bool) { return theme.RGB{}, false }
+	s := Parse("\x1b[1;1H"+theme.Style{Reverse: true}.SGR()+"x", 1, 1)
+	l := NewLayer(1, 1)
+	red := theme.RGB{R: 255}
+	l.Cells[0] = FX{Ch: '#', FG: red}
+	c := Composite(s, l, 1, unknown).At(0, 0)
+	if c.Text != "#" || !c.Style.Reverse || c.Style.FG.Kind != 0 || c.Style.BG != (theme.Color{Kind: 2, RGB: red}) {
+		t.Fatalf("%+v", c)
+	}
+}

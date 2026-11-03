@@ -289,3 +289,26 @@ func TestScreensaverHiddenStartsPaused(t *testing.T) {
 		t.Fatal("focus back: it plays")
 	}
 }
+
+// Resized while it waits for the focus, the demo is laid out again for the
+// new screen at once, not at its next frame.
+func TestIntroFollowsResizeWhilePaused(t *testing.T) {
+	u, _ := introUI(t, 80, 24)
+	t0 := time.Now()
+	u.introStart(t0)
+	u.introStep(t0.Add(time.Second))
+	u.introKey(term.Key{Code: term.FocusOut}, t0.Add(time.Second))
+	u.t.Cols, u.t.Rows = 100, 30
+	u.draw()
+	if l := u.intro.layer; l.Cols != 100 || l.Rows != 30 {
+		t.Fatalf("layer %dx%d after a resize to 100x30", l.Cols, l.Rows)
+	}
+}
+
+// /demo takes no prefix from the commands that were there before it.
+func TestDemoKeepsDebugPrefix(t *testing.T) {
+	u, _ := introUI(t, 80, 24)
+	if n, _, _, _ := ParseCommand("/de", u.commandNames()); n != "debug" {
+		t.Fatalf("/de: %q", n)
+	}
+}

@@ -177,7 +177,7 @@ func (s *Show) Frame(now time.Time, c Canvas) (*Layer, float32) {
 // drawHint writes the hint, centred on hintRow, on a
 // band of backdrop that keeps it readable over the chat.
 func (s *Show) drawHint(l *Layer, c Canvas, a float32) {
-	text := "  " + s.hint + "  "
+	text := toASCII("  " + s.hint + "  ")
 	y, x0 := hintRow(c), (c.Cols-len(text))/2
 	for i := 0; i < len(text); i++ {
 		f := l.At(x0+i, y)
@@ -185,14 +185,39 @@ func (s *Show) drawHint(l *Layer, c Canvas, a float32) {
 			continue
 		}
 		ch := text[i]
-		if ch < 0x20 || ch > 0x7e {
-			ch = '?'
-		}
 		*f = FX{Tint: Backdrop, A: 0.85 * a}
 		if hash(x0+i, y) < a {
 			f.Ch, f.FG = ch, hintFG
 		}
 	}
+}
+
+// latin1 : the letter of each rune from U+00C0 to U+00FF, accent dropped.
+const latin1 = "AAAAAAACEEEEIIIIDNOOOOOxOUUUUYTsaaaaaaaceeeeiiiidnooooo/ouuuuyty"
+
+// toASCII : s in printable ASCII, one byte a letter: the accents of the
+// Latin letters folded, any other rune a '?'.
+func toASCII(s string) string {
+	b := make([]byte, 0, len(s))
+	for _, r := range s {
+		switch {
+		case r >= 0x20 && r <= 0x7e:
+			b = append(b, byte(r))
+		case r >= 0xc0 && r <= 0xff:
+			b = append(b, latin1[r-0xc0])
+		case r == 0x152: // the oe ligature
+			b = append(b, 'O', 'E')
+		case r == 0x153:
+			b = append(b, 'o', 'e')
+		case r == 0x2019: // typographic apostrophe
+			b = append(b, '\'')
+		case r == 0xab || r == 0xbb: // guillemets
+			b = append(b, '"')
+		default:
+			b = append(b, '?')
+		}
+	}
+	return string(b)
 }
 
 // hintRow : the row of the hint, the second from the bottom: under the

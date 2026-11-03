@@ -20,6 +20,9 @@ func (tunnel) Name() string { return "tunnel" }
 // ramp : glyphs from light to dense.
 const ramp = " .:-=+*#%@"
 
+// thirdCos, thirdSin : cos and sin of 0, 1/3 and 2/3 of a turn.
+var thirdCos, thirdSin = [3]float64{1, -0.5, -0.5}, [3]float64{0, math.Sqrt(3) / 2, -math.Sqrt(3) / 2}
+
 var (
 	tileDark  = theme.RGB{R: 0x1e, G: 0x1e, B: 0x2e}
 	tileLight = theme.RGB{R: 0x45, G: 0x47, B: 0x5a}
@@ -36,7 +39,7 @@ func (tunnel) Draw(l *Layer, c Canvas, t float64) {
 		dy := (float64(y) - cy) * c.Aspect
 		for x := 0; x < c.Cols; x++ {
 			dx := float64(x) - cx
-			dist := math.Hypot(dx, dy) / scale
+			dist := math.Sqrt(dx*dx+dy*dy) / scale
 			if dist < 0.02 {
 				continue
 			}
@@ -49,10 +52,13 @@ func (tunnel) Draw(l *Layer, c Canvas, t float64) {
 			if tile {
 				col, b = tileLight, 0.45
 			}
-			// Over it, the three threads, braided along the depth.
+			// Over it, the three threads, braided along the depth. The three
+			// sines are one, turned by a third of a turn each.
+			s0, c0 := math.Sincos(math.Pi * depth)
 			for k := range 3 {
-				centre := float64(k)/3 + 0.09*math.Sin(2*math.Pi*depth*0.5+float64(k)*2*math.Pi/3)
-				d := math.Abs(math.Mod(ang-centre+1.5, 1) - 0.5)
+				centre := float64(k)/3 + 0.09*(s0*thirdCos[k]+c0*thirdSin[k])
+				v := ang - centre + 1.5
+				d := math.Abs(v - math.Floor(v) - 0.5)
 				if w := 1 - d/0.045; w > 0 {
 					col, b = mix(col, threadCol[k], float32(math.Min(w*1.6, 1))), math.Max(b, 0.55+0.45*w)
 				}

@@ -137,3 +137,21 @@ func TestShowWithoutParts(t *testing.T) {
 		t.Fatal("no part: an empty layer of the screen size")
 	}
 }
+
+// An accent in a translated hint is folded to its letter: the demo is ASCII,
+// and one letter takes one cell.
+func TestShowHintFoldsAccents(t *testing.T) {
+	withStubParts(t, 0)
+	c := Canvas{Cols: 80, Rows: 24, Aspect: 2}
+	s := NewShow(1, time.Unix(0, 0), "appuyez sur Entrée", "")
+	l, _ := s.Frame(time.Unix(6, 0), c)
+	var b []byte
+	for _, f := range l.Cells[hintRow(c)*c.Cols : (hintRow(c)+1)*c.Cols] {
+		if f.Ch != 0 {
+			b = append(b, f.Ch)
+		}
+	}
+	if !strings.Contains(string(b), "appuyez sur Entree") {
+		t.Fatalf("hint row: %q", b)
+	}
+}

@@ -18,6 +18,7 @@ var aliases = map[string]string{
 	"w": "window", "win": "window", "q": "query", "qu": "query", "j": "join", "m": "msg",
 	"hist": "history", "t": "theme", "o": "open", "c": "clear", "h": "help", "exit": "quit",
 	"shrugs": "shrug",
+	"de":     "debug", // /de was /debug before /demo
 }
 
 var commandNames = []string{"/window", "/close", "/query", "/join", "/new", "/msg", "/me", "/shrug", "/away", "/chats", "/networks", "/hooks", "/net", "/fold", "/mute", "/unmute", "/history",

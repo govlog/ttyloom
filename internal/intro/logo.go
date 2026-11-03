@@ -230,6 +230,17 @@ var (
 			"## ##",
 			"#   #",
 		},
+		'C': {" ###", "#   ", "#   ", "#   ", " ###"},
+		'D': {"### ", "#  #", "#  #", "#  #", "### "},
+		'F': {"####", "#   ", "### ", "#   ", "#   "},
+		'G': {" ###", "#   ", "# ##", "#  #", " ###"},
+		'H': {"#  #", "#  #", "####", "#  #", "#  #"},
+		'J': {"   #", "   #", "   #", "#  #", " ## "},
+		'P': {"### ", "#  #", "### ", "#   ", "#   "},
+		'Q': {" ## ", "#  #", "#  #", "# ##", " ###"},
+		'U': {"#  #", "#  #", "#  #", "#  #", " ## "},
+		'X': {"#  #", "#  #", " ## ", "#  #", "#  #"},
+		'Z': {"####", "   #", " ## ", "#   ", "####"},
 		'.': {"  ", "  ", "  ", "  ", "# "},
 		'*': {"   ", "# #", " # ", "# #", "   "},
 		'-': {"   ", "   ", "###", "   ", "   "},
@@ -267,6 +278,10 @@ var (
 	shadowCol = theme.RGB{R: 0x08, G: 0x08, B: 0x0e}
 	white     = theme.RGB{R: 0xff, G: 0xff, B: 0xff}
 	threadCol = [3]theme.RGB{colBlue, colMint, colPink}
+	// palette6 : the logo colours and three of Catppuccin: the faces of the
+	// cube, the copper bars.
+	palette6 = [6]theme.RGB{colBlue, colMint, colPink,
+		{R: 0xcb, G: 0xa6, B: 0xf7}, {R: 0xfa, G: 0xb3, B: 0x87}, {R: 0xa6, G: 0xe3, B: 0xa1}}
 )
 
 // logoCell : one lit cell of the logo.

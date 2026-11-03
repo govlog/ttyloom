@@ -24,8 +24,6 @@ var (
 	cubeVerts = [8]vec{{-1, -1, -1}, {1, -1, -1}, {1, 1, -1}, {-1, 1, -1}, {-1, -1, 1}, {1, -1, 1}, {1, 1, 1}, {-1, 1, 1}}
 	cubeFaces = [6][4]int{{0, 1, 2, 3}, {5, 4, 7, 6}, {4, 0, 3, 7}, {1, 5, 6, 2}, {4, 5, 1, 0}, {3, 2, 6, 7}}
 	cubeEdges = [12][2]int{{0, 1}, {1, 2}, {2, 3}, {3, 0}, {4, 5}, {5, 6}, {6, 7}, {7, 4}, {0, 4}, {1, 5}, {2, 6}, {3, 7}}
-	faceCols  = [6]theme.RGB{colBlue, colMint, colPink,
-		{R: 0xcb, G: 0xa6, B: 0xf7}, {R: 0xfa, G: 0xb3, B: 0x87}, {R: 0xa6, G: 0xe3, B: 0xa1}}
 	edgeFront = colTTY
 	edgeBack  = theme.RGB{R: 0x58, G: 0x5b, B: 0x70}
 )
@@ -70,7 +68,7 @@ func (cube) Draw(l *Layer, c Canvas, t float64) {
 		a, b, d := w[q[0]], w[q[1]], w[q[3]]
 		n := cross(vec{b.x - a.x, b.y - a.y, b.z - a.z}, vec{d.x - a.x, d.y - a.y, d.z - a.z})
 		shade := 0.35 + 0.65*math.Abs(dot(n, light))/(norm(n)*norm(light))
-		col := mix(Backdrop, faceCols[fi], float32(shade))
+		col := mix(Backdrop, palette6[fi], float32(shade))
 		alpha := float32(0.5)
 		if n.z > 0 { // a face turned away: seen through the front ones
 			alpha = 0.3

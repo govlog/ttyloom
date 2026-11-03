@@ -295,10 +295,12 @@ func parsePalette(resp []byte) Palette {
 	return p
 }
 
-// channel scales n hex digits to 0..255: "f" and "ffff" are both 255.
+// channel scales n hex digits to 0..255, rounded: "f" and "ffff" are both
+// 255, "8000" is 128.
 func channel(h []byte) uint8 {
 	v, _ := strconv.ParseUint(string(h), 16, 16)
-	return uint8(v * 255 / (1<<(4*len(h)) - 1))
+	top := uint64(1)<<(4*len(h)) - 1
+	return uint8((v*255 + top/2) / top)
 }
 
 // reTyCell : answer of Terminology to ESC } q s — columns;rows;cell w;cell h.

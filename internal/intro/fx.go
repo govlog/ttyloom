@@ -78,7 +78,11 @@ func Composite(chat *Screen, fx *Layer, dark float32, rgb Resolve) *Screen {
 				r.Text = " "
 			}
 			c.Text = glyphs[f.Ch&0x7f]
-			c.Style = theme.Style{FG: theme.Color{Kind: 2, RGB: f.FG}, BG: c.Style.BG}
+			if c.Style.Reverse { // its colours are unknown: it keeps the background it shows
+				c.Style = theme.Style{FG: c.Style.FG, BG: theme.Color{Kind: 2, RGB: f.FG}, Reverse: true}
+			} else {
+				c.Style = theme.Style{FG: theme.Color{Kind: 2, RGB: f.FG}, BG: c.Style.BG}
+			}
 		}
 	}
 	return out

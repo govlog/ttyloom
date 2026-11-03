@@ -19,9 +19,6 @@ func newCopper() part { return copper{} }
 
 func (copper) Name() string { return "copper" }
 
-var barCols = [6]theme.RGB{colBlue, colMint, colPink,
-	{R: 0xcb, G: 0xa6, B: 0xf7}, {R: 0xfa, G: 0xb3, B: 0x87}, {R: 0xa6, G: 0xe3, B: 0xa1}}
-
 const scrollSpeed = 18.0 // columns per second
 
 type bar struct {
@@ -34,9 +31,9 @@ func (copper) Draw(l *Layer, c Canvas, t float64) {
 	if c.Cols < 1 || c.Rows < 1 {
 		return
 	}
-	bars := make([]bar, len(barCols))
+	bars := make([]bar, len(palette6))
 	swing := math.Max(float64(c.Rows)/2-3, 1)
-	for i, col := range barCols {
+	for i, col := range palette6 {
 		ph := t*1.4 + float64(i)*0.52
 		bars[i] = bar{y: float64(c.Rows)/2 + swing*math.Sin(ph), col: col, front: math.Cos(ph)}
 	}

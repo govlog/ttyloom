@@ -76,3 +76,50 @@ func TestEmitSGRMatchesTheme(t *testing.T) {
 		}
 	}
 }
+
+// A cluster that opens with an ASCII byte (a keycap, a letter with a
+// combining accent) stays one cluster, with its width.
+func TestParseClustersAfterASCII(t *testing.T) {
+	s := Parse("\x1b[1;1H"+theme.Style{}.SGR()+"#\uFE0F\u20E3xe\u0301y", 6, 1)
+	want := []string{"#\uFE0F\u20E3", "", "x", "e\u0301", "y", " "}
+	for i, w := range want {
+		if s.Cells[i].Text != w {
+			t.Fatalf("cell %d: %q, want %q (%+v)", i, s.Cells[i].Text, w, s.Cells)
+		}
+	}
+}
+
+// Emit writes only the colours that change: a frame of the demo changes
+// colour at almost every cell, and a slow link pays for every byte.
+func TestEmitWritesOnlyWhatChanges(t *testing.T) {
+	s := &Screen{Cols: 80, Rows: 1, Cells: make([]Cell, 80)}
+	bg := theme.Color{Kind: 2, RGB: theme.RGB{R: 30, G: 30, B: 46}}
+	for i := range s.Cells {
+		fg := theme.Color{Kind: 2, RGB: theme.RGB{R: 200, G: uint8(100 + i%2), B: 200}}
+		s.Cells[i] = Cell{Text: "x", Style: theme.Style{FG: fg, BG: bg}}
+	}
+	if n := len(s.Emit()); n > 80*24 {
+		t.Fatalf("%d bytes for 80 cells whose text colour alone changes", n)
+	}
+}
+
+// Whatever the styles that follow each other, the screen Emit writes is the
+// screen it was given.
+func TestEmitRoundTrip(t *testing.T) {
+	colours := []theme.Color{{}, theme.Ansi(1), theme.Ansi(12), {Kind: 2, RGB: theme.RGB{R: 1, G: 2, B: 3}}, {Kind: 2, RGB: theme.RGB{R: 250}}}
+	s := &Screen{Cols: 40, Rows: 30, Cells: make([]Cell, 1200)}
+	h := uint32(7)
+	next := func(n int) int { h = h*1664525 + 1013904223; return int(h>>16) % n }
+	for i := range s.Cells {
+		s.Cells[i] = Cell{Text: string(rune('a' + next(26))), Style: theme.Style{
+			FG: colours[next(len(colours))], BG: colours[next(len(colours))],
+			Bold: next(4) == 0, Dim: next(5) == 0, Italic: next(4) == 0, Underline: next(4) == 0, Reverse: next(6) == 0, Strike: next(7) == 0}}
+	}
+	if s2 := Parse(s.Emit(), 40, 30); !slices.Equal(s.Cells, s2.Cells) {
+		for i := range s.Cells {
+			if s.Cells[i] != s2.Cells[i] {
+				t.Fatalf("cell %d: %+v, want %+v", i, s2.Cells[i], s.Cells[i])
+			}
+		}
+	}
+}

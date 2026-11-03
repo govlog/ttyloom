@@ -88,7 +88,7 @@ func Parse(text string, cols, rows int) *Screen {
 			i += 2
 		case c < 0x20 || c == 0x7f:
 			i++
-		case c < 0x80:
+		case c < 0x80 && (i+1 == len(text) || text[i+1] < 0x80): // a cluster may open with ASCII: a keycap, a combining accent
 			s.put(x, y, text[i:i+1], 1, st)
 			x++
 			i++
@@ -265,14 +265,51 @@ func (s *Screen) Emit() string {
 			if c.Text == "" {
 				continue
 			}
-			if first || c.Style != prev {
+			switch {
+			case first:
 				b = appendSGR(b, c.Style)
-				prev, first = c.Style, false
+			case c.Style != prev:
+				b = appendChange(b, prev, c.Style)
 			}
+			prev, first = c.Style, false
 			b = append(b, c.Text...)
 		}
 	}
 	return string(b)
+}
+
+// appendChange appends what takes the terminal from style a to style b: the
+// colours that changed alone when the attributes are the same, the whole SGR
+// otherwise. A curly underline takes its colour from the text: whole too.
+func appendChange(buf []byte, a, b theme.Style) []byte {
+	if a.Bold != b.Bold || a.Dim != b.Dim || a.Italic != b.Italic || a.Underline != b.Underline || a.Curly != b.Curly ||
+		a.Reverse != b.Reverse || a.Strike != b.Strike || (b.Underline && b.Curly) {
+		return appendSGR(buf, b)
+	}
+	buf = append(buf, "\x1b["...)
+	sep := false
+	if a.FG != b.FG {
+		buf = appendColourOrDefault(buf, b.FG, 30, "38", "39")
+		sep = true
+	}
+	if a.BG != b.BG {
+		if sep {
+			buf = append(buf, ';')
+		}
+		buf = appendColourOrDefault(buf, b.BG, 40, "48", "49")
+	}
+	return append(buf, 'm')
+}
+
+// appendColourOrDefault : the parameters of c without a leading ';', with
+// def for the default colour.
+func appendColourOrDefault(b []byte, c theme.Color, base int, ext, def string) []byte {
+	if c.Kind == 0 {
+		return append(b, def...)
+	}
+	n := len(b)
+	b = appendColour(b, c, base, ext)
+	return append(b[:n], b[n+1:]...) // drop the ';' appendColour opens with
 }
 
 // appendSGR appends the SGR of st, the same as theme.Style.SGR writes (a

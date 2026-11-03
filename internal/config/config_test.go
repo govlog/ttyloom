@@ -250,3 +250,20 @@ func TestWriteAtomicKeepsLink(t *testing.T) {
 		t.Fatalf("the file of the repository: %q", b)
 	}
 }
+
+// A new config.toml lists the keys of the demo with the others.
+func TestNewConfigListsTheDemo(t *testing.T) {
+	dir := t.TempDir()
+	if _, err := LoadFrom(dir); err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(filepath.Join(dir, "config.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, k := range []string{"\nintro = true", "\nscreensaver = \"0\""} {
+		if !strings.Contains(string(b), k) {
+			t.Errorf("config.toml lacks %q", k[1:])
+		}
+	}
+}

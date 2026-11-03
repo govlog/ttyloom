@@ -198,6 +198,8 @@ log_dir = "~/.local/share/ttyloom/logs"
 log = false            # /log: logs every window created afterwards
 separator = true       # separator line above the status bar
 redline = true         # red last-read line (unread separator) in each window
+intro = true           # the 90s demo at start, until the first key (/demo plays it again)
+screensaver = "0"      # the demo after that long with no key: 60m, 1h, 3600s; "0" = off
 sidebar = "hidden"      # sidebar at start: hidden | chats | windows (F2 writes it)
 sidebar_sort = "recent" # sort of the F2 sidebar (F7 cycles it): recent | alpha | unread
 sidebar_width = 26      # width of the F2 sidebar; the vertical bar drags with the mouse

@@ -93,6 +93,9 @@ func TestParsePalette(t *testing.T) {
 	if p.HasANSI[0] {
 		t.Fatal("ansi 0 never answered")
 	}
+	if q := parsePalette([]byte("\x1b]4;3;rgb:8000/8000/8000\x1b\\")); q.ANSI[3] != (theme.RGB{R: 128, G: 128, B: 128}) {
+		t.Fatalf("8000 (127.5) rounds to 128: %+v", q.ANSI[3])
+	}
 	if q := parsePalette([]byte("\x1b[?62;4c")); q.HasFG || q.HasBG {
 		t.Fatal("silent terminal: unknown")
 	}
