@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Added
+
+- **Start demo**: at start, a 90s demo in ASCII plays over the chat until the first key or click — a tunnel lined with the three threads of the logo, fire that burns the letters, a glass cube whose faces show the chat through them, a torus that changes its shape, copper bars with a sine scroller in big letters, and Matrix rain that lays the logo and decrypts it into the motto. One effect is picked at random, then another comes every 15 seconds with a transition; the TTYLOOM logo stays in the middle and its threads weave over and under its letters. The chat stays alive behind it and shows through. The key that stops it is not typed; a mouse move does not stop it. It ends by itself when a login prompt, a QR code or a form opens, after 10 minutes with no key on a terminal that never reports the focus, or when the terminal cannot keep 20 frames a second (a slow ssh link); it pauses while the terminal has no focus. ASCII only, on every terminal; TTYloom now asks the terminal for its colours at start (OSC 10, 11, 4) to blend with the chat under the default `terminal` theme; a terminal that does not answer gets a plain dark backdrop, with no fade. `/demo` plays it again, `/set intro off` turns it off.
+- **Screensaver**: `/set screensaver 1h` (or `60m`, `3600s`) plays the start demo after that long with no key, click, wheel or paste, until the next key; `0` turns it off, the default. It never starts over a login prompt, the image viewer or mpv, waits paused while the terminal has no focus, and comes back only after some activity.
+
 ### Fixed
 
 - **Every attachment of a Discord message shows**: several photos sent at once (from the phone app, say) are one Discord message, and only the first one showed. Each attachment now shows under the message with its own label and picture, and works like any media: it downloads to a file of its own, plays, opens in the viewer (`v`, a click, ←/→) and with `o`, and stays after a restart. Alt+↑/↓ or a click selects one; edit, delete, reply, react and pin act on the whole message. The media browser (Ctrl+M) gives each attachment a cell of its own. A message already in the disk cache gets its other attachments when Discord sends it again (the recent history of a conversation, when it opens). A message with several link previews still shows the first.

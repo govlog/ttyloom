@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/govlog/ttyloom/internal/i18n"
 	"github.com/govlog/ttyloom/internal/model"
@@ -20,7 +21,7 @@ var aliases = map[string]string{
 }
 
 var commandNames = []string{"/window", "/close", "/query", "/join", "/new", "/msg", "/me", "/shrug", "/away", "/chats", "/networks", "/hooks", "/net", "/fold", "/mute", "/unmute", "/history",
-	"/search", "/whois", "/rename", "/unrename", "/note", "/unnote", "/alias", "/unalias", "/open", "/view", "/send", "/theme", "/set", "/clear", "/log", "/debug", "/emoji", "/gif", "/media", "/help", "/quit"}
+	"/search", "/whois", "/rename", "/unrename", "/note", "/unnote", "/alias", "/unalias", "/open", "/view", "/send", "/theme", "/demo", "/set", "/clear", "/log", "/debug", "/emoji", "/gif", "/media", "/help", "/quit"}
 
 // cmdNames : the commands valid now. general resolve first by prefix, then
 // context — the ones a network adds in its own windows (IRC's /kick), which
@@ -323,6 +324,10 @@ func (u *UI) command(name string, args []string, text string) {
 		u.themeCmd(args)
 	case "networks":
 		u.openHub()
+	case "demo":
+		if !u.introStart(time.Now()) {
+			w.AddSys(i18n.T("demo_too_small"))
+		}
 	case "hooks":
 		u.hooksCmd(w, args, text)
 	case "set":

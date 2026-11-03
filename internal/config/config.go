@@ -116,6 +116,8 @@ type Config struct {
 	Log               bool      `toml:"log"`
 	Separator         bool      `toml:"separator"`
 	Redline           bool      `toml:"redline"`
+	Intro             bool      `toml:"intro"`       // the demo at start
+	Screensaver       string    `toml:"screensaver"` // the demo after that long with no key (Go duration: 60m, 1h); 0: off
 	SidebarSort       string    `toml:"sidebar_sort"`
 	SidebarSplit      bool      `toml:"sidebar_split"`
 	Spell             string    `toml:"spell"`        // off | a hunspell code, chained with + (fr, us, en_GB, fr+us)
@@ -265,7 +267,7 @@ func LoadFrom(dir string, mods ...module.Module) (*Config, error) {
 		}
 	}
 	c := &Config{dir: dir, mods: mods, DownloadDir: "~/Downloads/ttyloom", AutoMediaMaxKB: 5120, Images: "auto", Avatars: true, KittyImages: 48, VideoFrames: 300, Video: "show", GifPlay: "always", Timestamps: true, LinkPreviews: true, Hover: HoverMenu,
-		Bell: true, Notify: "terminal", AutoOpenDays: 7, Cache: true, CacheMessages: 2000, LogDir: "~/.local/share/ttyloom/logs", Separator: true, Redline: true, SidebarSort: "recent", SidebarWidth: 26, Sidebar: "hidden", Spell: "off", CycleMode: "next"}
+		Bell: true, Notify: "terminal", AutoOpenDays: 7, Cache: true, CacheMessages: 2000, LogDir: "~/.local/share/ttyloom/logs", Separator: true, Redline: true, Intro: true, Screensaver: "0", SidebarSort: "recent", SidebarWidth: 26, Sidebar: "hidden", Spell: "off", CycleMode: "next"}
 	md, err := toml.DecodeFile(path, c)
 	if err != nil {
 		return nil, fmt.Errorf(i18n.T("error_with_prefix"), path, err)

@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"golang.org/x/sys/unix"
+
+	"github.com/govlog/ttyloom/internal/theme"
 )
 
 // Everything written between two flushes goes out as one synchronized update:
@@ -66,5 +68,32 @@ func TestHandStopsReadingAndWriting(t *testing.T) {
 	}
 	w.Close() // end of input: the loop closes the keys and is over before r closes
 	for range tm.Keys() {
+	}
+}
+
+// The colours the terminal gives back to OSC 10, 11 and 4 are read with 1 to
+// 4 hex digits per channel and either end (ST or BEL); a colour with no answer
+// stays unknown.
+func TestParsePalette(t *testing.T) {
+	resp := []byte("\x1b]10;rgb:cdcd/d6d6/f4f4\x1b\\" + "\x1b]11;rgb:1e/1e/2e\x07" +
+		"\x1b]4;1;rgb:f3f3/8b8b/a8a8\x1b\\" + "\x1b]4;12;rgb:8/9/f\x1b\\" + "\x1b[?62;4c")
+	p := parsePalette(resp)
+	if !p.HasFG || p.FG != (theme.RGB{R: 0xcd, G: 0xd6, B: 0xf4}) {
+		t.Fatalf("fg: %+v", p)
+	}
+	if !p.HasBG || p.BG != (theme.RGB{R: 0x1e, G: 0x1e, B: 0x2e}) {
+		t.Fatalf("bg (BEL end, 2 digits): %+v", p)
+	}
+	if !p.HasANSI[1] || p.ANSI[1] != (theme.RGB{R: 0xf3, G: 0x8b, B: 0xa8}) {
+		t.Fatalf("ansi 1: %+v", p)
+	}
+	if !p.HasANSI[12] || p.ANSI[12] != (theme.RGB{R: 0x88, G: 0x99, B: 0xff}) {
+		t.Fatalf("ansi 12 (1 digit): %+v", p)
+	}
+	if p.HasANSI[0] {
+		t.Fatal("ansi 0 never answered")
+	}
+	if q := parsePalette([]byte("\x1b[?62;4c")); q.HasFG || q.HasBG {
+		t.Fatal("silent terminal: unknown")
 	}
 }

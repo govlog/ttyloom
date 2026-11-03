@@ -19,6 +19,9 @@ import (
 
 // draw repaints everything in one write (messages, status, input, images).
 func (u *UI) draw() {
+	if u.intro != nil && u.introBlocked() {
+		u.introEnd()
+	}
 	if u.viewer != nil { // full screen preview: the screen carries the image only
 		u.drawViewer()
 		return
@@ -162,6 +165,10 @@ func (u *UI) draw() {
 		_, curX = u.sideFindText()
 		curRow = sideHdr
 	}
+	if u.intro != nil { // the demo is all ASCII: no picture under it
+		u.placed = u.placed[:0]
+		avs = nil
+	}
 	var cur map[kplace]bool
 	var g strings.Builder // kitty commands, apart from the rows of text (paint)
 	if u.images == "kitty" {
@@ -185,7 +192,7 @@ func (u *UI) draw() {
 		}
 		// The QR after all the rest: its overlay already covers the text, and
 		// the placement (z=0) covers the white cells kept free.
-		if row, col, cols, rows, ok := u.qrImage(); ok {
+		if row, col, cols, rows, ok := u.qrImage(); ok && u.intro == nil {
 			fmt.Fprintf(&g, "\x1b[%d;%dH", row+1, col+1)
 			u.placeKitty(&g, cur, qrPID, u.qr.md, u.qr.png, cols, rows)
 		}
@@ -194,6 +201,9 @@ func (u *UI) draw() {
 		u.endFrameKitty(&g, cur) // after every placement: never a hole
 	}
 	pics := u.cellPics(x0)
+	if u.intro != nil {
+		pics = nil
+	}
 	// The pill "↓ last message" gives way to an image placed over its cells:
 	// an image goes above the text, and dropping the block for a pill would
 	// leave its label alone with blank lines.
@@ -216,11 +226,14 @@ func (u *UI) draw() {
 		}
 	}
 	trail := fmt.Sprintf("\x1b[%d;%dH", curRow, curX+1)
-	if u.cursorShown() {
+	text := b.String()
+	if u.intro != nil {
+		text = u.introCompose(text)
+	} else if u.cursorShown() {
 		trail += "\x1b[?25h"
 	}
 	u.noteShown()
-	u.paint(frame{text: b.String(), gfx: g.String(), pics: pics, trail: trail})
+	u.paint(frame{text: text, gfx: g.String(), pics: pics, trail: trail})
 }
 
 // cursorShown : the input cursor is drawn; the preview or an open overlay

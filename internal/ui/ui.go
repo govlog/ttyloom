@@ -48,6 +48,11 @@ type UI struct {
 	cfg       *config.Config
 	th        theme.Theme
 	build     update.Build // what this binary was built from (banner, update check)
+	intro     *introRun    // the demo of the start while it plays (intro.go)
+	lastInput time.Time    // last key, click, wheel or paste: the screensaver counts from it
+	saverFrom time.Time    // lastInput when the screensaver last started: once per idle spell
+	focusSeen bool         // the terminal reports the focus (a FocusIn or FocusOut came)
+	focusOut  bool         // ... and the last report was FocusOut: the terminal is hidden
 	// prevRows, prevPics, prevTrail : what the last frame put on the screen,
 	// by row (paint); nil after repaint, so the next frame goes whole.
 	prevRows  map[int]string
@@ -249,6 +254,10 @@ func Run(ctx context.Context, cancel context.CancelFunc, t *term.Term, cfg *conf
 	defer u.flushCache(true)
 	defer u.saveLast() // the chat shown comes back at the next start
 	defer u.dropPics(true)
+	u.lastInput = time.Now()
+	if cfg.Intro {
+		u.introStart(time.Now())
+	}
 	tick := time.NewTicker(100 * time.Millisecond)
 	defer tick.Stop()
 	for {
@@ -258,6 +267,10 @@ func Run(ctx context.Context, cancel context.CancelFunc, t *term.Term, cfg *conf
 		case k, ok := <-t.Keys():
 			if !ok {
 				return nil
+			}
+			u.noteInput(k, time.Now())
+			if u.intro != nil && u.introKey(k, time.Now()) {
+				break // the demo's key: never typed
 			}
 			switch {
 			case k.Code == term.Mouse && (k.Mouse.Motion || !k.Mouse.Press) && u.drag == dragNone:
@@ -310,6 +323,12 @@ func Run(ctx context.Context, cancel context.CancelFunc, t *term.Term, cfg *conf
 			if !u.tick() {
 				continue
 			}
+		case now := <-u.introC():
+			start := time.Now()
+			u.introStep(now)
+			u.draw()
+			u.introPace(time.Since(start)) // what the frame cost, its write included
+			continue
 		}
 		u.draw()
 	}
@@ -2716,7 +2735,7 @@ func (u *UI) candidates(word string, atStart bool) []string {
 // tick : typing timeout, clock, animation. true when a repaint is worth it.
 func (u *UI) tick() bool {
 	now := time.Now()
-	redraw := false
+	redraw := u.saverCheck(now)
 	if (len(u.dirty) > 0 || u.dialogsDirty) && now.Sub(u.flushed) >= flushEvery {
 		u.flushCache(false)
 	}

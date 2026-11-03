@@ -5,6 +5,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/govlog/ttyloom/internal/config"
 	"github.com/govlog/ttyloom/internal/i18n"
@@ -159,6 +160,17 @@ var settings = []setting{
 		func(u *UI, _ *Window, v string) bool { u.cfg.LogDir = v; return true }},
 	boolSetting("separator", func(c *config.Config) *bool { return &c.Separator }, (*UI).clear), // the separator line shows or goes: the view changes height
 	boolSetting("redline", func(c *config.Config) *bool { return &c.Redline }, (*UI).clear),     // the redline shows or goes: the view changes height
+	boolSetting("intro", func(c *config.Config) *bool { return &c.Intro }, nil),                 // at the next start
+	{"screensaver", fixed("0", "30m", "1h"),
+		func(u *UI) string { return "screensaver = " + u.cfg.Screensaver },
+		func(u *UI, w *Window, v string) bool {
+			if d, err := time.ParseDuration(v); err != nil || d < 0 {
+				w.AddSys(i18n.T("screensaver_bad"))
+				return false
+			}
+			u.cfg.Screensaver = v
+			return true
+		}},
 	choiceSetting("sidebar_sort", []string{"recent", "alpha", "unread"}, func() string { return i18n.T("set_sidebar_sort_values") },
 		func(u *UI) string { return "sidebar_sort = " + u.cfg.SidebarSort },
 		func(u *UI, v string) {

@@ -44,6 +44,16 @@ type Term struct {
 	Panic        string // panic of the read loop, shown by main after Close
 	KittyKbd     bool   // kitty keyboard protocol on (answer to CSI ? u)
 	Curly        bool   // undercurl (SGR 4:3) supported
+	Colors       Palette
+}
+
+// Palette : the colours the terminal gave at start (OSC 10, 11, 4). Has*
+// false: no answer, the value is unknown.
+type Palette struct {
+	FG, BG       theme.RGB
+	HasFG, HasBG bool
+	ANSI         [16]theme.RGB
+	HasANSI      [16]bool
 }
 
 // curlyTerms : a TERM that holds one of these names supports undercurl.
@@ -174,6 +184,9 @@ func (t *Term) Hand() (back func()) {
 	}
 }
 
+// Held : another program has the terminal (Hand).
+func (t *Term) Held() bool { return t.held }
+
 func (t *Term) Keys() <-chan Key          { return t.keys }
 func (t *Term) Resized() <-chan os.Signal { return t.winch }
 
@@ -225,7 +238,14 @@ func (t *Term) probe() {
 		q += "\x1b_Gi=32,s=1,v=1,a=q,t=s,f=24;" + base64.StdEncoding.EncodeToString([]byte(shm)) + "\x1b\\"
 		defer os.Remove("/dev/shm" + shm)
 	}
+	// The colours of the terminal (text, background, the 16 ANSI ones): the
+	// intro blends with the real ones, also under the "terminal" theme.
+	q += "\x1b]10;?\x1b\\\x1b]11;?\x1b\\"
+	for i := range 16 {
+		q += "\x1b]4;" + strconv.Itoa(i) + ";?\x1b\\"
+	}
 	resp := t.ask(q + "\x1b[16t\x1b[?u\x1b[=c\x1b[c")
+	t.Colors = parsePalette(resp)
 	t.Kitty = strings.Contains(string(resp), "_Gi=31;OK")
 	t.KittyShm = strings.Contains(string(resp), "_Gi=32;OK")
 	t.KittyAnim = reAnim.Match(resp)
@@ -250,6 +270,35 @@ func (t *Term) probe() {
 			t.CellH, _ = strconv.Atoi(string(m[2]))
 		}
 	}
+}
+
+// reColor : answer to OSC 10 (text), 11 (background) or 4;<n> (ANSI colour
+// n): 1 to 4 hex digits per channel, ended by ST or BEL.
+var reColor = regexp.MustCompile(`\x1b\](10|11|4;(\d+));rgb:([0-9a-fA-F]{1,4})/([0-9a-fA-F]{1,4})/([0-9a-fA-F]{1,4})(?:\x07|\x1b\\)`)
+
+// parsePalette reads the colour answers out of the probe answers.
+func parsePalette(resp []byte) Palette {
+	var p Palette
+	for _, m := range reColor.FindAllSubmatch(resp, -1) {
+		c := theme.RGB{R: channel(m[3]), G: channel(m[4]), B: channel(m[5])}
+		switch string(m[1]) {
+		case "10":
+			p.FG, p.HasFG = c, true
+		case "11":
+			p.BG, p.HasBG = c, true
+		default:
+			if i, err := strconv.Atoi(string(m[2])); err == nil && i < 16 {
+				p.ANSI[i], p.HasANSI[i] = c, true
+			}
+		}
+	}
+	return p
+}
+
+// channel scales n hex digits to 0..255: "f" and "ffff" are both 255.
+func channel(h []byte) uint8 {
+	v, _ := strconv.ParseUint(string(h), 16, 16)
+	return uint8(v * 255 / (1<<(4*len(h)) - 1))
 }
 
 // reTyCell : answer of Terminology to ESC } q s — columns;rows;cell w;cell h.

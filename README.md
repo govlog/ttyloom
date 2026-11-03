@@ -30,6 +30,7 @@
 - **Give your draft some room.** Expand the multiline editor, paste a code block, complete an `@mention` or a `:shortcode:`, pick an emoji or paste an image with `Ctrl+V`. `Ctrl+B`, `Ctrl+I` and `Ctrl+U` style the draft in bold, italic and underline, sent as Discord Markdown, Telegram entities or mIRC codes. Optional Hunspell underlines misspellings; `Ctrl+R` offers corrections.
 - **Keep the useful little details.** Drag to select and copy text, without timestamps or nicks, preview themes live, show seconds in timestamps, spot the unread divider, and keep a local history cache. Typing indicators, focus-aware read state, configurable notifications that merge a burst into one, and `/mute` for a noisy conversation complete the flow.
 - **Answer with your own programs.** Hooks run a script when a message matches a network, a chat, a sender or a pattern; its output is sent, proposed in the input line or shown. [Hooks](docs/hooks.md).
+- **A demo at start, in the spirit of the 90s.** Tunnel, fire, a glass cube, a morphing torus, copper bars and Matrix rain around the TTYLOOM logo, in ASCII over your chat, until you press a key. `/demo` plays it again, `/set intro off` turns it off, `/set screensaver 1h` makes it a screensaver. [Start demo](docs/guide.md#start-demo).
 - **Switch languages while chatting.** French and English interface: `/set lang fr` or `/set lang en` applies immediately.
 
 Capabilities depend on the network. Unsupported actions are hidden.

@@ -112,6 +112,7 @@ var helpTopics = []topic{
 
 	// Options
 	{"/theme", "help_theme", "options"},
+	{"/demo", "help_demo", "options"},
 	{"/set", "help_set", "options"},
 	{"/debug", "help_debug", "options"},
 	{"timestamps", "help_timestamps", "options"},
@@ -137,6 +138,8 @@ var helpTopics = []topic{
 	{"log_dir", "help_log_dir", "options"},
 	{"separator", "help_separator", "options"},
 	{"redline", "help_redline", "options"},
+	{"intro", "help_intro", "options"},
+	{"screensaver", "help_screensaver", "options"},
 	{"spell", "help_spell", "options"},
 	{"spell_quotes", "help_spell_quotes", "options"},
 	{"sidebar_sort", "help_sidebar_sort", "options"},

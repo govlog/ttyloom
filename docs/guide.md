@@ -182,6 +182,8 @@ avatars = true
 hover = "menu"
 separator = true
 redline = true
+intro = true
+screensaver = "0"
 sidebar_sort = "recent"
 sidebar_split = false
 spell = "off"
@@ -225,6 +227,8 @@ update_check = false
 | `hover` | `menu` and `highlight` highlight the message under the pointer; a right click opens its menu. `off`: disable hover tracking. Old boolean values remain accepted. Also controls pointer tracking for sidebar wheel navigation. |
 | `separator` | A horizontal rule between messages and the status bar. |
 | `redline` | An unread divider after the last read message. It stays in place during the visit and resets when you return to the window or regain focus. |
+| `intro` | The demo at start: a 90s demo in ASCII over the chat, until the first key or click. See [Start demo](#start-demo). |
+| `screensaver` | The same demo after that long with no key, click, wheel or paste: a Go duration (`60m`, `1h`, `3600s`); `0` turns it off (the default). |
 | `sidebar_width` | Width in columns, from 12 to half the terminal width. Drag its vertical border to resize and save it. |
 | `sidebar_sort` | `recent`, `alpha` or `unread`. `F7` cycles these orders. |
 | `sidebar_split` | Windows list in two sections, channels then direct messages, each in `sidebar_sort` order. The `⊟` of the sidebar header toggles it. |
@@ -573,6 +577,38 @@ Theme files are read from `~/.config/ttyloom/themes`, `~/.config/ghostty/themes`
 
 `/theme` without arguments opens a filterable picker. Arrows, the wheel or a
 click preview themes live. Enter keeps the choice; Escape restores the old theme.
+
+### Start demo
+
+At start, TTYloom plays a 90s demo in ASCII over the chat: a tunnel, fire, a
+glass cube, a torus that changes its shape, copper bars with a sine scroller,
+and Matrix rain, each one around the TTYLOOM logo. One effect is picked at
+random, then another one comes every 15 seconds. The chat stays visible and
+alive behind it: connections and messages go on.
+
+The first key or click stops it with a short fade; that key is not typed. A
+second key ends the fade at once. A mouse move does not stop it. The demo also
+ends by itself when a login prompt, a QR code or a form opens, after 10 minutes
+with no key on a terminal that never reports the focus, or when the terminal
+cannot keep up (a slow ssh link). It pauses
+while the terminal has no focus.
+
+It uses ASCII characters only, in 24-bit colour, on every terminal. To blend
+with the chat under the default `terminal` theme, TTYloom asks the terminal for
+its colours at start (OSC 10, 11 and 4); on a terminal that does not answer,
+the chat goes dark at once, with no fade.
+
+`/demo` plays it again. `/set intro off` turns it off at start; the screen needs
+at least 40 × 12.
+
+The demo is also a screensaver: `/set screensaver 1h` (or `60m`, `3600s`) plays
+it after an hour with no key, click, wheel or paste, until the next key; a mouse
+move is not activity. `/set screensaver 0` turns it off, the default. It never
+starts over a login prompt, the image viewer or mpv, and it waits, paused, while
+the terminal has no focus. Once it ended, it comes back only after some
+activity. Where the terminal reports the focus, the demo plays until a key; the
+10-minute limit stays only for terminals that never report it (tmux without
+`focus-events`, screen).
 
 ## Using TTYloom
 
