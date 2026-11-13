@@ -636,6 +636,9 @@ type fakeBackend struct {
 	sends      []string // Send calls: "<chat title>: <text>"
 	forwards   []string // Forward calls: "<from title>:<id>><to title>"
 	pins       []string // Pin calls: "<id>:<pin>"
+	// Stickers tab (stickers_test.go).
+	stickerCalls []string        // LoadStickers, LoadStickerPack <key>, SearchStickers <emoji>
+	stickersSent []model.Sticker // SendSticker
 }
 
 func (f *fakeBackend) Caps() model.Caps { return f.caps }

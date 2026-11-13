@@ -363,6 +363,8 @@ func (u *UI) command(name string, args []string, text string) {
 		u.openPicker(u.view().Chat, func(s string) { u.ed.Insert(s) })
 	case "gif":
 		u.openGifs(text)
+	case "sticker":
+		u.openStickers(text)
 	case "media":
 		u.openMediaBox(arg(0))
 	case "files":

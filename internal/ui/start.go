@@ -35,7 +35,7 @@ func newUI(ctx context.Context, cancel context.CancelFunc, t *term.Term, cfg *co
 		conn:        map[string]bool{},
 		dialogsSeen: map[string]bool{},
 		tabLast:     map[string]*Window{},
-		reactList:   map[string][]string{}}
+		reactList:   map[string][]string{}, reactTop: map[string][]string{}}
 	u.ws.Log = cfg.Log
 	u.setMaxItems(cfg.CacheMessages)
 	u.images = u.resolveImages(cfg.Images)

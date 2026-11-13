@@ -221,10 +221,18 @@ func docMedia(d *tg.Document) *model.Media {
 	switch {
 	case sticker:
 		m.Kind = model.MediaSticker
-		m.Animated = m.Mime != "image/webp"
 		m.Label = "[sticker " + m.Emoji + "]"
-		if m.Animated {
-			m.Label = i18n.T("media_animated_sticker", m.Emoji)
+		switch {
+		case m.Mime == "image/webp":
+		case strings.HasPrefix(m.Mime, "video/"): // a video sticker plays like a GIF
+			m.Kind = model.MediaGIF
+		default: // Lottie (.tgs): no player here, the still thumb Telegram gives
+			if t, w, h := stillThumb(d.Thumbs); t != "" {
+				m.Loc, m.Mime, m.Ext, m.W, m.H = d.AsInputDocumentFileLocation(t), "image/webp", ".webp", w, h
+			} else {
+				m.Animated = true
+				m.Label = i18n.T("media_animated_sticker", m.Emoji)
+			}
 		}
 	case animated:
 		m.Kind = model.MediaGIF
@@ -243,6 +251,20 @@ func docMedia(d *tg.Document) *model.Media {
 		}
 	}
 	return m
+}
+
+// stillThumb gives the type and size of the first picture among the thumbs of
+// a document, "" when there is none (an outline or a tiny blurred one only).
+func stillThumb(thumbs []tg.PhotoSizeClass) (typ string, w, h int) {
+	for _, t := range thumbs {
+		switch v := t.(type) {
+		case *tg.PhotoSize:
+			return v.Type, v.W, v.H
+		case *tg.PhotoSizeProgressive:
+			return v.Type, v.W, v.H
+		}
+	}
+	return "", 0, 0
 }
 
 func extOf(name, mime string) string {

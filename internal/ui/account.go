@@ -38,6 +38,9 @@ func (u *UI) clearNetWork(net string) {
 	if u.gifs != nil && u.gifs.chat.Net == net {
 		u.gifClose()
 	}
+	if u.stickers != nil && u.stickers.chat.Net == net {
+		u.stickerClose()
+	}
 	if u.mbox != nil && u.mbox.chat.Net == net {
 		u.mboxClose()
 	}
@@ -132,6 +135,7 @@ func (u *UI) clearAccount(net string) {
 	}
 	u.customs = nil
 	delete(u.reactList, net)
+	delete(u.reactTop, net)
 	delete(u.dialogsSeen, net)
 	u.dialogsDirty = true
 }

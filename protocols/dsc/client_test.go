@@ -36,7 +36,7 @@ var _ model.Forwarder = (*Client)(nil) // Caps.Forward is on: the UI finds the m
 // leaving a room and blocking included, so the context menu offers neither.
 func TestCaps(t *testing.T) {
 	got := New(Config{}, make(chan model.Event, 1)).Caps()
-	want := model.Caps{Reactions: true, AnyReaction: true, Edit: true, Delete: true, Gifs: true, Search: true, GlobalSearch: true, History: true, Forward: true, Pin: true}
+	want := model.Caps{Reactions: true, AnyReaction: true, Edit: true, Delete: true, Gifs: true, Stickers: true, Search: true, GlobalSearch: true, History: true, Forward: true, Pin: true}
 	if got != want {
 		t.Fatalf("Caps: %+v, want %+v", got, want)
 	}

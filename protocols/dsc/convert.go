@@ -184,7 +184,41 @@ func mediaOf(m *discord.Message) (*model.Media, []*model.Media) {
 			return embedMedia(e), nil
 		}
 	}
+	if len(m.Stickers) > 0 { // up to three
+		var more []*model.Media
+		for _, s := range m.Stickers[1:] {
+			more = append(more, stickerMedia(s))
+		}
+		return stickerMedia(m.Stickers[0]), more
+	}
 	return nil, nil
+}
+
+// stickerFormatGIF : the GIF format of a sticker, which arikawa does not name.
+const stickerFormatGIF = 4
+
+// stickerMedia : a sticker of a message. PNG shows as a picture, APNG and GIF
+// play like a GIF, Lottie (Discord's own stickers) has its name alone: nothing
+// here draws it. PNG and APNG come from the CDN, the file as sent (the media
+// proxy may flatten an APNG to its first picture); GIF ones are served by the
+// media proxy only.
+func stickerMedia(s discord.StickerItem) *model.Media {
+	m := &model.Media{Kind: model.MediaSticker, Name: s.Name, Label: "[sticker " + s.Name + "]"}
+	url := "https://media.discordapp.net/stickers/" + s.ID.String()
+	switch s.FormatType {
+	case discord.StickerFormatPNG, discord.StickerFormatAPNG:
+		m.Mime, m.Ext, m.Loc = "image/png", ".png", fileURL("https://cdn.discordapp.com/stickers/"+s.ID.String()+".png")
+		if s.FormatType == discord.StickerFormatAPNG {
+			m.Kind = model.MediaGIF
+		}
+	case stickerFormatGIF:
+		m.Kind, m.Mime, m.Ext, m.Loc = model.MediaGIF, "image/gif", ".gif", fileURL(url+".gif?size=160")
+	default:
+		m.Animated = true // label alone
+		return m
+	}
+	m.W, m.H = 160, 160
+	return m
 }
 
 // gifvMedia : a Tenor or Giphy link unfurled by Discord (what SendGif posts)

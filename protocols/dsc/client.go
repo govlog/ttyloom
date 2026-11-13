@@ -50,6 +50,10 @@ type Client struct {
 	// emojis : the custom emojis of each guild (customsOf), by guild id —
 	// one read-only copy shared by all its chats, dropped when they change.
 	emojis sync.Map
+	// guildStickers : the stickers of each guild asked by the Stickers tab, for
+	// the session (discord.GuildID → []discord.Sticker).
+	guildStickers sync.Map
+	stickerTop    atomic.Pointer[stickerPrefs] // from the synced settings (loadReactionsTop)
 	// runCtx : the ctx of Run, set before wire(): the pins handler starts a
 	// REST read under it (fetchPins).
 	runCtx context.Context
@@ -78,7 +82,7 @@ func (c *Client) state() *ningen.State { return c.st.Load() }
 // and no name resolution: a pseudo that no dialog carries cannot become a chat
 // (/query, /join).
 func (c *Client) Caps() model.Caps {
-	return model.Caps{Reactions: true, AnyReaction: true, Edit: true, Delete: true, Gifs: true, Search: true, GlobalSearch: true, History: true, Forward: true, Pin: true}
+	return model.Caps{Reactions: true, AnyReaction: true, Edit: true, Delete: true, Gifs: true, Stickers: true, Search: true, GlobalSearch: true, History: true, Forward: true, Pin: true}
 }
 
 // Run blocks: QR login when there is no token yet, gateway connection, then
@@ -116,6 +120,7 @@ func (c *Client) Run(ctx context.Context) error {
 	// Bot stays false: the token is that of an account, and the bot gates of
 	// the UI (/chats, global search…) are a Telegram matter.
 	c.Post(model.EvReady{SelfID: int64(me.ID), SelfName: cmp.Or(me.DisplayName, me.Username), Bot: false})
+	go c.loadReactionsTop(ctx)
 	// EvConnected is posted by the ConnectedEvent handler, on this connection
 	// and on every one that follows it. The gateway reconnects on its own and
 	// gives up only on a fatal close: then Run ends with its error, and the

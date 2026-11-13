@@ -569,8 +569,11 @@ func (u *UI) edited(e model.EvEdited) {
 // (chat lookup, login prompt, fatal error).
 func (u *UI) openReactPicker(it *Item) {
 	c := u.chatOf(it.Msg)
+	top := u.topOf(c)
 	if u.caps(c).AnyReaction { // the whole table, with the search
 		u.openPicker(c, func(e string) { u.react(it, e) })
+		u.picker.recent = reactHead(top, u.picker.recent)
+		u.picker.filter()
 		return
 	}
 	list := u.allowed(c)
@@ -578,8 +581,56 @@ func (u *UI) openReactPicker(it *Item) {
 		u.flash(i18n.T("no_reaction_allowed"))
 		return
 	}
-	u.picker = newReactPicker(min(60, u.t.Cols-4), min(14, u.t.Rows-4), list,
+	u.picker = newReactPicker(min(60, u.t.Cols-4), min(14, u.t.Rows-4), topFirst(list, top),
 		func(e string) { u.react(it, e) })
+}
+
+// topOf : the reactions the account uses most on the network of c, most used
+// first; nil for no chat or no list.
+func (u *UI) topOf(c *model.Chat) []string {
+	if c == nil {
+		return nil
+	}
+	return u.reactTop[c.Net]
+}
+
+// topFirst gives list with the entries of top it holds first, in the order of
+// top, then the rest of list in its own order. The form of list is kept (the
+// one the server takes); the variation selector is ignored.
+func topFirst(list, top []string) []string {
+	byBase := make(map[string]string, len(list))
+	for _, e := range list {
+		byBase[emoji.Base(e)] = e
+	}
+	out := make([]string, 0, len(list))
+	seen := make(map[string]bool, len(list))
+	for _, e := range top {
+		b := emoji.Base(e)
+		if v, ok := byBase[b]; ok && !seen[b] {
+			seen[b] = true
+			out = append(out, v)
+		}
+	}
+	for _, e := range list {
+		if !seen[emoji.Base(e)] {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
+// reactHead : the head of the whole table for a reaction — the ones the
+// account uses most, then the local recents, each once.
+func reactHead(top, recent []string) []string {
+	out := make([]string, 0, len(top)+len(recent))
+	seen := make(map[string]bool, len(top)+len(recent))
+	for _, e := range slices.Concat(top, recent) {
+		if b := emoji.Base(e); !seen[b] {
+			seen[b] = true
+			out = append(out, e)
+		}
+	}
+	return out
 }
 
 // baseAll gives the list normalised (no variation selector), the form Telegram

@@ -185,6 +185,7 @@ type UI struct {
 	picker      *picker                 // emoji picker open: it takes every key
 	themePick   *themePicker            // theme picker open: it takes every key
 	reactList   map[string][]string     // reactions the account can use per network (EvReactionsList)
+	reactTop    map[string][]string     // reactions the account uses most per network (EvReactionsTop)
 	viewer      *viewer                 // full screen preview open: it takes every key
 	search      *searchState            // Ctrl+F search running in the shown window
 	gsearch     *globalSearch           // 2nd Ctrl+F: overlay of the server results, it takes everything
@@ -193,6 +194,7 @@ type UI struct {
 	hub         *hubBox                 // hub "Networks" open: it takes everything but its page (form)
 	hubReturn   map[string]bool         // networks started from the hub: it comes back at their EvReady or EvStopped
 	gifs        *gifBox                 // GIF box (Ctrl+G): it takes everything
+	stickers    *stickerBox             // its Stickers tab (Tab, /sticker)
 	mbox        *mediaBox               // media browser (Ctrl+M): it takes everything
 	files       *filesBox               // file browser (Ctrl+D): it takes everything but the menu of a file
 	fileRuns    sync.WaitGroup          // its reading of the disk, for a test to wait on
@@ -1341,6 +1343,12 @@ func (u *UI) event(ev model.Event) {
 		u.contactsFound(e)
 	case model.EvGifs:
 		u.gifsResult(e)
+	case model.EvStickers:
+		u.stickersLoaded(e)
+	case model.EvStickerPack:
+		u.stickerPack(e)
+	case model.EvStickerSearch:
+		u.stickerSearch(e)
 	case model.EvMedia:
 		u.mediaResult(e)
 	case model.EvEditMessage:
@@ -1408,6 +1416,8 @@ func (u *UI) event(ev model.Event) {
 		u.pinned(e)
 	case model.EvReactionsList:
 		u.reactList[u.dispatchNet] = baseAll(e.Emojis)
+	case model.EvReactionsTop:
+		u.reactTop[u.dispatchNet] = e.Emojis
 	case model.EvChatReactions:
 		if c := u.chats[u.evKey(e.ChatID)]; c != nil {
 			c.Reactions = baseAll(e.Emojis) // nil = no restriction left
@@ -2911,6 +2921,10 @@ func (u *UI) tickAt(now time.Time) bool {
 	}
 	if n := u.newChat; n != nil && n.due(now) {
 		u.ncSend()
+		redraw = true
+	}
+	if s := u.stickers; s != nil && s.due(now) {
+		u.stickerAsk()
 		redraw = true
 	}
 	if g := u.gifs; g != nil && g.due(now) {

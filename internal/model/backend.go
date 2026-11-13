@@ -55,6 +55,15 @@ type Backend interface {
 	// Telegram). SendGif posts a result of it, EvSent back like a text send.
 	SearchGifs(ctx context.Context, chat *Chat, q string)
 	SendGif(ctx context.Context, chat *Chat, g Gif, tmpID int64)
+	// LoadStickers : the Stickers tab of the GIF box — the sections the
+	// account can send in chat (EvStickers). LoadStickerPack fills a section
+	// left empty (EvStickerPack); SearchStickers asks the network for the
+	// stickers of an emoji (EvStickerSearch, Caps.StickerSearch only).
+	// SendSticker posts one, EvSent back like a text send.
+	LoadStickers(ctx context.Context, chat *Chat)
+	LoadStickerPack(ctx context.Context, chat *Chat, key string)
+	SearchStickers(ctx context.Context, chat *Chat, emoji string)
+	SendSticker(ctx context.Context, chat *Chat, s Sticker, tmpID int64)
 }
 
 // Launcher builds the backend of one configured network and runs it: the
@@ -91,8 +100,12 @@ type Caps struct {
 	Leave        bool // leaving a room (a private chat only closes its window)
 	Block        bool // blocking or reporting a chat or a member of a room
 	Gifs         bool // GIF search and send (Ctrl+G)
-	Forward      bool // forwarding a message to a chat of the same network (Forwarder)
-	Pin          bool // pinning a message of a chat (menu entry, key "n", banner)
+	Stickers     bool // Stickers tab of the GIF box
+	// StickerSearch : the search of the Stickers tab goes to the network
+	// (SearchStickers); false: the box filters what it holds.
+	StickerSearch bool
+	Forward       bool // forwarding a message to a chat of the same network (Forwarder)
+	Pin           bool // pinning a message of a chat (menu entry, key "n", banner)
 	// History : the server keeps the history, the disk cache is a copy of it.
 	// Off (IRC), the cache is the only copy: the UI never drops or replaces
 	// it as a side effect — account change, chat gone, older cache format.
@@ -139,7 +152,7 @@ type MediaSearcher interface {
 // with nothing gated off.
 func AllCaps() Caps {
 	return Caps{ReadReceipts: true, Reactions: true, Edit: true, Delete: true, Whois: true, Search: true,
-		GlobalSearch: true, Contacts: true, Resolve: true, Sync: true, Leave: true, Block: true, Gifs: true, History: true, Forward: true, Pin: true}
+		GlobalSearch: true, Contacts: true, Resolve: true, Sync: true, Leave: true, Block: true, Gifs: true, Stickers: true, StickerSearch: true, History: true, Forward: true, Pin: true}
 }
 
 // Poster : how a backend talks to the UI — the event channel, a blocking and

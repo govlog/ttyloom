@@ -888,3 +888,18 @@ func TestDefaultPort(t *testing.T) {
 		cancel()
 	}
 }
+
+// IRC has no stickers: the box gets an error to show, a send fails at once.
+func TestStickersUnsupported(t *testing.T) {
+	events := make(chan model.Event, 4)
+	c := New(Config{Name: "test"}, events)
+	chat := &model.Chat{Net: "test", ID: 1}
+	c.LoadStickers(context.Background(), chat)
+	if ev := waitFor[model.EvStickers](t, events); ev.Err == "" || ev.ChatID != 1 {
+		t.Fatalf("LoadStickers: %+v, want an error for chat 1", ev)
+	}
+	c.SendSticker(context.Background(), chat, model.Sticker{}, 9)
+	if ev := waitFor[model.EvSent](t, events); ev.Err == "" || ev.TmpID != 9 {
+		t.Fatalf("SendSticker: %+v, want an error for tmp 9", ev)
+	}
+}

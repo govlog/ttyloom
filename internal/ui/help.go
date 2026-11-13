@@ -87,6 +87,7 @@ var helpTopics = []topic{
 	{"F5", "help_f5", "media"},
 	{"Ctrl+V", "help_ctrl_v", "media"},
 	{"/gif", "help_gif", "media"},
+	{"/sticker", "help_sticker", "media"},
 	{"Ctrl+G", "help_ctrl_g", "media"},
 	{"/media", "help_media", "media"},
 	{"Ctrl+M", "help_ctrl_m", "media"},

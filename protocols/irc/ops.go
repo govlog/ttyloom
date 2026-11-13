@@ -357,3 +357,20 @@ func (c *Client) SearchGifs(_ context.Context, _ *model.Chat, q string) {
 func (c *Client) SendGif(_ context.Context, chat *model.Chat, _ model.Gif, tmpID int64) {
 	c.Refuse("SendGif", model.EvSent{ChatID: chat.ID, TmpID: tmpID, Err: c.unsupported()})
 }
+
+// IRC has no stickers.
+func (c *Client) LoadStickers(_ context.Context, chat *model.Chat) {
+	c.Refuse("LoadStickers", model.EvStickers{ChatID: chat.ID, Err: c.unsupported()})
+}
+
+func (c *Client) LoadStickerPack(_ context.Context, chat *model.Chat, key string) {
+	c.Refuse("LoadStickerPack", model.EvStickerPack{ChatID: chat.ID, Key: key, Err: c.unsupported()})
+}
+
+func (c *Client) SearchStickers(_ context.Context, chat *model.Chat, emoji string) {
+	c.Refuse("SearchStickers", model.EvStickerSearch{ChatID: chat.ID, Query: emoji, Err: c.unsupported()})
+}
+
+func (c *Client) SendSticker(_ context.Context, chat *model.Chat, _ model.Sticker, tmpID int64) {
+	c.Refuse("SendSticker", model.EvSent{ChatID: chat.ID, TmpID: tmpID, Err: c.unsupported()})
+}

@@ -425,7 +425,9 @@ Current limits:
   exact count.
 - Custom emojis show as `:name:`; on kitty their image takes the cell of the
   picker. Only the emojis of the current server are offered and sent.
-- No other-person read receipts, stickers or location cards.
+- No other-person read receipts or location cards. Stickers show: PNG ones as
+  pictures, APNG and GIF ones playing like GIFs, Discord's own (Lottie) ones by
+  their name.
 - Leave/report/block actions are hidden where unsupported. Closing a DM window
   only closes the local window. Deleting a server channel conversation is
   unsupported and records a warning in `/debug`.
@@ -745,7 +747,8 @@ because `/quit` shares that prefix. Exact aliases take precedence when executing
 | `/set video hidden` | Keep only video labels in the conversation; `show` previews one frame and `autoplay` loops visible downloaded videos. |
 | `/send path [caption]` | Send a local file of 2 GB at most. On Telegram, PNG/JPEG goes as a photo, a video or a sound file as a playable media with its ffprobe metadata, other formats as documents; on Discord, as an attachment; in a private IRC chat, by DCC SEND. Tab completes the path: `~`, relative paths and spaces work, a directory gets its `/` and the next Tab goes on inside it. |
 | Ctrl+V | Paste an image through `wl-paste` or `xclip`, then `e` sends it, `l` adds a caption first, `a` or Escape cancels. Plain text goes into the editor. |
-| Ctrl+G, `/gif [query]` | Search animated GIF previews: Telegram’s `@gif` bot or Discord’s GIF provider (currently KLIPY). Images must be on (F4). Trends appear immediately; typing searches. Up to 24 previews show at a time, six by four rows; they download three at a time in grid order. Until its preview appears, a cell fills with grey bars as its bytes arrive (a band sweeps it when the size is unknown), stays full while it decodes, and says "waiting" before its turn; a smaller terminal shrinks the previews first, then shows fewer columns or rows. A scrollbar on the right, thicker under the pointer, shows the others: click it or drag its thumb. Only the preview under the mouse, or the one the arrows reached, plays. Arrows, PgUp/PgDn, Home/End, the wheel or the scrollbar move; Enter or a click sends; Escape closes. |
+| Ctrl+G, `/gif [query]` | Search animated GIF previews: Telegram’s `@gif` bot or Discord’s GIF provider (currently KLIPY). Images must be on (F4). Trends appear immediately; typing searches. Up to 24 previews show at a time, six by four rows; they download three at a time in grid order. Until its preview appears, a cell fills with grey bars as its bytes arrive (a band sweeps it when the size is unknown), stays full while it decodes, and says "waiting" before its turn; a smaller terminal shrinks the previews first, then shows fewer columns or rows. A scrollbar on the right, thicker under the pointer, shows the others: click it or drag its thumb. Only the preview under the mouse, or the one the arrows reached, plays. Arrows, PgUp/PgDn, Home/End, the wheel or the scrollbar move; Enter or a click sends; Escape closes. Tab, or a click on `Stickers` at the top, goes to the Stickers tab. |
+| Tab in Ctrl+G, `/sticker [query]` | The Stickers tab of the GIF box, on the same grid. Telegram: your recent and favorite stickers, then your installed packs, each one loaded when the list reaches it (one request at a time, to stay clear of FLOOD_WAIT); typing a word or an emoji asks Telegram for the stickers of that emoji (`joy` finds 😂). Discord: your favorite and most used stickers of the server, then all its stickers; typing filters them by name and tags. Outside a server, or for the stickers of another server, Discord asks for Nitro, which ttyloom does not handle. A Lottie sticker with no still picture is not offered. Enter or a click sends; Tab goes back to the GIFs. IRC has no stickers. |
 | Ctrl+M, `/media [media\|gifs\|files]` | Browse the media of the conversation of the window, sent by anyone, newest first: photos and videos, GIFs, or files (Telegram, Discord; not for a bot account). Same grid as the GIF picker: up to six by four, with the same scrollbar; older ones load as you scroll. Tab and Shift+Tab, or a click on a tab, change tab; Enter or a click shows the media in the viewer, where ←/→ go through the list (a file opens with its program); `j` goes to its message, `o` opens it, Escape or Ctrl+M closes. Only the GIF under the mouse plays. A cell shows the small picture the network gives (kept in the cache directory), a small GIF itself, or the name, size, sender and date of a file; a GIF or a media with no small picture downloads to `download_dir`, like the ones of the conversation, when it is under `auto_media_max_kb`. Ctrl+M needs the kitty keyboard protocol (Ghostty, kitty, WezTerm, foot); elsewhere it is Enter, so use `/media`. |
 | Ctrl+D, `/files` | Browse the files sent and received in every conversation the disk cache and the open windows hold, by person: documents, photos, videos and audio, not stickers, GIFs nor link previews. The people go on the left, grouped by network, in one list in the aggregate view (F6), cut to the network of `/net`; me comes first for what I sent. The files of the person picked go on the right, newest first, with their date, size, name and conversation. Typing filters the files by name, case and accents aside: `rapport` finds a part of the name, `*.pdf` or `*toto*.gif` a pattern on the whole name (`*` any run of characters, `?` one); Backspace takes a letter back, Escape clears the filter. ↑/↓, PgUp/PgDn, Home/End and the wheel move; ←/→ or Tab go from the people to the files and back, as Enter on a person does. Enter or a click on a file opens its menu (below), with "go to the message" first; Escape or Ctrl+D closes. The box shows what was there at its opening. Opening it also moves the documents still under the names of before to the folder of their conversation. |
 | Click the label of a media, right-click a picture | Open the menu of its file: view (a media with a preview), copy the image (a picture: through `wl-copy` or `xclip`), copy its absolute path (OSC 52, like a selection), send it to a conversation, open it with `xdg-open`. "Send to a conversation" opens the new chat box over every network: on the network of the file the network forwards the message, so the receiver sees where it comes from; anywhere else (another network, an IRC nick by DCC, one attachment of several) the file goes up as a file of mine. A file not downloaded yet downloads first, and a failure says so in the window. A left click on the picture still opens the viewer; the label of a map opens the viewer too. |
@@ -793,7 +796,8 @@ control the conversation view. A video already playing in the conversation
 (`autoplay`, or the FFmpeg fallback) keeps `l` as pause; `s` then `l` hands it
 to mpv.
 
-Photos, stickers (animated stickers stay labels), GIFs and videos below the
+Photos, stickers (a video sticker plays like a GIF; an animated Lottie one
+shows its still picture, or its label when Telegram gives none), GIFs and videos below the
 download threshold are fetched into `download_dir`; GIFs animate and a video
 shows its first frame. On kitty and Ghostty 1.4, the terminal plays the GIFs
 itself: ttyloom sends their frames once, a few at a time, and only controls
@@ -1044,6 +1048,10 @@ reactions the chat allows on the first row (click one to toggle it), then the
 actions of the message — go to the quoted message, reply, forward, react, pin
 or unpin, copy, info, open, view, play — with edit and delete last. The entry under the pointer is
 the current one; Enter or a click runs it, any other key closes the menu.
+The quick reactions, like the reaction picker, start with the reactions your
+account uses most: on Telegram the quick bar of the official apps, on Discord
+your favorite emojis then your most used reactions (both synced with your
+phone), read again at each connection.
 Double-click a message to toggle 👍 (or the first reaction the chat allows).
 Clicking any reaction below a message also toggles it.
 
@@ -1248,7 +1256,8 @@ intercept Alt+letter combinations. Use F6, the supported shortcut.
 ### Reaction unavailable here
 
 Telegram has a supported reaction set that each chat can restrict. The picker
-offers permitted reactions. In Saved Messages, reactions are tags and require
+offers permitted reactions. Some common emojis, such as 😂, are not in the set:
+Telegram refuses them as reactions. In Saved Messages, reactions are tags and require
 Telegram Premium; the client reports that restriction when applicable.
 
 ### Images use half blocks in Ghostty

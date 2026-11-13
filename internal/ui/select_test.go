@@ -4,10 +4,15 @@ import (
 	"bytes"
 	"encoding/base64"
 	"fmt"
+	"os"
+	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/govlog/ttyloom/internal/config"
+	"github.com/govlog/ttyloom/internal/emoji"
 	"github.com/govlog/ttyloom/internal/i18n"
 	"github.com/govlog/ttyloom/internal/media"
 	"github.com/govlog/ttyloom/internal/model"
@@ -546,5 +551,107 @@ func TestClickRevealsDeleted(t *testing.T) {
 		if it.Reveal != want {
 			t.Fatalf("after a click: reveal %v, want %v", it.Reveal, want)
 		}
+	}
+}
+
+// pickerChars : the emojis of the open picker, in the order shown.
+func pickerChars(u *UI, n int) []string {
+	var out []string
+	for _, e := range u.picker.items[:min(n, len(u.picker.items))] {
+		out = append(out, e.Char)
+	}
+	return out
+}
+
+// pickUI : a UI with one chat of net open in the current window, and the
+// item of a message of it to react to.
+func pickUI(net string, caps model.Caps, c *model.Chat) (*UI, *Item) {
+	u := &UI{ws: NewWindows(), agg: &Window{}, chats: map[model.ChatKey]*model.Chat{},
+		nets: map[string]model.Backend{net: &fakeBackend{caps: caps}}, t: &term.Term{Cols: 80, Rows: 24},
+		reactList: map[string][]string{}, reactTop: map[string][]string{}}
+	u.chats[c.Key()] = c
+	w := u.ws.New(false)
+	w.Chat = c
+	it := &Item{Msg: &model.Msg{Net: net, ID: 7, ChatID: c.ID}}
+	w.Items = append(w.Items, it)
+	return u, it
+}
+
+// Telegram: the reactions the account uses most come first, then the others in
+// the order of the server; the restriction of the chat still holds. With no
+// list of the most used (call failed), the order of the server stays.
+func TestReactPickerTopFirst(t *testing.T) {
+	c := &model.Chat{Net: netTelegram, ID: 5, Reactions: []string{"👍", "🤣", "😁"}}
+	u, it := pickUI(netTelegram, model.AllCaps(), c)
+	u.dispatch(model.Envelope{Net: netTelegram, Ev: model.EvReactionsList{Emojis: []string{"👍", "❤", "🔥", "🤣", "😁"}}})
+	u.openReactPicker(it)
+	if got := pickerChars(u, 10); !slices.Equal(got, []string{"👍", "🤣", "😁"}) {
+		t.Fatalf("no list of the most used: %v, want the order of the server", got)
+	}
+	u.dispatch(model.Envelope{Net: netTelegram, Ev: model.EvReactionsTop{Emojis: []string{"🔥", "😁", "🤣"}}})
+	u.openReactPicker(it)
+	if got := pickerChars(u, 10); !slices.Equal(got, []string{"😁", "🤣", "👍"}) {
+		t.Fatalf("most used first: %v, want [😁 🤣 👍] (🔥 refused by the chat)", got)
+	}
+}
+
+// Discord: the whole table opens on the reactions used most, then the local
+// recents, each once; a custom emoji of another guild is left out.
+func TestFullPickerTopThenRecents(t *testing.T) {
+	t.Setenv("TTYLOOM_DIR", t.TempDir())
+	path := config.RecentPath()
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	emoji.AddRecent(path, "🤣")
+	emoji.AddRecent(path, "😁") // recents: 😁 then 🤣
+	c := &model.Chat{Net: netDiscord, ID: 9, Customs: []string{":kek:"}}
+	u, it := pickUI(netDiscord, model.Caps{Reactions: true, AnyReaction: true}, c)
+	u.dispatch(model.Envelope{Net: netDiscord, Ev: model.EvReactionsTop{Emojis: []string{":kek:", "🤣", ":other:"}}})
+	u.openReactPicker(it)
+	if got := pickerChars(u, 3); !slices.Equal(got, []string{":kek:", "🤣", "😁"}) {
+		t.Fatalf("head of the picker: %v, want [:kek: 🤣 😁]", got)
+	}
+}
+
+// The quick reactions of the right-click menu start with the ones the account
+// uses most: on Telegram those the chat allows, on Discord the emojis of the
+// list (a custom emoji has no place on that row), then the usual ones.
+func TestMenuQuickReactsTopFirst(t *testing.T) {
+	c := &model.Chat{Net: netTelegram, ID: 5}
+	u, it := pickUI(netTelegram, model.AllCaps(), c)
+	u.dispatch(model.Envelope{Net: netTelegram, Ev: model.EvReactionsList{Emojis: []string{"👍", "❤", "🔥", "🤣", "😁", "🎉", "🙏", "👌"}}})
+	u.dispatch(model.Envelope{Net: netTelegram, Ev: model.EvReactionsTop{Emojis: []string{"👌", "🤣", "💩"}}})
+	u.openMsgMenu(it, 10, 0)
+	if got := u.menu.reacts; !slices.Equal(got, []string{"👌", "🤣", "👍", "❤", "🔥", "😁", "🎉"}) {
+		t.Fatalf("Telegram quick reactions: %v", got)
+	}
+	d := &model.Chat{Net: netDiscord, ID: 9, Customs: []string{":kek:"}}
+	u, it = pickUI(netDiscord, model.Caps{Reactions: true, AnyReaction: true}, d)
+	u.dispatch(model.Envelope{Net: netDiscord, Ev: model.EvReactionsTop{Emojis: []string{":kek:", "😂", "👍"}}})
+	u.openMsgMenu(it, 10, 0)
+	if got := u.menu.reacts; len(got) != menuReacts || got[0] != "😂" || got[1] != "👍" || slices.Contains(got, ":kek:") {
+		t.Fatalf("Discord quick reactions: %v, want 😂 then 👍 first, no custom emoji, %d of them", got, menuReacts)
+	}
+}
+
+// Another account on the same network does not inherit the reactions the
+// first one uses most: its picker keeps the plain order until its own list
+// comes (the call may fail or give nothing).
+func TestAccountChangeForgetsTopReactions(t *testing.T) {
+	u, b, room, _ := queryUI()
+	u.self, u.cacheSelf, u.conn = map[string]selfInfo{}, map[string]int64{}, map[string]bool{}
+	u.reactTop = map[string][]string{}
+	u.t = &term.Term{Cols: 80, Rows: 24}
+	u.dispatch(model.Envelope{Net: room.Net, Ev: model.EvReady{SelfID: 111, SelfName: "first account"}})
+	u.dispatch(model.Envelope{Net: room.Net, Ev: model.EvReactionsTop{Emojis: []string{"🔥"}}})
+	u.dispatch(model.Envelope{Net: room.Net, Ev: model.EvStopped{}})
+	u.nets[room.Net] = b
+	u.dispatch(model.Envelope{Net: room.Net, Ev: model.EvReady{SelfID: 222, SelfName: "second account"}})
+	c := &model.Chat{Net: room.Net, ID: 3}
+	u.chats[c.Key()] = c
+	u.openReactPicker(&Item{Msg: &model.Msg{Net: c.Net, ID: 7, ChatID: c.ID}})
+	if got := pickerChars(u, 1); !slices.Equal(got, []string{"👍"}) {
+		t.Fatalf("second account: picker starts with %v, want the plain order (👍), not the first account's 🔥", got)
 	}
 }

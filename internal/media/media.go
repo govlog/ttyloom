@@ -149,8 +149,9 @@ func Load(ctx context.Context, path, mime string, maxW, maxH, frames int, progre
 	switch {
 	case strings.HasPrefix(mime, "video/"):
 		return loadVideo(ctx, path, maxW, maxH, frames, p)
-	case mime == "image/webp" && animatedWebP(head(path)):
-		// The Go decoder reads still WebP only; ffmpeg plays an animated one.
+	case mime == "image/webp" && animatedWebP(head(path)),
+		mime == "image/png" && HaveFFmpeg && animatedPNG(head(path)): // no ffmpeg: its first picture
+		// The Go decoders read the first picture only; ffmpeg plays the others.
 		return loadVideo(ctx, path, maxW, maxH, frames, p)
 	case mime == "image/gif" && frames > 1:
 		return loadGIF(ctx, path, maxW, maxH, min(frames, maxFrames))
@@ -213,6 +214,38 @@ func Sniff(path string) string {
 func animatedWebP(b []byte) bool {
 	return len(b) > 20 && string(b[:4]) == "RIFF" && string(b[8:16]) == "WEBPVP8X" && b[20]&0x02 != 0
 }
+
+// animatedPNG tells whether the bytes open an animated PNG (APNG): an acTL
+// chunk before the first IDAT.
+func animatedPNG(b []byte) bool {
+	if len(b) < 8 || string(b[:8]) != "\x89PNG\r\n\x1a\n" {
+		return false
+	}
+	for b = b[8:]; len(b) >= 8; {
+		switch string(b[4:8]) {
+		case "acTL":
+			return true
+		case "IDAT":
+			return false
+		}
+		n := uint64(binary.BigEndian.Uint32(b)) + 12 // length, type, data, crc
+		if n > uint64(len(b)) {
+			return false
+		}
+		b = b[n:]
+	}
+	return false
+}
+
+// haveLibvpx : ffmpeg has the libvpx VP9 decoder, the one that keeps the alpha
+// of a WebM (the native one drops it: Telegram video stickers on black).
+var haveLibvpx = sync.OnceValue(func() bool {
+	if !HaveFFmpeg {
+		return false
+	}
+	out, err := exec.Command("ffmpeg", "-hide_banner", "-decoders").Output()
+	return err == nil && bytes.Contains(out, []byte(" libvpx-vp9 "))
+})
 
 // Fit gives the size reduced to fit in maxW x maxH (0 = no limit), aspect kept.
 func Fit(w, h, maxW, maxH int) (int, int) {
@@ -429,12 +462,13 @@ func loadVideo(ctx context.Context, path string, maxW, maxH, frames int, progres
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
 	out, err := exec.CommandContext(ctx, "ffprobe", "-v", "error", "-select_streams", "v:0",
-		"-show_entries", "stream=width,height,r_frame_rate", "-of", "csv=p=0", "-protocol_whitelist", "file,pipe", "-i", path).Output()
+		"-show_entries", "stream=codec_name,width,height,r_frame_rate", "-of", "csv=p=0", "-protocol_whitelist", "file,pipe", "-i", path).Output()
 	if err != nil {
 		return nil, fmt.Errorf(i18n.T("ffprobe_error"), err)
 	}
+	codec, dims, _ := strings.Cut(strings.TrimSpace(string(out)), ",")
 	var w, h, num, den int
-	n, _ := fmt.Sscanf(strings.TrimSpace(string(out)), "%d,%d,%d/%d", &w, &h, &num, &den)
+	n, _ := fmt.Sscanf(dims, "%d,%d,%d/%d", &w, &h, &num, &den)
 	if n < 2 || w <= 0 || h <= 0 {
 		return nil, fmt.Errorf(i18n.T("ffprobe_output"), out)
 	}
@@ -449,10 +483,14 @@ func loadVideo(ctx context.Context, path string, maxW, maxH, frames int, progres
 	}
 	w, h = Fit(w, h, maxW, maxH)
 	w, h = max(w&^1, 2), max(h&^1, 2) // even size for ffmpeg
-	cmd := exec.CommandContext(ctx, "ffmpeg", "-v", "error", "-nostdin", "-protocol_whitelist", "file,pipe", "-i", path,
+	args := []string{"-v", "error", "-nostdin", "-protocol_whitelist", "file,pipe"}
+	if codec == "vp9" && haveLibvpx() {
+		args = append(args, "-c:v", "libvpx-vp9") // keeps the alpha
+	}
+	cmd := exec.CommandContext(ctx, "ffmpeg", append(args, "-i", path,
 		"-vf", fmt.Sprintf("fps=%g,scale=%d:%d", fps, w, h),
 		"-frames:v", strconv.Itoa(frames),
-		"-f", "rawvideo", "-pix_fmt", "rgba", "-")
+		"-f", "rawvideo", "-pix_fmt", "rgba", "-")...)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, err
@@ -472,7 +510,8 @@ func loadVideo(ctx context.Context, path string, maxW, maxH, frames int, progres
 			break
 		}
 		// The PNG is made before buf is read again: the encoder keeps nothing of it.
-		b, err := encode(&image.RGBA{Pix: buf, Stride: w * 4, Rect: image.Rect(0, 0, w, h)})
+		// rgba of ffmpeg is straight alpha: NRGBA, not the premultiplied RGBA.
+		b, err := encode(&image.NRGBA{Pix: buf, Stride: w * 4, Rect: image.Rect(0, 0, w, h)})
 		if err != nil {
 			return nil, err
 		}

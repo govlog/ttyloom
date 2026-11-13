@@ -57,6 +57,8 @@ func (u *UI) thumbBox() thumbs {
 	switch {
 	case u.gifs != nil:
 		return u.gifs
+	case u.stickers != nil:
+		return u.stickers
 	case u.mbox != nil:
 		return u.mbox
 	}

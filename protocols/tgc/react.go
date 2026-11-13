@@ -19,6 +19,7 @@ import (
 // outside a premium account: the server would refuse them.
 func (c *Client) loadReactions(ctx context.Context) {
 	defer c.Guard("loadReactions", nil)
+	defer c.loadTopReactions(ctx) // after the list, whatever became of it
 	res, err := c.api.MessagesGetAvailableReactions(ctx, 0)
 	if err != nil {
 		c.floodTrip(err)
@@ -41,6 +42,41 @@ func (c *Client) loadReactions(ctx context.Context) {
 		out = model.DefaultReactions
 	}
 	c.Post(model.EvReactionsList{Emojis: out})
+}
+
+// loadTopReactions gets the reactions the account uses most (the quick bar of
+// the official apps), once per connection. A failure posts nothing: the
+// picker keeps the order of the server.
+func (c *Client) loadTopReactions(ctx context.Context) {
+	defer c.Guard("loadTopReactions", nil)
+	if !c.floodOK() {
+		return
+	}
+	res, err := c.api.MessagesGetTopReactions(ctx, &tg.MessagesGetTopReactionsRequest{Limit: 20})
+	if err != nil {
+		c.floodTrip(err)
+		return
+	}
+	if top := topEmojis(res); len(top) > 0 {
+		c.Post(model.EvReactionsTop{Emojis: top})
+	}
+}
+
+// topEmojis keeps the plain emoji reactions of a list, in its order: a custom
+// emoji (Premium) or a paid star is no emoji to pick. The variation selector
+// goes, as in the list of the server.
+func topEmojis(res tg.MessagesReactionsClass) []string {
+	list, ok := res.(*tg.MessagesReactions)
+	if !ok {
+		return nil
+	}
+	var out []string
+	for _, r := range list.Reactions {
+		if e, ok := r.(*tg.ReactionEmoji); ok {
+			out = append(out, emoji.Base(e.Emoticon))
+		}
+	}
+	return out
 }
 
 // reactionReason gives the text to show in the window for a refused reaction,

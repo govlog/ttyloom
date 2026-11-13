@@ -73,6 +73,21 @@ func stamp(net string, ev model.Event) model.Event {
 	case model.EvGifs:
 		e.Err = render.CleanLine(e.Err)
 		return e
+	case model.EvStickers:
+		e.Err = render.CleanLine(e.Err)
+		for i := range e.Sections {
+			e.Sections[i].Title = render.CleanLine(e.Sections[i].Title)
+			stampStickers(e.Sections[i].Stickers)
+		}
+		return e
+	case model.EvStickerPack:
+		e.Err = render.CleanLine(e.Err)
+		stampStickers(e.Stickers)
+		return e
+	case model.EvStickerSearch:
+		e.Err = render.CleanLine(e.Err)
+		stampStickers(e.Stickers)
+		return e
 	case model.EvMedia:
 		for i := range e.Items {
 			stampMsg(net, &e.Items[i].Msg)
@@ -87,6 +102,14 @@ func stamp(net string, ev model.Event) model.Event {
 }
 
 // stampChat : a nil chat is a normal answer (lookup failed, hit with no peer).
+// stampStickers cleans the text of stickers: pack creators and servers write it.
+func stampStickers(ss []model.Sticker) {
+	for i := range ss {
+		s := &ss[i]
+		s.Name, s.Tags, s.Emoji = render.CleanLine(s.Name), render.CleanLine(s.Tags), render.CleanLine(s.Emoji)
+	}
+}
+
 func stampChat(net string, c *model.Chat) {
 	if c != nil {
 		c.Net = net

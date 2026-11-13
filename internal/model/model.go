@@ -494,6 +494,11 @@ type EvReactions struct {
 // posted at connection time.
 type EvReactionsList struct{ Emojis []string }
 
+// EvReactionsTop : the reactions the account uses most, most used first, as
+// the network counts them (synced with the other apps of the account), posted
+// at connection time. A new one replaces the one before.
+type EvReactionsTop struct{ Emojis []string }
+
 // EvChatReactions : reactions allowed in a chat. Emojis nil and None false
 // = no restriction (every reaction of the account).
 type EvChatReactions struct {
@@ -568,6 +573,48 @@ type EvParticipants struct {
 type Gif struct {
 	Preview *Media
 	Send    any
+}
+
+// Sticker : one sticker the account can send. Preview is its still picture
+// (nil: none to show), Send the handle of its network for SendSticker; Emoji,
+// Name and Tags serve the search of the box.
+type Sticker struct {
+	Preview           *Media
+	Send              any
+	Emoji, Name, Tags string
+}
+
+// StickerSection : a titled run of stickers of the box (recents, favorites, a
+// pack, a server). Key set and Stickers nil: a pack not loaded yet, that
+// LoadStickerPack fills.
+type StickerSection struct {
+	Title    string
+	Key      string
+	Stickers []Sticker
+}
+
+// EvStickers : answer of LoadStickers, the sections of the box.
+type EvStickers struct {
+	ChatID   int64
+	Sections []StickerSection
+	Err      string
+}
+
+// EvStickerPack : answer of LoadStickerPack, the stickers of the pack Key.
+type EvStickerPack struct {
+	ChatID   int64
+	Key      string
+	Stickers []Sticker
+	Err      string
+}
+
+// EvStickerSearch : answer of SearchStickers. Query is the emoji asked: the UI
+// drops the answers of a query it gave up.
+type EvStickerSearch struct {
+	ChatID   int64
+	Query    string
+	Stickers []Sticker
+	Err      string
 }
 
 // EvGifs : answer of SearchGifs. Query is the query sent: the UI drops the

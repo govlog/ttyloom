@@ -53,11 +53,12 @@ type Client struct {
 	// before the gap handler runs).
 	loggedIn qrlogin.LoggedIn
 
-	mu sync.Mutex // guards seen, floodUntil, gifUser and fills
+	mu sync.Mutex // guards seen, floodUntil, gifUser, fills and stickers
 	// ponytail: session cache with no eviction, a few hundred bytes per peer
 	// seen; move to an LRU if an account ever sees tens of thousands.
 	seen       map[int64]peers.Peer // peers already seen, by TDLib id: names with no network
 	floodUntil time.Time            // FLOOD_WAIT breaker
+	stickers   stickerCache         // Stickers tab of the GIF box, for the session
 	gifUser    tg.InputUserClass    // @gif once resolved (gifs.go)
 	// fills : the quote reads in flight (fillLater), by message {chat, id},
 	// each with its number; a newer version of the message drops the older read.

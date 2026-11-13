@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Stickers tab in the GIF box**: Tab in Ctrl+G, a click on `Stickers` at its top, or `/sticker [query]` shows the stickers you can send, on the grid of the GIF box. Telegram: your recent and favorite stickers, then your installed packs, each loaded when the list reaches it, one request at a time; typing a word or an emoji asks Telegram for the stickers of that emoji (`joy` finds 😂). Discord: your favorite and most used stickers of the server (from the settings Discord syncs between its apps), then all its stickers; typing filters by name. Enter or a click sends. Discord without Nitro allows only the stickers of the server of the channel, so the tab offers no other; IRC has no stickers.
+- **Stickers show**: a Discord sticker, ignored until now (a message holding only one looked empty), shows under its message with a `[sticker name]` label, up to the three a message can hold: a PNG one as a picture, an APNG or GIF one playing like a GIF; Discord's own stickers, drawn in Lottie, show their name alone. On Telegram, a video sticker now plays like a GIF, its transparency kept (ffmpeg with libvpx), and an animated sticker (Lottie) shows the still picture Telegram gives with it instead of a label alone. IRC has no stickers.
+
+### Changed
+
+- **The reactions you use most come first**: the reaction picker and the quick reactions of the right-click menu now start with the reactions your account uses most, as the network counts them across all your apps, phone included. On Telegram that is the quick bar of the official apps (`messages.getTopReactions`), ordered within what the chat allows; on Discord, your favorite emojis then your most used reactions, read from the settings Discord syncs between its apps, before the local recents. The order is read again at each connection; when the network does not answer, the order stays as before. Telegram does not offer 😂 as a reaction, so it never shows there; IRC has no reactions.
+
 ## v0.17-beta — 2026-11-13
 
 ### Added

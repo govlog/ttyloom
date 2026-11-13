@@ -362,6 +362,24 @@ func TestMimeOf(t *testing.T) {
 	}
 }
 
+// A video sticker plays like a GIF, under its sticker label; an animated
+// (Lottie) sticker shows the still picture Telegram gives with it, the thumb
+// of its document, rather than a label alone.
+func TestDocMediaStickers(t *testing.T) {
+	alt := &tg.DocumentAttributeSticker{Alt: "😂"}
+	m := docMedia(&tg.Document{ID: 1, AccessHash: 2, MimeType: "video/webm", Attributes: []tg.DocumentAttributeClass{alt}})
+	if m.Kind != model.MediaGIF || m.Label != "[sticker 😂]" || m.Loc == nil {
+		t.Fatalf("video sticker: %+v", m)
+	}
+	m = docMedia(&tg.Document{ID: 1, AccessHash: 2, MimeType: "application/x-tgsticker", Attributes: []tg.DocumentAttributeClass{alt},
+		Thumbs: []tg.PhotoSizeClass{&tg.PhotoPathSize{Type: "j"}, &tg.PhotoSize{Type: "m", W: 128, H: 128}}})
+	loc, _ := m.Loc.(*tg.InputDocumentFileLocation)
+	if m.Kind != model.MediaSticker || m.Animated || !m.Previewable() || loc == nil || loc.ThumbSize != "m" ||
+		m.Mime != "image/webp" || m.W != 128 || m.Label != "[sticker 😂]" {
+		t.Fatalf("animated sticker with a thumb: %+v (loc %+v)", m, m.Loc)
+	}
+}
+
 // docMedia : one label and one kind per document form.
 func TestDocMediaKinds(t *testing.T) {
 	doc := func(mime string, attrs ...tg.DocumentAttributeClass) *tg.Document {

@@ -74,3 +74,5 @@ tg_setup_3 = "3. Copiez ses deux valeurs ci-dessous. Scannez ensuite le QR code,
 tg_bad_api_id = "api_id : le numéro de l'application"
 tg_bad_api_hash = "api_hash : 32 caractères hexadécimaux"
 tg_not_saved = "config.toml n'a pas pu être écrit : voir la ligne dans la fenêtre 0"
+tg_stickers_recent = "Récents"
+tg_stickers_faved = "Favoris"

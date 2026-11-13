@@ -34,27 +34,40 @@ func (u *UI) gifRect() rect { return u.gridRect(&u.gifs.g) }
 
 // openGifs : Ctrl+G, /gif. The conversation is the one the input goes to.
 func (u *UI) openGifs(q string) {
+	if c := u.boxChat(func(c model.Caps) bool { return c.Gifs }); c != nil {
+		u.openGifsFor(c, q)
+	}
+}
+
+// boxChat : the conversation a picture box (GIF, stickers) sends to — the one
+// the input goes to — or nil after saying why there is none: no window bound,
+// a bot, a network without the box (need), images off.
+func (u *UI) boxChat(need func(model.Caps) bool) *model.Chat {
 	w := u.sendWin()
 	if w == nil {
-		return
+		return nil
 	}
 	c := w.Chat
 	if c == nil {
 		w.AddSys(i18n.T("window_not_bound"))
-		return
+		return nil
 	}
 	if u.selfOf(c.Net).Bot {
 		u.sys(i18n.T("bot_unavailable"))
-		return
+		return nil
 	}
-	if !u.caps(c).Gifs {
+	if !need(u.caps(c)) {
 		u.netUnsupported(c.Net)
-		return
+		return nil
 	}
 	if u.images == "off" { // a grid of blank cells would pick blind
 		u.sys(i18n.T("images_off"))
-		return
+		return nil
 	}
+	return c
+}
+
+func (u *UI) openGifsFor(c *model.Chat, q string) {
 	u.gifs = &gifBox{chat: c, netQuery: netQuery{query: []rune(render.CleanLine(q))}, g: grid{live: -1}}
 	u.gifRect() // sized before the first answer
 	u.gifQuery()
@@ -144,6 +157,8 @@ func (u *UI) gifKey(k term.Key) {
 		u.gifClose()
 	case k.Code == term.Enter:
 		u.gifSend()
+	case k.Code == term.Tab:
+		u.stickerTab()
 	case g.g.key(k):
 	default:
 		g.edit(k) // the rest types the query
@@ -162,6 +177,12 @@ func (u *UI) gifMouse(e term.MouseEvent) {
 		}
 		return
 	}
+	if e.Press && !e.Motion && e.Button == 0 && e.Y == r.row+1 {
+		if tab, ok := tabAt(e.X-r.col-1, false); ok && tab == "stickers" {
+			u.stickerTab()
+		}
+		return
+	}
 	if u.gridMouse(&u.gifs.g, e, r.row+2, r.col+1) >= 0 {
 		u.gifSend()
 	}
@@ -174,7 +195,7 @@ func (u *UI) gifLines(r rect) []render.Line {
 	u.gifLoad()
 	box, edge, _ := boxStyles(u.th)
 	b := boxDraw{edge: edge, fill: box, inner: r.w - 2}
-	head := i18n.T("gif_head", render.CleanLine(string(g.query)))
+	head := boxTabs(false) + "  " + i18n.T("gif_head", render.CleanLine(string(g.query)))
 	switch {
 	case g.err != "":
 		head += "  (" + g.err + ")"

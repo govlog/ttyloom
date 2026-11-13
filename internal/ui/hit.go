@@ -295,6 +295,8 @@ func init() {
 			}},
 		{func(u *UI) bool { return u.gifs != nil }, (*UI).gifKey, (*UI).gifMouse, (*UI).gifClose,
 			func(u *UI) overlayBox { r := u.gifRect(); return overlayBox{rect: r, lines: u.gifLines(r)} }},
+		{func(u *UI) bool { return u.stickers != nil }, (*UI).stickerKey, (*UI).stickerMouse, (*UI).stickerClose,
+			func(u *UI) overlayBox { r := u.stickerRect(); return overlayBox{rect: r, lines: u.stickerLines(r)} }},
 		{func(u *UI) bool { return u.mbox != nil }, (*UI).mboxKey, (*UI).mboxMouse, (*UI).mboxClose,
 			func(u *UI) overlayBox { r := u.gridRect(&u.mbox.g); return overlayBox{rect: r, lines: u.mboxLines(r)} }},
 		{func(u *UI) bool { return u.gsearch != nil }, (*UI).gsKey, (*UI).gsMouse, func(u *UI) { u.gsearch = nil },

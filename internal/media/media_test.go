@@ -15,6 +15,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -451,5 +452,105 @@ func TestOriginalName(t *testing.T) {
 	}
 	if got := OriginalName(long); len(got) > maxOriginalName || !strings.HasSuffix(got, ".pdf") || !utf8.ValidString(got) {
 		t.Errorf("long name: %d bytes %q", len(got), got)
+	}
+}
+
+// An animated PNG (Discord APNG stickers) plays through ffmpeg; a still PNG
+// stays one picture of the standard decoder.
+func TestLoadAPNGPlays(t *testing.T) {
+	if !HaveFFmpeg {
+		t.Skip("ffmpeg not available")
+	}
+	dir := t.TempDir()
+	anim := filepath.Join(dir, "a.png")
+	gen := exec.Command("ffmpeg", "-v", "error", "-f", "lavfi", "-i", "testsrc=duration=0.5:size=32x32:rate=10",
+		"-plays", "0", "-f", "apng", anim)
+	if out, err := gen.CombinedOutput(); err != nil {
+		t.Skipf("generation: %v %s", err, out)
+	}
+	fr, err := Load(context.Background(), anim, "image/png", 32, 32, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(fr.PNG) != 5 {
+		t.Fatalf("animated PNG: %d frames, want 5", len(fr.PNG))
+	}
+	still := filepath.Join(dir, "s.png")
+	var b bytes.Buffer
+	if err := png.Encode(&b, image.NewRGBA(image.Rect(0, 0, 8, 8))); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(still, b.Bytes(), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if fr, err = Load(context.Background(), still, "image/png", 32, 32, 10); err != nil || len(fr.PNG) != 1 {
+		t.Fatalf("still PNG: %v frames, err %v; want 1", fr, err)
+	}
+}
+
+// A WebM with an alpha channel (Telegram video stickers) keeps it: its
+// background shows through instead of black, and a half transparent grey stays
+// grey (ffmpeg gives straight alpha, not premultiplied).
+func TestLoadWebMKeepsAlpha(t *testing.T) {
+	if !HaveFFmpeg {
+		t.Skip("ffmpeg not available")
+	}
+	p := filepath.Join(t.TempDir(), "s.webm")
+	gen := exec.Command("ffmpeg", "-v", "error", "-f", "lavfi", "-i", "color=c=gray:size=32x32:rate=10:duration=0.3,format=rgba,colorchannelmixer=aa=0.5",
+		"-vf", "format=yuva420p", "-c:v", "libvpx-vp9", "-auto-alt-ref", "0", p)
+	if out, err := gen.CombinedOutput(); err != nil {
+		t.Skipf("generation (libvpx-vp9 encoder): %v %s", err, out)
+	}
+	fr, err := Load(context.Background(), p, "video/webm", 32, 32, 2)
+	if err != nil || len(fr.PNG) == 0 {
+		t.Fatalf("frames %v, err %v", fr, err)
+	}
+	img, err := png.Decode(bytes.NewReader(fr.PNG[0]))
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := color.NRGBAModel.Convert(img.At(16, 16)).(color.NRGBA)
+	if c.A < 0x60 || c.A > 0xa0 || c.R < 100 || c.R > 156 {
+		t.Fatalf("half transparent grey: %+v, want alpha and grey near 128", c)
+	}
+}
+
+// A WebM that is not VP9 (VP8 here, a Discord video say) still plays: the
+// decoder that keeps the alpha is VP9 only.
+func TestLoadWebMVP8Plays(t *testing.T) {
+	if !HaveFFmpeg {
+		t.Skip("ffmpeg not available")
+	}
+	p := filepath.Join(t.TempDir(), "v.webm")
+	gen := exec.Command("ffmpeg", "-v", "error", "-f", "lavfi", "-i", "testsrc=duration=0.3:size=32x32:rate=10",
+		"-c:v", "libvpx", p)
+	if out, err := gen.CombinedOutput(); err != nil {
+		t.Skipf("generation (libvpx encoder): %v %s", err, out)
+	}
+	if fr, err := Load(context.Background(), p, "video/webm", 32, 32, 2); err != nil || len(fr.PNG) == 0 {
+		t.Fatalf("VP8 WebM: frames %v, err %v", fr, err)
+	}
+}
+
+// With no ffmpeg, an animated PNG still shows: its first picture, through the
+// standard decoder, as before APNG learnt to play.
+func TestLoadAPNGWithoutFFmpeg(t *testing.T) {
+	var b bytes.Buffer
+	if err := png.Encode(&b, image.NewRGBA(image.Rect(0, 0, 8, 8))); err != nil {
+		t.Fatal(err)
+	}
+	// An acTL chunk right after IHDR (8 + 25 bytes): an APNG to every sniffer.
+	actl := []byte{0, 0, 0, 8, 'a', 'c', 'T', 'L', 0, 0, 0, 1, 0, 0, 0, 0}
+	actl = binary.BigEndian.AppendUint32(actl, crc32.ChecksumIEEE(actl[4:]))
+	raw := slices.Concat(b.Bytes()[:33], actl, b.Bytes()[33:])
+	p := filepath.Join(t.TempDir(), "a.png")
+	if err := os.WriteFile(p, raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	was := HaveFFmpeg
+	HaveFFmpeg = false
+	t.Cleanup(func() { HaveFFmpeg = was })
+	if fr, err := Load(context.Background(), p, "image/png", 32, 32, 10); err != nil || len(fr.PNG) != 1 {
+		t.Fatalf("APNG with no ffmpeg: %v, err %v; want its first picture", fr, err)
 	}
 }

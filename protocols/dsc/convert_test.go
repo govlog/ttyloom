@@ -134,6 +134,39 @@ func TestMsgOfAttachments(t *testing.T) {
 	}
 }
 
+// The stickers of a message show, up to the three Discord allows, the text
+// kept: a picture for PNG, one that plays for APNG and GIF, the name alone for
+// Lottie (Discord's own stickers, which nothing here can draw).
+func TestStickerItemsShow(t *testing.T) {
+	got := (&Client{}).msgOf(&discord.Message{ID: msgID(10), ChannelID: 55, Content: "lol",
+		Author: discord.User{ID: 42, Username: "bob"},
+		Stickers: []discord.StickerItem{
+			{ID: 1, Name: "wave", FormatType: discord.StickerFormatPNG},
+			{ID: 2, Name: "dance", FormatType: discord.StickerFormatAPNG},
+			{ID: 3, Name: "wumpus", FormatType: discord.StickerFormatLottie},
+		}})
+	if got.Text != "lol" || len(got.More) != 2 {
+		t.Fatalf("text %q, %d more media; want lol and 2", got.Text, len(got.More))
+	}
+	png, apng, lottie := got.Media, got.More[0], got.More[1]
+	if png.Kind != model.MediaSticker || png.Label != "[sticker wave]" || !png.Previewable() ||
+		png.Loc != fileURL("https://cdn.discordapp.com/stickers/1.png") {
+		t.Fatalf("PNG sticker: %+v", png)
+	}
+	if apng.Kind != model.MediaGIF || apng.Label != "[sticker dance]" || apng.Mime != "image/png" ||
+		apng.Loc != fileURL("https://cdn.discordapp.com/stickers/2.png") { // the file as sent: the proxy may flatten it
+		t.Fatalf("APNG sticker: %+v", apng)
+	}
+	if lottie.Loc != nil || lottie.Previewable() || lottie.Label != "[sticker wumpus]" {
+		t.Fatalf("Lottie sticker: %+v", lottie)
+	}
+	gif := (&Client{}).msgOf(&discord.Message{ID: msgID(11), ChannelID: 55, Author: discord.User{ID: 42},
+		Stickers: []discord.StickerItem{{ID: 4, Name: "spin", FormatType: 4}}}).Media
+	if gif.Kind != model.MediaGIF || gif.Loc != fileURL("https://media.discordapp.net/stickers/4.gif?size=160") {
+		t.Fatalf("GIF sticker: %+v", gif)
+	}
+}
+
 // A message received from someone else is not Out, and its lone embed becomes
 // the link preview — no attachment, so nothing to download.
 func TestMsgOfEmbed(t *testing.T) {

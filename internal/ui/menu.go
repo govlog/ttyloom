@@ -74,6 +74,21 @@ func reactAt(reacts []string, x int) string {
 	return ""
 }
 
+// quickReacts : the quick reactions of the menu — the ones the account uses
+// most first. On a network that takes any emoji they come before the usual
+// list, custom emojis left out (no room for ":name:" on the row); elsewhere
+// they are ordered within what the chat allows.
+func (u *UI) quickReacts(c *model.Chat, caps model.Caps) []string {
+	list, top := u.allowed(c), u.topOf(c)
+	if caps.AnyReaction {
+		top = slices.DeleteFunc(slices.Clone(top), reCustomName.MatchString)
+		list = reactHead(top, list)
+	} else {
+		list = topFirst(list, top)
+	}
+	return list[:min(len(list), menuReacts)]
+}
+
 // openMsgMenu : right click on a message — its actions, and the quick
 // reactions of its chat. The message is selected: the entries are its keys.
 func (u *UI) openMsgMenu(it *Item, x, y int) {
@@ -87,8 +102,7 @@ func (u *UI) openMsgMenu(it *Item, x, y int) {
 	caps := u.capsOf(m)
 	var reacts []string
 	if caps.Reactions {
-		reacts = u.allowed(c)
-		reacts = reacts[:min(len(reacts), menuReacts)]
+		reacts = u.quickReacts(c, caps)
 	}
 	es := msgEntries(render.SelActs(m, u.own(m), w.Search != "", caps))
 	if len(es) == 0 && len(reacts) == 0 {

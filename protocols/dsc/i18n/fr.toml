@@ -24,3 +24,7 @@ dsc_setup_qr = "Laissez le champ vide pour le QR code : Discord (mobile) → Par
 dsc_f_token_cmd = "token_cmd (option)"
 dsc_not_saved = "config.toml n'a pas pu être écrit : voir la ligne dans la fenêtre 0"
 dsc_autoreply_warn = "Discord traite les réponses automatiques d'un compte utilisateur comme un self-bot, contraire à ses conditions : le compte peut être fermé. draft ou display vous laissent l'envoi."
+dsc_stickers_faved = "Favoris"
+dsc_stickers_used = "Plus utilisés"
+dsc_stickers_server = "Ce serveur"
+dsc_stickers_none_here = "aucun sticker utilisable ici : hors d'un serveur, Discord demande Nitro"
