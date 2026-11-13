@@ -82,6 +82,12 @@ type Window struct {
 	Loaded         bool   // recent history loaded at least once
 	Draft          string // input in progress, kept for the time of leaving the window
 	Log            bool   // /log: added messages logged to disk
+	// olderAt : the scroll reached the top at this time; the older page goes
+	// out once it has rested there olderDelay (scroll, tickAt).
+	olderAt time.Time
+	// histErr : last history error shown. Under a FLOOD_WAIT each page asked
+	// is refused: one line is enough.
+	histErr string
 	// Search : result of /search on Chat, not a history. The window is invisible
 	// to ForChat (the live messages go to the window of the chat) and to the
 	// cache, and its *model.Msg are shared with the window of the chat.

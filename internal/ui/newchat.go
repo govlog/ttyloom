@@ -37,6 +37,9 @@ type newChatBox struct {
 	// fwd : message to forward ("f"); the list keeps the chats of its
 	// network and Enter forwards it rather than opening the chat.
 	fwd *model.Msg
+	// share : message whose file goes to the chat picked (share), on any
+	// network.
+	share *model.Msg
 }
 
 // chat gives the chat of the current line, nil when the list is empty.
@@ -314,14 +317,20 @@ func (u *UI) contactsFound(e model.EvContactsFound) {
 // it has one, in a new one otherwise. The chat already carries its peer
 // (entities of the answer): nothing to resolve.
 func (u *UI) ncOpen() {
-	c, fwd := u.newChat.chat(), u.newChat.fwd
+	c, fwd, share := u.newChat.chat(), u.newChat.fwd, u.newChat.share
 	if c == nil {
 		return
 	}
 	u.newChat = nil
+	if share != nil {
+		u.files = nil // the file browser, when the file came from it: the chat shows
+	}
 	u.openChat(c)
-	if fwd != nil {
+	switch {
+	case fwd != nil:
 		u.forward(fwd, c)
+	case share != nil:
+		u.share(share, c)
 	}
 }
 

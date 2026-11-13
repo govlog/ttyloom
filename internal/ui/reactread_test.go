@@ -2,11 +2,14 @@ package ui
 
 import (
 	"bytes"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/govlog/ttyloom/internal/intro"
 	"github.com/govlog/ttyloom/internal/model"
+	"github.com/govlog/ttyloom/internal/render"
 	"github.com/govlog/ttyloom/internal/term"
 	"github.com/govlog/ttyloom/internal/theme"
 )
@@ -106,7 +109,8 @@ func TestReactionNotifiesAndMarksTheChat(t *testing.T) {
 		t.Errorf("sidebar line %q: want the reaction at its end", line)
 	}
 	var act strings.Builder
-	for _, s := range u.actSpans(theme.Style{}, theme.Style{}) {
+	acts, _ := u.actSpans(theme.Style{}, theme.Style{})
+	for _, s := range acts {
 		act.WriteString(s.Text)
 	}
 	if act.String() != "1🔥" {
@@ -114,20 +118,73 @@ func TestReactionNotifiesAndMarksTheChat(t *testing.T) {
 	}
 }
 
-// Going to the window shows the message that got the reaction (selected,
-// the view moves to it) and the reaction leaves the chat line.
+// Going to the window shows the message that got the reaction (lit a moment,
+// the view moves to it — not selected: the keys stay for the input) and the
+// reaction leaves the chat line.
 func TestReactionVisitShowsTheMessage(t *testing.T) {
 	var out bytes.Buffer
 	u, w := reactUI(&out)
 	w.Items = append(w.Items, &Item{Msg: &model.Msg{Net: netTelegram, ChatID: 1, ID: 6, Text: "later"}})
 	u.reactions(model.EvReactions{ChatID: 1, ID: 5, Reactions: []model.Reaction{{Emoji: "🔥", Count: 1}}, New: "🔥", By: "Eve"})
 	u.goTo(1)
-	if w.Sel == nil || w.Sel.Msg.ID != 5 {
-		t.Fatalf("visit: selection %+v, want message 5", w.Sel)
+	if row := screenRow(u, &out, "my joke"); !strings.HasPrefix(row, "▌") || w.Sel != nil {
+		t.Fatalf("visit: %q, selection %+v; want message 5 lit, nothing selected", row, w.Sel)
 	}
 	if reactBadge(w.Chat) != "" {
 		t.Error("the visit must clear the reaction of the chat line")
 	}
+}
+
+// A click on a window of [Act: …] brings it, settled on its first unread
+// message, lit a moment and then not, and reads it.
+func TestActClickGoesToFirstUnread(t *testing.T) {
+	var out bytes.Buffer
+	u, w := reactUI(&out)
+	w.Chat.ReadInboxMaxID = 5
+	for id := 6; id < 60; id++ { // far more than the screen: the first one is above the view
+		w.Items = append(w.Items, &Item{Msg: &model.Msg{Net: netTelegram, ChatID: 1, ID: id, FromID: 2, From: "Alice",
+			Text: fmt.Sprintf("n%03d", id), Date: time.Now()}})
+	}
+	w.Act, w.Chat.Unread = 54, 54
+	status := screenRow(u, &out, "[Act: ")
+	x := strings.Index(status, "1(54)")
+	if x < 0 {
+		t.Fatalf("status %q: no 1(54)", status)
+	}
+	u.mouse(term.MouseEvent{Button: 0, X: render.Width(status[:x]), Y: u.tabRow(), Press: true})
+	if u.ws.Current() != w {
+		t.Fatal("the click must bring the window")
+	}
+	if row := screenRow(u, &out, "n006"); !strings.HasPrefix(row, "▌") {
+		t.Fatalf("first unread %q: want it shown and lit", row)
+	}
+	if strings.Contains(screenRow(u, &out, "[1:"), "Act:") || w.Chat.Unread != 0 {
+		t.Fatal("the chat must be read")
+	}
+	u.glow.until = time.Now() // the clock: the moment is over
+	u.tick()
+	if row := screenRow(u, &out, "n006"); strings.HasPrefix(row, "▌") {
+		t.Fatalf("after the moment %q: want it no longer lit", row)
+	}
+}
+
+// screenRow draws the whole screen and gives its first row that holds sub,
+// "" when none.
+func screenRow(u *UI, out *bytes.Buffer, sub string) string {
+	out.Reset()
+	u.repaint()
+	u.draw()
+	s := intro.Parse(out.String(), u.t.Cols, u.t.Rows)
+	for y := range s.Rows {
+		var b strings.Builder
+		for _, c := range s.Cells[y*s.Cols : (y+1)*s.Cols] {
+			b.WriteString(c.Text)
+		}
+		if row := b.String(); strings.Contains(row, sub) {
+			return row
+		}
+	}
+	return ""
 }
 
 // The dialog list only says a chat holds unread reactions: a generic one

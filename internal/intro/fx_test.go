@@ -48,6 +48,36 @@ func TestCompositeGlyphSplitsWide(t *testing.T) {
 	}
 }
 
+// A fill glyph takes the blank cells of the chat only: its text stays.
+func TestCompositeFillOnBlankOnly(t *testing.T) {
+	s := Parse("\x1b[1;1H"+theme.Style{}.SGR()+"a ", 2, 1)
+	l := NewLayer(2, 1)
+	l.Cells[0] = FX{Fill: '#', FG: theme.RGB{R: 255}}
+	l.Cells[1] = l.Cells[0]
+	out := Composite(s, l, 0, rgbKnown)
+	if out.At(0, 0).Text != "a" || out.At(1, 0).Text != "#" {
+		t.Fatalf("%+v", out.Cells)
+	}
+}
+
+// The veil of a picture: nothing with no effect, the dark of a picture at
+// full dark, the tint alone when it covers the cell.
+func TestVeil(t *testing.T) {
+	l := NewLayer(3, 1)
+	l.Cells[2] = FX{Tint: theme.RGB{R: 200, G: 100}, A: 1}
+	if v := Veil(l, 0, 0, 0, 2, 1, 2, 4); v.Bounds().Dx() != 4 || v.Bounds().Dy() != 4 || v.NRGBAAt(3, 3).A != 0 {
+		t.Fatalf("no dark, no tint: %v, alpha %d", v.Bounds(), v.NRGBAAt(3, 3).A)
+	}
+	v := Veil(l, 1, 1, 0, 2, 1, 1, 1)
+	pic := float32(darkPic)
+	if p := v.NRGBAAt(0, 0); p.A != uint8(pic*255+0.5) || p.R != Backdrop.R || p.B != Backdrop.B {
+		t.Fatalf("full dark: %+v", p)
+	}
+	if p := v.NRGBAAt(1, 0); p.A != 255 || p.R != 200 || p.G != 100 {
+		t.Fatalf("full tint: %+v", p)
+	}
+}
+
 func TestCompositeReverseUsesFG(t *testing.T) {
 	fg := theme.Color{Kind: 2, RGB: theme.RGB{R: 200, G: 200, B: 200}}
 	s := Parse("\x1b[1;1H"+theme.Style{FG: fg, BG: theme.Color{Kind: 2}, Reverse: true}.SGR()+"x", 1, 1)

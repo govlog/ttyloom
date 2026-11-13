@@ -22,7 +22,7 @@
 
 - **Play videos in the terminal, with sound.** With mpv, `l` hands the whole terminal to mpv through the best output the terminal has — kitty graphics, sixel or text — with mpv's own keys; `q` comes back, and messages keep arriving meanwhile. Without mpv, FFmpeg plays it silently inside the conversation: `l` plays or pauses, `s` stops. Choose previews, hidden videos or autoplay.
 - **Open an image and explore it.** Click or press `v` for the built-in viewer. Zoom up to 8× with the wheel or `+`/`-`, **drag with the mouse to pan**, press `0` to fit again, and ←/→ to go to the previous or next media. [Viewer controls](docs/guide.md#viewer).
-- **Keep photos and GIFs in the flow.** Real pixels in Ghostty and kitty (kitty graphics), foot and xterm (sixel) and Terminology, Unicode half blocks elsewhere — [see the table](#pictures-in-your-terminal). `F5` shows images only on hover; `Ctrl+G` opens a searchable GIF picker whose previews play under the mouse; `Ctrl+M` (or `/media`) browses every photo, video, GIF and file of a conversation.
+- **Keep photos and GIFs in the flow.** Real pixels in Ghostty and kitty (kitty graphics), foot and xterm (sixel) and Terminology, Unicode half blocks elsewhere — [see the table](#pictures-in-your-terminal). `F5` shows images only on hover; `Ctrl+G` opens a searchable GIF picker whose previews play under the mouse; `Ctrl+M` (or `/media`) browses every photo, video, GIF and file of a conversation, and `Ctrl+D` (or `/files`) every file sent and received, by person.
 - **Move between conversations your way.** Numbered windows, a draft in each, `/query`, `/join`, `/msg`, `/me`, and a cycle through unread windows. `F6` combines conversations in window 0.
 - **Make the sidebar work for you.** Fold networks and Discord servers, filter with `/net` or by typing over it, sort by recent activity, name or unread messages, split the windows into channels and direct messages, and drag the border to resize. The wheel switches between open conversations.
 - **Find a message, then jump to it.** `Ctrl+F` searches locally; press it twice to search across networks. Click a reply’s quote to return to its original message, loading the surrounding history when needed.
@@ -206,6 +206,8 @@ Review `download_dir` and `log_dir` in that configuration. Caches written with e
 | Search here / search across networks | Ctrl+F / Ctrl+F again |
 | GIFs / emoji | Ctrl+G / Ctrl+T |
 | Photos, videos, GIFs and files of the conversation | Ctrl+M or `/media` |
+| Files sent and received, by person, in every conversation | Ctrl+D or `/files` |
+| Copy the image or the path of a file, send it on, open it | Click its label or right-click its picture |
 | Mute or unmute a conversation | `/mute` / `/unmute` |
 | Pin or unpin a message (banner at the top) | `n` or the right-click menu; click the banner to jump |
 | Local note in the same banner | `/note text` / `/unnote` |

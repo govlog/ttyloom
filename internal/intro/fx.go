@@ -1,6 +1,8 @@
 package intro
 
 import (
+	"image"
+	"image/color"
 	"slices"
 
 	"github.com/govlog/ttyloom/internal/theme"
@@ -9,7 +11,8 @@ import (
 // FX : what an effect puts on one cell.
 type FX struct {
 	Ch   byte      // glyph of the effect, 0: the chat glyph stays
-	FG   theme.RGB // colour of Ch
+	Fill byte      // glyph with no Ch, on a blank cell of the chat only: its text shows through
+	FG   theme.RGB // colour of Ch, or of Fill
 	Tint theme.RGB // colour the background goes toward
 	A    float32   // 0..1: how far the background goes toward Tint
 }
@@ -44,8 +47,9 @@ var Backdrop = theme.RGB{R: 0x11, G: 0x11, B: 0x1b}
 // How far dark = 1 takes a background and a text colour toward Backdrop: the
 // text stays readable behind the effect.
 const (
-	darkBG = 0.8
-	darkFG = 0.5
+	darkBG  = 0.8
+	darkFG  = 0.5
+	darkPic = 0.6 // a picture of the chat: dimmed, still seen
 )
 
 // Composite lays fx over chat. dark (0..1) is how far the chat goes toward
@@ -60,11 +64,14 @@ func Composite(chat *Screen, fx *Layer, dark float32, rgb Resolve) *Screen {
 			if p := fx.At(x, y); p != nil {
 				f = *p
 			}
-			if dark <= 0 && f.A <= 0 && f.Ch == 0 {
+			if dark <= 0 && f.A <= 0 && f.Ch == 0 && f.Fill == 0 {
 				continue
 			}
 			c := &out.Cells[y*out.Cols+x]
 			c.Style = blend(c.Style, f, dark, rgb)
+			if f.Ch == 0 && c.Text == " " {
+				f.Ch = f.Fill
+			}
 			if f.Ch == 0 {
 				continue
 			}
@@ -86,6 +93,40 @@ func Composite(chat *Screen, fx *Layer, dark float32, rgb Resolve) *Screen {
 		}
 	}
 	return out
+}
+
+// Veil : what the demo lays on the cols x rows cells at col, row where a
+// picture of the chat lies — under the text, over the backgrounds (kitty,
+// z < 0), so that the dark and the tints, backgrounds, would stay under it.
+// Each cell gives sx x sy pixels: the dark of a picture, then the tint of the
+// cell, in one colour and one opacity to lay over the picture.
+func Veil(fx *Layer, dark float32, col, row, cols, rows, sx, sy int) *image.NRGBA {
+	img := image.NewNRGBA(image.Rect(0, 0, max(cols, 0)*sx, max(rows, 0)*sy))
+	a1 := min(max(darkPic*dark, 0), 1)
+	for y := range rows {
+		for x := range cols {
+			var f FX
+			if p := fx.At(col+x, row+y); p != nil {
+				f = *p
+			}
+			a2 := min(max(f.A, 0), 1)
+			// over a picture P: mix(mix(P, Backdrop, a1), Tint, a2) = mix(P, c, a)
+			a := 1 - (1-a1)*(1-a2)
+			if a <= 0 {
+				continue
+			}
+			ch := func(b, t uint8) uint8 {
+				return uint8((float32(b)*a1*(1-a2)+float32(t)*a2)/a + 0.5)
+			}
+			px := color.NRGBA{R: ch(Backdrop.R, f.Tint.R), G: ch(Backdrop.G, f.Tint.G), B: ch(Backdrop.B, f.Tint.B), A: uint8(a*255 + 0.5)}
+			for py := y * sy; py < (y+1)*sy; py++ {
+				for qx := x * sx; qx < (x+1)*sx; qx++ {
+					img.SetNRGBA(qx, py, px)
+				}
+			}
+		}
+	}
+	return img
 }
 
 // blend darkens st toward Backdrop and tints its background toward f.Tint.

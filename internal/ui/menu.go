@@ -24,7 +24,8 @@ type menuEntry struct {
 type ctxMenu struct {
 	chat    *model.Chat // target: line of the sidebar…
 	member  string      // …or member of the member box (@name or id)…
-	item    *Item       // …or a message; win is its window
+	item    *Item       // …or a message; win is its window…
+	file    *Item       // …or the file of the media of a message (filemenu.go)
 	win     *Window
 	reacts  []string // message: quick reactions on the first row, clickable
 	entries []menuEntry
@@ -278,6 +279,10 @@ func (u *UI) menuMouse(e term.MouseEvent) {
 func (u *UI) menuDo(m *ctxMenu, key string) {
 	if m.member != "" {
 		u.menuMember(m, key)
+		return
+	}
+	if m.file != nil {
+		u.fileDo(m, key)
 		return
 	}
 	if m.item != nil { // message: the entry is the key of the selection

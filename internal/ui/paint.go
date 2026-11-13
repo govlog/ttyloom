@@ -4,6 +4,8 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+
+	"github.com/govlog/ttyloom/internal/model"
 )
 
 // Row diff. draw writes every piece of a frame right after a cursor move
@@ -17,7 +19,9 @@ import (
 // cellPic : a picture drawn in the cells (sixel, Terminology): text written
 // over its rows erases it, so it goes again with them.
 type cellPic struct {
-	row, rows int    // screen rows it covers, 0-based
+	row, rows int // screen rows it covers, 0-based
+	col       int // first screen column
+	md        *model.Media
 	seq       string // what draws it, cursor move included
 }
 

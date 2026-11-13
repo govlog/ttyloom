@@ -14,7 +14,7 @@ import (
 func TestFullSizePhotoForOpenAndViewer(t *testing.T) {
 	u, b := gifUI()
 	u.cfg.DownloadDir = t.TempDir()
-	u.openNext, u.fulls = map[*model.Media]bool{}, map[*model.Media]bool{}
+	u.fileNext, u.fulls = map[*model.Media]func(*model.Media){}, map[*model.Media]bool{}
 	w := u.ws.List[1]
 	full := &model.Media{Kind: model.MediaPhoto, Loc: "y", Ext: ".jpg", W: 1280, H: 960}
 	md := &model.Media{Kind: model.MediaPhoto, Loc: "x", Ext: ".jpg", W: 800, H: 600, Full: full}
@@ -24,10 +24,10 @@ func TestFullSizePhotoForOpenAndViewer(t *testing.T) {
 
 	u.openItemMedia(w, it)
 	if len(b.downloads) != 1 || !strings.HasSuffix(b.downloads[0], "_7_full.jpg") ||
-		full.State != model.MediaLoading || md.State != model.MediaNone || !u.openNext[full] {
+		full.State != model.MediaLoading || md.State != model.MediaNone || u.fileNext[full] == nil {
 		t.Fatalf("o: downloads %v, full %v, line %v", b.downloads, full.State, md.State)
 	}
-	delete(u.openNext, full) // no xdg-open from a test
+	delete(u.fileNext, full) // no xdg-open from a test
 
 	u.openViewer(m)
 	if u.viewer == nil || u.viewer.src != full || len(b.downloads) != 1 {
@@ -45,7 +45,7 @@ func TestFullSizePhotoForOpenAndViewer(t *testing.T) {
 func TestPhotoWithoutFullUsesLineMedia(t *testing.T) {
 	u, b := gifUI()
 	u.cfg.DownloadDir = t.TempDir()
-	u.openNext, u.fulls = map[*model.Media]bool{}, map[*model.Media]bool{}
+	u.fileNext, u.fulls = map[*model.Media]func(*model.Media){}, map[*model.Media]bool{}
 	w := u.ws.List[1]
 	md := &model.Media{Kind: model.MediaPhoto, Loc: "x", Ext: ".jpg", W: 800, H: 600}
 	m := &model.Msg{Net: netTelegram, ChatID: 1, ID: 8, Date: time.Now(), Media: md}

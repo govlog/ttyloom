@@ -22,7 +22,7 @@ func newUI(ctx context.Context, cancel context.CancelFunc, t *term.Term, cfg *co
 		netCancel: map[string]context.CancelFunc{}, events: make(chan model.Event, 256), ws: NewWindows(),
 		agg: &Window{}, aggregate: cfg.Aggregate, debug: &Window{}, focused: true,
 		chats: map[model.ChatKey]*model.Chat{}, lookups: map[uint64]*lookup{}, typing: map[model.ChatKey]typing{}, lastTyping: map[model.ChatKey]time.Time{},
-		avatars: map[model.ChatKey]*model.Media{}, openNext: map[*model.Media]bool{}, fulls: map[*model.Media]bool{}, presence: map[model.ChatKey]string{},
+		avatars: map[model.ChatKey]*model.Media{}, fileNext: map[*model.Media]func(*model.Media){}, fulls: map[*model.Media]bool{}, presence: map[model.ChatKey]string{},
 		caches: map[string]*cache.Cache{}, dirty: map[model.ChatKey]bool{}, partsCache: map[model.ChatKey]partsEntry{}, whoCache: map[whoKey]whoEntry{},
 		sideW:       clampSideW(cfg.SidebarWidth, t.Cols),
 		side:        sideModeOf(cfg.Sidebar), // F2 and F3 as the last session left them

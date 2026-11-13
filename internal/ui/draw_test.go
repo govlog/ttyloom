@@ -329,11 +329,14 @@ func TestImgPlace(t *testing.T) {
 			t.Fatalf("Row %d at r %d: got %d %d %d %v", c.row, c.r, row, rows, top, ok)
 		}
 	}
-	if r := cropOf(0, 5, 5, 100, 50); !r.Empty() {
+	if r := cropOf(rect{0, 0, 5, 20}, 5, 20, 100, 50); !r.Empty() {
 		t.Fatalf("whole block: crop %v", r)
 	}
-	if r := cropOf(2, 3, 5, 100, 50); r != image.Rect(0, 20, 100, 50) {
+	if r := cropOf(rect{row: 2, h: 3, w: 20}, 5, 20, 100, 50); r != image.Rect(0, 20, 100, 50) {
 		t.Fatalf("lower 3 of 5 rows: crop %v", r)
+	}
+	if r := cropOf(rect{col: 5, h: 5, w: 10}, 5, 20, 100, 50); r != image.Rect(25, 0, 75, 50) {
+		t.Fatalf("columns 5 to 15 of 20: crop %v", r)
 	}
 }
 
@@ -345,7 +348,7 @@ func TestActSpansHot(t *testing.T) {
 	w := u.ws.New(true)
 	w.Act, w.Hot = 1, true
 	u.pulse = true
-	sp := u.actSpans(theme.Style{}, theme.Style{FG: u.th.Color(theme.Act)})
+	sp, _ := u.actSpans(theme.Style{}, theme.Style{FG: u.th.Color(theme.Act)})
 	if len(sp) != 3 || sp[0].Text != "1(2)" || sp[1].Text != "," || sp[2].Text != "2(1)" {
 		t.Fatalf("spans: %+v", sp)
 	}
@@ -364,11 +367,11 @@ func TestWindow0QuietActivity(t *testing.T) {
 	u.ws.New(false) // window 1 shown
 	act := theme.Style{FG: u.th.Color(theme.Act)}
 	u.event(model.EvLines{Lines: []string{"- MOTD -"}, Quiet: true})
-	if sp := u.actSpans(theme.Style{}, act); len(sp) != 1 || sp[0].Text != "0" || sp[0].Style != (theme.Style{}) {
+	if sp, _ := u.actSpans(theme.Style{}, act); len(sp) != 1 || sp[0].Text != "0" || sp[0].Style != (theme.Style{}) {
 		t.Fatalf("quiet lines: %+v", sp)
 	}
 	u.event(model.EvLines{Lines: []string{"433 nick in use"}})
-	if sp := u.actSpans(theme.Style{}, act); len(sp) != 1 || sp[0].Text != "0(1)" || sp[0].Style != act {
+	if sp, _ := u.actSpans(theme.Style{}, act); len(sp) != 1 || sp[0].Text != "0(1)" || sp[0].Style != act {
 		t.Fatalf("after an error: %+v", sp)
 	}
 }
@@ -382,7 +385,7 @@ func TestWindow0DisconnectQuiet(t *testing.T) {
 	u.ws.New(false) // window 1 shown
 	u.event(model.EvDisconnected{})
 	act := theme.Style{FG: u.th.Color(theme.Act)}
-	if sp := u.actSpans(theme.Style{}, act); len(sp) != 1 || sp[0].Text != "0" || sp[0].Style != (theme.Style{}) {
+	if sp, _ := u.actSpans(theme.Style{}, act); len(sp) != 1 || sp[0].Text != "0" || sp[0].Style != (theme.Style{}) {
 		t.Fatalf("a disconnection counts: %+v", sp)
 	}
 	if n := len(u.ws.List[0].Items); n != 1 {
@@ -400,7 +403,8 @@ func TestMutedOutOfStatusBar(t *testing.T) {
 	u.ws.List[2].Act = 1 // telegram
 	u.muted = map[model.ChatKey]bool{u.ws.List[1].Chat.Key(): true}
 	var text strings.Builder
-	for _, s := range u.actSpans(theme.Style{}, theme.Style{}) {
+	acts, _ := u.actSpans(theme.Style{}, theme.Style{})
+	for _, s := range acts {
 		text.WriteString(s.Text)
 	}
 	spans, _ := u.tabSpans(0)
@@ -534,5 +538,26 @@ func TestDrawSkipsSameFrame(t *testing.T) {
 	u.draw()
 	if out.Len() == first {
 		t.Fatal("Ctrl+L sent nothing")
+	}
+}
+
+// A box over a picture leaves the rest of it on the screen: the picture is
+// placed in parts around the box, none under it, and together they cover
+// every cell the box leaves free.
+func TestPictureAroundABox(t *testing.T) {
+	ov := overlays{{rect: rect{row: 12, col: 30, h: 4, w: 10}}} // a menu over the middle
+	parts := ov.freeParts(10, 25, 8, 20)                        // a block of 8 x 20 at (10, 25)
+	free := 0
+	for _, p := range parts {
+		if ov.hits(10+p.row, 25+p.col, p.h, p.w) {
+			t.Fatalf("part %+v under the box", p)
+		}
+		free += p.h * p.w
+	}
+	if want := 8*20 - 4*10; free != want || len(parts) != 4 {
+		t.Fatalf("%d parts, %d cells, want 4 parts and %d cells: %+v", len(parts), free, want, parts)
+	}
+	if p := (overlays{}).freeParts(0, 0, 8, 20); len(p) != 1 || p[0] != (rect{0, 0, 8, 20}) {
+		t.Fatalf("no box: %+v", p)
 	}
 }

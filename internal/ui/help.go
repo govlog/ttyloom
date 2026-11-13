@@ -90,6 +90,8 @@ var helpTopics = []topic{
 	{"Ctrl+G", "help_ctrl_g", "media"},
 	{"/media", "help_media", "media"},
 	{"Ctrl+M", "help_ctrl_m", "media"},
+	{"/files", "help_files", "media"},
+	{"Ctrl+D", "help_ctrl_d", "media"},
 
 	// Sidebar
 	{"F2", "help_f2", "sidebar"},

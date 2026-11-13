@@ -19,6 +19,7 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/govlog/ttyloom/internal/model"
 )
@@ -44,7 +45,7 @@ func TestKittyChunks(t *testing.T) {
 		for i := range data {
 			data[i] = byte(i * 7)
 		}
-		s := KittyDisplay(7, 3, data, 10, 5)
+		s := KittyDisplay(7, 3, data, 10, 5, 0)
 		parts := strings.Split(strings.TrimSuffix(s, "\x1b\\"), "\x1b\\")
 		var enc strings.Builder
 		for i, p := range parts {
@@ -65,16 +66,19 @@ func TestKittyChunks(t *testing.T) {
 			t.Fatalf("%d bytes: the chunks do not give the data back (%v)", n, err)
 		}
 	}
-	if got := KittyPlace(7, 3, 10, 5); got != "\x1b_Ga=p,i=7,p=3,c=10,r=5,q=2\x1b\\" {
+	if got := KittyPlace(7, 3, 10, 5, 0); got != "\x1b_Ga=p,i=7,p=3,c=10,r=5,q=2\x1b\\" {
 		t.Fatal(got)
 	}
 	// Crop: source sub-rectangle in pixels of the image sent.
-	crop := KittyPlace(7, 3, 10, 5, image.Rect(20, 10, 120, 60))
+	crop := KittyPlace(7, 3, 10, 5, 0, image.Rect(20, 10, 120, 60))
 	if crop != "\x1b_Ga=p,i=7,p=3,c=10,r=5,x=20,y=10,w=100,h=50,q=2\x1b\\" {
 		t.Fatal(crop)
 	}
-	if got := KittyPlace(7, 3, 10, 5, image.Rectangle{}); got != "\x1b_Ga=p,i=7,p=3,c=10,r=5,q=2\x1b\\" {
+	if got := KittyPlace(7, 3, 10, 5, 0, image.Rectangle{}); got != "\x1b_Ga=p,i=7,p=3,c=10,r=5,q=2\x1b\\" {
 		t.Fatal(got) // empty rectangle: no crop key
+	}
+	if got := KittyPlace(7, 3, 10, 5, -1); got != "\x1b_Ga=p,i=7,p=3,c=10,r=5,z=-1,q=2\x1b\\" {
+		t.Fatal(got) // under the text
 	}
 }
 
@@ -425,5 +429,27 @@ func TestMPVOutputFollowsTerminal(t *testing.T) {
 		if got := strings.Join(mpvOut(tc.s), " "); got != tc.want {
 			t.Errorf("%+v: %q, want %q", tc.s, got, tc.want)
 		}
+	}
+}
+
+// A received file keeps the name its sender gave it, as one safe name: no
+// path in it, no control or bidi character, and a cut that keeps the suffix.
+func TestOriginalName(t *testing.T) {
+	long := strings.Repeat("é", 150) + ".pdf"
+	cases := []struct{ in, want string }{
+		{"Rapport annuel (v2).docx", "Rapport annuel (v2).docx"},
+		{"../../.bashrc", ".._.._.bashrc"},
+		{"a\\b\x1bc", "a_b_c"},
+		{"gpj‮.exe", "gpj_.exe"},
+		{" .. ", ""},
+		{"", ""},
+	}
+	for _, c := range cases {
+		if got := OriginalName(c.in); got != c.want {
+			t.Errorf("OriginalName(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+	if got := OriginalName(long); len(got) > maxOriginalName || !strings.HasSuffix(got, ".pdf") || !utf8.ValidString(got) {
+		t.Errorf("long name: %d bytes %q", len(got), got)
 	}
 }

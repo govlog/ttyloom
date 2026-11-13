@@ -355,7 +355,7 @@ func colText(text string, c0, c1 int) string {
 // The columns of each action frame its label exactly in the drawn line,
 // selection marker and indent included.
 func TestMsgActions(t *testing.T) {
-	labels := map[rune]string{KeyTicks: " ✓", KeyView: "[photo]"}
+	labels := map[rune]string{KeyTicks: " ✓", KeyFile: "[photo]"}
 	m := &model.Msg{ID: 1, Date: time.Date(2026, 8, 30, 12, 1, 0, 0, time.UTC), From: "moi", FromID: 7,
 		Out: true, Text: "salut", Media: &model.Media{Label: "[photo]", Loc: &tg.InputPhotoFileLocation{}}}
 	seen := map[rune]bool{}
@@ -816,32 +816,35 @@ func TestCapsGating(t *testing.T) {
 	}
 }
 
-// A click on the label of a photo or a video opens the preview: the label
-// carries KeyView. A link preview keeps its URL instead — the label opens the
-// page.
-func TestMessageLabelViewAction(t *testing.T) {
+// A click on the label of a media with a file opens the menu of the file:
+// the label carries KeyFile. A map has no file: its label opens the preview
+// (KeyView). A link preview keeps its URL — the label opens the page.
+func TestMessageLabelAction(t *testing.T) {
 	o := Opts{Width: 60, Theme: theme.Terminal(), Images: "off", Caps: func(*model.Msg) model.Caps { return model.AllCaps() }}
-	has := func(m *model.Msg) bool {
-		for _, l := range Message(m, o) {
+	key := func(md *model.Media) rune {
+		for _, l := range Message(&model.Msg{ID: 1, From: "a", Media: md}, o) {
 			for _, a := range l.Actions {
-				if a.Key == KeyView {
-					return true
+				if a.Key == KeyFile || a.Key == KeyView {
+					return a.Key
 				}
 			}
 		}
-		return false
+		return 0
 	}
-	m := &model.Msg{ID: 1, From: "a", Media: &model.Media{Kind: model.MediaPhoto, Label: "[photo]", Loc: 1}}
-	if !has(m) {
-		t.Fatal("photo label: no view action")
+	cases := []struct {
+		md   *model.Media
+		want rune
+	}{
+		{&model.Media{Kind: model.MediaPhoto, Label: "[photo]", Loc: 1}, KeyFile},
+		{&model.Media{Kind: model.MediaVideo, Label: "[video]", Loc: 1}, KeyFile},
+		{&model.Media{Kind: model.MediaFile, Label: "[file a.pdf]", Loc: 1}, KeyFile},
+		{&model.Media{Kind: model.MediaMap, Label: "[map]", Lat: 1, Long: 2}, KeyView},
+		{&model.Media{Kind: model.MediaWebPage, Label: "[lien]", URL: "https://x"}, 0},
 	}
-	m.Media = &model.Media{Kind: model.MediaVideo, Label: "[video]", Loc: 1}
-	if !has(m) {
-		t.Fatal("video label: no view action")
-	}
-	m.Media = &model.Media{Kind: model.MediaWebPage, Label: "[lien]", URL: "https://x"}
-	if has(m) {
-		t.Fatal("link preview label: view action instead of the page")
+	for _, c := range cases {
+		if got := key(c.md); got != c.want {
+			t.Errorf("%s: label action %q, want %q", c.md.Label, got, c.want)
+		}
 	}
 }
 

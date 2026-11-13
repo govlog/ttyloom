@@ -1,15 +1,18 @@
 package ui
 
 import (
+	"bytes"
 	"cmp"
 	"fmt"
 	"image"
+	"image/png"
 	"slices"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/govlog/ttyloom/internal/i18n"
+	"github.com/govlog/ttyloom/internal/intro"
 	"github.com/govlog/ttyloom/internal/media"
 	"github.com/govlog/ttyloom/internal/model"
 	"github.com/govlog/ttyloom/internal/render"
@@ -36,6 +39,12 @@ func (u *UI) draw() {
 	if u.selShow { // on a selection change only: the scroll stays free
 		u.selShow = false
 		if first, last := blockOf(items, w.Sel); last >= 0 {
+			w.Scroll = showRows(w.Scroll, first, last, len(lines), view, maxScroll)
+		}
+	}
+	if u.glow.show { // same for a message lit for a moment
+		u.glow.show = false
+		if first, last := blockOf(items, u.glow.it); u.glow.w == w && last >= 0 {
 			w.Scroll = showRows(w.Scroll, first, last, len(lines), view, maxScroll)
 		}
 	}
@@ -82,15 +91,25 @@ func (u *UI) draw() {
 		}
 		u.writeLine(&b, line, cols, &u.hits[r])
 		if img := lines[i].Img; img != nil {
-			// A block cut by the view is placed cropped; the crop needs the
-			// pixel size, known once the frames are decoded (then a repaint comes).
-			row, rows, top, ok := imgPlace(img, r, view)
-			md := img.Media
-			if ok && (rows == img.Rows || md.FrameH > 0) && !ov.hits(row, x0+img.Col, rows, img.Cols) {
-				part := *img
-				part.Rows = rows
-				u.placed = append(u.placed, placed{row: row, pid: uint32(row + 1), img: &part,
-					crop: cropOf(top, rows, img.Rows, md.FrameW, md.FrameH)})
+			// A block cut by the view, or partly under a box, is placed in
+			// cropped parts — the ones the boxes leave free, each with a pid of
+			// its own. The crop needs the pixel size, known once the frames are
+			// decoded (then a repaint comes).
+			if row, rows, top, ok := imgPlace(img, r, view); ok {
+				md := img.Media
+				parts := ov.freeParts(row, x0+img.Col, rows, img.Cols)
+				whole := rows == img.Rows && len(parts) == 1 && parts[0] == rect{0, 0, rows, img.Cols}
+				for k, f := range parts {
+					if !whole && (md.FrameW <= 0 || md.FrameH <= 0) {
+						break
+					}
+					part := *img
+					part.Col, part.Cols, part.Rows = img.Col+f.col, f.w, f.h
+					src := f
+					src.row += top // counted from the top of the block, the rows hidden above included
+					u.placed = append(u.placed, placed{row: row + f.row, pid: uint32(row+1) | uint32(k)<<12, img: &part,
+						crop: cropOf(src, img.Rows, img.Cols, md.FrameW, md.FrameH)})
+				}
 			}
 		}
 		if h := lines[i].Hover; h != nil && u.hover != nil && items[i] == u.hover {
@@ -165,10 +184,6 @@ func (u *UI) draw() {
 		_, curX = u.sideFindText()
 		curRow = sideHdr
 	}
-	if u.intro != nil { // the demo is all ASCII: no picture under it
-		u.placed = u.placed[:0]
-		avs = nil
-	}
 	var cur map[kplace]bool
 	var g strings.Builder // kitty commands, apart from the rows of text (paint)
 	if u.images == "kitty" {
@@ -189,6 +204,9 @@ func (u *UI) draw() {
 			u.redecode(a.md)
 			fmt.Fprintf(&g, "\x1b[%d;%dH", a.row+1, a.col+1)
 			u.placeKitty(&g, cur, avatarPID(a.row, a.col), a.md, a.md.Frames[0], 2, 1)
+		}
+		if u.intro != nil {
+			u.placeVeils(&g, cur, x0, avs)
 		}
 		// The QR after all the rest: its overlay already covers the text, and
 		// the placement (z=0) covers the white cells kept free.
@@ -285,9 +303,9 @@ func (u *UI) placeKitty(b *strings.Builder, cur map[kplace]bool, pid uint32, md 
 		if u.animNative(md) {
 			png, md.KittyAnim = md.Frames[0], 1 // the root frame: animate() sends the others
 		}
-		b.WriteString(media.KittyDisplay(md.KittyID, pid, png, cols, rows, crop...))
+		b.WriteString(media.KittyDisplay(md.KittyID, pid, png, cols, rows, u.kittyZ(), crop...))
 	} else {
-		b.WriteString(media.KittyPlace(md.KittyID, pid, cols, rows, crop...))
+		b.WriteString(media.KittyPlace(md.KittyID, pid, cols, rows, u.kittyZ(), crop...))
 	}
 	cur[kplace{id: md.KittyID, pid: pid}] = true
 	// The cap covers everything on the screen, so a media already placed in
@@ -297,6 +315,65 @@ func (u *UI) placeKitty(b *strings.Builder, cur map[kplace]bool, pid uint32, md 
 	for _, old := range u.kittyLRU.touch(md) {
 		b.WriteString(u.kittyFree(old))
 	}
+}
+
+// kittyZ : the z-index of the placements. Under the demo, -2: under the text,
+// so that the glyphs of its effects draw over the pictures, and under their
+// veil (-1, placeVeils), which carries its dark and its tints. A sixel
+// picture would be written over by each frame: it waits for the end.
+func (u *UI) kittyZ() int {
+	if u.intro != nil {
+		return -2
+	}
+	return 0
+}
+
+// Pixels of a veil per cell: a sharp edge between two cells, whatever the
+// scaling of the terminal, for little to send.
+const veilSX, veilSY = 2, 4
+
+// placeVeils lays a veil over each picture of the frame (placeKitty and
+// the avatars): the dark and the tints the demo gives the backgrounds of its
+// cells, which the picture hides. Made again at each frame, on two images per
+// veil in turn: the new one is placed before the old one goes, never a blink.
+func (u *UI) placeVeils(g *strings.Builder, cur map[kplace]bool, x0 int, avs []avPlace) {
+	rects := make([]rect, 0, len(u.placed)+len(avs))
+	for _, p := range u.placed {
+		if len(p.img.Media.Frames) > 0 { // placed: not still loading
+			rects = append(rects, rect{row: p.row, col: x0 + p.img.Col, h: p.img.Rows, w: p.img.Cols})
+		}
+	}
+	for _, a := range avs {
+		rects = append(rects, rect{row: a.row, col: a.col, h: 1, w: 2})
+	}
+	l, dark := u.introLayer()
+	u.veilFlip = 1 - u.veilFlip
+	enc := png.Encoder{CompressionLevel: png.BestSpeed}
+	for k, r := range rects {
+		if k == len(u.veils) {
+			u.kittyID += 2
+			u.veils = append(u.veils, [2]uint32{u.kittyID - 1, u.kittyID})
+		}
+		var buf bytes.Buffer
+		if enc.Encode(&buf, intro.Veil(l, dark, r.col, r.row, r.w, r.h, veilSX, veilSY)) != nil {
+			continue
+		}
+		id := u.veils[k][u.veilFlip]
+		fmt.Fprintf(g, "\x1b[%d;%dH", r.row+1, r.col+1)
+		g.WriteString(media.KittyDisplay(id, 1, buf.Bytes(), r.w, r.h, -1))
+		cur[kplace{id: id, pid: 1}] = true
+	}
+}
+
+// freeVeils drops the veils from the terminal, data and all.
+func (u *UI) freeVeils() {
+	for _, v := range u.veils {
+		for _, id := range v {
+			u.t.WriteString(media.KittyFree(id))
+			u.forgetKitty(id)
+		}
+	}
+	u.veils = nil
 }
 
 // kplace : one live kitty placement on the screen. The pids come from the
@@ -373,13 +450,13 @@ func imgPlace(img *render.Img, r, view int) (row, rows, top int, ok bool) {
 	return row, rows, top, rows > 0
 }
 
-// cropOf gives the source pixels of the rows [top, top+rows) of a block of
-// total rows, for an image of w×h pixels; empty for the whole block (no crop).
-func cropOf(top, rows, total, w, h int) image.Rectangle {
-	if top == 0 && rows == total {
+// cropOf gives the source pixels of the cells c of a block of rows x cols
+// cells, for an image of w×h pixels; empty for the whole block (no crop).
+func cropOf(c rect, rows, cols, w, h int) image.Rectangle {
+	if c == (rect{0, 0, rows, cols}) {
 		return image.Rectangle{}
 	}
-	return image.Rect(0, top*h/total, w, (top+rows)*h/total)
+	return image.Rect(c.col*w/cols, c.row*h/rows, (c.col+c.w)*w/cols, (c.row+c.h)*h/rows)
 }
 
 // showRows gives the Scroll that shows the lines first..last of the drawing
@@ -484,6 +561,53 @@ type overlayBox struct {
 
 // overlays : the boxes of the frame, in drawing order.
 type overlays []overlayBox
+
+// freeParts : the parts of a block of rows x cols cells at (row, col) of the
+// screen that no box covers, as rectangles of cells counted from the block —
+// one per run of free columns, over the rows the same boxes cross. The whole
+// block alone when no box covers it.
+func (o overlays) freeParts(row, col, rows, cols int) []rect {
+	var out []rect
+	for r := 0; r < rows; {
+		segs := o.freeCols(row+r, col, cols)
+		h := 1
+		for r+h < rows && slices.Equal(o.freeCols(row+r+h, col, cols), segs) {
+			h++
+		}
+		for _, s := range segs {
+			out = append(out, rect{row: r, col: s[0], h: h, w: s[1] - s[0]})
+		}
+		r += h
+	}
+	return out
+}
+
+// freeCols : the runs [c0, c1) of the cols columns from col that no box
+// covers on the screen row row, counted from col.
+func (o overlays) freeCols(row, col, cols int) [][2]int {
+	free := [][2]int{{0, cols}}
+	for _, b := range o {
+		if b.h <= 0 || row < b.row || row >= b.row+b.h {
+			continue
+		}
+		c0, c1 := b.col-col, b.col+b.w-col
+		var next [][2]int
+		for _, s := range free {
+			if c1 <= s[0] || c0 >= s[1] {
+				next = append(next, s)
+				continue
+			}
+			if c0 > s[0] {
+				next = append(next, [2]int{s[0], c0})
+			}
+			if c1 < s[1] {
+				next = append(next, [2]int{c1, s[1]})
+			}
+		}
+		free = next
+	}
+	return free
+}
 
 // hits : the given rectangle crosses one of them.
 func (o overlays) hits(row, col, h, w int) bool {
@@ -609,12 +733,20 @@ func (u *UI) sgr(st theme.Style) string {
 	return s
 }
 
+// actHit : the columns of one window of [Act: …], for the click.
+type actHit struct {
+	col0, col1 int // [col0, col1): from the start of its spans, then screen columns
+	w          *Window
+}
+
 // actSpans : the [Act: …] list of the status bar, one span per window (a hot
-// one in hotStyle), commas between them. Only the windows of the tab in tab
-// mode: the other networks are summed up on their tab. A muted chat keeps its
-// count in its own line only (/mute).
-func (u *UI) actSpans(plain, act theme.Style) []render.Span {
+// one in hotStyle), commas between them, and the columns of each window. Only
+// the windows of the tab in tab mode: the other networks are summed up on
+// their tab. A muted chat keeps its count in its own line only (/mute).
+func (u *UI) actSpans(plain, act theme.Style) ([]render.Span, []actHit) {
 	var out []render.Span
+	var hits []actHit
+	col := 0
 	for i, w := range u.ws.List {
 		rb := "" // a reaction to my messages not seen yet: "5👍", "5(3)👍"
 		if w.Chat != nil && w.Search == "" {
@@ -625,6 +757,7 @@ func (u *UI) actSpans(plain, act theme.Style) []render.Span {
 		}
 		if len(out) > 0 {
 			out = append(out, render.Span{Text: ",", Style: plain})
+			col++
 		}
 		st := act
 		switch {
@@ -638,8 +771,21 @@ func (u *UI) actSpans(plain, act theme.Style) []render.Span {
 			s += fmt.Sprintf("(%d)", w.Act)
 		}
 		out = append(out, render.Span{Text: s + rb, Style: st})
+		n := render.Width(s + rb)
+		hits = append(hits, actHit{col0: col, col1: col + n, w: w})
+		col += n
 	}
-	return out
+	return out, hits
+}
+
+// actAt : the window of [Act: …] under screen column x, nil when none.
+func (u *UI) actAt(x int) *Window {
+	for _, h := range u.actHits {
+		if x >= h.col0 && x < h.col1 {
+			return h.w
+		}
+	}
+	return nil
 }
 
 // tabHit : the columns of one tab of the bar, for the click.
@@ -717,27 +863,29 @@ func (u *UI) tabAt(x int) (string, bool) {
 type statusSeg struct {
 	spans []render.Span
 	keep  bool
+	acts  []actHit // [Act: …]: its windows, columns from the start of the segment
 }
 
 // withTabs puts the tabs at the right end of the status line and keeps their
 // hits at their real screen columns. The left part gives up whole segments to
 // leave them room, plus one blank of separation; when the tabs alone do not
-// fit, they are dropped and take no click.
-func (u *UI) withTabs(left []statusSeg, x0, cols int, st theme.Style) []render.Span {
+// fit, they are dropped and take no click. It gives the segments kept too.
+func (u *UI) withTabs(left []statusSeg, x0, cols int, st theme.Style) ([]render.Span, []statusSeg) {
 	tabs, hits := u.tabSpans(0)
 	tw := spansWidth(tabs)
 	if tw >= cols {
-		return joinSegs(left)
+		return joinSegs(left), left
 	}
 	start := cols - tw // column of the first tab, relative to x0
-	spans, w := fitSegs(left, start-1)
+	kept := fitSegs(left, start-1)
+	spans, w := truncSpans(joinSegs(kept), start-1)
 	for i := range hits {
 		hits[i].col0 += x0 + start
 		hits[i].col1 += x0 + start
 	}
 	u.tabHits = append(u.tabHits, hits...)
 	spans = append(spans, render.Span{Text: strings.Repeat(" ", start-w), Style: st})
-	return append(spans, tabs...)
+	return append(spans, tabs...), kept
 }
 
 // joinSegs : the spans of the segments, in order.
@@ -758,11 +906,11 @@ func spansWidth(spans []render.Span) int {
 	return w
 }
 
-// fitSegs joins the segments into at most cols cells and gives the width kept.
-// A segment is dropped whole, from the end (the flash first, then the away
-// message, the activity, …), so the line never ends in the middle of one; the
-// kept segments stay, and are cut by cells only when they overflow on their own.
-func fitSegs(segs []statusSeg, cols int) ([]render.Span, int) {
+// fitSegs gives the segments that fit into cols cells. A segment is dropped
+// whole, from the end (the flash first, then the away message, the activity,
+// …), so the line never ends in the middle of one; the kept segments stay,
+// and are cut by cells (truncSpans) only when they overflow on their own.
+func fitSegs(segs []statusSeg, cols int) []statusSeg {
 	w := 0
 	for _, s := range segs {
 		w += spansWidth(s.spans)
@@ -774,16 +922,13 @@ func fitSegs(segs []statusSeg, cols int) ([]render.Span, int) {
 		}
 		drop[i], w = true, w-spansWidth(segs[i].spans)
 	}
-	var out []render.Span
+	var out []statusSeg
 	for i, s := range segs {
 		if !drop[i] {
-			out = append(out, s.spans...)
+			out = append(out, s)
 		}
 	}
-	if w > cols { // the kept segments alone are too wide: last resort
-		return truncSpans(out, cols)
-	}
-	return out, w
+	return out
 }
 
 // truncSpans cuts spans to at most cols cells and gives the width kept.
@@ -811,7 +956,7 @@ func (u *UI) drawStatus(b *strings.Builder, row, x0, cols int) {
 	acc.FG, acc.Bold = u.th.Color(theme.Accent), true
 	act.FG = u.th.Color(theme.Act)
 	errS.FG = u.th.Color(theme.Error)
-	u.tabHits = u.tabHits[:0] // made again at each repaint, like u.hits
+	u.tabHits, u.actHits = u.tabHits[:0], u.actHits[:0] // made again at each repaint, like u.hits
 	fmt.Fprintf(b, "\x1b[%d;%dH%s\x1b[K", row, x0+1, st.SGR())
 	if u.pager != nil {
 		msg := i18n.T("pager_more", len(u.pager.rest))
@@ -821,11 +966,13 @@ func (u *UI) drawStatus(b *strings.Builder, row, x0, cols int) {
 	w := u.view()
 	var segs []statusSeg
 	var cur []render.Span
+	var acts []actHit
 	add := func(s string, style theme.Style) { cur = append(cur, render.Span{Text: s, Style: style}) }
 	// end closes the segment being written; keep: it survives the tabs.
 	end := func(keep bool) {
 		if len(cur) > 0 {
-			segs, cur = append(segs, statusSeg{spans: cur, keep: keep}), nil
+			segs = append(segs, statusSeg{spans: cur, keep: keep, acts: acts})
+			cur, acts = nil, nil
 		}
 	}
 	add(time.Now().Format("[15:04]"), st)
@@ -875,8 +1022,12 @@ func (u *UI) drawStatus(b *strings.Builder, row, x0, cols int) {
 		add(" ["+l+"]", acc)
 		end(false)
 	}
-	if l := u.actSpans(st, act); len(l) > 0 {
+	if l, hits := u.actSpans(st, act); len(l) > 0 {
 		add(" [Act: ", st)
+		for _, h := range hits {
+			h.col0, h.col1 = h.col0+spansWidth(cur), h.col1+spansWidth(cur)
+			acts = append(acts, h)
+		}
 		cur = append(cur, l...)
 		add("]", st)
 		end(false)
@@ -915,9 +1066,17 @@ func (u *UI) drawStatus(b *strings.Builder, row, x0, cols int) {
 		add(" ["+u.flashMsg+"]", acc)
 		end(false)
 	}
-	spans := joinSegs(segs)
+	spans, kept := joinSegs(segs), segs
 	if u.tabsOn() {
-		spans = u.withTabs(segs, x0, cols, st)
+		spans, kept = u.withTabs(segs, x0, cols, st)
+	}
+	col := x0
+	for _, s := range kept {
+		for _, h := range s.acts {
+			h.col0, h.col1 = h.col0+col, h.col1+col
+			u.actHits = append(u.actHits, h)
+		}
+		col += spansWidth(s.spans)
 	}
 	u.writeLine(b, render.Line{Spans: spans}, cols, nil)
 }

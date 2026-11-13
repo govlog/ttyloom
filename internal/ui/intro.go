@@ -169,6 +169,7 @@ func (u *UI) introEnd() {
 	}
 	u.intro.timer.Stop()
 	u.intro = nil
+	u.freeVeils()
 	u.repaint()
 }
 
@@ -189,15 +190,20 @@ func (u *UI) introCanvas() intro.Canvas {
 	return intro.Canvas{Cols: u.t.Cols, Rows: u.t.Rows, Aspect: aspect}
 }
 
-// introCompose lays the demo over the frame text draw made. A layer of
-// another size (a resize, paused or between two frames) is made again for
-// this screen first.
-func (u *UI) introCompose(text string) string {
+// introLayer : the layer of the demo and its dark. A layer of another size (a
+// resize, paused or between two frames) is made again for this screen first.
+func (u *UI) introLayer() (*intro.Layer, float32) {
 	r := u.intro
 	if r.layer == nil || r.layer.Cols != u.t.Cols || r.layer.Rows != u.t.Rows {
 		r.layer, r.dark = r.show.Frame(time.Now(), u.introCanvas())
 	}
-	return intro.Composite(intro.Parse(text, u.t.Cols, u.t.Rows), r.layer, r.dark, u.rgbOf).Emit()
+	return r.layer, r.dark
+}
+
+// introCompose lays the demo over the frame text draw made.
+func (u *UI) introCompose(text string) string {
+	l, dark := u.introLayer()
+	return intro.Composite(intro.Parse(text, u.t.Cols, u.t.Rows), l, dark, u.rgbOf).Emit()
 }
 
 // rgbOf : the colour c shows on the screen. A default colour is the

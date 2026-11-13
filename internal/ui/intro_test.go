@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -310,5 +311,37 @@ func TestDemoKeepsDebugPrefix(t *testing.T) {
 	u, _ := introUI(t, 80, 24)
 	if n, _, _, _ := ParseCommand("/de", u.commandNames()); n != "debug" {
 		t.Fatalf("/de: %q", n)
+	}
+}
+
+// The demo plays over the pictures of the chat without hiding them: each
+// one stays placed, under the text (z<0) — the glyphs of the effects draw
+// over it — and under a veil (z=-1) that carries the dark and the tints of
+// the demo; at the end it goes back over the text and the veil goes.
+func TestIntroKeepsPicturesUnderIt(t *testing.T) {
+	u, buf := introUI(t, 80, 24)
+	u.images, u.t.Kitty, u.t.CellW, u.t.CellH = "kitty", true, 10, 20
+	md := &model.Media{Kind: model.MediaPhoto, Label: "[photo]", State: model.MediaReady,
+		Frames: [][]byte{{1}}, FrameW: 100, FrameH: 100}
+	u.ws.Current().Items = append(u.ws.Current().Items, &Item{Msg: &model.Msg{ID: 1, Date: time.Now(), Media: md}})
+	frame := func() string {
+		buf.Reset()
+		u.draw()
+		return buf.String()
+	}
+	if f := frame(); !strings.Contains(f, "\x1b_Ga=T,") || strings.Contains(f, ",z=") {
+		t.Fatalf("before the demo: the picture over the text, %q", f)
+	}
+	t0 := time.Now()
+	u.introStart(t0)
+	u.introStep(t0.Add(time.Second))
+	f := frame()
+	pic, veil := strings.Index(f, "\x1b_Ga=p,i=1,"), strings.Index(f, "\x1b_Ga=T,f=100,")
+	if pic < 0 || !strings.Contains(f[pic:], ",z=-2,") || veil < pic || !strings.Contains(f[veil:], ",z=-1,") {
+		t.Fatalf("under the demo: the picture under the text, then its veil over it, %q", f)
+	}
+	u.introEnd()
+	if f := frame(); !strings.Contains(f, "\x1b_Ga=p,i=1,") || strings.Contains(f, ",z=") || !strings.Contains(f, "a=d,d=I,") {
+		t.Fatalf("after the demo: the picture over the text again, its veil freed, %q", f)
 	}
 }

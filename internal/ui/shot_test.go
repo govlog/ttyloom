@@ -205,7 +205,7 @@ func shotUI(t *testing.T, th theme.Theme, out *bytes.Buffer, pic *model.Media) *
 		agg: &Window{}, debug: &Window{}, focused: true, images: "kitty", side: sideChats, sideW: 26,
 		nets:  map[string]model.Backend{netTelegram: tg, netDiscord: dc, libera: irc},
 		chats: map[model.ChatKey]*model.Chat{}, lookups: map[uint64]*lookup{}, typing: map[model.ChatKey]typing{},
-		lastTyping: map[model.ChatKey]time.Time{}, avatars: map[model.ChatKey]*model.Media{}, openNext: map[*model.Media]bool{},
+		lastTyping: map[model.ChatKey]time.Time{}, avatars: map[model.ChatKey]*model.Media{}, fileNext: map[*model.Media]func(*model.Media){},
 		presence: map[model.ChatKey]string{}, dirty: map[model.ChatKey]bool{},
 		partsCache: map[model.ChatKey]partsEntry{}, whoCache: map[whoKey]whoEntry{}, aliases: map[model.ChatKey]string{},
 		folded: map[string]bool{}, tabLast: map[string]*Window{},

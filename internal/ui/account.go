@@ -90,7 +90,7 @@ func (u *UI) clearAccount(net string) {
 				return false
 			}
 			if md := it.Msg.Media; md != nil {
-				delete(u.openNext, md)
+				delete(u.fileNext, md)
 				u.dropFrames(md)
 			}
 			return true

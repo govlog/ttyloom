@@ -185,11 +185,20 @@ func Message(m *model.Msg, o Opts) []Line {
 	for i := mk.reactFirst; i < mk.reactLast; i++ {
 		lines[i].Actions = actionsIn(lines[i], ra)
 	}
-	// A click on the label of a photo, a video, a GIF or a map is the "v" of
-	// the palette: the preview, never the desktop. A link preview keeps its
-	// URL (the page) and a file has nothing to preview.
-	if md := m.Media; mk.label >= 0 && md.Kind != model.MediaWebPage && md.Previewable() && Actionable(m) {
-		lines[mk.label].Actions = append(lines[mk.label].Actions, actionsIn(lines[mk.label], []Act{{KeyView, mk.labelText, "", 0}})...)
+	// A click on the label of a media with a file opens the menu of its file
+	// (view, copy, open); on the label of a map, the preview. A link preview
+	// keeps its URL (the page).
+	if md := m.Media; mk.label >= 0 && md.Kind != model.MediaWebPage && Actionable(m) {
+		key := rune(0)
+		switch {
+		case md.Kind != model.MediaMap && md.Loc != nil:
+			key = KeyFile
+		case md.Previewable():
+			key = KeyView
+		}
+		if key != 0 {
+			lines[mk.label].Actions = append(lines[mk.label].Actions, actionsIn(lines[mk.label], []Act{{key, mk.labelText, "", 0}})...)
+		}
 	}
 	// After the indent and the marker: Col is the end of the label as it is
 	// drawn.

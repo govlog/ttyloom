@@ -595,14 +595,14 @@ func TestMultilineInsert(t *testing.T) {
 	}
 }
 
-// TestOpenRefusesBin : a file saved with a neutralised extension (.bin, the
-// type is not on the allow list of tgc.extOf) is never handed to xdg-open.
-func TestOpenRefusesBin(t *testing.T) {
+// TestOpenAsksUnknownType : a file of a type off the allow list goes to
+// xdg-open only after a yes, never at once; a launcher never goes
+// (TestRegressionOpenActiveExtension).
+func TestOpenAsksUnknownType(t *testing.T) {
 	u := &UI{ws: NewWindows(), agg: &Window{}}
-	u.open("/tmp/ttyloom/20260830-120000_chat_12.bin")
-	items := u.view().Items
-	if len(items) != 1 || !strings.Contains(items[0].Sys, "20260830-120000_chat_12.bin") {
-		t.Fatalf("items: %+v", items)
+	u.open("/tmp/ttyloom/x/notes.py")
+	if u.ask == nil || !strings.Contains(u.ask.q, "notes.py") {
+		t.Fatalf("no question before opening notes.py: %+v", u.ask)
 	}
 }
 
@@ -632,6 +632,7 @@ type fakeBackend struct {
 	gifQueries []string
 	gifsSent   []model.Gif
 	downloads  []string
+	arounds    []int    // LoadHistoryAround calls: the id aimed at
 	sends      []string // Send calls: "<chat title>: <text>"
 	forwards   []string // Forward calls: "<from title>:<id>><to title>"
 	pins       []string // Pin calls: "<id>:<pin>"
@@ -1030,4 +1031,55 @@ func TestDialogsKeepChatActiveDuringRead(t *testing.T) {
 
 func (f *fakeBackend) Forward(_ context.Context, from *model.Chat, id int, to *model.Chat, _ int64) {
 	f.forwards = append(f.forwards, fmt.Sprintf("%s:%d>%s", from.Title, id, to.Title))
+}
+
+// The older page goes out only once the scroll rests at the top: a scrollbar
+// thumb dragged up and down fast passes by the top many times, and one page
+// per pass brought a FLOOD_WAIT from Telegram.
+func TestOlderPageWaitsAtTop(t *testing.T) {
+	u := netUI(netTelegram)
+	u.ctx = context.Background()
+	b := u.nets[netTelegram].(*fakeBackend)
+	w := u.ws.New(false)
+	w.Chat, w.Loaded = u.chatList[0], true
+	for i := range 100 {
+		w.AddSys(fmt.Sprint("line ", i))
+	}
+	for range 5 { // up to the top and down again, fast
+		u.scroll(w, 1000)
+		u.scroll(w, -10)
+	}
+	u.tickAt(time.Now().Add(time.Minute))
+	if b.history != 0 {
+		t.Fatalf("thumb passing by the top: %d pages asked, want 0", b.history)
+	}
+	u.scroll(w, 1000)
+	u.tickAt(time.Now())
+	if b.history != 0 {
+		t.Fatal("page asked as soon as the top is reached, before the delay")
+	}
+	u.tickAt(time.Now().Add(olderDelay))
+	if b.history != 1 || !w.Loading {
+		t.Fatalf("rest at the top: %d pages asked, loading %v; want 1, true", b.history, w.Loading)
+	}
+}
+
+// Under a FLOOD_WAIT every page asked is refused: the window shows the error
+// once, not one line per refusal. A new error after a page that came shows.
+func TestHistoryErrorShownOnce(t *testing.T) {
+	u := netUI(netTelegram)
+	w := u.ws.New(false)
+	w.Chat = u.chatList[0]
+	refused := model.Envelope{Net: netTelegram, Ev: model.EvHistory{ChatID: w.Chat.ID, Err: "FLOOD_WAIT"}}
+	for range 3 {
+		u.dispatch(refused)
+	}
+	if len(w.Items) != 1 {
+		t.Fatalf("3 refusals: %d lines, want 1", len(w.Items))
+	}
+	u.dispatch(model.Envelope{Net: netTelegram, Ev: model.EvHistory{ChatID: w.Chat.ID}})
+	u.dispatch(refused)
+	if len(w.Items) != 2 {
+		t.Fatalf("refusal after a page: %d lines, want 2", len(w.Items))
+	}
 }

@@ -87,7 +87,8 @@ const (
 	KeyReact = 'R' // click on a reaction: toggles Emoji
 	KeyJump  = 'g' // quote of a reply, "g" of the palette: jump to message ID
 	KeyTicks = 'T' // hover zone of the ✓/✓✓ tick of my messages: never a click
-	KeyView  = 'V' // click on the label of a photo, video, GIF or map: the preview
+	KeyView  = 'V' // click on the label of a map: the preview
+	KeyFile  = 'F' // click on the label of a media with a file: the menu of the file
 )
 
 type Img struct {

@@ -213,7 +213,7 @@ update_check = false
 | `bot_token` | Empty for a user account; a BotFather token for Telegram bot mode. |
 | `lang` | `en`, `fr`, or a fallback chain such as `fr+en`. The first language also selects plural rules. Empty follows the first of `LC_ALL`, `LC_MESSAGES` and `LANG` that is set: French when it starts with `fr`, otherwise English. `/set lang` changes it live and rejects unknown languages. See the Languages table of the README. |
 | `theme` | Ghostty theme name. Empty reads the `theme` setting in `~/.config/ghostty/config`; `terminal` uses the terminal’s ANSI colors. |
-| `download_dir` | Downloaded media directory. Names include date, network, chat ID, title and message ID. |
+| `download_dir` | Downloaded media directory. A file someone sends keeps its own name in the folder of its conversation, `<network>/<conversation>/`; a media with no name of its own is named by date, network, chat ID, title and message ID. |
 | `auto_media_max_kb` | Automatic download threshold in KiB, from 0 to 524288. **0 disables all automatic downloads of message media**, including unknown sizes; avatars and the pictures of the GIF picker and media browser still load. `/open`, `/view`, `v`, `o` and a click remain explicit requests. |
 | `images` | `auto` takes the best the terminal has — kitty graphics, then sixel, then Terminology —, else half blocks; `kitty`, `sixel`, `terminology`, `halfblock` and `off` select an explicit mode. `F4` cycles modes. |
 | `images_hover` | Show images in an overlay when hovering over a message, with no reserved image rows in the conversation. `F5` toggles it. |
@@ -584,7 +584,9 @@ At start, TTYloom plays a 90s demo in ASCII over the chat: a tunnel, fire, a
 glass cube, a torus that changes its shape, copper bars with a sine scroller,
 and Matrix rain, each one around the TTYLOOM logo. One effect is picked at
 random, then another one comes every 15 seconds. The chat stays visible and
-alive behind it: connections and messages go on.
+alive behind it: connections and messages go on. Its pictures stay too, on
+kitty and Ghostty, dimmed like the chat, with the effects over them.
+Sixel and Terminology pictures come back at the end.
 
 The first key or click stops it with a short fade; that key is not typed. A
 second key ends the fade at once. A mouse move does not stop it. The demo also
@@ -745,6 +747,8 @@ because `/quit` shares that prefix. Exact aliases take precedence when executing
 | Ctrl+V | Paste an image through `wl-paste` or `xclip`, then `e` sends it, `l` adds a caption first, `a` or Escape cancels. Plain text goes into the editor. |
 | Ctrl+G, `/gif [query]` | Search animated GIF previews: Telegram’s `@gif` bot or Discord’s GIF provider (currently KLIPY). Images must be on (F4). Trends appear immediately; typing searches. Up to 24 previews show at a time, six by four rows; they download three at a time in grid order. Until its preview appears, a cell fills with grey bars as its bytes arrive (a band sweeps it when the size is unknown), stays full while it decodes, and says "waiting" before its turn; a smaller terminal shrinks the previews first, then shows fewer columns or rows. A scrollbar on the right, thicker under the pointer, shows the others: click it or drag its thumb. Only the preview under the mouse, or the one the arrows reached, plays. Arrows, PgUp/PgDn, Home/End, the wheel or the scrollbar move; Enter or a click sends; Escape closes. |
 | Ctrl+M, `/media [media\|gifs\|files]` | Browse the media of the conversation of the window, sent by anyone, newest first: photos and videos, GIFs, or files (Telegram, Discord; not for a bot account). Same grid as the GIF picker: up to six by four, with the same scrollbar; older ones load as you scroll. Tab and Shift+Tab, or a click on a tab, change tab; Enter or a click shows the media in the viewer, where ←/→ go through the list (a file opens with its program); `j` goes to its message, `o` opens it, Escape or Ctrl+M closes. Only the GIF under the mouse plays. A cell shows the small picture the network gives (kept in the cache directory), a small GIF itself, or the name, size, sender and date of a file; a GIF or a media with no small picture downloads to `download_dir`, like the ones of the conversation, when it is under `auto_media_max_kb`. Ctrl+M needs the kitty keyboard protocol (Ghostty, kitty, WezTerm, foot); elsewhere it is Enter, so use `/media`. |
+| Ctrl+D, `/files` | Browse the files sent and received in every conversation the disk cache and the open windows hold, by person: documents, photos, videos and audio, not stickers, GIFs nor link previews. The people go on the left, grouped by network, in one list in the aggregate view (F6), cut to the network of `/net`; me comes first for what I sent. The files of the person picked go on the right, newest first, with their date, size, name and conversation. Typing filters the files by name, case and accents aside: `rapport` finds a part of the name, `*.pdf` or `*toto*.gif` a pattern on the whole name (`*` any run of characters, `?` one); Backspace takes a letter back, Escape clears the filter. ↑/↓, PgUp/PgDn, Home/End and the wheel move; ←/→ or Tab go from the people to the files and back, as Enter on a person does. Enter or a click on a file opens its menu (below), with "go to the message" first; Escape or Ctrl+D closes. The box shows what was there at its opening. Opening it also moves the documents still under the names of before to the folder of their conversation. |
+| Click the label of a media, right-click a picture | Open the menu of its file: view (a media with a preview), copy the image (a picture: through `wl-copy` or `xclip`), copy its absolute path (OSC 52, like a selection), send it to a conversation, open it with `xdg-open`. "Send to a conversation" opens the new chat box over every network: on the network of the file the network forwards the message, so the receiver sees where it comes from; anywhere else (another network, an IRC nick by DCC, one attachment of several) the file goes up as a file of mine. A file not downloaded yet downloads first, and a failure says so in the window. A left click on the picture still opens the viewer; the label of a map opens the viewer too. |
 | `/set auto_media_max_kb 20480` | Raise the automatic download threshold to 20 MiB. |
 
 <a id="viewer"></a>
@@ -798,10 +802,23 @@ memory, are sent one frame at a time, as on other terminals. A link preview show
 on Telegram, title on Discord) and a description, with a thumbnail on
 Telegram. Only HTTP and HTTPS links, and mailto links without a `?` or `#`
 part, are made clickable and passed to `xdg-open`. Larger media stay as labels
-until requested. Files outside the allowed extension list are saved as `.bin`
-and cannot be opened through `o`. The list covers common images, video, audio,
-office files, archives, text and PDF. Downloads are created with mode `0600` in
-`0700` directories.
+until requested. A file keeps the name its sender gave it, in the folder of
+its conversation, `download_dir/<network>/<conversation>/`, with the date of
+its message as its time. When another message already holds that name, the
+file takes the id of its own message: `report (1234).pdf`. A path separator, a
+control character or a bidi override in the name becomes `_`. A photo, a
+video, an audio or a GIF keeps its name only when its suffix is the one ttyloom
+gives its type, since the suffix steers the decoders; one downloaded before
+stays where it is. A document downloaded under the name of its message, before
+the names were kept, moves to its new place when it is shown or opened, and
+all of them when the file browser (Ctrl+D) opens. A Telegram file reference
+dies after a while: a message kept in the cache for weeks may carry a dead one.
+Its download then asks the network for the message again, once, and starts
+over. `o` and `xdg-open` open the common images, video, audio,
+office files, archives, text and PDF at once; another type asks first, and a
+launcher (`.desktop`, `.sh`, `.AppImage`, `.run`, `.jar`, `.exe` and the like)
+is never opened: copy its path from the menu of its label. Downloads are
+created with mode `0600` in `0700` directories.
 
 Image decoding rejects still images over about 40 megapixels (20 for a 16-bit
 PNG) and animated GIF frames over about 1.6 megapixels. GIFs in the
@@ -920,7 +937,9 @@ click `[x]` to close the box.
 The message scrollbar supports clicking to jump and dragging to scroll. Its
 track highlights under the pointer, and its thumb becomes a solid block during
 mouse interaction. The status bar lists background activity as
-`[Act: 2(3),5(1)]`: window number and unread count. Window 0 shows with no
+`[Act: 2(3),5(1)]`: window number and unread count. A click on one goes to its
+window, on its first unread message, lit for 2 seconds, and reads it (on the
+message that got a reaction, when one waits there). Window 0 shows with no
 count and in the plain colour when it only received lines nobody waits for
 (connected, disconnected — the status bar says it live —, chats loaded, sync,
 MOTD, notices of the server, SASL login); errors, invitations and notices
@@ -1033,8 +1052,9 @@ conversation you are not looking at, the reaction shows at the end of the
 conversation's sidebar line and next to its window in `[Act: …]` (`5🔥`,
 `5(3)🔥`), and a notification follows the `notify` setting, without the bell:
 `#room · Eve` / `🔥 « the start of your message »`. A custom emoji shows as ⭐.
-Going to the window selects the message that got the reaction (loading it
-when it is older than the page shown) and clears the mark. At start-up the
+Going to the window shows the message that got the reaction, lit for 2
+seconds (loading it when it is older than the page shown), and clears the
+mark. At start-up the
 Telegram list only says which conversations hold unread reactions, not which:
 they show 👍 until visited. A muted conversation keeps a dimmed mark and sends
 no notification.
@@ -1257,7 +1277,11 @@ XTerm*numColorRegisters: 256
 ```
 
 Sixel and Terminology pictures are drawn in the cells: they go again only when
-a row under them changes (a scroll, a hover), not at each key. They do not
+a row under them changes (a scroll, a hover), not at each key. Each one is
+decoded, scaled and encoded outside the interface loop, up to four at a time:
+the keys answer while a screen of them is made, and a picture shows as soon as
+it is ready. A zoom step of the viewer keeps the picture before it on the
+screen until the new one is ready. They do not
 animate: a GIF shows one frame, and a video plays in mpv. Terminology draws a
 file and can neither crop nor enlarge it, so it gets a PNG of what the cells
 show (the zoomed region of the viewer, the visible part of a picture cut by

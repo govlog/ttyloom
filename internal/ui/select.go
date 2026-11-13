@@ -120,7 +120,7 @@ func (u *UI) actClick(w *Window, it *Item, a render.Action) {
 		if it != nil && it.Msg != nil {
 			u.jumpTo(u.chatOf(it.Msg), a.ID)
 		}
-	case a.Key == render.KeyView: // label of a media: the preview, whatever the mode
+	case a.Key == render.KeyView: // label of a map: the preview, whatever the mode
 		if it != nil && it.Msg != nil {
 			u.viewMsg(it.Msg)
 		}

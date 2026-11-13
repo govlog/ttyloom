@@ -62,6 +62,9 @@ type UI struct {
 	picDir    string                        // private directory of the files of Terminology, made at first use
 	picN      int                           // last file number there
 	picBytes  int                           // size of the files there (tmpfs: memory)
+	picBusy   map[picKey]bool               // pictures being made outside the loop (picStart)
+	picSem    chan struct{}                 // lanes of those, picSlots
+	picRuns   sync.WaitGroup                // the same, for a test to wait on
 	alertNext *alertNote                    // hot message waiting for its bell and notification (alert)
 	alertAt   time.Time                     // last bell and notification given
 	sgrs      map[theme.Style]string        // SGR sequence of each style drawn (sgr)
@@ -117,6 +120,8 @@ type UI struct {
 	avatars    map[model.ChatKey]*model.Media // peer → avatar; nil = no photo
 	partsCache map[model.ChatKey]partsEntry   // members per chat, valid for 5 min
 	kittyID    uint32                         // last kitty id given out; it never goes back down
+	veils      [][2]uint32                    // kitty ids of the veils of the demo, two per picture (placeVeils)
+	veilFlip   int                            // which of the two the frame places
 	kittyLRU   lru                            // images alive in the terminal, cap kitty_images
 	framesLRU  lru                            // media holding decoded frames, least recently shown first (framesBudget)
 	kplaced    map[kplace]bool                // kitty placements on the screen (frame before), for the diff
@@ -140,8 +145,14 @@ type UI struct {
 		item *Item
 		at   time.Time
 	}
-	openNext map[*model.Media]bool
+	// fileNext : what to do with the file of a media once it is downloaded (withFile).
+	fileNext map[*model.Media]func(*model.Media)
 	fulls    map[*model.Media]bool // larger variants (Media.Full) being downloaded: no line shows them
+	// dls : the downloads on their way (fetch); refs, refreshed : the media
+	// waiting for a fresh Telegram reference, the ones already asked once (refetch).
+	dls       map[*model.Media]dlOf
+	refs      map[model.ChatKey][]refAsk
+	refreshed map[*model.Media]bool
 	// decodes : decoding running per media, to be ended when nobody waits for
 	// it any more ("s", window closed, media freed, preview closed).
 	decodes     map[*model.Media]context.CancelFunc
@@ -183,6 +194,8 @@ type UI struct {
 	hubReturn   map[string]bool         // networks started from the hub: it comes back at their EvReady or EvStopped
 	gifs        *gifBox                 // GIF box (Ctrl+G): it takes everything
 	mbox        *mediaBox               // media browser (Ctrl+M): it takes everything
+	files       *filesBox               // file browser (Ctrl+D): it takes everything but the menu of a file
+	fileRuns    sync.WaitGroup          // its reading of the disk, for a test to wait on
 	customs     map[string]*model.Media // images of the custom emojis, by URL, kept for the session (customs.go)
 	gridOrphan  map[*model.Media]bool   // pictures of a closed GIF box or media browser whose download still comes
 	contacts    []*model.Chat           // contacts of the account (contacts.getContacts), source of the overlay
@@ -190,7 +203,15 @@ type UI struct {
 	jump        struct {                // message to join at the next history (global result)
 		chat  model.ChatKey
 		msgID int
+		glow  bool // lit for a moment (glowOn) rather than selected
 	}
+	glow struct { // a message lit for a moment, with the look of the selection
+		w     *Window
+		it    *Item
+		until time.Time
+		show  bool // next draw: the view moves to it
+	}
+	glowNext *Window // its recent page lights its first unread message (actGo)
 	// netFilter : network the sidebar and the aggregate are cut to (/net),
 	// "" = all. Always empty with a single backend.
 	netFilter string
@@ -198,6 +219,7 @@ type UI struct {
 	tabLast map[string]*Window
 	// tabHits : column range of each tab of the bar, made again at each repaint.
 	tabHits    []tabHit
+	actHits    []actHit                  // same for each window of [Act: …]
 	side       sideMode                  // sidebar (F2)
 	sideW      int                       // width of its content (sidebar_width, drag of the bar)
 	sideScroll int                       // first entry shown in the sidebar
@@ -1034,9 +1056,7 @@ func (u *UI) opts() render.Opts {
 		Avatars: u.avatarsOn(), ShowChat: v == u.agg, ReadOutbox: u.readOutboxOf, ReadInbox: u.readInboxOf,
 		ImagesHover: u.cfg.ImagesHover, Video: u.cfg.Video, ChatKind: u.chatKindOf,
 		Alias: u.aliasOf, Redline: u.cfg.Redline, Caps: u.capsOf}
-	if it := v.Sel; it != nil { // every view draws the shown window
-		o.Selected = it.Msg
-	}
+	o.Selected = u.selMsg(v) // every view draws the shown window
 	// The hover counts only for the shown window: after a window change at the
 	// keyboard, the item pointed at is no longer its own (the aggregate shares
 	// the *model.Msg, it would highlight the wrong message).
@@ -1051,11 +1071,77 @@ func (u *UI) opts() render.Opts {
 // view (the read position when a background window loads, say).
 func (u *UI) optsFor(w *Window) render.Opts {
 	o := u.opts()
-	o.ShowChat, o.Selected, o.Hover = w == u.agg, nil, nil
-	if w.Sel != nil {
-		o.Selected = w.Sel.Msg
-	}
+	o.ShowChat, o.Selected, o.Hover = w == u.agg, u.selMsg(w), nil
 	return o
+}
+
+// selMsg : the message w draws as selected — its selection, else the one lit
+// for a moment.
+func (u *UI) selMsg(w *Window) *model.Msg {
+	switch {
+	case w.Sel != nil:
+		return w.Sel.Msg
+	case u.glow.it != nil && u.glow.w == w:
+		return u.glow.it.Msg
+	}
+	return nil
+}
+
+// glowFor : how long a message reached from [Act: …] stays lit.
+const glowFor = 2 * time.Second
+
+// glowOn lights it, in w, for glowFor; the next draw moves the view to it.
+func (u *UI) glowOn(w *Window, it *Item) {
+	u.glow.it.Invalidate()
+	u.glow.w, u.glow.it, u.glow.until, u.glow.show = w, it, time.Now().Add(glowFor), true
+	it.Invalidate()
+}
+
+// land : a jump reached its message — selected, or lit for a moment.
+func (u *UI) land(w *Window, it *Item, glow bool) {
+	if glow {
+		u.glowOn(w, it)
+		return
+	}
+	u.setSel(w, it)
+}
+
+// firstUnread : the first message of w past its redline, nil when it is not
+// in the messages loaded.
+// ponytail: more unread messages than one page leaves the first one out of
+// the recent page: nothing lit, the view stays on the redline. Load around
+// MarkID if that ever matters.
+func firstUnread(w *Window) *Item {
+	if w.MarkID <= 0 {
+		return nil
+	}
+	for _, it := range w.Items {
+		if it.Msg != nil && !it.part && w.shown(it) && it.Msg.ID > w.MarkID && !it.Msg.Out {
+			return it
+		}
+	}
+	return nil
+}
+
+// actGo : a click on a window of [Act: …]. The window comes, settled on what
+// waits there and lit for a moment: the message that got a reaction (goTo),
+// else the first unread one — read once shown, as any visit does.
+func (u *UI) actGo(w *Window) {
+	i := slices.Index(u.ws.List, w)
+	if i < 0 {
+		return
+	}
+	reacted := w.Chat != nil && w.Search == "" && w.Chat.ReactedMsg != 0
+	u.goTo(i)
+	if reacted || u.ws.Current() != w {
+		return
+	}
+	if it := firstUnread(w); it != nil {
+		u.glowOn(w, it)
+	}
+	if w.Loading { // the recent page lights it, or lights it again (Merge may change the items)
+		u.glowNext = w
+	}
 }
 
 // chatKindOf gives the kind of the chat of a message, for render.Opts.ChatKind
@@ -1365,6 +1451,10 @@ func (u *UI) event(ev model.Event) {
 		}
 	case evFlash:
 		u.flash(e.Text)
+	case evPic:
+		u.picKeep(e)
+	case evFiles:
+		u.filesLoaded(e)
 	case evHook:
 		u.hookDone(e)
 	case evUpdate:
@@ -1628,6 +1718,7 @@ func (u *UI) jumpDone(k model.ChatKey) {
 
 func (u *UI) history(e model.EvHistory) {
 	key := u.evKey(e.ChatID)
+	u.refreshRefs(key, e)
 	i := u.ws.ForChat(key)
 	if i < 0 {
 		u.jumpDone(key) // window closed meanwhile
@@ -1636,10 +1727,14 @@ func (u *UI) history(e model.EvHistory) {
 	w := u.ws.List[i]
 	w.Loading = false
 	if e.Err != "" {
-		w.AddSys(i18n.T("history_error", e.Err))
+		if e.Err != w.histErr {
+			w.AddSys(i18n.T("history_error", e.Err))
+			w.histErr = e.Err
+		}
 		u.jumpDone(key)
 		return
 	}
+	w.histErr = ""
 	w.dropCacheMark() // the network answered: the history is no longer the one of the disk
 	ptrs := make([]*model.Msg, len(e.Msgs))
 	for k := range e.Msgs {
@@ -1698,6 +1793,12 @@ func (u *UI) history(e model.EvHistory) {
 			w.Scroll = scrollTo(len(lines), idx, u.viewRows())
 		}
 	}
+	if recent && u.glowNext == w {
+		u.glowNext = nil
+		if it := firstUnread(w); it != nil {
+			u.glowOn(w, it)
+		}
+	}
 	// Appointment of a jump (search, quote): the selection is set as soon as
 	// the message is there (selShow moves the view at the next draw). Any
 	// other page that ends starts the centred page again — including a scroll
@@ -1706,8 +1807,9 @@ func (u *UI) history(e model.EvHistory) {
 	if u.jump.msgID != 0 && u.jump.chat == key {
 		switch it := itemByID(w, u.jump.msgID); {
 		case it != nil:
+			glow := u.jump.glow
 			u.jumpDone(key)
-			u.setSel(w, it)
+			u.land(w, it, glow)
 		case e.Around && e.AroundID == u.jump.msgID:
 			u.jumpDone(key) // page centred on it, without it: message gone
 			w.AddSys(i18n.T("message_gone"))
@@ -1900,7 +2002,7 @@ func (u *UI) goTo(n int) {
 	// while messages came).
 	u.markRefresh(w)
 	if c := w.Chat; c != nil && c.ReactedMsg != 0 {
-		u.jumpTo(c, c.ReactedMsg) // the message that got the reaction, before markRead forgets it
+		u.jumpMsg(c, c.ReactedMsg, true) // the message that got the reaction, before markRead forgets it
 	}
 	u.markRead(w)
 }
@@ -1937,7 +2039,10 @@ func (u *UI) loadAround(w *Window, id int) {
 // that NOTHING fills — scrolling up loads before the oldest one shown, so
 // above the gap and never inside it. The seam is marked (Window.markGap), the
 // hole itself is still nobody's job.
-func (u *UI) jumpTo(c *model.Chat, id int) {
+func (u *UI) jumpTo(c *model.Chat, id int) { u.jumpMsg(c, id, false) }
+
+// jumpMsg : jumpTo, the message lit for a moment rather than selected when glow.
+func (u *UI) jumpMsg(c *model.Chat, id int, glow bool) {
 	if id == 0 {
 		return // send not confirmed yet: no id to aim at
 	}
@@ -1945,7 +2050,7 @@ func (u *UI) jumpTo(c *model.Chat, id int) {
 		u.sys(i18n.T("jump_unknown_chat"))
 		return
 	}
-	u.jump.chat, u.jump.msgID = model.ChatKey{}, 0
+	u.jump.chat, u.jump.msgID, u.jump.glow = model.ChatKey{}, 0, false
 	if i := u.ws.ForChat(c.Key()); i != u.ws.Cur {
 		// goTo → cancelMode() gives the input back and closes the local search;
 		// useless (and rough) when the window aimed at is already the current one.
@@ -1957,14 +2062,14 @@ func (u *UI) jumpTo(c *model.Chat, id int) {
 	}
 	w := u.ws.List[i]
 	if it := itemByID(w, id); it != nil {
-		u.setSel(w, it)
+		u.land(w, it, glow)
 		return
 	}
 	if u.selfOf(c.Net).Bot {
 		w.AddSys(i18n.T("jump_bot_no_history"))
 		return
 	}
-	u.jump.chat, u.jump.msgID = c.Key(), id
+	u.jump.chat, u.jump.msgID, u.jump.glow = c.Key(), id, glow
 	if !w.Loading {
 		u.loadAround(w, id)
 	}
@@ -2111,13 +2216,37 @@ func (u *UI) findChat(q string, strict bool) (chat *model.Chat, ambiguous bool) 
 	return nil, false
 }
 
+// olderDelay : rest at the top before the older page goes out. A scrollbar
+// thumb dragged up and down fast passes by the top without a page each time:
+// a burst of pages brings a FLOOD_WAIT from Telegram.
+const olderDelay = 400 * time.Millisecond
+
 func (u *UI) scroll(w *Window, delta int) {
 	lines := w.Lines(u.opts())
 	maxScroll := max(0, len(lines)-u.viewRows())
 	w.Scroll = max(0, min(w.Scroll+delta, maxScroll))
-	if delta > 0 && w.Scroll >= maxScroll && w.Chat != nil && !w.Full && !w.Loading {
-		u.loadHistory(w, w.OldestID())
+	switch {
+	case w.Scroll < maxScroll:
+		w.olderAt = time.Time{} // left the top before the delay: no page
+	case delta > 0 && w.olderAt.IsZero():
+		w.olderAt = time.Now()
 	}
+}
+
+// olderDue sends the older page of the shown window once its scroll has
+// rested at the top olderDelay (see scroll).
+func (u *UI) olderDue(now time.Time) bool {
+	w := u.view()
+	if w.olderAt.IsZero() || now.Sub(w.olderAt) < olderDelay {
+		return false
+	}
+	w.olderAt = time.Time{}
+	atTop := w.Scroll >= len(w.Lines(u.opts()))-u.viewRows()
+	if !atTop || w.Chat == nil || w.Full || w.Loading {
+		return false
+	}
+	u.loadHistory(w, w.OldestID())
+	return true
 }
 
 // --- keyboard ---
@@ -2265,6 +2394,8 @@ func (u *UI) key(k term.Key) {
 			u.openGifs("")
 		case 'm': // kitty keyboard protocol only: Ctrl+M is Enter elsewhere (/media)
 			u.openMediaBox("")
+		case 'd':
+			u.openFiles()
 		case 'k':
 			u.ed.KillToEnd()
 		case 'b', 'i', 'u': // style toggles of the draft (Ctrl+I needs the kitty keyboard protocol: Tab elsewhere)
@@ -2733,8 +2864,9 @@ func (u *UI) candidates(word string, atStart bool) []string {
 }
 
 // tick : typing timeout, clock, animation. true when a repaint is worth it.
-func (u *UI) tick() bool {
-	now := time.Now()
+func (u *UI) tick() bool { return u.tickAt(time.Now()) }
+
+func (u *UI) tickAt(now time.Time) bool {
 	redraw := u.saverCheck(now)
 	if (len(u.dirty) > 0 || u.dialogsDirty) && now.Sub(u.flushed) >= flushEvery {
 		u.flushCache(false)
@@ -2750,6 +2882,10 @@ func (u *UI) tick() bool {
 	}
 	if u.flashMsg != "" && now.After(u.flashUntil) {
 		u.flashMsg, redraw = "", true
+	}
+	if u.glow.it != nil && now.After(u.glow.until) {
+		u.glow.it.Invalidate()
+		u.glow.w, u.glow.it, redraw = nil, nil, true
 	}
 	if u.selEdge() { // the terminal sends no event while the pointer rests on the edge
 		redraw = true
@@ -2768,6 +2904,9 @@ func (u *UI) tick() bool {
 	// The boxes that ask a network: the query goes out once the typing has settled.
 	if g := u.gsearch; g != nil && g.due(now) {
 		u.gsSend()
+		redraw = true
+	}
+	if u.olderDue(now) {
 		redraw = true
 	}
 	if n := u.newChat; n != nil && n.due(now) {

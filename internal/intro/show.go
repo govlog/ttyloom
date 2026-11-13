@@ -231,8 +231,8 @@ func fade(l *Layer, f float32) {
 		for x := 0; x < l.Cols; x++ {
 			c := &l.Cells[y*l.Cols+x]
 			c.A *= max(f, 0)
-			if c.Ch != 0 && hash(x, y) >= f {
-				c.Ch = 0
+			if hash(x, y) >= f {
+				c.Ch, c.Fill = 0, 0
 			}
 		}
 	}
@@ -305,6 +305,6 @@ func mixFX(a, b FX, u, h float32) FX {
 	if h < u {
 		g = b
 	}
-	out.Ch, out.FG = g.Ch, g.FG
+	out.Ch, out.Fill, out.FG = g.Ch, g.Fill, g.FG
 	return out
 }

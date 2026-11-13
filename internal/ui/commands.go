@@ -22,7 +22,7 @@ var aliases = map[string]string{
 }
 
 var commandNames = []string{"/window", "/close", "/query", "/join", "/new", "/msg", "/me", "/shrug", "/away", "/chats", "/networks", "/hooks", "/net", "/fold", "/mute", "/unmute", "/history",
-	"/search", "/whois", "/rename", "/unrename", "/note", "/unnote", "/alias", "/unalias", "/open", "/view", "/send", "/theme", "/demo", "/set", "/clear", "/log", "/debug", "/emoji", "/gif", "/media", "/help", "/quit"}
+	"/search", "/whois", "/rename", "/unrename", "/note", "/unnote", "/alias", "/unalias", "/open", "/view", "/send", "/theme", "/demo", "/set", "/clear", "/log", "/debug", "/emoji", "/gif", "/media", "/files", "/help", "/quit"}
 
 // cmdNames : the commands valid now. general resolve first by prefix, then
 // context — the ones a network adds in its own windows (IRC's /kick), which
@@ -365,6 +365,8 @@ func (u *UI) command(name string, args []string, text string) {
 		u.openGifs(text)
 	case "media":
 		u.openMediaBox(arg(0))
+	case "files":
+		u.openFiles()
 	case "help":
 		if arg(0) == "" {
 			u.emit(w, helpLines(u.topics(), u.sections(), u.width()))

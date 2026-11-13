@@ -26,6 +26,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	xdraw "golang.org/x/image/draw"
 	_ "golang.org/x/image/webp"
@@ -617,3 +618,43 @@ func SafeExtension(name, mime string) string {
 
 // OpenableFile reports whether a local file has an allowed suffix.
 func OpenableFile(path string) bool { return allowedExtensions[strings.ToLower(filepath.Ext(path))] }
+
+// launchers contains the suffixes of files the desktop runs instead of
+// showing them. They never go to the desktop opener, even when asked.
+var launchers = map[string]bool{
+	".desktop": true, ".appimage": true, ".run": true, ".sh": true, ".jar": true,
+	".exe": true, ".msi": true, ".bat": true, ".cmd": true, ".com": true, ".scr": true,
+}
+
+// Launcher reports whether a local file has the suffix of a launcher.
+func Launcher(path string) bool { return launchers[strings.ToLower(filepath.Ext(path))] }
+
+// maxOriginalName : bytes kept of the name of a received file; the file
+// systems stop at 255, and the folder around it is named apart.
+const maxOriginalName = 200
+
+// OriginalName gives the name the sender gave a file, made safe as one name
+// on the disk: a path separator, a control character or a bidi override
+// becomes _, and a name too long is cut before its suffix. "" when nothing
+// is left (an empty name, "." or "..").
+func OriginalName(name string) string {
+	n := strings.TrimSpace(strings.Map(func(r rune) rune {
+		switch {
+		case r == '/', r == '\\', r < 0x20, r >= 0x7f && r <= 0x9f, r >= 0x202a && r <= 0x202e,
+			r >= 0x2066 && r <= 0x2069, r == utf8.RuneError:
+			return '_'
+		}
+		return r
+	}, name))
+	if n == "." || n == ".." {
+		return ""
+	}
+	if len(n) > maxOriginalName {
+		ext := filepath.Ext(n)
+		if len(ext) > 16 {
+			ext = ""
+		}
+		n = strings.ToValidUTF8(n[:maxOriginalName-len(ext)], "") + ext
+	}
+	return n
+}

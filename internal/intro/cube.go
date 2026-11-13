@@ -9,9 +9,10 @@ import (
 
 func init() { parts = append(parts, newCube) }
 
-// cube : a cube of glass turning behind the logo. Its faces are tinted, not
-// filled: the faces at the back, and the chat, show through the ones at the
-// front. Its edges are lines of ASCII.
+// cube : a cube of glass turning behind the logo. Its faces are tinted, and
+// hatched with '#' where the chat has no text: its text, and the faces at the
+// back, show through the ones at the front, and a picture of the chat, which
+// hides the tints, still shows the face. Its edges are lines of ASCII.
 type cube struct{}
 
 func newCube() part { return cube{} }
@@ -89,6 +90,7 @@ func (cube) Draw(l *Layer, c Canvas, t float64) {
 				}
 				f.Tint = mix(f.Tint, col, alpha/max(f.A+alpha*(1-f.A), 0.01))
 				f.A += alpha * (1 - f.A)
+				f.Fill, f.FG = '#', col // far to near: the front face gives its own
 			}
 		}
 	}

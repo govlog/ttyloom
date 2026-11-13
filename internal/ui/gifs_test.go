@@ -24,6 +24,9 @@ func (f *fakeBackend) SendGif(_ context.Context, _ *model.Chat, g model.Gif, _ i
 func (f *fakeBackend) Download(_ context.Context, _ *model.Media, path string) {
 	f.downloads = append(f.downloads, path)
 }
+func (f *fakeBackend) LoadHistoryAround(_ context.Context, _ *model.Chat, id, _ int) {
+	f.arounds = append(f.arounds, id)
+}
 
 // gifUI : a kitty terminal, one Telegram chat in window 1 (window 0 is shown).
 func gifUI() (*UI, *fakeBackend) {

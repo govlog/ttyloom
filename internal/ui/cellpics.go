@@ -7,6 +7,7 @@ import (
 	"image/png"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -29,7 +30,10 @@ func pixelMode(mode string) bool { return mode == "kitty" || mode == "sixel" || 
 
 // cellPics gives the pictures of u.placed for the mode; nil in kitty (its
 // placements) and in half blocks (text). x0: first column of the message
-// area, which placed.img.Col counts from.
+// area, which placed.img.Col counts from. A picture still being made
+// (picOf) is left out, unless the same media had one at the same place in
+// the last frame: that one stays on the screen until the new one comes (a
+// zoom step of the viewer), where a blank would flash.
 func (u *UI) cellPics(x0 int) []cellPic {
 	if u.images != "sixel" && u.images != "terminology" {
 		return nil
@@ -40,7 +44,7 @@ func (u *UI) cellPics(x0 int) []cellPic {
 		if len(md.Frames) == 0 {
 			continue
 		}
-		s := u.picOf(md, p.crop, p.img.Cols, p.img.Rows)
+		s, busy := u.picOf(md, p.crop, p.img.Cols, p.img.Rows)
 		var seq string
 		switch {
 		case s == "":
@@ -49,8 +53,14 @@ func (u *UI) cellPics(x0 int) []cellPic {
 		default:
 			seq = terminologyPic(s, row, col, p.img.Cols, p.img.Rows)
 		}
-		if seq != "" {
-			out = append(out, cellPic{row: row, rows: p.img.Rows, seq: seq})
+		switch {
+		case seq != "":
+			out = append(out, cellPic{row: row, col: col, rows: p.img.Rows, md: md, seq: seq})
+		case busy:
+			same := func(q cellPic) bool { return q.md == md && q.row == row && q.col == col && q.rows == p.img.Rows }
+			if i := slices.IndexFunc(u.prevPics, same); i >= 0 {
+				out = append(out, u.prevPics[i])
+			}
 		}
 	}
 	return out
@@ -66,88 +76,139 @@ type picKey struct {
 	cellW, cellH int
 }
 
+// picSlots : pictures made at the same time. The sixel encoder holds a core
+// for 15 to 40 ms a picture; a screen of them goes through this many lanes
+// while the UI loop stays free for the keys.
+const picSlots = 4
+
+// evPic : a picture made outside the UI loop (makePic), back for the cache.
+type evPic struct {
+	key  picKey
+	seq  string // sixel, or the file of Terminology; "" when it cannot be made
+	size int    // bytes of that file
+}
+
 // picOf : what draws the shown frame of md, cut to crop and fitted to cols x
 // rows cells — the sixel sequence, or for Terminology the path of a PNG of
-// it. "" when it cannot be made.
+// it. "" when it cannot be made, or while it is being made (busy): the
+// decoding, the scaling and the encoding run outside the UI loop, and the
+// event that brings the picture back draws the screen again.
 // ponytail: up to 64 kept and 96 MB of files, all dropped past that; an LRU
 // if a scroll through many pictures ever makes them again and again.
-func (u *UI) picOf(md *model.Media, crop image.Rectangle, cols, rows int) string {
+func (u *UI) picOf(md *model.Media, crop image.Rectangle, cols, rows int) (s string, busy bool) {
 	f := md.Frames[md.Frame%len(md.Frames)]
 	if len(f) == 0 {
-		return ""
+		return "", false
 	}
 	cw, ch, _, _ := u.cells()
 	k := picKey{u.images, &f[0], crop, cols, rows, cw, ch}
 	if s, ok := u.pics[k]; ok {
-		return s
+		return s, false
 	}
-	img, err := png.Decode(bytes.NewReader(f))
-	if err != nil {
-		return ""
+	if !u.picBusy[k] {
+		u.picStart(k, f)
 	}
-	if sub, ok := img.(interface {
-		SubImage(image.Rectangle) image.Image
-	}); ok && !crop.Empty() {
-		img = sub.SubImage(crop)
+	return "", true
+}
+
+// picStart makes the picture of k from the frame f in a goroutine. The
+// file of Terminology is named here, on the UI loop, which owns the counter
+// and the directory.
+func (u *UI) picStart(k picKey, f []byte) {
+	path := ""
+	if k.mode == "terminology" {
+		if u.picDir == "" {
+			d, err := os.MkdirTemp(os.Getenv("XDG_RUNTIME_DIR"), "ttyloom-pics-")
+			if err != nil {
+				u.picKeep(evPic{key: k}) // never asked again: "" is kept
+				return
+			}
+			u.picDir = d
+		}
+		u.picN++
+		path = filepath.Join(u.picDir, strconv.Itoa(u.picN)+".png")
 	}
-	fit := fitBox(img, cols*cw, rows*ch, cw, ch)
-	var s string
-	if u.images == "sixel" {
-		s = media.Sixel(fit)
-	} else {
-		// The frame is already a PNG: it goes as it is, unless cut or scaled.
-		s = u.picFile(f, fit, crop.Empty() && fit == img)
+	if u.picBusy == nil {
+		u.picBusy = map[picKey]bool{}
+		u.picSem = make(chan struct{}, picSlots)
 	}
-	if s == "" {
-		return ""
-	}
+	u.picBusy[k] = true
+	sem, ctx := u.picSem, u.ctx
+	u.picRuns.Add(1)
+	go func() {
+		defer u.picRuns.Done()
+		ev := evPic{key: k}
+		defer func() {
+			if r := recover(); r != nil { // a frame the decoders choke on: no picture, the process lives
+				ev = evPic{key: k}
+			}
+			u.post(ev) // busy ends in every case
+		}()
+		select {
+		case sem <- struct{}{}:
+			defer func() { <-sem }()
+		case <-ctx.Done():
+			return
+		}
+		ev.seq, ev.size = makePic(k, f, path)
+	}()
+}
+
+// picKeep files a picture made (picStart). A failure is kept too, as "": a
+// frame that cannot be made is not asked again at each frame.
+func (u *UI) picKeep(e evPic) {
+	delete(u.picBusy, e.key)
 	if len(u.pics) >= 64 || u.picBytes > 96<<20 {
 		u.dropPics(false)
 	}
 	if u.pics == nil {
 		u.pics = map[picKey]string{}
 	}
-	u.pics[k] = s
-	return s
+	u.pics[e.key] = e.seq
+	u.picBytes += e.size
 }
 
-// picFile writes the picture Terminology draws to a PNG of a private
-// directory (0700, under XDG_RUNTIME_DIR) and gives its path. Terminology
-// reads a file and can neither crop nor make it bigger: the zoom of the
-// preview and a picture cut by the view need a bitmap of their own, written
-// with no compression: a full screen one takes 11 ms to write instead of 140,
-// and Terminology, which shows it only once loaded (a blank cell meanwhile:
-// the flash of a zoom step), reads it in 4 ms instead of 27. raw: the frame f
-// goes as it is.
-func (u *UI) picFile(f []byte, img image.Image, raw bool) string {
-	if u.picDir == "" {
-		d, err := os.MkdirTemp(os.Getenv("XDG_RUNTIME_DIR"), "ttyloom-pics-")
-		if err != nil {
-			return ""
-		}
-		u.picDir = d
+// makePic : the picture of the frame f for k, cut and fitted — the sixel
+// sequence, or the path of the PNG written for Terminology and its size.
+// Terminology reads a file and can neither crop nor make it bigger: the zoom
+// of the preview and a picture cut by the view need a bitmap of their own,
+// written with no compression: a full screen one takes 11 ms to write
+// instead of 140, and Terminology, which shows it only once loaded (a blank
+// cell meanwhile: the flash of a zoom step), reads it in 4 ms instead of 27.
+// It reads its arguments only: it runs outside the UI loop.
+func makePic(k picKey, f []byte, path string) (string, int) {
+	img, err := png.Decode(bytes.NewReader(f))
+	if err != nil {
+		return "", 0
 	}
-	if !raw {
+	if sub, ok := img.(interface {
+		SubImage(image.Rectangle) image.Image
+	}); ok && !k.crop.Empty() {
+		img = sub.SubImage(k.crop)
+	}
+	fit := fitBox(img, k.cols*k.cellW, k.rows*k.cellH, k.cellW, k.cellH)
+	if k.mode == "sixel" {
+		return media.Sixel(fit), 0
+	}
+	// The frame is already a PNG: it goes as it is, unless cut or scaled.
+	if !k.crop.Empty() || fit != img {
 		var b bytes.Buffer
-		if err := (&png.Encoder{CompressionLevel: png.NoCompression}).Encode(&b, img); err != nil {
-			return ""
+		if err := (&png.Encoder{CompressionLevel: png.NoCompression}).Encode(&b, fit); err != nil {
+			return "", 0
 		}
 		f = b.Bytes()
 	}
-	u.picN++
-	path := filepath.Join(u.picDir, strconv.Itoa(u.picN)+".png")
 	if os.WriteFile(path, f, 0o600) != nil {
-		return ""
+		return "", 0
 	}
-	u.picBytes += len(f)
-	return path
+	return path, len(f)
 }
 
 // dropPics forgets the pictures made, with their files; all: the directory
 // too (end of the session).
 func (u *UI) dropPics(all bool) {
 	for k, s := range u.pics {
-		if k.mode == "terminology" {
+		if k.mode == "terminology" && s != "" {
 			os.Remove(s)
 		}
 	}

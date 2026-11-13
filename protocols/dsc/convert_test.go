@@ -443,8 +443,9 @@ func TestMsgOfService(t *testing.T) {
 	}
 }
 
-// An attachment of a type the allow list does not know is saved as .bin, like
-// tgc: the .bin guard of the UI then keeps it away from xdg-open.
+// An attachment of a type the allow list does not know gets .bin, like tgc:
+// no decoder is steered by its suffix. Its file still takes the name its
+// sender gave it (ui keptName), and the UI never opens a launcher.
 func TestAttachMediaUnknownTypeBin(t *testing.T) {
 	m := attachMedia(discord.Attachment{Filename: "run.sh", ContentType: "application/x-sh", URL: "https://cdn/x"})
 	if m.Ext != ".bin" {

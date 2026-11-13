@@ -289,7 +289,7 @@ func TestMPVFailureFallsBackInline(t *testing.T) {
 func TestFailedDownloadForgetsOpen(t *testing.T) {
 	u := &UI{ws: NewWindows(), agg: &Window{}, cfg: &config.Config{}, ctx: context.Background(), images: "off",
 		t: &term.Term{Cols: 80, Rows: 24}, nets: map[string]model.Backend{netTelegram: &fakeBackend{}},
-		openNext: map[*model.Media]bool{}, fulls: map[*model.Media]bool{}}
+		fileNext: map[*model.Media]func(*model.Media){}, fulls: map[*model.Media]bool{}}
 	w := u.ws.New(false)
 	md := &model.Media{Kind: model.MediaFile, Loc: 1, Label: "[file]"}
 	it := &Item{Msg: &model.Msg{Net: netTelegram, ChatID: 1, ID: 1, Media: md}}
@@ -324,8 +324,8 @@ func TestStopReleasesPartialFrames(t *testing.T) {
 
 // Each picture of a message downloads to a file of its own: the network gives
 // the lead back at once on a file already there, so one name for the message
-// would show its first picture three times. The first keeps the name a single
-// media has always had, so the files already downloaded still match.
+// would show its first picture three times. Each keeps the name its sender
+// gave it.
 func TestAttachmentsDownloadApart(t *testing.T) {
 	u, b := gifUI()
 	u.cfg.AutoMediaMaxKB = 1
@@ -339,8 +339,96 @@ func TestAttachmentsDownloadApart(t *testing.T) {
 	if len(b.downloads) != 3 || len(files) != 3 {
 		t.Fatalf("downloads %v, want one file per picture (3)", b.downloads)
 	}
-	if want := media.FileName(m.Key(), "Alice", m.ID, m.Date, ".jpg"); filepath.Base(b.downloads[0]) != want {
-		t.Fatalf("first picture to %s, want the name of a single media %s", b.downloads[0], want)
+	for i, n := range []string{"a.jpg", "b.jpg", "c.jpg"} {
+		if filepath.Base(b.downloads[i]) != n {
+			t.Fatalf("picture %d to %s, want its own name %s", i, b.downloads[i], n)
+		}
+	}
+}
+
+// A document sent to me keeps the name its sender gave it, whatever its
+// suffix, in the folder of its conversation. A name another message holds —
+// a download on its way, or a file whose time is not the date of this
+// message — gets the id of the message; the file of the message itself is
+// found again.
+func TestReceivedFileKeepsItsName(t *testing.T) {
+	u, b := gifUI()
+	u.cfg.DownloadDir = t.TempDir()
+	date := time.Date(2026, 11, 6, 9, 0, 0, 0, time.Local)
+	doc := func(id int, name string) *model.Msg {
+		return &model.Msg{Net: netTelegram, ChatID: 1, ID: id, Date: date.Add(time.Duration(id) * time.Minute),
+			Media: &model.Media{Kind: model.MediaFile, Name: name, Ext: ".bin", Loc: id, Size: 3}}
+	}
+	folder := filepath.Join(u.cfg.DownloadDir, "telegram", "Alice")
+	for _, m := range []*model.Msg{doc(1, "build.gradle.kts"), doc(2, "report.pdf"), doc(3, "report.pdf")} {
+		u.fetch(b, m, m.Media, "")
+	}
+	want := []string{"build.gradle.kts", "report.pdf", "report (3).pdf"}
+	for i, w := range want {
+		if b.downloads[i] != filepath.Join(folder, w) {
+			t.Fatalf("download %d to %s, want %s in %s", i, b.downloads[i], w, folder)
+		}
+	}
+
+	// report.pdf of message 2 landed: message 4 does not take it, message 2 finds it.
+	mine := filepath.Join(folder, "report.pdf")
+	if err := os.MkdirAll(folder, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(mine, []byte("pdf"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(mine, date.Add(2*time.Minute), date.Add(2*time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	u.dls = nil
+	b.downloads = nil
+	for _, m := range []*model.Msg{doc(4, "report.pdf"), doc(2, "report.pdf")} {
+		u.fetch(b, m, m.Media, "")
+		u.dls = nil
+	}
+	if b.downloads[0] != filepath.Join(folder, "report (4).pdf") || b.downloads[1] != mine {
+		t.Fatalf("on the disk: %v", b.downloads)
+	}
+}
+
+// A document downloaded under the name of its message, before the names
+// were kept, moves to its new place with the date of its message: it is
+// not fetched again.
+func TestOldNamedFileMoves(t *testing.T) {
+	u, b := gifUI()
+	u.cfg.DownloadDir = t.TempDir()
+	m := &model.Msg{Net: netTelegram, ChatID: 1, ID: 9, Date: time.Date(2026, 8, 27, 16, 59, 0, 0, time.Local),
+		Media: &model.Media{Kind: model.MediaFile, Name: "Points.pdf", Ext: ".pdf", Loc: 9, Size: 3}}
+	old := filepath.Join(u.cfg.DownloadDir, media.FileName(m.Key(), "Alice", m.ID, m.Date, ".pdf"))
+	if err := os.WriteFile(old, []byte("pdf"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	u.fetch(b, m, m.Media, "")
+	now := filepath.Join(u.cfg.DownloadDir, "telegram", "Alice", "Points.pdf")
+	fi, err := os.Stat(now)
+	if err != nil || b.downloads[0] != now || !fi.ModTime().Equal(m.Date) {
+		t.Fatalf("moved: %v, downloads %v", err, b.downloads)
+	}
+	if _, err := os.Stat(old); err == nil {
+		t.Fatal("the old name is still there")
+	}
+}
+
+// A picture downloaded before the files kept their names stays where it is:
+// it is not fetched again under its new name.
+func TestPictureDownloadedBeforeStaysPut(t *testing.T) {
+	u, b := gifUI()
+	u.cfg.DownloadDir = t.TempDir()
+	m := album(1)
+	m.More = nil
+	old := filepath.Join(u.cfg.DownloadDir, media.FileName(m.Key(), "Alice", m.ID, m.Date, ".jpg"))
+	if err := os.WriteFile(old, []byte("jpg"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	u.fetch(b, m, m.Media, "")
+	if len(b.downloads) != 1 || b.downloads[0] != old {
+		t.Fatalf("downloads %v, want the file already there %s", b.downloads, old)
 	}
 }
 
@@ -661,5 +749,66 @@ func TestKittyStreamsLongGif(t *testing.T) {
 	u.animate(time.Now().Add(2 * time.Second))
 	if s := out.String(); strings.Count(s, "a=f,") != 1 || !strings.Contains(s, "a=a,i=1,r=1,z=50,s=3") {
 		t.Fatalf("2nd tick: %d frames, %q", strings.Count(s, "a=f,"), s[strings.LastIndex(s, "\x1b_G"):])
+	}
+}
+
+// A Telegram reference kept on the disk dies after a while: the download
+// that meets FILE_REFERENCE_EXPIRED asks the message again, once, and starts
+// over with the fresh reference; the action waiting for the file then runs.
+// A second failure is said in the window, never swallowed.
+func TestExpiredReferenceAskedAgain(t *testing.T) {
+	u, b := gifUI()
+	u.fileNext = map[*model.Media]func(*model.Media){}
+	md := &model.Media{Kind: model.MediaFile, Name: "plan.pdf", Label: "[file plan.pdf]", Size: 3, Loc: "old"}
+	m := &model.Msg{Net: netTelegram, ChatID: 1, ID: 42, Date: time.Now(), Media: md}
+	var got string
+	u.withFile(u.view(), m, func(md *model.Media) { got = md.Path })
+	expired := "rpc error code 400: FILE_REFERENCE_EXPIRED"
+	u.downloaded(model.EvDownloaded{Media: md, Err: expired})
+	if len(b.arounds) != 1 || b.arounds[0] != 42 || md.State != model.MediaLoading {
+		t.Fatalf("expired: arounds %v, state %v", b.arounds, md.State)
+	}
+	fresh := *m
+	fresh.Media = &model.Media{Kind: model.MediaFile, Name: "plan.pdf", Size: 3, Loc: "new"}
+	u.dispatch(model.Envelope{Net: netTelegram, Ev: model.EvHistory{ChatID: 1, Around: true, AroundID: 42, Msgs: []model.Msg{fresh}}})
+	if md.Loc != "new" || len(b.downloads) != 2 {
+		t.Fatalf("fresh reference: loc %v, downloads %v", md.Loc, b.downloads)
+	}
+	u.downloaded(model.EvDownloaded{Media: md, Path: b.downloads[1]})
+	if got != b.downloads[1] {
+		t.Fatalf("the action waiting got %q", got)
+	}
+
+	other := &model.Media{Kind: model.MediaFile, Name: "late.pdf", Size: 3, Loc: "x"}
+	m2 := &model.Msg{Net: netTelegram, ChatID: 1, ID: 43, Date: time.Now(), Media: other}
+	u.withFile(u.view(), m2, func(*model.Media) { t.Fatal("ran after a failure") })
+	u.downloaded(model.EvDownloaded{Media: other, Err: expired})
+	u.dispatch(model.Envelope{Net: netTelegram, Ev: model.EvHistory{ChatID: 1, Around: true, AroundID: 43, Msgs: []model.Msg{*m2}}})
+	u.downloaded(model.EvDownloaded{Media: other, Err: expired}) // the fresh one is dead too
+	if len(b.arounds) != 2 || sysLines(u.view(), "late.pdf") != 1 {
+		t.Fatalf("second failure: arounds %v, lines %d", b.arounds, sysLines(u.view(), "late.pdf"))
+	}
+}
+
+// A GIF placed in parts around a box steps one frame at a time, and every
+// part takes the new frame: none stays behind on the old image.
+func TestGIFPartsStepTogether(t *testing.T) {
+	var out bytes.Buffer
+	u := &UI{ws: NewWindows(), agg: &Window{}, cfg: &config.Config{GifPlay: "always"}, images: "kitty",
+		t: term.NewOffscreen(&out, 80, 24)}
+	md := &model.Media{Kind: model.MediaGIF, State: model.MediaReady, Frames: [][]byte{{1}, {2}, {3}}, Delay: time.Millisecond}
+	u.placed = []placed{
+		{row: 2, pid: 3, img: &render.Img{Media: md, Cols: 2, Rows: 2}},
+		{row: 2, pid: 3 | 1<<12, img: &render.Img{Media: md, Col: 6, Cols: 2, Rows: 2}},
+	}
+	u.animate(time.Now().Add(time.Second))
+	u.t.Flush()
+	if md.Frame != 1 {
+		t.Fatalf("frame %d after one step, want 1", md.Frame)
+	}
+	for _, pid := range []uint32{3, 3 | 1<<12} {
+		if !u.kplaced[kplace{id: md.KittyID, pid: pid}] || !strings.Contains(out.String(), fmt.Sprintf("p=%d,", pid)) {
+			t.Fatalf("part %d not placed on the new frame", pid)
+		}
 	}
 }

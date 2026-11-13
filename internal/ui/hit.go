@@ -98,13 +98,19 @@ func (u *UI) mouse(m term.MouseEvent) {
 	if u.spellFix != nil && u.spellFixMouse(m) {
 		return
 	}
-	// The tabs hold the columns of the message area only: on the status line
-	// the sidebar keeps its own clicks.
-	if m.Press && m.Button == 0 && u.tabsOn() && m.Y == u.tabRow() && m.X >= x0 {
-		if net, ok := u.tabAt(m.X); ok {
-			u.tabTo(net)
+	// The tabs and [Act: …] hold the columns of the message area only: on the
+	// status line the sidebar keeps its own clicks.
+	if m.Press && m.Button == 0 && m.Y == u.tabRow() && m.X >= x0 {
+		if w := u.actAt(m.X); w != nil {
+			u.actGo(w)
+			return
 		}
-		return
+		if u.tabsOn() {
+			if net, ok := u.tabAt(m.X); ok {
+				u.tabTo(net)
+			}
+			return
+		}
 	}
 	if m.Press && m.Button == 2 && m.Y >= u.t.Rows-u.inputRows() {
 		u.spellClick(m.X, m.Y) // right click on a misspelled word of the input
@@ -150,8 +156,11 @@ func (u *UI) mouse(m term.MouseEvent) {
 		}
 		return // the banner covers the row: never a click on the line under it
 	}
-	if m.Press && m.Button == 2 && m.Y < u.viewRows() { // right click: the menu of the message
-		if h := hitAt(u.hits, m.X-x0, m.Y); h.item != nil && selectable(h.item) {
+	if m.Press && m.Button == 2 && m.Y < u.viewRows() { // right click: the menu of the picture, or of the message
+		switch h := hitAt(u.hits, m.X-x0, m.Y); {
+		case h.img != nil && h.item != nil && h.item.Msg != nil && h.item.Msg.Media != nil:
+			u.openFileMenu(h.item, m.X, m.Y)
+		case h.item != nil && selectable(h.item):
 			u.openMsgMenu(h.item, m.X, m.Y)
 		}
 		return
@@ -164,6 +173,8 @@ func (u *UI) mouse(m term.MouseEvent) {
 	case m.Button == 0 && m.Y < u.viewRows():
 		h := hitAt(u.hits, m.X-x0, m.Y)
 		switch {
+		case h.act != nil && h.act.Key == render.KeyFile && h.item != nil:
+			u.openFileMenu(h.item, m.X, m.Y)
 		case h.act != nil:
 			u.actClick(u.view(), h.item, *h.act)
 		case h.url != "" && h.masked: // the text hides where the link goes: show it first
@@ -296,6 +307,9 @@ func init() {
 				r := u.menuBox()
 				return overlayBox{rect: r, lines: u.menu.Lines(u.th, r.w, r.h)}
 			}},
+		// Under the menu: the menu of a file opens over the file browser.
+		{func(u *UI) bool { return u.files != nil }, (*UI).filesKey, (*UI).filesMouse, (*UI).filesClose,
+			func(u *UI) overlayBox { r := u.filesRect(); return overlayBox{rect: r, lines: u.filesLines(r)} }},
 		{func(u *UI) bool { return u.form != nil }, (*UI).formKey, (*UI).formMouse, func(u *UI) { u.form = nil },
 			func(u *UI) overlayBox { r := u.formRect(); return overlayBox{rect: r, lines: u.form.Lines(u.th, r.w)} }},
 		{func(u *UI) bool { return u.hub != nil }, (*UI).hubKey, (*UI).hubMouse, func(u *UI) { u.hub = nil },

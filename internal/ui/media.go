@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -178,6 +179,37 @@ func full(m *model.Msg) *model.Media {
 // fetch downloads md, the media of m or its larger variant, into download_dir;
 // suffix tells the file of the variant from the file of the line.
 func (u *UI) fetch(b model.Backend, m *model.Msg, md *model.Media, suffix string) {
+	if u.dls == nil {
+		u.dls = map[*model.Media]dlOf{}
+	}
+	u.dls[md] = dlOf{key: m.Key(), id: m.ID, date: m.Date, path: u.filePath(m, md, suffix), b: b}
+	u.startDL(md)
+}
+
+// dlOf : a download on its way — where it goes, and its message: the file
+// takes the date of the message, and a dead Telegram reference is asked
+// again through it (refetch).
+type dlOf struct {
+	key  model.ChatKey
+	id   int
+	date time.Time
+	path string
+	b    model.Backend
+}
+
+// startDL starts the download of md that u.dls holds.
+func (u *UI) startDL(md *model.Media) {
+	d := u.dls[md]
+	md.State = model.MediaLoading
+	u.invalidateMedia(md)
+	d.b.Download(u.backendContext(d.b), md, d.path)
+}
+
+// filePath : where the file of md, the media of m or its larger variant
+// (suffix), goes in download_dir. A file that keeps the name its sender gave
+// it (keptName) goes to the folder of its conversation (namedPath); any
+// other takes the name of its message.
+func (u *UI) filePath(m *model.Msg, md *model.Media, suffix string) string {
 	title := ""
 	if c := u.chats[m.Key()]; c != nil {
 		title = c.Title
@@ -196,10 +228,164 @@ func (u *UI) fetch(b model.Backend, m *model.Msg, md *model.Media, suffix string
 		fmt.Fprint(h, identOf(m.Media))
 		suffix = "_" + strconv.FormatUint(uint64(h.Sum32()), 36) + suffix
 	}
-	path := filepath.Join(config.Expand(u.cfg.DownloadDir), media.FileName(m.Key(), title, m.ID, m.Date, suffix+md.Ext))
-	md.State = model.MediaLoading
-	u.invalidateMedia(md)
-	b.Download(u.backendContext(b), md, path)
+	dir := config.Expand(u.cfg.DownloadDir)
+	path := filepath.Join(dir, media.FileName(m.Key(), title, m.ID, m.Date, suffix+md.Ext))
+	if orig := keptName(md, path); orig != "" {
+		return namedPath(dir, title, m, md, orig, strconv.Itoa(m.ID)+suffix, path, func(p string) bool {
+			for other, d := range u.dls {
+				if other != md && d.path == p {
+					return true
+				}
+			}
+			return false
+		})
+	}
+	return path
+}
+
+// keptName : the name the sender gave the file of md when its file keeps
+// it, else "" — the file then takes old, the name of its message. A
+// document keeps it whatever its suffix: nothing decodes it. A photo, a
+// video, an audio or a GIF keeps it only when its suffix is the one of
+// md.Ext, the safe one (the suffix steers the decoders), and when it was not
+// downloaded under old before the names were kept: it is not fetched twice.
+func keptName(md *model.Media, old string) string {
+	orig := media.OriginalName(md.Name)
+	switch md.Kind {
+	case model.MediaFile:
+		return orig
+	case model.MediaPhoto, model.MediaVideo, model.MediaAudio, model.MediaGIF:
+		if _, err := os.Stat(old); err != nil && strings.EqualFold(filepath.Ext(orig), md.Ext) {
+			return orig
+		}
+	}
+	return ""
+}
+
+// namedPath : where a file that keeps its name goes — the folder of its
+// conversation, download_dir/<network>/<conversation>/<name>. A name taken
+// by the file of another message gets the tag of its own media: "report
+// (1234).pdf"; so does a name another download on its way goes to (busy).
+// The file of the message downloaded before under the name of the message
+// (legacy) moves there: nothing is fetched twice.
+func namedPath(dir, chat string, m *model.Msg, md *model.Media, orig, tag, legacy string, busy func(string) bool) string {
+	folder := filepath.Join(dir, media.SafeName(m.Net), cmp.Or(media.OriginalName(chat), strconv.FormatInt(m.ChatID, 10)))
+	path := filepath.Join(folder, orig)
+	if taken(path, md, m.Date) || busy(path) {
+		ext := filepath.Ext(orig)
+		path = filepath.Join(folder, strings.TrimSuffix(orig, ext)+" ("+tag+")"+ext)
+	}
+	// Two names of before: the name of the message, and the folder of its own
+	// the first version of the kept names gave it.
+	moveLegacy(path, m.Date, legacy, filepath.Join(strings.TrimSuffix(legacy, md.Ext), orig))
+	return path
+}
+
+// taken : a file is at path, and it is not the file of md — the time of
+// the file is not the date of its message (downloaded gives it that date),
+// or its size differs.
+func taken(path string, md *model.Media, date time.Time) bool {
+	fi, err := os.Stat(path)
+	if err != nil || md.Path == path {
+		return false
+	}
+	return fi.ModTime().Unix() != date.Unix() || (md.Size > 0 && fi.Size() != md.Size)
+}
+
+// moveLegacy moves the file of a name of before to path when path is free,
+// with the date of its message; flat is a file of download_dir, folder a
+// file in a folder of its own, which goes once empty.
+func moveLegacy(path string, date time.Time, flat, folder string) {
+	if _, err := os.Stat(path); err == nil {
+		return
+	}
+	for _, l := range []string{flat, folder} {
+		if fi, err := os.Stat(l); err != nil || !fi.Mode().IsRegular() {
+			continue
+		}
+		if os.MkdirAll(filepath.Dir(path), 0o700) == nil && os.Rename(l, path) == nil {
+			os.Chtimes(path, date, date)
+		}
+		break
+	}
+	if fi, err := os.Stat(filepath.Dir(folder)); err == nil && fi.IsDir() {
+		os.Remove(filepath.Dir(folder)) // an empty folder only
+	}
+}
+
+// refetch : a Telegram file reference lasts a while, and a message kept on
+// the disk may carry a dead one (FILE_REFERENCE_EXPIRED). The page around
+// its message is asked once (refreshRefs takes the answer); md stays
+// loading meanwhile. false: nothing to ask, the failure stands.
+func (u *UI) refetch(md *model.Media, d dlOf, err string) bool {
+	c := u.chats[d.key]
+	if !strings.Contains(err, "FILE_REFERENCE") || u.refreshed[md] || c == nil {
+		return false
+	}
+	if u.refreshed == nil {
+		u.refreshed, u.refs = map[*model.Media]bool{}, map[model.ChatKey][]refAsk{}
+	}
+	u.refreshed[md] = true
+	u.refs[d.key] = append(u.refs[d.key], refAsk{md, d})
+	d.b.LoadHistoryAround(u.backendContext(d.b), c, d.id, 3)
+	return true
+}
+
+// refAsk : a media waiting for the fresh reference of its message.
+type refAsk struct {
+	md *model.Media
+	d  dlOf
+}
+
+// refreshRefs : a page around a message (refetch). Each media waiting for
+// that message takes the reference the network gives now, and its download
+// starts over; one whose message is no longer there fails. With no window
+// on the chat to keep them, the fresh messages go to the disk: the next
+// opening finds live references.
+func (u *UI) refreshRefs(key model.ChatKey, e model.EvHistory) {
+	if !e.Around || len(u.refs[key]) == 0 {
+		return
+	}
+	var keep []refAsk
+	var fresh []model.Msg
+	for _, a := range u.refs[key] {
+		if a.d.id != e.AroundID {
+			keep = append(keep, a)
+			continue
+		}
+		i := slices.IndexFunc(e.Msgs, func(m model.Msg) bool { return m.ID == a.d.id })
+		var src *model.Media
+		if i >= 0 {
+			src = sameMedia(&e.Msgs[i], a.md)
+		}
+		if src == nil || src.Loc == nil {
+			u.downloaded(model.EvDownloaded{Media: a.md, Err: cmp.Or(e.Err, i18n.T("file_ref_gone"))})
+			continue
+		}
+		a.md.Loc = src.Loc
+		fresh = append(fresh, e.Msgs[i])
+		u.dls[a.md] = a.d
+		u.startDL(a.md)
+	}
+	u.refs[key] = keep
+	if cc := u.cacheFor(key.Net); cc != nil && len(fresh) > 0 && u.ws.ForChat(key) < 0 {
+		u.bg(func() { saveMerged(cc, key.ID, fresh) })
+	}
+}
+
+// sameMedia : the media of m that is md as the network gives it now — the
+// media, its larger variant or an attachment with the same identity.
+func sameMedia(m *model.Msg, md *model.Media) *model.Media {
+	all := append([]*model.Media{m.Media}, m.More...)
+	if m.Media != nil && m.Media.Full != nil {
+		all = append(all, m.Media.Full)
+	}
+	for _, c := range all {
+		if c != nil && identOf(c) == identOf(md) {
+			return c
+		}
+	}
+	return nil
 }
 
 // downloadMap : "download" of an OSM map — no Telegram Loc, a separate
@@ -231,10 +417,18 @@ func (u *UI) downloaded(e model.EvDownloaded) {
 		delete(u.gridOrphan, md)
 		return
 	}
+	d, mine := u.dls[md]
+	delete(u.dls, md)
+	if e.Err != "" && mine && u.refetch(md, d, e.Err) {
+		return // the download starts over with a fresh reference
+	}
 	isFull := u.fulls[md]
 	delete(u.fulls, md)
 	if e.Err != "" {
-		delete(u.openNext, md) // the next download of md, whatever starts it, opens nothing
+		if u.fileNext[md] != nil { // asked by a key or a menu: the failure is said
+			u.sys(i18n.T("file_failed", render.CleanLine(cmp.Or(md.Name, md.Label)), e.Err))
+		}
+		delete(u.fileNext, md) // the next download of md, whatever starts it, opens nothing
 		md.State, md.Err = model.MediaFailed, e.Err
 		if v := u.viewer; v != nil && v.src == md {
 			v.md.State, v.md.Err = model.MediaFailed, e.Err
@@ -243,9 +437,12 @@ func (u *UI) downloaded(e model.EvDownloaded) {
 		return
 	}
 	md.Path = e.Path
-	if u.openNext[md] {
-		delete(u.openNext, md)
-		u.open(md.Path)
+	if mine {
+		os.Chtimes(e.Path, d.date, d.date) // the file takes the date of its message (taken)
+	}
+	if do := u.fileNext[md]; do != nil {
+		delete(u.fileNext, md)
+		do(md)
 	}
 	if v := u.viewer; v != nil && v.src == md {
 		u.viewLoad() // preview open, waiting for the file
@@ -625,8 +822,11 @@ func (u *UI) animate(now time.Time) bool {
 	wrote := false
 	x0, _ := u.layout()
 	stream := kittyStream
-	for _, p := range u.placed {
+	for i, p := range u.placed {
 		md := p.img.Media
+		if slices.ContainsFunc(u.placed[:i], func(q placed) bool { return q.img.Media == md }) {
+			continue // one more placement of a media stepped already (a part around a box, the hover): done with it
+		}
 		if md.KittyAnim > 0 && u.images == "kitty" {
 			wrote = u.animKitty(md, &stream) || wrote
 			continue
@@ -646,7 +846,6 @@ func (u *UI) animate(now time.Time) bool {
 				u.kittyID++
 				md.KittyAlt = u.kittyID
 			}
-			pid := p.pid // same pid as draw(): replacement in place
 			// The bytes of the frame go first, with the cursor where it is: the
 			// placement that follows moves it onto the image, hidden meanwhile —
 			// the terminal would draw it there between two writes, an erratic
@@ -655,20 +854,30 @@ func (u *UI) animate(now time.Time) bool {
 			// out for a good part of every frame.
 			u.t.WriteString(media.KittyTransmit(md.KittyAlt, md.Frames[md.Frame]))
 			u.t.WriteString("\x1b[?25l\x1b[s")
-			u.t.WriteString("\x1b[" + strconv.Itoa(p.row+1) + ";" + strconv.Itoa(x0+p.img.Col+1) + "H")
-			// p.crop : the zoomed preview keeps its sub-rectangle from one frame to the next.
-			u.t.WriteString(media.KittyPlace(md.KittyAlt, pid, p.img.Cols, p.img.Rows, p.crop))
+			if u.kplaced == nil {
+				u.kplaced = map[kplace]bool{}
+			}
+			for _, q := range u.placed[i:] { // every placement of md: d=i below takes them all
+				if q.img.Media != md {
+					continue
+				}
+				u.t.WriteString("\x1b[" + strconv.Itoa(q.row+1) + ";" + strconv.Itoa(x0+q.img.Col+1) + "H")
+				// q.pid : same pid as draw(), replacement in place; q.crop : the
+				// zoomed preview or the part keeps its sub-rectangle.
+				u.t.WriteString(media.KittyPlace(md.KittyAlt, q.pid, q.img.Cols, q.img.Rows, u.kittyZ(), q.crop))
+			}
 			if old != 0 {
 				u.t.WriteString(media.KittyDeletePlacement(old, 0))
 			}
 			u.t.WriteString("\x1b[u")
 			// d=i took every placement of the old id: without this update, the
-			// diff of the next frame would drop the new one.
+			// diff of the next frame would drop the new ones.
 			u.forgetKitty(old)
-			if u.kplaced == nil {
-				u.kplaced = map[kplace]bool{}
+			for _, q := range u.placed[i:] {
+				if q.img.Media == md {
+					u.kplaced[kplace{id: md.KittyAlt, pid: q.pid}] = true
+				}
 			}
-			u.kplaced[kplace{id: md.KittyAlt, pid: pid}] = true
 			md.KittyID, md.KittyAlt = md.KittyAlt, old
 			wrote = true
 		}
@@ -849,17 +1058,26 @@ func (u *UI) openItemMedia(w *Window, it *Item) {
 		u.openHidden(md.URL)
 		return
 	}
-	md = full(it.Msg)
-	if md.Path != "" {
-		u.open(md.Path)
+	u.withFile(w, it.Msg, func(md *model.Media) { u.open(md.Path) })
+}
+
+// withFile runs do on the file of m — its larger variant when the backend
+// gave one: at once when it is on the disk, else when its download lands.
+// The line saying so goes to w.
+func (u *UI) withFile(w *Window, m *model.Msg, do func(*model.Media)) {
+	md := full(m)
+	if _, err := os.Stat(md.Path); md.Path != "" && err == nil {
+		do(md)
 		return
 	}
-	u.openNext[md] = true
-	if md.State == model.MediaLoading { // already running: we will open it on arrival
+	// Gone since (moved, removed): it downloads again, or is found where it is now.
+	md.Path = ""
+	u.fileNext[md] = do                 // the last asked wins
+	if md.State == model.MediaLoading { // already running: done on arrival
 		return
 	}
 	w.AddSys(i18n.T("downloading", md.Label))
-	u.downloadFull(it.Msg)
+	u.downloadFull(m)
 }
 
 // openHidden asks before opening a URL the screen does not show: a link
@@ -884,9 +1102,20 @@ func (u *UI) open(path string) {
 		return
 	}
 	if i := strings.IndexAny(path, ":/"); (i < 0 || path[i] != ':') && !media.OpenableFile(path) {
-		u.sys(i18n.T("open_denied_type", render.Truncate(render.CleanLine(filepath.Base(path)), 60, "…")))
+		// A type off the allow list: a launcher never goes, the rest asks.
+		name := render.Truncate(render.CleanLine(filepath.Base(path)), 60, "…")
+		if media.Launcher(path) {
+			u.sys(i18n.T("open_denied_type", name))
+			return
+		}
+		u.confirm(i18n.T("confirm_open_type", name), func() { u.xdgOpen(path) })
 		return
 	}
+	u.xdgOpen(path)
+}
+
+// xdgOpen hands path to the desktop, past every check of open.
+func (u *UI) xdgOpen(path string) {
 	cmd := exec.Command("xdg-open", path)
 	cmd.Stdout, cmd.Stderr = nil, nil
 	if err := cmd.Start(); err != nil {

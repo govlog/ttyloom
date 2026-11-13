@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"image"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -15,10 +16,12 @@ const chunk = 4096
 // placement: the same pair replaces in place, two different pids live
 // together (a repeated avatar). The caller keeps stable pids from one frame
 // to the next. crop, when given and not empty, limits the display to that
-// sub-rectangle of the image sent (zoomed preview).
-func KittyDisplay(id, pid uint32, png []byte, cols, rows int, crop ...image.Rectangle) string {
-	return kittyChunks(fmt.Sprintf("a=T,f=100,i=%d,p=%d,c=%d,r=%d%s,q=2",
-		id, pid, cols, rows, cropKeys(crop)), png)
+// sub-rectangle of the image sent (zoomed preview). z: the z-index, 0 over
+// the text; under 0 the text draws over the image, the cell backgrounds stay
+// under it.
+func KittyDisplay(id, pid uint32, png []byte, cols, rows, z int, crop ...image.Rectangle) string {
+	return kittyChunks(fmt.Sprintf("a=T,f=100,i=%d,p=%d,c=%d,r=%d%s%s,q=2",
+		id, pid, cols, rows, zKey(z), cropKeys(crop)), png)
 }
 
 // KittyPlace places an image already sent at the cursor, under the id pid.
@@ -28,9 +31,17 @@ func KittyTransmit(id uint32, png []byte) string {
 	return kittyChunks(fmt.Sprintf("a=t,f=100,i=%d,q=2", id), png)
 }
 
-func KittyPlace(id, pid uint32, cols, rows int, crop ...image.Rectangle) string {
-	return fmt.Sprintf("\x1b_Ga=p,i=%d,p=%d,c=%d,r=%d%s,q=2\x1b\\",
-		id, pid, cols, rows, cropKeys(crop))
+func KittyPlace(id, pid uint32, cols, rows, z int, crop ...image.Rectangle) string {
+	return fmt.Sprintf("\x1b_Ga=p,i=%d,p=%d,c=%d,r=%d%s%s,q=2\x1b\\",
+		id, pid, cols, rows, zKey(z), cropKeys(crop))
+}
+
+// zKey : the z key of a placement, none for 0 (the default of the protocol).
+func zKey(z int) string {
+	if z == 0 {
+		return ""
+	}
+	return ",z=" + strconv.Itoa(z)
 }
 
 // KittyFrame adds png as the next frame of the animation of image id, shown

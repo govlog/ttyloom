@@ -2,6 +2,7 @@ package ui
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"image"
 	"image/color"
@@ -194,12 +195,30 @@ func TestRowDiffMatchesFullFrame(t *testing.T) {
 	}
 }
 
+// settlePics waits for the pictures being made and files them, as the UI
+// loop does with their events.
+func settlePics(u *UI) {
+	done := make(chan struct{})
+	go func() { u.picRuns.Wait(); close(done) }()
+	for {
+		select {
+		case ev := <-u.events:
+			u.event(ev)
+		case <-done:
+			u.drain()
+			return
+		}
+	}
+}
+
 // In sixel, a key typed sends the input line, not the pictures again; a
 // picture that moves (the sidebar hidden) goes again.
 func TestSixelSentOnlyWhenItsRowsChange(t *testing.T) {
 	var out bytes.Buffer
 	u := shotUI(t, theme.Terminal(), &out, drawnGIF(t))
 	u.images, u.t.Sixel = "sixel", true
+	u.draw() // asks for the picture, made outside the loop
+	settlePics(u)
 	u.draw()
 	if !strings.Contains(out.String(), "\x1bP") {
 		t.Fatal("first frame: no sixel for the GIF on the screen")
@@ -236,13 +255,15 @@ func TestTerminologyZoomGivesTheZoomedBitmap(t *testing.T) {
 	if err := png.Encode(&frame, src); err != nil {
 		t.Fatal(err)
 	}
-	u := &UI{ws: NewWindows(), agg: &Window{}, debug: &Window{}, cfg: &config.Config{}, th: theme.Terminal(),
-		t: term.NewOffscreen(&bytes.Buffer{}, 80, 24), images: "terminology"}
+	u := &UI{ctx: context.Background(), events: make(chan model.Event, 8), ws: NewWindows(), agg: &Window{}, debug: &Window{},
+		cfg: &config.Config{}, th: theme.Terminal(), t: term.NewOffscreen(&bytes.Buffer{}, 80, 24), images: "terminology"}
 	u.t.CellW, u.t.CellH = 10, 20
 	defer u.dropPics(true)
 	md := &model.Media{Frames: [][]byte{frame.Bytes()}, FrameW: 100, FrameH: 40}
 	// The left half, zoomed into 20 x 4 cells (200 x 80 px).
 	u.placed = []placed{{row: 2, img: &render.Img{Media: md, Cols: 20, Rows: 4}, crop: image.Rect(0, 0, 50, 40)}}
+	u.cellPics(0)
+	settlePics(u)
 	pics := u.cellPics(0)
 	if len(pics) != 1 {
 		t.Fatalf("%d pictures", len(pics))
@@ -266,5 +287,44 @@ func TestTerminologyZoomGivesTheZoomedBitmap(t *testing.T) {
 	}
 	if r, _, bl, _ := img.At(99, 79).RGBA(); r>>8 < 200 || bl>>8 > 50 {
 		t.Fatalf("right bottom pixel %v: the blue half came in", img.At(99, 79))
+	}
+}
+
+// The pictures of the cells are made outside the UI loop: the frame that
+// asks for one goes without it, the next one has it. A zoom step of the
+// viewer keeps the picture of the step before on the screen until its own
+// is made, instead of a blank.
+func TestCellPictureMadeOutsideTheLoop(t *testing.T) {
+	src := image.NewRGBA(image.Rect(0, 0, 64, 32))
+	for y := range 32 {
+		for x := range 64 {
+			src.Set(x, y, color.RGBA{uint8(x * 4), uint8(y * 8), 90, 255})
+		}
+	}
+	var frame bytes.Buffer
+	if err := png.Encode(&frame, src); err != nil {
+		t.Fatal(err)
+	}
+	u := &UI{ctx: context.Background(), events: make(chan model.Event, 8), ws: NewWindows(), agg: &Window{}, debug: &Window{},
+		cfg: &config.Config{}, th: theme.Terminal(), t: term.NewOffscreen(&bytes.Buffer{}, 80, 24), images: "sixel"}
+	u.t.CellW, u.t.CellH = 8, 16
+	md := &model.Media{Frames: [][]byte{frame.Bytes()}, FrameW: 64, FrameH: 32}
+	u.placed = []placed{{row: 2, img: &render.Img{Media: md, Cols: 8, Rows: 2}}}
+	if pics := u.cellPics(0); len(pics) != 0 {
+		t.Fatalf("first frame: %d pictures, want none while it is made", len(pics))
+	}
+	settlePics(u)
+	whole := u.cellPics(0)
+	if len(whole) != 1 || !strings.Contains(whole[0].seq, "\x1bP") {
+		t.Fatalf("after the event: %v, want the sixel", whole)
+	}
+	u.prevPics = whole                          // what paint leaves after the frame
+	u.placed[0].crop = image.Rect(0, 0, 32, 16) // zoom step
+	if kept := u.cellPics(0); len(kept) != 1 || kept[0] != whole[0] {
+		t.Fatalf("zoom step: %d pictures, want the one before kept", len(kept))
+	}
+	settlePics(u)
+	if zoomed := u.cellPics(0); len(zoomed) != 1 || zoomed[0].seq == whole[0].seq {
+		t.Fatal("zoom step: the zoomed picture never came")
 	}
 }
