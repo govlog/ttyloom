@@ -14,8 +14,8 @@
   },
   {
     "Path": "github.com/andybalholm/brotli",
-    "Version": "v1.2.7",
-    "Sum": "h1:UgafRPGMam5ySHfRkhthMqOFA6IFoeF3D7mWIDLjG5A="
+    "Version": "v1.3.0",
+    "Sum": "h1:IdkhjSe/+34U+fP7FSR2Q6Poj1hnHUa2GoWmzXJd6qY="
   },
   {
     "Path": "github.com/andybalholm/cascadia",
@@ -298,8 +298,8 @@
   },
   {
     "Path": "github.com/klauspost/compress",
-    "Version": "v1.20.3",
-    "Sum": "h1:zWNoFqq/lSuYQRim3dUXlXeA0IqwuZGicdG5ZTfY5j4="
+    "Version": "v1.20.4",
+    "Sum": "h1:dD0v/bvxtjCBqQu6sx1TNWkalEY5lNTIe+HY9w8TeNI="
   },
   {
     "Path": "github.com/klauspost/cpuid/v2",
@@ -503,8 +503,8 @@
   },
   {
     "Path": "github.com/twmb/murmur3",
-    "Version": "v1.2.1",
-    "Sum": "h1:TJzZGygOc1VJ7jiBpy8m7KAAzm67zy1jvkUxxEjJp+g="
+    "Version": "v1.2.2",
+    "Sum": "h1:XUKzAiw6XPwHy5prnd/jEEV1C7IYinixLa8xOBB/g4k="
   },
   {
     "Path": "github.com/valyala/bytebufferpool",
@@ -608,8 +608,8 @@
   },
   {
     "Path": "golang.org/x/crypto",
-    "Version": "v0.58.0",
-    "Sum": "h1:COkYLr4k7nDI4r6QtMML2AfzeIswWHAJthLS6K/M/54="
+    "Version": "v0.59.0",
+    "Sum": "h1:xS2jhqYbzNrpvkWP2YTDf4TJwBy3ykR03i8vFDxEc7c="
   },
   {
     "Path": "golang.org/x/exp",
@@ -618,8 +618,8 @@
   },
   {
     "Path": "golang.org/x/image",
-    "Version": "v0.47.0",
-    "Sum": "h1:za/8gVz++PPZqmZJBNSISICN5Rrj5zixP/8K++fgmqo="
+    "Version": "v0.48.0",
+    "Sum": "h1:1AvuPcuoOTJpA7s4VZ5umrb90T3So0rkB/bSGmxkxik="
   },
   {
     "Path": "golang.org/x/mod",
@@ -633,13 +633,13 @@
   },
   {
     "Path": "golang.org/x/sync",
-    "Version": "v0.24.0",
-    "Sum": "h1:iqiDrGoDgyuvAKrhLQthUEzU/R378N78gXbBjxed7oA="
+    "Version": "v0.25.0",
+    "Sum": "h1:dJnifr0nMV8/SBnBvdo4eSGGnrc3O4FFx6IqvtLcmRs="
   },
   {
     "Path": "golang.org/x/sys",
-    "Version": "v0.49.0",
-    "Sum": "h1:XbzkgYJHdqh/8m2Uu0W/dQv8nktxx4BFHp1M0gROTXA="
+    "Version": "v0.50.0",
+    "Sum": "h1:dkKZEFTEKaLr1sjhs0WiKqoi8Jj5nHbS3Njmx1UoMJs="
   },
   {
     "Path": "golang.org/x/telemetry",
@@ -647,13 +647,13 @@
   },
   {
     "Path": "golang.org/x/term",
-    "Version": "v0.47.0",
-    "Sum": "h1:cpyOwQkr2Nzxe2p6KnrTG7Ei2wtzjsuSjhpXXepZ/BM="
+    "Version": "v0.48.0",
+    "Sum": "h1:G6UU1eiSB8nl3DzeUGt7Mg+2SctI8tPS6Z5/mBt6cOk="
   },
   {
     "Path": "golang.org/x/text",
-    "Version": "v0.43.0",
-    "Sum": "h1:1QivrlhwAsnMOcqgOdl9my7s9OyZl8O5/UGUTJVXoWc="
+    "Version": "v0.44.0",
+    "Sum": "h1:YItdp/mQNGnsmrgpcdA5yQ3bnRxCfo/Tj/iByGW9GGo="
   },
   {
     "Path": "golang.org/x/time",

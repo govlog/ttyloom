@@ -9,7 +9,7 @@ Original texts and checksums are recorded in [manifest.json](manifest.json). Kee
 | Module | Version | Scope | Original notices |
 | --- | --- | --- | --- |
 | `github.com/BurntSushi/toml` | `v1.6.0` | application or tests | [COPYING](github.com/BurntSushi/toml@v1.6.0/COPYING), [COPYING](github.com/BurntSushi/toml@v1.6.0/cmd/toml-test-decoder/COPYING), [COPYING](github.com/BurntSushi/toml@v1.6.0/cmd/toml-test-encoder/COPYING), [COPYING](github.com/BurntSushi/toml@v1.6.0/cmd/tomlv/COPYING) |
-| `github.com/andybalholm/brotli` | `v1.2.7` | application or tests | [LICENSE](github.com/andybalholm/brotli@v1.2.7/LICENSE), [LICENSE](github.com/andybalholm/brotli@v1.2.7/flate/LICENSE) |
+| `github.com/andybalholm/brotli` | `v1.3.0` | application or tests | [LICENSE](github.com/andybalholm/brotli@v1.3.0/LICENSE), [LICENSE](github.com/andybalholm/brotli@v1.3.0/flate/LICENSE) |
 | `github.com/cenkalti/backoff/v4` | `v4.3.0` | application or tests | [LICENSE](github.com/cenkalti/backoff/v4@v4.3.0/LICENSE) |
 | `github.com/cespare/xxhash/v2` | `v2.3.0` | application or tests | [LICENSE.txt](github.com/cespare/xxhash/v2@v2.3.0/LICENSE.txt) |
 | `github.com/clipperhouse/uax29/v2` | `v2.7.0` | application or tests | [LICENSE](github.com/clipperhouse/uax29/v2@v2.7.0/LICENSE) |
@@ -32,7 +32,7 @@ Original texts and checksums are recorded in [manifest.json](manifest.json). Kee
 | `github.com/gotd/log` | `v0.1.0` | application or tests | [LICENSE](github.com/gotd/log@v0.1.0/LICENSE) |
 | `github.com/gotd/neo` | `v0.1.5` | application or tests | [LICENSE](github.com/gotd/neo@v0.1.5/LICENSE) |
 | `github.com/gotd/td` | `v0.163.0` | application or tests | [LICENSE](github.com/gotd/td@v0.163.0/LICENSE) |
-| `github.com/klauspost/compress` | `v1.20.3` | application or tests | [LICENSE](github.com/klauspost/compress@v1.20.3/LICENSE), [LICENSE](github.com/klauspost/compress@v1.20.3/gzhttp/LICENSE), [LICENSE](github.com/klauspost/compress@v1.20.3/internal/lz4ref/LICENSE), [LICENSE](github.com/klauspost/compress@v1.20.3/internal/snapref/LICENSE), [LICENSE](github.com/klauspost/compress@v1.20.3/s2/LICENSE), [LICENSE](github.com/klauspost/compress@v1.20.3/s2/cmd/internal/filepathx/LICENSE), [LICENSE](github.com/klauspost/compress@v1.20.3/s2/cmd/internal/readahead/LICENSE), [AUTHORS](github.com/klauspost/compress@v1.20.3/snappy/AUTHORS), [LICENSE](github.com/klauspost/compress@v1.20.3/snappy/LICENSE), [LICENSE](github.com/klauspost/compress@v1.20.3/snappy/xerial/LICENSE), [LICENSE.txt](github.com/klauspost/compress@v1.20.3/zstd/internal/xxhash/LICENSE.txt) |
+| `github.com/klauspost/compress` | `v1.20.4` | application or tests | [LICENSE](github.com/klauspost/compress@v1.20.4/LICENSE), [LICENSE](github.com/klauspost/compress@v1.20.4/gzhttp/LICENSE), [LICENSE](github.com/klauspost/compress@v1.20.4/internal/lz4ref/LICENSE), [LICENSE](github.com/klauspost/compress@v1.20.4/internal/snapref/LICENSE), [LICENSE](github.com/klauspost/compress@v1.20.4/s2/LICENSE), [LICENSE](github.com/klauspost/compress@v1.20.4/s2/cmd/internal/filepathx/LICENSE), [LICENSE](github.com/klauspost/compress@v1.20.4/s2/cmd/internal/readahead/LICENSE), [AUTHORS](github.com/klauspost/compress@v1.20.4/snappy/AUTHORS), [LICENSE](github.com/klauspost/compress@v1.20.4/snappy/LICENSE), [LICENSE](github.com/klauspost/compress@v1.20.4/snappy/xerial/LICENSE), [LICENSE.txt](github.com/klauspost/compress@v1.20.4/zstd/internal/xxhash/LICENSE.txt) |
 | `github.com/mattn/go-colorable` | `v0.1.16` | declared; not imported on this platform | [LICENSE](github.com/mattn/go-colorable@v0.1.16/LICENSE) |
 | `github.com/mattn/go-isatty` | `v0.0.24` | declared; not imported on this platform | [LICENSE](github.com/mattn/go-isatty@v0.0.24/LICENSE) |
 | `github.com/mattn/go-runewidth` | `v0.0.31` | application or tests | [LICENSE](github.com/mattn/go-runewidth@v0.0.31/LICENSE) |
@@ -41,7 +41,7 @@ Original texts and checksums are recorded in [manifest.json](manifest.json). Kee
 | `github.com/refraction-networking/utls` | `v1.8.2` | application or tests | [LICENSE](github.com/refraction-networking/utls@v1.8.2/LICENSE), [LICENSE](github.com/refraction-networking/utls@v1.8.2/dicttls/LICENSE) |
 | `github.com/segmentio/asm` | `v1.2.1` | application or tests | [LICENSE](github.com/segmentio/asm@v1.2.1/LICENSE) |
 | `github.com/shopspring/decimal` | `v1.6.0` | declared; not imported on this platform | [LICENSE](github.com/shopspring/decimal@v1.6.0/LICENSE) |
-| `github.com/twmb/murmur3` | `v1.2.1` | application or tests | [LICENSE](github.com/twmb/murmur3@v1.2.1/LICENSE) |
+| `github.com/twmb/murmur3` | `v1.2.2` | application or tests | [LICENSE](github.com/twmb/murmur3@v1.2.2/LICENSE) |
 | `github.com/yuin/goldmark` | `v1.8.6` | declared; not imported on this platform | [LICENSE](github.com/yuin/goldmark@v1.8.6/LICENSE) |
 | `go.opentelemetry.io/otel` | `v1.47.0` | application or tests | [LICENSE](go.opentelemetry.io/otel@v1.47.0/LICENSE) |
 | `go.opentelemetry.io/otel/metric` | `v1.47.0` | declared; not imported on this platform | [LICENSE](go.opentelemetry.io/otel/metric@v1.47.0/LICENSE) |
@@ -49,15 +49,15 @@ Original texts and checksums are recorded in [manifest.json](manifest.json). Kee
 | `go.uber.org/atomic` | `v1.12.0` | application or tests | [LICENSE.txt](go.uber.org/atomic@v1.12.0/LICENSE.txt) |
 | `go.uber.org/multierr` | `v1.11.0` | application or tests | [LICENSE.txt](go.uber.org/multierr@v1.11.0/LICENSE.txt) |
 | `go.uber.org/zap` | `v1.28.0` | declared; not imported on this platform | [LICENSE](go.uber.org/zap@v1.28.0/LICENSE) |
-| `golang.org/x/crypto` | `v0.58.0` | application or tests | [LICENSE](golang.org/x/crypto@v0.58.0/LICENSE), [PATENTS](golang.org/x/crypto@v0.58.0/PATENTS) |
+| `golang.org/x/crypto` | `v0.59.0` | application or tests | [LICENSE](golang.org/x/crypto@v0.59.0/LICENSE), [PATENTS](golang.org/x/crypto@v0.59.0/PATENTS) |
 | `golang.org/x/exp` | `v0.0.0-20261014143641-f0251eb4aa3e` | declared; not imported on this platform | [LICENSE](golang.org/x/exp@v0.0.0-20261014143641-f0251eb4aa3e/LICENSE), [PATENTS](golang.org/x/exp@v0.0.0-20261014143641-f0251eb4aa3e/PATENTS) |
-| `golang.org/x/image` | `v0.47.0` | application or tests | [LICENSE](golang.org/x/image@v0.47.0/LICENSE), [PATENTS](golang.org/x/image@v0.47.0/PATENTS) |
+| `golang.org/x/image` | `v0.48.0` | application or tests | [LICENSE](golang.org/x/image@v0.48.0/LICENSE), [PATENTS](golang.org/x/image@v0.48.0/PATENTS) |
 | `golang.org/x/mod` | `v0.42.0` | declared; not imported on this platform | [LICENSE](golang.org/x/mod@v0.42.0/LICENSE), [PATENTS](golang.org/x/mod@v0.42.0/PATENTS) |
 | `golang.org/x/net` | `v0.62.0` | application or tests | [LICENSE](golang.org/x/net@v0.62.0/LICENSE), [PATENTS](golang.org/x/net@v0.62.0/PATENTS) |
-| `golang.org/x/sync` | `v0.24.0` | application or tests | [LICENSE](golang.org/x/sync@v0.24.0/LICENSE), [PATENTS](golang.org/x/sync@v0.24.0/PATENTS) |
-| `golang.org/x/sys` | `v0.49.0` | application or tests | [LICENSE](golang.org/x/sys@v0.49.0/LICENSE), [PATENTS](golang.org/x/sys@v0.49.0/PATENTS) |
-| `golang.org/x/term` | `v0.47.0` | application or tests | [LICENSE](golang.org/x/term@v0.47.0/LICENSE), [PATENTS](golang.org/x/term@v0.47.0/PATENTS) |
-| `golang.org/x/text` | `v0.43.0` | application or tests | [LICENSE](golang.org/x/text@v0.43.0/LICENSE), [PATENTS](golang.org/x/text@v0.43.0/PATENTS) |
+| `golang.org/x/sync` | `v0.25.0` | application or tests | [LICENSE](golang.org/x/sync@v0.25.0/LICENSE), [PATENTS](golang.org/x/sync@v0.25.0/PATENTS) |
+| `golang.org/x/sys` | `v0.50.0` | application or tests | [LICENSE](golang.org/x/sys@v0.50.0/LICENSE), [PATENTS](golang.org/x/sys@v0.50.0/PATENTS) |
+| `golang.org/x/term` | `v0.48.0` | application or tests | [LICENSE](golang.org/x/term@v0.48.0/LICENSE), [PATENTS](golang.org/x/term@v0.48.0/PATENTS) |
+| `golang.org/x/text` | `v0.44.0` | application or tests | [LICENSE](golang.org/x/text@v0.44.0/LICENSE), [PATENTS](golang.org/x/text@v0.44.0/PATENTS) |
 | `golang.org/x/time` | `v0.16.0` | application or tests | [LICENSE](golang.org/x/time@v0.16.0/LICENSE), [PATENTS](golang.org/x/time@v0.16.0/PATENTS) |
 | `golang.org/x/tools` | `v0.52.0` | declared; not imported on this platform | [LICENSE](golang.org/x/tools@v0.52.0/LICENSE), [PATENTS](golang.org/x/tools@v0.52.0/PATENTS) |
 | `gopkg.in/yaml.v2` | `v2.4.0` | declared; not imported on this platform | [LICENSE](gopkg.in/yaml.v2@v2.4.0/LICENSE), [LICENSE.libyaml](gopkg.in/yaml.v2@v2.4.0/LICENSE.libyaml), [NOTICE](gopkg.in/yaml.v2@v2.4.0/NOTICE) |
