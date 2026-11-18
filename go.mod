@@ -9,9 +9,9 @@ require (
 	github.com/diamondburned/ningen/v3 v3.0.1-0.20260306213430-5a08d3a709b4
 	github.com/ergochat/irc-go v0.7.0
 	github.com/gorilla/websocket v1.5.3
-	github.com/gotd/contrib v0.25.0
+	github.com/gotd/contrib v0.26.0
 	github.com/gotd/log v0.1.0
-	github.com/gotd/td v0.163.0
+	github.com/gotd/td v0.164.0
 	github.com/mattn/go-runewidth v0.0.31
 	golang.org/x/image v0.48.0
 	golang.org/x/sys v0.50.0
