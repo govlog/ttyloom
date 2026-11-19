@@ -40,7 +40,13 @@ func (m *Module) dccCmd(h module.Host, w module.Win, args []string, text string)
 			return
 		}
 		nick := args[1]
-		path := config.Expand(strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(strings.TrimPrefix(text, args[0])), nick)))
+		path := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(strings.TrimPrefix(text, args[0])), nick))
+		// The rest of the line is the path, spaces included. Double quotes
+		// around it, as /send needs them, are accepted.
+		if q, ok := strings.CutPrefix(path, `"`); ok {
+			path = strings.TrimSuffix(q, `"`)
+		}
+		path = config.Expand(path)
 		if st, err := os.Stat(path); err != nil || !st.Mode().IsRegular() {
 			h.Print(w, i18n.T("send_not_a_file", path))
 			return

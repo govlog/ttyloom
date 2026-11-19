@@ -2,6 +2,7 @@ package irc
 
 import (
 	"context"
+	"slices"
 	"sync"
 	"time"
 )
@@ -60,9 +61,13 @@ func (p *pacer) allow() bool {
 }
 
 // pace holds a user-initiated line until the output bucket has a token for
-// it; ctx (the network: a logout, a disconnect) cuts the wait. Never called
-// from a callback.
+// it; ctx (the network: a logout, a disconnect) cuts the wait. A ctx that
+// ended while the line waited in the queue takes no token: the line is
+// dropped. Never called from a callback.
 func (c *Client) pace(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	d := c.out.take()
 	if d <= 0 {
 		return nil
@@ -74,5 +79,63 @@ func (c *Client) pace(ctx context.Context) error {
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()
+	}
+}
+
+// queue puts one send of the user (all its lines) at the end of the output
+// queue and comes back at once. The worker of Run runs the jobs one at a
+// time, in the order of the calls: a message typed during a paste goes out
+// after the whole paste. A job paces its lines and posts its own answer.
+//
+// ponytail: no cap on the queue. The UI bounds each job (a paste is 64 KB at
+// most, and only after a prompt) and the rate (a person types; a hook sends
+// hookMaxSends a minute). Add a cap that fails the job with its error if a
+// program ever calls Send in a loop.
+func (c *Client) queue(job func()) {
+	c.mu.Lock()
+	done := c.outDone
+	if !done {
+		c.outQ = append(c.outQ, job)
+	}
+	c.mu.Unlock()
+	if done {
+		// Run has ended: no line can go out. The job runs on its own and posts
+		// its error, as each send did before the queue.
+		go job()
+		return
+	}
+	select {
+	case c.wake <- struct{}{}:
+	default: // a wake is pending already
+	}
+}
+
+// work runs the jobs of the output queue, oldest first, until ctx ends (Run
+// returns). The jobs still in the queue then run too: the connection is
+// down, so each one only posts its error. After that, queue runs each new
+// job on its own goroutine.
+func (c *Client) work(ctx context.Context) {
+	for {
+		c.mu.Lock()
+		end := ctx.Err() != nil
+		var job func()
+		if len(c.outQ) > 0 {
+			job = c.outQ[0]
+			c.outQ = slices.Delete(c.outQ, 0, 1) // clears the old slot: the text of the job can go
+		} else if end {
+			c.outDone = true
+		}
+		c.mu.Unlock()
+		switch {
+		case job != nil:
+			job()
+		case end:
+			return
+		default:
+			select {
+			case <-c.wake:
+			case <-ctx.Done():
+			}
+		}
 	}
 }

@@ -620,6 +620,7 @@ type fakeBackend struct {
 	search       int        // Search calls
 	since        int        // LoadHistorySince calls
 	history      int        // LoadHistory calls
+	befores      []int      // LoadHistory calls: the beforeID of each
 	markRead     int        // MarkRead calls
 	readReacts   int        // ReadReactions calls
 	readMentions int        // ReadMentions calls
@@ -664,7 +665,10 @@ func (f *fakeBackend) Pin(_ context.Context, _ *model.Chat, id int, pin bool) {
 
 func (f *fakeBackend) LoadHistorySince(context.Context, *model.Chat, int, int) { f.since++ }
 
-func (f *fakeBackend) LoadHistory(context.Context, *model.Chat, int, int) { f.history++ }
+func (f *fakeBackend) LoadHistory(_ context.Context, _ *model.Chat, before, _ int) {
+	f.history++
+	f.befores = append(f.befores, before)
+}
 
 func (f *fakeBackend) MarkRead(context.Context, *model.Chat, int) { f.markRead++ }
 func (f *fakeBackend) ReadReactions(context.Context, *model.Chat) { f.readReacts++ }

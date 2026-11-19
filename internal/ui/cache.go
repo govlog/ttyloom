@@ -106,6 +106,13 @@ func (u *UI) bindChat(w *Window, c *model.Chat) {
 		ptrs[k] = &msgs[k]
 	}
 	w.Merge(ptrs)
+	// A hole the cache kept (Msg.HoleBelow; the file is sorted by id) is
+	// marked again: the first page of the window starts its load (history).
+	for k := 1; k < len(msgs); k++ {
+		if msgs[k].HoleBelow {
+			w.markGap(msgs[k-1].ID, msgs[k].ID, true)
+		}
+	}
 	// Loaded and Full stay false: the first visit still loads the network
 	// history, which fills the gap between the cache and now, and scrolling up
 	// loads the older messages.
@@ -458,22 +465,54 @@ func (u *UI) syncToCache(c *model.Chat, msgs []model.Msg) {
 	if cc == nil || len(msgs) == 0 {
 		return
 	}
-	chatID := c.ID
+	chatID, full := c.ID, len(msgs) >= syncLimit && u.caps(c).History
 	// Read after earlier writes finish, so this merge includes their messages.
-	u.bg(func() { saveMerged(cc, chatID, msgs) })
+	u.bg(func() { saveSyncPage(cc, chatID, msgs, full) })
+}
+
+// saveSyncPage : saveMerged for a page of the sync. A full page whose oldest
+// message is new to the file, while the file holds an older one, may stop
+// above the file: that message gets Msg.HoleBelow, and the window that binds
+// the file later marks the hole and loads it.
+func saveSyncPage(cc *cache.Cache, chatID int64, msgs []model.Msg, full bool) error {
+	old, err := cc.LoadHistory(chatID)
+	if err != nil {
+		return err
+	}
+	first := msgs[0].ID // a page goes from the oldest to the newest
+	if full && !slices.ContainsFunc(old, func(m model.Msg) bool { return m.ID == first }) &&
+		slices.ContainsFunc(old, func(m model.Msg) bool { return m.ID < first }) {
+		msgs = slices.Clone(msgs)
+		msgs[0].HoleBelow = true
+	}
+	return cc.SaveHistory(chatID, mergeHistory(old, msgs))
 }
 
 // mergeHistory gives the cached history filled with the new messages, with no
 // duplicate ID. Server fields refresh the cached copy.
+//
+// Msg.HoleBelow, for every caller (window copy, sync page, media refresh,
+// rekey): fresh is contiguous on the server between its own messages, so its
+// flag wins on each of them. Under its oldest message it knows nothing (a
+// page stops there, a window trims its head): there the flag of the file
+// stays, and fresh can only add one.
 func mergeHistory(old, fresh []model.Msg) []model.Msg {
 	out := slices.Clone(old)
 	have := make(map[int]int, len(old))
 	for i, m := range out {
 		have[m.ID] = i
 	}
+	oldest := 0
+	for k, m := range fresh {
+		if k == 0 || m.ID < oldest {
+			oldest = m.ID
+		}
+	}
 	for _, m := range fresh {
 		if i, ok := have[m.ID]; ok {
+			kept := out[i].HoleBelow && m.ID == oldest
 			reconcileMsg(&out[i], &m)
+			out[i].HoleBelow = m.HoleBelow || kept
 		} else {
 			have[m.ID] = len(out)
 			out = append(out, m)

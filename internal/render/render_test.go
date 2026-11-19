@@ -2,6 +2,7 @@ package render
 
 import (
 	"bytes"
+	"fmt"
 	"image"
 	"image/color"
 	"image/png"
@@ -133,6 +134,48 @@ func TestRunsRuneOffsetsBoldURL(t *testing.T) {
 	}
 	if spans[3].Text != "example.org" || spans[3].Style.URL != "https://example.org" || !spans[3].Style.Underline {
 		t.Fatalf("url: %+v", spans[3])
+	}
+}
+
+// Link entities side by side read as one link: a part whose target is not
+// that whole text asks before it opens (masked), even when each entity alone
+// shows its own target.
+func TestRunsAdjacentLinksMasked(t *testing.T) {
+	url := func(s, e int, u string) model.Span { return model.Span{Start: s, End: e, Kind: model.SpanURL, URL: u} }
+	cases := []struct {
+		name, text string
+		ents       []model.Span
+		want       string // "text=masked" of each clickable span
+	}{
+		{"two hosts", "paypal.com/x.evil.com",
+			[]model.Span{url(0, 11, "https://paypal.com/"), url(11, 21, "https://x.evil.com")},
+			"paypal.com/=true x.evil.com=true"},
+		{"refused left half", "paypal.com/x.evil.com",
+			[]model.Span{url(0, 11, "javascript:alert(1)"), url(11, 21, "https://x.evil.com")},
+			"x.evil.com=true"},
+		{"one target in two parts", "example.com",
+			[]model.Span{url(0, 7, "https://example.com"), url(7, 11, "https://example.com")},
+			"example.com=false"},
+		{"nested", "paypal.com",
+			[]model.Span{url(0, 10, "https://paypal.com"), url(3, 10, "https://pal.com")},
+			"pay=false pal.com=true"},
+		{"plain text after", "example.com!",
+			[]model.Span{url(0, 11, "https://example.com")},
+			"example.com=false"},
+		{"line break between", "paypal.com/\nx.evil.com",
+			[]model.Span{url(0, 11, "https://paypal.com/"), url(12, 22, "https://x.evil.com")},
+			"paypal.com/=false x.evil.com=false"},
+	}
+	for _, c := range cases {
+		var got []string
+		for _, sp := range Runs(c.text, c.ents, theme.Style{}, theme.Terminal()) {
+			if sp.Style.URL != "" {
+				got = append(got, fmt.Sprintf("%s=%v", sp.Text, sp.Style.Masked))
+			}
+		}
+		if g := strings.Join(got, " "); g != c.want {
+			t.Errorf("%s: %q gives %q, want %q", c.name, c.text, g, c.want)
+		}
 	}
 }
 
@@ -474,6 +517,46 @@ func TestReactionActions(t *testing.T) {
 		}
 		if got := colText(text, a.Col0, a.Col1); got != want.label {
 			t.Fatalf("action %d: columns %d-%d → %q, want %q", i, a.Col0, a.Col1, got, want.label)
+		}
+	}
+}
+
+// Wrapped reactions: a click sends the reaction drawn under the mouse, even
+// when the label of another reaction shows inside it (🔥 2 in ❤‍🔥 2). A label
+// cut by the line break is not clickable.
+func TestReactionActionsWrapped(t *testing.T) {
+	zwj := []model.Reaction{{Emoji: "👍", Count: 2}, {Emoji: "🔥", Count: 2}, {Emoji: "❤‍🔥", Count: 2}}
+	cases := []struct {
+		name  string
+		rs    []model.Reaction
+		width int
+		sel   bool
+		want  string // "emoji=text under its columns" of each action, line by line
+	}{
+		{"on line 2", zwj, 16, false, "👍=👍 2 🔥=🔥 2 | ❤‍🔥=❤‍🔥 2"},
+		{"on line 2, selected", zwj, 17, true, "👍=👍 2 🔥=🔥 2 | ❤‍🔥=❤‍🔥 2"},
+		{"cut label", []model.Reaction{{Emoji: "👍", Count: 12}, {Emoji: "🔥", Count: 2}, {Emoji: "❤‍🔥", Count: 2}}, 15, false,
+			"👍=👍 12 | ❤‍🔥=❤‍🔥 2"},
+		{"cut label, no prefix", zwj, 8, false, "👍=👍 2 | ❤‍🔥=❤‍🔥 2"},
+	}
+	for _, c := range cases {
+		m := &model.Msg{ID: 1, From: "al", FromID: 9, Text: "hi", Reactions: c.rs}
+		o := Opts{Width: c.width, Theme: theme.Terminal(), Images: "off", Self: self7}
+		if c.sel {
+			o.Selected = m
+		}
+		var got []string
+		for _, l := range Message(m, o) {
+			var acts []string
+			for _, a := range l.Actions {
+				acts = append(acts, a.Emoji+"="+colText(LineText(l), a.Col0, a.Col1))
+			}
+			if len(acts) > 0 {
+				got = append(got, strings.Join(acts, " "))
+			}
+		}
+		if g := strings.Join(got, " | "); g != c.want {
+			t.Errorf("%s: actions %q, want %q\nlines %q", c.name, g, c.want, texts(Message(m, o)))
 		}
 	}
 }

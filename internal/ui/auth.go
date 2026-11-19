@@ -2,7 +2,9 @@ package ui
 
 import (
 	"slices"
+	"time"
 
+	"github.com/govlog/ttyloom/internal/i18n"
 	"github.com/govlog/ttyloom/internal/model"
 	"github.com/govlog/ttyloom/internal/term"
 )
@@ -45,6 +47,10 @@ func (u *UI) authDone(net string) {
 	if u.prompt == nil || u.promptNet != net {
 		return
 	}
+	if u.ed.String() != "" { // closed with no submit while the user typed in it
+		u.authClosed = time.Now()
+		u.flash(i18n.T("auth_prompt_closed"))
+	}
 	u.prompt, u.promptNet = nil, ""
 	u.ed = Editor{}
 	if len(u.authPending) > 0 {
@@ -60,6 +66,29 @@ func (u *UI) authDone(net string) {
 		u.ed = *u.authDraft
 		u.authDraft = nil
 	}
+}
+
+// authGuardTime : how long authGuard drops the keys after a prompt closed.
+const authGuardTime = time.Second
+
+// authGuard : a login prompt closed with typed text and no submit (authDone):
+// the user may still type the rest of a password or a code, blind. For
+// authGuardTime the keys that would put it into the chat input or send it are
+// dropped: Enter, a printable key, a paste, Ctrl+V. Same clock as
+// answeredYes.
+func (u *UI) authGuard(k term.Key) bool {
+	if time.Since(u.authClosed) >= authGuardTime {
+		return false
+	}
+	switch k.Code {
+	case term.Enter, term.Paste:
+		return true
+	case term.Ctrl:
+		return k.Rune == 'v'
+	case term.None:
+		return k.Rune != 0 && !k.Alt
+	}
+	return false
 }
 
 func (u *UI) authKey(k term.Key) {

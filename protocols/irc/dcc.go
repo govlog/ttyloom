@@ -252,10 +252,7 @@ func (c *Client) dccSend(ctx context.Context, nick, path string) error {
 	untrack := c.track(i18n.T("dcc_sending", name, nick))
 	defer untrack()
 	line := fmt.Sprintf("\x01DCC SEND %s %s %d %d\x01", dccName(name), ipArg(ip), port, st.Size())
-	if err := c.pace(ctx); err != nil {
-		return err
-	}
-	if err := c.send("PRIVMSG", nick, line); err != nil {
+	if err := c.sendLine(ctx, nick, line); err != nil {
 		return err
 	}
 	// The peer has dccWait to connect; ctx (a logout, a quit) cuts it short.
@@ -284,6 +281,28 @@ func (c *Client) dccSend(ctx context.Context, nick, path string) error {
 	// still in the send queue would drop them (RST). The read carries the
 	// dccWait idle deadline of dccConn, ctx cuts it.
 	return <-acks
+}
+
+// sendLine : one PRIVMSG of a DCC offer through the output queue, in turn
+// with the messages of the user; it waits until the line went out. The
+// transfer after it runs outside the queue. ctx cuts the wait: the job then
+// finds ctx ended and sends nothing.
+func (c *Client) sendLine(ctx context.Context, nick, line string) error {
+	done := make(chan error, 1)
+	c.queue(func() {
+		defer c.Guard("DCC", func(err string) { done <- errors.New(err) })
+		err := c.pace(ctx)
+		if err == nil {
+			err = c.send("PRIVMSG", nick, line)
+		}
+		done <- err
+	})
+	select {
+	case err := <-done:
+		return err
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 // acked reads the 4-byte counters of the peer through the whole transfer —
@@ -446,10 +465,7 @@ func (c *Client) dccConnect(ctx context.Context, off dccOffer) (net.Conn, error)
 	defer l.Close()
 	port := l.Addr().(*net.TCPAddr).Port
 	line := fmt.Sprintf("\x01DCC SEND %s %s %d %d %s\x01", dccName(off.Name), ipArg(ip), port, off.Size, off.Token)
-	if err := c.pace(ctx); err != nil {
-		return nil, err
-	}
-	if err := c.send("PRIVMSG", off.Nick, line); err != nil {
+	if err := c.sendLine(ctx, off.Nick, line); err != nil {
 		return nil, err
 	}
 	wctx, cancel := context.WithTimeout(ctx, dccWait)

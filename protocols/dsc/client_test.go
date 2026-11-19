@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -247,6 +248,125 @@ func TestHistorySeedsNewerPage(t *testing.T) {
 		if _, err := cab.Message(8, m.ID); err != nil {
 			t.Fatalf("message %d of the page not in the store: %s", m.ID, err)
 		}
+	}
+}
+
+// fakeChannel : the REST side of channel 8, whose messages are msgID(1) to
+// msgID(last). The history routes answer as Discord does: newest first, at
+// most limit, before an id, around an id (about half of the page after it) or
+// the newest ones. Any other GET gets an empty list (the pins), any other
+// method a 204. Each request comes back on reqs, when reqs is not nil.
+func fakeChannel(t *testing.T, last int64, reqs chan<- string) *httptest.Server {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if reqs != nil {
+			reqs <- r.Method + " " + r.URL.Path
+		}
+		switch {
+		case r.Method != http.MethodGet:
+			w.WriteHeader(http.StatusNoContent)
+		case strings.HasSuffix(r.URL.Path, "/channels/8/messages"):
+			q := r.URL.Query()
+			limit, _ := strconv.Atoi(q.Get("limit"))
+			top := last
+			if id, err := strconv.ParseInt(q.Get("before"), 10, 64); err == nil {
+				top = id>>22 - 1
+			}
+			if id, err := strconv.ParseInt(q.Get("around"), 10, 64); err == nil {
+				top = min(last, id>>22+int64(limit)/2)
+			}
+			page := []discord.Message{}
+			for ms := top; ms >= 1 && len(page) < limit; ms-- {
+				page = append(page, discord.Message{ID: msgID(ms), ChannelID: 8, Author: discord.User{ID: 42, Username: "bob"}})
+			}
+			json.NewEncoder(w).Encode(page)
+		default:
+			w.Write([]byte("[]"))
+		}
+	}))
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+// Every message of a history page goes into the store where the store takes
+// it. The store adds a message only before its newest one or after its oldest
+// one, and drops one in between: live messages held before the load must not
+// make it drop the page. Channel of 300 messages, pages of the UI; the store
+// keeps 100 messages at most.
+func TestHistorySeedsWholePage(t *testing.T) {
+	ctx := context.Background()
+	chat := &model.Chat{ID: 8, Peer: peer{Channel: 8}}
+	newest := func(c *Client) { c.LoadHistory(ctx, chat, 0, 100) }
+	for _, tc := range []struct {
+		name  string
+		live  []int64 // MESSAGE_CREATE before the load, oldest first
+		loads []func(*Client)
+		held  [2]int64 // each message from held[0] to held[1] must be in the store
+		out   [2]int64 // no message from out[0] to out[1] may be in it (zero: no check)
+	}{
+		{"empty store", nil, []func(*Client){newest}, [2]int64{201, 300}, [2]int64{}},
+		{"live messages before the load", []int64{299, 300}, []func(*Client){newest}, [2]int64{201, 300}, [2]int64{}},
+		{"older page", nil, []func(*Client){
+			func(c *Client) { c.LoadHistory(ctx, chat, 0, 50) },
+			func(c *Client) { c.LoadHistory(ctx, chat, int(msgID(251)), 50) },
+		}, [2]int64{201, 300}, [2]int64{}},
+		// The page around 249 is 299..200: it reaches the live messages, the
+		// store takes 98 of it and refuses 200 at its limit.
+		{"jump that reaches the live messages", []int64{299, 300}, []func(*Client){
+			func(c *Client) { c.LoadHistoryAround(ctx, chat, int(msgID(249)), 100) },
+		}, [2]int64{201, 300}, [2]int64{}},
+		// The page around 100 is 125..76, far below the live messages. Glued
+		// to them, it would leave a hole the store cannot see, and the newest
+		// page, in that hole, would then be dropped.
+		{"jump with a gap, then the newest page", []int64{299, 300}, []func(*Client){
+			func(c *Client) { c.LoadHistoryAround(ctx, chat, int(msgID(100)), 50) },
+			newest,
+		}, [2]int64{201, 300}, [2]int64{76, 125}},
+		// The sync reads the newest 200 (two requests) and seeds them all
+		// before it keeps those above minID for the window.
+		{"since sync", []int64{300}, []func(*Client){
+			func(c *Client) { c.LoadHistorySince(ctx, chat, int(msgID(290)), 200) },
+		}, [2]int64{201, 300}, [2]int64{}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ev := make(chan model.Event, 8)
+			c := New(Config{}, ev)
+			useTestAPI(t, c, fakeChannel(t, 300, nil))
+			cab := c.state().Cabinet
+			for _, ms := range tc.live {
+				c.state().State.Session.Handler.Call(&gateway.MessageCreateEvent{Message: discord.Message{
+					ID: msgID(ms), ChannelID: 8, Author: discord.User{ID: 42, Username: "bob"}}})
+				if _, err := cab.Message(8, msgID(ms)); err != nil {
+					t.Fatalf("live message %d not in the store: %s", ms, err)
+				}
+			}
+			for i, load := range tc.loads {
+				load(c)
+				for {
+					if h, ok := next(t, ev).(model.EvHistory); ok {
+						if h.Err != "" {
+							t.Fatalf("load %d: %s", i, h.Err)
+						}
+						break
+					}
+				}
+			}
+			var missing []int64
+			for ms := tc.held[0]; ms <= tc.held[1]; ms++ {
+				if _, err := cab.Message(8, msgID(ms)); err != nil {
+					missing = append(missing, ms)
+				}
+			}
+			if len(missing) > 0 {
+				all, _ := cab.Messages(8)
+				t.Fatalf("%d messages of %d..%d not in the store (first %d, last %d); it holds %d",
+					len(missing), tc.held[0], tc.held[1], missing[0], missing[len(missing)-1], len(all))
+			}
+			for ms := tc.out[0]; ms != 0 && ms <= tc.out[1]; ms++ {
+				if _, err := cab.Message(8, msgID(ms)); err == nil {
+					t.Fatalf("message %d of the page with a gap is in the store", ms)
+				}
+			}
+		})
 	}
 }
 
@@ -605,6 +725,52 @@ func TestInfoOnStoreMiss(t *testing.T) {
 	e := next(t, ev).(model.EvInfo)
 	if len(e.Lines) == 0 || e.Lines[0] != i18n.T("info_sent_at", i18n.LocalTime(msgID(900).Time())) {
 		t.Fatalf("info lines %q, want the date first", e.Lines)
+	}
+}
+
+// A read sends one ack, whether the store holds the message or not: a window
+// marks its last cached message read before the REST page fills the store,
+// and ningen acks only a message its store holds. A read the read state
+// already covers sends nothing: the same read again, or a read below what
+// another device acked.
+func TestMarkReadAcksOnce(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		before gateway.Event // from the gateway, before the read
+		acks   int
+	}{
+		{"store miss", nil, 1},
+		{"message in the store", &gateway.MessageCreateEvent{Message: discord.Message{
+			ID: msgID(300), ChannelID: 8, Author: discord.User{ID: 42, Username: "bob"}}}, 1},
+		{"read further on another device", &gateway.MessageAckEvent{ChannelID: 8, MessageID: msgID(301)}, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			reqs := make(chan string, 8)
+			c := New(Config{}, make(chan model.Event, 4))
+			useTestAPI(t, c, fakeChannel(t, 300, reqs))
+			if tc.before != nil {
+				c.state().State.Session.Handler.Call(tc.before)
+			}
+			chat := &model.Chat{ID: 8, Peer: peer{Channel: 8}}
+			want := "POST /api/v9/channels/8/messages/" + msgID(300).String() + "/ack"
+			c.MarkRead(context.Background(), chat, int(msgID(300)))
+			if tc.acks == 1 {
+				select {
+				case r := <-reqs:
+					if r != want {
+						t.Fatalf("request %q, want %q", r, want)
+					}
+				case <-time.After(2 * time.Second):
+					t.Fatal("no ack sent")
+				}
+				c.MarkRead(context.Background(), chat, int(msgID(300)))
+			}
+			select {
+			case r := <-reqs:
+				t.Fatalf("request %q: want %d ack in all", r, tc.acks)
+			case <-time.After(200 * time.Millisecond):
+			}
+		})
 	}
 }
 

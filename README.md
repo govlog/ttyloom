@@ -215,7 +215,7 @@ Review `download_dir` and `log_dir` in that configuration. Caches written with e
 | Select a message | Alt+↑ / Alt+↓ or click |
 | Reply / forward / edit / react / copy selection | `p` / `f` / `e` / `r` / `c`, or the right-click menu |
 | Edit my previous message, the next one | Ctrl+↑ / Ctrl+↓ |
-| Paste / send a file | Ctrl+V / `/send path [caption]` |
+| Paste / send a file | Ctrl+V / `/send path [caption]`, `/send "path with spaces" [caption]` |
 | Bold / italic / underline in the draft | Ctrl+B / Ctrl+I / Ctrl+U |
 | Clear the screen, keep the history | Ctrl+L |
 | Member list / image mode | F3 / F4 |

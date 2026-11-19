@@ -417,8 +417,22 @@ func (u *UI) readInbox(c *model.Chat, maxID, unread int, hasUnread bool) {
 			}
 		}
 	}
-	if hasUnread {
-		c.Unread = unread
+	if !hasUnread {
+		return
+	}
+	var w *Window
+	if i := u.ws.ForChat(c.Key()); i >= 0 {
+		w = u.ws.List[i]
+	}
+	if unread == 0 && w != nil && slices.ContainsFunc(w.Items, func(it *Item) bool { return it.Msg != nil && !it.Msg.Out && it.Msg.ID > maxID }) {
+		return // an incoming message above maxID stays unread: a Discord ack of an older message says 0
+	}
+	c.Unread = unread
+	if unread == 0 && w != nil { // read up to the end on another device: the activity goes too
+		w.Act, w.Hot = 0, false
+		if a := u.alertNext; a != nil && a.chat == c && !a.quiet {
+			u.alertNext = nil // its bell and notification too
+		}
 	}
 }
 

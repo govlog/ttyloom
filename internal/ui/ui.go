@@ -97,7 +97,10 @@ type UI struct {
 	authDraft   *Editor
 	authWindow  *Window
 	authDebug   bool
-	qr          *qrBox // QR code login running: passive overlay
+	// authClosed : a prompt closed with typed text and no submit at this time
+	// (authDone); authGuard drops the next keys for a moment.
+	authClosed time.Time
+	qr         *qrBox // QR code login running: passive overlay
 	// self : identity of the account per network (EvReady). Zero value while
 	// the network has not answered yet — id 0 owns nothing, name empty, not a
 	// bot, which is what the interface showed before any connection.
@@ -1737,6 +1740,9 @@ func (u *UI) history(e model.EvHistory) {
 	}
 	w := u.ws.List[i]
 	w.Loading = false
+	if !e.Older || e.Err != "" { // not the page of a hole: a later page asks it again
+		w.fillAsked = 0
+	}
 	if e.Err != "" {
 		if e.Err != w.histErr {
 			w.AddSys(i18n.T("history_error", e.Err))
@@ -1751,11 +1757,16 @@ func (u *UI) history(e model.EvHistory) {
 	for k := range e.Msgs {
 		ptrs[k] = &e.Msgs[k]
 	}
+	below, gaps := 0, w.fillGaps()
+	if len(ptrs) > 0 {
+		below = w.heldBelow(ptrs[0].ID)
+	}
 	if e.Around {
 		w.MergeAround(ptrs, e.Started)
 	} else {
 		w.Merge(ptrs, e.Started)
 	}
+	u.markHole(w, e, ptrs, below, gaps)
 	u.markDirty(key)
 	if e.Done {
 		w.Full = true
@@ -1827,6 +1838,68 @@ func (u *UI) history(e model.EvHistory) {
 		default:
 			u.loadAround(w, u.jump.msgID)
 		}
+	}
+	// The next page of a hole (markHole), the newest hole first. One load at
+	// a time: the next one goes when this page is in, at the pace of the
+	// network (its FLOOD_WAIT guard). The same hole is not asked twice for
+	// one answer; a page in error stops the fill until the next page of the
+	// window comes (reconnection, scroll, sync). A hole whose old side left
+	// the window (its cap, /clear) is not loaded: it is the top of the
+	// window, and the scroll goes on from there.
+	if !w.Loading {
+		for _, g := range slices.Backward(w.fillGaps()) {
+			if itemByID(w, g[0]) == nil {
+				continue
+			}
+			if g[1] != w.fillAsked {
+				w.fillAsked = g[1]
+				u.loadHistory(w, g[1])
+			}
+			break
+		}
+	}
+}
+
+// markHole marks the hole a history page leaves, for history() to load it.
+// A full page (the network has older messages) of the recent messages or of
+// the sync whose oldest message the window did not hold leaves a hole
+// between it and below, the newest message the window held under it (a live
+// message that came meanwhile can be above the page). An older page that
+// holds an id of a hole (gaps: the holes before the merge) or its old side is
+// the answer for it: full and above the old side, it leaves the rest of the
+// hole; otherwise the hole is closed. A page centred on a message (Around)
+// inside a hole leaves a hole on each side. Only on a network that keeps the
+// history: nothing would fill it elsewhere (IRC). The marker reaches the
+// disk cache as Msg.HoleBelow (Window.Msgs): a stop before the fill ends
+// loses nothing, and the next start marks the hole again (bindChat).
+// ponytail: ids say nothing about what lies between two messages: a page
+// that ends just on the old side gives one more load, which closes the hole.
+// If that old side was deleted on the server meanwhile, the answer holds no
+// id of the hole and the marker stays (fillAsked stops a loop).
+func (u *UI) markHole(w *Window, e model.EvHistory, ptrs []*model.Msg, below int, gaps [][2]int) {
+	if len(ptrs) == 0 || !u.caps(w.Chat).History {
+		return
+	}
+	full := !e.Done && (!e.Since || len(ptrs) >= syncLimit) // a sync page never says Done
+	first, last := ptrs[0].ID, ptrs[len(ptrs)-1].ID
+	hi := max(first, w.OldestID()) // the oldest message of the page the window kept (its cap cuts the head)
+	if e.Older || e.Around {
+		for _, g := range gaps {
+			if !slices.ContainsFunc(ptrs, func(m *model.Msg) bool { return m.ID >= g[0] && m.ID < g[1] }) {
+				continue // a page above the oldest message (scroll), or a jump: not for this hole
+			}
+			w.Items = slices.DeleteFunc(w.Items, func(it *Item) bool { return it.fill && it.gap == g })
+			if (full || e.Around) && first > g[0] && hi <= last {
+				w.markGap(g[0], hi, true)
+			}
+			if e.Around && last < g[1] {
+				w.markGap(last, g[1], true)
+			}
+		}
+		return
+	}
+	if full && below != 0 && hi <= last {
+		w.markGap(below, hi, true)
 	}
 }
 
@@ -2310,6 +2383,9 @@ func (u *UI) key(k term.Key) {
 		u.markRead(u.view())
 		return
 	}
+	if u.authGuard(k) {
+		return
+	}
 	if u.prompt != nil {
 		u.authKey(k)
 		return
@@ -2568,6 +2644,7 @@ func (u *UI) openPicker(c *model.Chat, onPick func(string)) {
 func (u *UI) submit() {
 	if p := u.prompt; p != nil { // login answer, never in the history
 		line := u.ed.String()
+		u.ed = Editor{} // answered: no typed text left for authDone to guard
 		ctx := u.netContext(u.promptNet)
 		u.authDone(u.promptNet)
 		go func() {
@@ -2856,12 +2933,19 @@ func (u *UI) candidates(word string, atStart bool) []string {
 	case complWords:
 		return argWords[setKey]
 	case complPath:
-		// The editor completes its last word; a path with a space is longer
-		// than that word, so the candidates are cut to the part after the
-		// last space of what was typed.
+		// The editor completes its last word; a quoted path with a space is
+		// longer than that word, so the candidates are cut to the part after
+		// the last space of what was typed. In quotes, a file closes them.
 		cut := len(tail) - len(word)
+		p, quoted := strings.CutPrefix(tail, `"`)
 		var out []string
-		for _, c := range pathCandidates(tail) {
+		for _, c := range pathCandidates(p) {
+			if quoted {
+				c = `"` + c
+				if !strings.HasSuffix(c, "/") {
+					c += `"`
+				}
+			}
 			if len(c) >= cut {
 				out = append(out, c[cut:])
 			}

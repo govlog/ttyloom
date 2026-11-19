@@ -195,6 +195,7 @@ func (c *Client) onMessage(ctx context.Context, mc tg.MessageClass, ent peer.Ent
 		c.fills[k] = seq
 	}
 	c.mu.Unlock()
+	cc := *chat // before the post: after it, the UI owns chat and writes it (stampChat)
 	if edit {
 		c.Post(model.EvEditMessage{Msg: m})
 	} else {
@@ -203,7 +204,6 @@ func (c *Client) onMessage(ctx context.Context, mc tg.MessageClass, ent peer.Ent
 	if fill {
 		q := *m.Reply // a quote of its own: the UI holds the one posted
 		m.Reply = &q
-		cc := *chat // the UI writes the chat it was posted with
 		go c.fillLater(ctx, &cc, m, k, seq)
 	}
 	return nil

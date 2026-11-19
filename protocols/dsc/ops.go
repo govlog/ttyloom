@@ -508,19 +508,32 @@ func (c *Client) history(ctx context.Context, name string, chat *model.Chat, ev 
 		// shown here, and on the store copy an edit or a reaction re-converts
 		// later.
 		//
-		// The order is the one the store takes: it only adds a message newer
-		// than its first one or older than its last, so a page above what it
-		// holds goes in oldest first (the page comes newest first), and an
-		// older page newest first.
+		// The store holds one run of messages, newest first, and adds a message
+		// only at one end of it: newer than its first one (at its limit of 100,
+		// the oldest one goes), or older than its last one (refused at the
+		// limit). It drops a message in between. So the page (newest first)
+		// goes in at both ends: its messages newer than the head oldest first,
+		// then its messages older than the tail newest first. A message in
+		// between is already held when the page overlaps the run. A jump page
+		// that does not reach the tail stays out: glued below it, it would
+		// leave a hole the store cannot see, and the store would drop every
+		// message of the hole later, the newest page included.
 		for i := range ms {
 			ms[i].GuildID = guild
 		}
-		for i := range ms {
-			j := len(ms) - 1 - i
-			if ev.Older {
-				j = i
+		cab := c.state().Cabinet
+		held, _ := cab.Messages(chID)
+		for i := len(ms) - 1; i >= 0; i-- {
+			if len(held) == 0 || ms[i].ID > held[0].ID {
+				cab.MessageSet(&ms[i], false)
 			}
-			c.state().Cabinet.MessageSet(&ms[j], false)
+		}
+		if n := len(held); n > 0 && len(ms) > 0 && (!ev.Around || ms[0].ID >= held[n-1].ID) {
+			for i := range ms {
+				if ms[i].ID < held[n-1].ID {
+					cab.MessageSet(&ms[i], false)
+				}
+			}
 		}
 		ms = newerThan(ms, minID)
 		ev.Msgs = c.msgsOf(ms)
@@ -729,13 +742,29 @@ func (c *Client) Typing(ctx context.Context, chat *model.Chat, cancel bool) {
 	}()
 }
 
-// MarkRead acks the channel up to maxID. The state sends the ack itself and
-// gives no error back — same fire and forget as tgc.
-func (c *Client) MarkRead(_ context.Context, chat *model.Chat, maxID int) {
+// MarkRead acks the channel up to maxID — same fire and forget as tgc. ningen
+// moves the read state, then acks only a message its store holds (it reads
+// the author there: never an ack of my own message). A window marks its last
+// cached message read before the REST page fills the store, so on a store miss
+// the ack goes from here, with the other rules of ningen: an empty ack, and
+// none when the read state is already there with no mention left. "There" is
+// at maxID or past it (another device read further): an ack of an older
+// message could only move the read mark back.
+func (c *Client) MarkRead(ctx context.Context, chat *model.Chat, maxID int) {
 	go func() {
 		defer c.Guard("MarkRead", nil)
 		chID, _ := ids(chat)
-		c.state().ReadState.MarkRead(chID, discord.MessageID(maxID))
+		mid := discord.MessageID(maxID)
+		st := c.state()
+		_, miss := st.Cabinet.Message(chID, mid)
+		// ReadState gives the record of ningen itself, read with no lock, as
+		// readOf and ningen (ChannelIsUnread) do.
+		rs := st.ReadState.ReadState(chID)
+		marked := rs != nil && rs.LastMessageID >= mid && rs.MentionCount == 0
+		st.ReadState.MarkRead(chID, mid)
+		if miss != nil && !marked {
+			c.rest(ctx).Ack(chID, mid, &api.Ack{})
+		}
 	}()
 }
 

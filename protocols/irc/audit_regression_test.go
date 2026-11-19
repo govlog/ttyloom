@@ -354,6 +354,108 @@ func TestRegressionOutputPaced(t *testing.T) {
 	}
 }
 
+// IRC-1: a message sent while a paste is paced goes out after the whole
+// paste. Other users must not see the paste cut in two.
+func TestRegressionSendAfterPacedPaste(t *testing.T) {
+	was := outFill
+	outFill = 50 * time.Millisecond
+	t.Cleanup(func() { outFill = was })
+	c, s, events, _ := start(t, Config{}, false)
+	c.Send(context.Background(), chatOf("#go"), "a1\na2\na3\na4\na5\na6\na7\na8", 1)
+	for range outBurst { // the burst is out, a5 to a8 wait for their tokens
+		s.expect("PRIVMSG #go")
+	}
+	c.Send(context.Background(), chatOf("#go"), "B", 2)
+	var got []string
+	for range 5 {
+		got = append(got, strings.TrimPrefix(s.expect("PRIVMSG #go"), "PRIVMSG #go "))
+	}
+	if want := []string{"a5", "a6", "a7", "a8", "B"}; !slices.Equal(got, want) {
+		t.Fatalf("wire order after the burst: %v, want %v (B inside the paste)", got, want)
+	}
+	for _, tmp := range []int64{1, 2} {
+		if e := waitFor[model.EvSent](t, events); e.TmpID != tmp || e.Err != "" || e.ID == 0 {
+			t.Fatalf("receipt: %+v, want tmp %d with an id", e, tmp)
+		}
+	}
+}
+
+// IRC-1: messages and commands typed in quick succession go out in the order
+// they were typed, past the burst of the pacer too.
+func TestRegressionQuickSendsKeepOrder(t *testing.T) {
+	was := outFill
+	outFill = 5 * time.Millisecond
+	t.Cleanup(func() { outFill = was })
+	c, s, _, _ := start(t, Config{}, false)
+	var want []string
+	for i := range 12 {
+		text := string(rune('a' + i))
+		if i%3 == 2 { // a command among the messages
+			cmd(c, 0, "#go", "notice", "#go "+text)
+			want = append(want, "NOTICE #go "+text)
+		} else {
+			c.Send(context.Background(), chatOf("#go"), text, int64(i+1))
+			want = append(want, "PRIVMSG #go "+text)
+		}
+	}
+	var got []string
+	for range want {
+		got = append(got, s.lineWithin(5*time.Second, "PRIVMSG #go ", "NOTICE #go "))
+	}
+	if !slices.Equal(got, want) {
+		t.Fatalf("wire order: %q, want %q", got, want)
+	}
+}
+
+// IRC-1: a send that fails in the middle posts its error once and drops the
+// rest of its lines; the send after it still goes out.
+func TestRegressionFailedSendFreesQueue(t *testing.T) {
+	c, s, events, _ := start(t, Config{}, false)
+	c.Send(context.Background(), chatOf("#go"), "ok\nbad\x00\nlost", 1) // NUL: the line cannot be written
+	c.Send(context.Background(), chatOf("#go"), "next", 2)
+	got := []string{s.expect("PRIVMSG #go"), s.expect("PRIVMSG #go")}
+	slices.Sort(got)
+	if want := []string{"PRIVMSG #go next", "PRIVMSG #go ok"}; !slices.Equal(got, want) {
+		t.Fatalf("lines: %q, want %q", got, want)
+	}
+	s.never("PRIVMSG #go lost", 100*time.Millisecond)
+	sent := map[int64]model.EvSent{}
+	for range 2 {
+		e := waitFor[model.EvSent](t, events)
+		if _, twice := sent[e.TmpID]; twice {
+			t.Fatalf("second receipt for tmp %d: %+v", e.TmpID, e)
+		}
+		sent[e.TmpID] = e
+	}
+	if e := sent[1]; e.Err == "" || e.ID != 0 {
+		t.Fatalf("failed send: %+v, want an error and no id", e)
+	}
+	if e := sent[2]; e.Err != "" || e.ID == 0 {
+		t.Fatalf("send after the failed one: %+v, want an id", e)
+	}
+}
+
+// A send given up while it waits behind a paste (its context ends: the chat
+// closed, the network stopped) never goes out and answers with that error.
+func TestRegressionCancelledSendDropped(t *testing.T) {
+	was := outFill
+	outFill = 50 * time.Millisecond
+	t.Cleanup(func() { outFill = was })
+	c, s, events, _ := start(t, Config{}, false)
+	c.Send(context.Background(), chatOf("#go"), "1\n2\n3\n4\n5\n6", 1)
+	ctx, cancel := context.WithCancel(context.Background())
+	c.Send(ctx, chatOf("#go"), "gone", 2)
+	cancel()
+	e := waitFor[model.EvSent](t, events)
+	for e.TmpID != 2 {
+		e = waitFor[model.EvSent](t, events)
+	}
+	if e.Err != context.Canceled.Error() {
+		t.Fatalf("cancelled send: %+v, want the error %q", e, context.Canceled)
+	}
+	s.never("PRIVMSG #go gone", 100*time.Millisecond)
+}
+
 // A MOTD that never ends is kept to maxGather lines.
 func TestRegressionMotdBounded(t *testing.T) {
 	_, s, events, _ := start(t, Config{}, false)

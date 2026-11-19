@@ -33,6 +33,9 @@ import (
 // keeps its first attachment alone until the network sends it again (the
 // recent page of a conversation does at its opening). Bump to 4 if they must
 // all show at once.
+//
+// Msg.HoleBelow came with no new version either: gob reads an older file
+// with it false (no hole known, as before), and an older binary skips it.
 const cacheVersion = 3
 
 // defaultMaxHistory : messages kept per chat when New gets max <= 0 (older

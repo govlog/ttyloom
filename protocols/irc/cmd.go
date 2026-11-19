@@ -41,8 +41,9 @@ var usages = map[string]string{
 // Command runs one slash command from the UI. reply: chat of the window it
 // was typed in (0 = window 0); room: the channel of that window, if any.
 // One token of the output pacer per command: a run of them is a flood too.
+// A command waits in the output queue, in turn with the messages.
 func (c *Client) Command(ctx context.Context, reply int64, room, name string, args []string, text string) {
-	go func() {
+	c.queue(func() {
 		defer c.Guard("Command", nil)
 		err := c.pace(ctx)
 		if err == nil {
@@ -51,7 +52,7 @@ func (c *Client) Command(ctx context.Context, reply int64, room, name string, ar
 		if err != nil {
 			c.Post(model.EvLines{ChatID: reply, Lines: []string{err.Error()}})
 		}
-	}()
+	})
 }
 
 // roomArg : the room named first in args, else the room of the window; the

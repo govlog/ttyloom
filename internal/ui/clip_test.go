@@ -30,16 +30,42 @@ func TestPasteImageName(t *testing.T) {
 	}
 }
 
-func TestSplitSendArgs(t *testing.T) {
-	exists := func(p string) bool { return p == "/tmp/mon image.png" }
-	if p, c := splitSendArgs("/tmp/mon image.png une légende", exists); p != "/tmp/mon image.png" || c != "une légende" {
-		t.Fatalf("path with spaces: %q / %q", p, c)
+// A path with a space goes in double quotes: /send sends that file, never a
+// shorter path that also exists, and the rest of the line is the caption.
+func TestRegressionSendQuotedPath(t *testing.T) {
+	dir := t.TempDir()
+	for _, n := range []string{"report", "report final.pdf"} {
+		if err := os.WriteFile(filepath.Join(dir, n), []byte("x"), 0o600); err != nil {
+			t.Fatal(err)
+		}
 	}
-	if p, c := splitSendArgs("/tmp/mon image.png", exists); p != "/tmp/mon image.png" || c != "" {
-		t.Fatalf("path alone: %q / %q", p, c)
+	u, b, room, _ := queryUI()
+	u.goTo(u.ws.ForChat(room.Key()))
+	input(u, `/send "`+dir+`/report final.pdf" for you`)
+	w := u.winFor(room)
+	if b.file != 1 || len(w.Items) != 1 || w.Items[0].Msg == nil || w.Items[0].Msg.Media == nil {
+		t.Fatalf("one file must go: %d SendFile call(s), %d line(s): %q", b.file, len(w.Items), lastSys(w))
 	}
-	if p, c := splitSendArgs("/tmp/absent.png bla", exists); p != "/tmp/absent.png bla" || c != "" {
-		t.Fatalf("nonexistent: %q / %q", p, c)
+	m := w.Items[0].Msg
+	if !strings.Contains(m.Media.Label, "report final.pdf") || m.Text != "for you" {
+		t.Fatalf("sent %q with caption %q, want report final.pdf with caption %q", m.Media.Label, m.Text, "for you")
+	}
+}
+
+// Without quotes the path is the first word: when it does not exist and more
+// text follows, the error tells the user to quote the path.
+func TestRegressionSendSpaceAsksQuotes(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "my file.pdf"), []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	u, b, room, _ := queryUI()
+	u.goTo(u.ws.ForChat(room.Key()))
+	w := u.view()
+	input(u, "/send "+dir+"/my file.pdf")
+	got := lastSys(w)
+	if b.file != 0 || !strings.Contains(got, dir+"/my") || !strings.Contains(got, `"`) {
+		t.Fatalf("unquoted path with a space: %d SendFile call(s), message %q; want an error that names %q and shows the double quotes", b.file, got, dir+"/my")
 	}
 }
 

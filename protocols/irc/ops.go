@@ -66,9 +66,9 @@ func (c *Client) SendAction(ctx context.Context, chat *model.Chat, segs []model.
 
 // sendLines : one PRIVMSG per line, paced (a pasted text is many lines); the
 // receipt unpends the local line (no server echo on IRC: the UI keeps what
-// it has).
+// it has). All the lines go out before the next send (queue).
 func (c *Client) sendLines(ctx context.Context, name string, chat *model.Chat, lines []string, tmpID int64) {
-	go func() {
+	c.queue(func() {
 		defer c.Guard(name, func(err string) { c.Post(model.EvSent{ChatID: chat.ID, TmpID: tmpID, Err: err}) })
 		to := nameOf(chat)
 		for _, line := range lines {
@@ -82,7 +82,7 @@ func (c *Client) sendLines(ctx context.Context, name string, chat *model.Chat, l
 			}
 		}
 		c.Post(model.EvSent{ChatID: chat.ID, TmpID: tmpID, ID: c.ids.next()})
-	}()
+	})
 }
 
 func (c *Client) Send(ctx context.Context, chat *model.Chat, text string, tmpID int64) {

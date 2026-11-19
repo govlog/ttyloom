@@ -66,6 +66,8 @@ type Client struct {
 
 	out  *pacer // user-initiated lines: burst outBurst, then one every outFill
 	ctcp *pacer // CTCP answers: burst 3, one every 2 s
+	// wake, cap 1: a job was put in outQ (pace.go).
+	wake chan struct{}
 
 	mu       sync.Mutex
 	channels []string                     // rooms to be in, "#room" or "#room key": the config list, joined at each connection
@@ -82,6 +84,8 @@ type Client struct {
 	motd     []string             // MOTD lines gathered until 376/422
 	ignores  []string             // /ignore masks, nick!user@host with * and ?
 	pings    map[string]time.Time // folded nick -> CTCP PING sent at
+	outQ     []func()             // sends of the user that wait for the worker of Run, oldest first
+	outDone  bool                 // the worker of Run has ended: queue runs a job on its own
 	ready    bool                 // EvReady posted (once per Run)
 	up       bool                 // connected() ran on this connection: a /motd ends with 376 too
 	sock     net.Conn
@@ -100,7 +104,7 @@ type whoisReq struct {
 // connection is there for it, never a nil one Run has not set yet.
 func New(cfg Config, events chan<- model.Event) *Client {
 	c := &Client{Poster: model.Poster{Events: events}, cfg: cfg,
-		out: newPacer(outBurst, outFill), ctcp: newPacer(3, 2*time.Second),
+		out: newPacer(outBurst, outFill), ctcp: newPacer(3, 2*time.Second), wake: make(chan struct{}, 1),
 		members: map[string]map[string]string{}, names: map[string][]string{}, queries: map[string]string{},
 		joining: map[string][]model.EvChat{}, naming: map[string]*model.Chat{}, whois: map[string]*whoisReq{},
 		offers: map[string]dccOffer{}, asked: map[string]int64{}, pings: map[string]time.Time{}}
@@ -212,6 +216,19 @@ func (c *Client) password() string {
 // Run connects (blocking until 001, the error of a first connection is the
 // error of Run), then reconnects on its own until ctx ends.
 func (c *Client) Run(ctx context.Context) error {
+	// The worker of the output queue lives as long as Run: each way out of
+	// Run stops it and waits for it. It stops when Run returns, not when ctx
+	// ends: a job queued after it must find the connection down.
+	wctx, stopWork := context.WithCancel(context.Background())
+	worked := make(chan struct{})
+	go func() {
+		defer close(worked)
+		c.work(wctx)
+	}()
+	defer func() {
+		stopWork()
+		<-worked
+	}()
 	if ctx.Err() != nil {
 		return nil // a launch already given up (a logout during the token read)
 	}

@@ -56,15 +56,22 @@ const (
 	// first — a 4 MB PNG can claim 65535x65535. Same guard as fetchTile
 	// (osm.go) on the OSM side.
 	maxPixels = 40 << 20
+	// maxSide : longest side of an image, in px. The scaler keeps 1 px of
+	// output width at least, and it pays 32 bytes of temporary per source row
+	// plus 64 bytes of weights per source row and column, whatever the pixel
+	// count: a 1x8388608 PNG of 32 KB took 776 MB in Load. Up to this side
+	// the extra stays near 3 MB (a 1x32768 PNG takes 4 MB in Load). A long
+	// screenshot (1170x12000), an 8K screenshot or a panorama still loads.
+	maxSide = 1 << 15
 	// Limit the canvas and the input frame count before gif.DecodeAll.
 	// Paletted frames use one byte per pixel.
 	maxGIFPixels = maxPixels * 4 / maxFrames
 )
 
 // checkPixels refuses the dimensions announced by a header before the
-// decoding allocates for them.
+// decoding allocates for them: more than maxPx pixels, or a side over maxSide.
 func checkPixels(w, h, maxPx int) error {
-	if w <= 0 || h <= 0 || w > maxPx || h > maxPx || w > maxPx/h {
+	if w <= 0 || h <= 0 || w > maxSide || h > maxSide || w > maxPx/h {
 		return fmt.Errorf(i18n.T("image_too_big"), w, h)
 	}
 	return nil
@@ -452,6 +459,34 @@ func gifPreview(ctx context.Context, f *os.File) (io.Reader, error) {
 	return io.MultiReader(io.NewSectionReader(f, 0, end), strings.NewReader(";")), err
 }
 
+// sideRotation : the ffprobe entry that reads the rotation of a stream. Only
+// an ffprobe that knows it (FFmpeg 5.1 and later) gets it: an older one
+// refuses an unknown section, and every video would fail. With an old
+// ffprobe a rotated video keeps its stored size.
+var sideRotation = sync.OnceValue(func() string {
+	out, err := exec.Command("ffprobe", "-hide_banner", "-sections").Output()
+	if err != nil || !bytes.Contains(out, []byte("/stream_side_data\n")) {
+		return ""
+	}
+	return ":stream_side_data=rotation"
+})
+
+// upright gives the size shown of a video stream stored at w x h. ffmpeg
+// turns the frames by the rotation of the stream before the filters, so a
+// quarter turn swaps the sides. line is the stream line of ffprobe: from its
+// field n on, one field per side data of the stream (sideRotation), its
+// rotation in degrees or empty. A field that is not an integer is not a
+// rotation and changes nothing.
+func upright(w, h int, line string, n int) (int, int) {
+	fs := strings.Split(line, ",")
+	for _, f := range fs[min(n, len(fs)):] {
+		if r, err := strconv.Atoi(f); err == nil && (r%180 == 90 || r%180 == -90) {
+			return h, w
+		}
+	}
+	return w, h
+}
+
 // loadVideo : fixed arguments, never a shell. The raw output is read as it
 // comes and encoded to PNG here (no PNG encoder on the ffmpeg side to parse).
 func loadVideo(ctx context.Context, path string, maxW, maxH, frames int, progress func(*Frames)) (*Frames, error) {
@@ -462,16 +497,18 @@ func loadVideo(ctx context.Context, path string, maxW, maxH, frames int, progres
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
 	out, err := exec.CommandContext(ctx, "ffprobe", "-v", "error", "-select_streams", "v:0",
-		"-show_entries", "stream=codec_name,width,height,r_frame_rate", "-of", "csv=p=0", "-protocol_whitelist", "file,pipe", "-i", path).Output()
+		"-show_entries", "stream=codec_name,width,height,r_frame_rate"+sideRotation(), "-of", "csv=p=0", "-protocol_whitelist", "file,pipe", "-i", path).Output()
 	if err != nil {
 		return nil, fmt.Errorf(i18n.T("ffprobe_error"), err)
 	}
-	codec, dims, _ := strings.Cut(strings.TrimSpace(string(out)), ",")
+	line := strings.TrimSpace(string(out))
+	codec, dims, _ := strings.Cut(line, ",")
 	var w, h, num, den int
 	n, _ := fmt.Sscanf(dims, "%d,%d,%d/%d", &w, &h, &num, &den)
 	if n < 2 || w <= 0 || h <= 0 {
 		return nil, fmt.Errorf(i18n.T("ffprobe_output"), out)
 	}
+	w, h = upright(w, h, line, 4)
 	if err := checkPixels(w, h, maxPixels); err != nil {
 		return nil, err
 	}
@@ -542,18 +579,19 @@ func ProbeVideo(ctx context.Context, path string) (w, h int, dur time.Duration, 
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 	out, err := exec.CommandContext(ctx, "ffprobe", "-v", "error", "-select_streams", "v:0",
-		"-show_entries", "stream=width,height:format=duration", "-of", "csv=p=0", "-protocol_whitelist", "file,pipe", "-i", path).Output()
+		"-show_entries", "stream=width,height"+sideRotation()+":format=duration", "-of", "csv=p=0", "-protocol_whitelist", "file,pipe", "-i", path).Output()
 	if err != nil {
 		return 0, 0, 0, fmt.Errorf(i18n.T("ffprobe_error"), err)
 	}
-	// Two lines at most: "w,h" for the video stream — missing for a sound
-	// file — then the length in seconds. The order is fixed by ffprobe but
-	// each line is recognised on its own shape, not on its rank.
+	// Two lines at most: "w,h" and the rotation fields for the video stream —
+	// missing for a sound file — then the length in seconds. The order is
+	// fixed by ffprobe but each line is recognised on its own shape, not on
+	// its rank.
 	for _, ln := range strings.Split(string(out), "\n") {
 		ln = strings.TrimSpace(ln)
 		var a, b int
 		if n, _ := fmt.Sscanf(ln, "%d,%d", &a, &b); n == 2 {
-			w, h = a, b
+			w, h = upright(a, b, ln, 2)
 		} else if s, e := strconv.ParseFloat(ln, 64); e == nil && s > 0 {
 			dur = time.Duration(s * float64(time.Second))
 		}

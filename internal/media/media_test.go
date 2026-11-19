@@ -2,9 +2,11 @@ package media
 
 import (
 	"bytes"
+	"compress/zlib"
 	"context"
 	"encoding/base64"
 	"encoding/binary"
+	"fmt"
 	"hash/crc32"
 	"image"
 	"image/color"
@@ -15,6 +17,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"sync/atomic"
@@ -283,6 +286,52 @@ func pngHeader(w, h uint32, depth, kind byte) []byte {
 	return out.Bytes()
 }
 
+// zeroPNG writes a black greyscale PNG of w x h px and gives its path. The
+// chunks are made here: png.Encode writes row by row and takes seconds under
+// -race for millions of rows.
+func zeroPNG(t *testing.T, w, h int) string {
+	t.Helper()
+	var idat bytes.Buffer
+	z, _ := zlib.NewWriterLevel(&idat, zlib.BestSpeed)
+	z.Write(make([]byte, h*(1+w))) // each row: filter byte 0, then black pixels
+	z.Close()
+	b := pngHeader(uint32(w), uint32(h), 8, 0)
+	for _, c := range [][]byte{append([]byte("IDAT"), idat.Bytes()...), []byte("IEND")} {
+		b = binary.BigEndian.AppendUint32(b, uint32(len(c)-4))
+		b = binary.BigEndian.AppendUint32(append(b, c...), crc32.ChecksumIEEE(c))
+	}
+	p := filepath.Join(t.TempDir(), "a.png")
+	if err := os.WriteFile(p, b, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
+// TestLoadRefusesThinImage : the scaler keeps 1 px of width at least and
+// pays per source row and column, so a 1x8388608 PNG of 32 KB took 776 MB in
+// Load. Such a shape is refused on its header; a long screenshot still loads.
+func TestLoadRefusesThinImage(t *testing.T) {
+	for _, d := range [][2]int{{1, 8 << 20}, {8 << 20, 1}, {2, 4 << 20}} {
+		p := zeroPNG(t, d[0], d[1])
+		size := fmt.Sprintf("%dx%d", d[0], d[1])
+		runtime.GC()
+		var before, after runtime.MemStats
+		runtime.ReadMemStats(&before)
+		_, err := Load(context.Background(), p, "image/png", 600, 220, 1)
+		runtime.ReadMemStats(&after)
+		if mb := (after.TotalAlloc - before.TotalAlloc) >> 20; mb > 16 {
+			t.Errorf("%s PNG: Load allocated %d MB, want 16 MB at most", size, mb)
+		}
+		if err == nil || !strings.Contains(err.Error(), size) {
+			t.Errorf("%s PNG: err %v, want the size refused", size, err)
+		}
+	}
+	fr, err := Load(context.Background(), zeroPNG(t, 1170, 12000), "image/png", 600, 220, 1)
+	if err != nil || len(fr.PNG) != 1 {
+		t.Fatalf("1170x12000 screenshot in a 600x220 box: %v, err %v; want one picture", fr, err)
+	}
+}
+
 // TestLoadRefusesPixelBomb : a 4 KB header claiming 65535x65535 (4 GB once
 // decoded) is refused on the announced size, before any allocation.
 func TestLoadRefusesPixelBomb(t *testing.T) {
@@ -407,6 +456,48 @@ func TestVideoProbeDoesNotFollowNetworkPlaylist(t *testing.T) {
 	}
 	if requests.Load() != 0 {
 		t.Fatalf("media probe made %d network requests", requests.Load())
+	}
+}
+
+// A phone video is often stored in landscape with a tag that turns it to
+// portrait. ffmpeg turns the frames before it scales them, so Load and
+// ProbeVideo give the size shown, not the size stored. A side data with no
+// rotation in it (stereo 3D here) changes nothing.
+func TestVideoSizeFollowsRotation(t *testing.T) {
+	if !HaveFFmpeg {
+		t.Skip("ffmpeg not available")
+	}
+	dir := t.TempDir()
+	p := func(name string) string { return filepath.Join(dir, name) }
+	for _, args := range [][]string{
+		{"-f", "lavfi", "-i", "testsrc=duration=0.3:size=64x32:rate=10", "-pix_fmt", "yuv420p", p("plain.mp4")},
+		{"-display_rotation", "90", "-i", p("plain.mp4"), "-c", "copy", p("r90.mp4")},
+		{"-display_rotation", "180", "-i", p("plain.mp4"), "-c", "copy", p("r180.mp4")},
+		{"-display_rotation", "270", "-i", p("plain.mp4"), "-c", "copy", p("r270.mp4")},
+		{"-display_rotation", "-90", "-i", p("plain.mp4"), "-c", "copy", p("r-90.mp4")},
+		{"-i", p("plain.mp4"), "-c", "copy", "-metadata:s:v:0", "stereo_mode=left_right", p("stereo.mkv")},
+		{"-display_rotation", "90", "-i", p("plain.mp4"), "-c", "copy", "-metadata:s:v:0", "stereo_mode=left_right", p("stereo90.mkv")},
+	} {
+		if out, err := exec.Command("ffmpeg", append([]string{"-v", "error"}, args...)...).CombinedOutput(); err != nil {
+			t.Skipf("generation: %v %s", err, out)
+		}
+	}
+	for _, c := range []struct {
+		file string
+		w, h int
+	}{
+		{"plain.mp4", 64, 32}, {"r90.mp4", 32, 64}, {"r180.mp4", 64, 32}, {"r270.mp4", 32, 64},
+		{"r-90.mp4", 32, 64}, {"stereo.mkv", 64, 32}, {"stereo90.mkv", 32, 64},
+	} {
+		fr, err := Load(context.Background(), p(c.file), "video/mp4", 400, 400, 1)
+		if err != nil {
+			t.Errorf("%s: Load: %v", c.file, err)
+		} else if fr.W != c.w || fr.H != c.h {
+			t.Errorf("%s: Load gives %dx%d, want %dx%d", c.file, fr.W, fr.H, c.w, c.h)
+		}
+		if w, h, _, err := ProbeVideo(context.Background(), p(c.file)); err != nil || w != c.w || h != c.h {
+			t.Errorf("%s: ProbeVideo gives %dx%d (err %v), want %dx%d", c.file, w, h, err, c.w, c.h)
+		}
 	}
 }
 

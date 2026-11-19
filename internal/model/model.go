@@ -270,9 +270,13 @@ type Msg struct {
 	// (Telegram: a mention or a reply to me, not read yet).
 	Mentioned bool
 	// Action : IRC /me line; Text already reads "* nick does", so no <nick>.
-	Action  bool
-	Pending bool
-	Err     string
+	Action bool
+	// HoleBelow : the history between this message and the one before it in
+	// the disk cache is not loaded. Only the UI sets it (a backend never
+	// does): the cache keeps a hole marked until a window fills it.
+	HoleBelow bool
+	Pending   bool
+	Err       string
 }
 
 // Key : the chat the message belongs to, not the message itself.

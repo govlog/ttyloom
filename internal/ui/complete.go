@@ -106,9 +106,10 @@ func complContext(line string, cursor int, names cmdNames) (src complSource, tai
 		}
 		return complAliases, rest, ""
 	case "send":
-		// The whole tail: a path may hold spaces (splitSendArgs allows it);
-		// once it names a file, the rest is the caption.
-		if p, _ := splitSendArgs(rest, isFile); p != rest {
+		// The path as splitSendArgs reads it: the first word, or the text
+		// after an open double quote. Once it ends, the rest is the caption.
+		rest = strings.TrimLeft(rest, " ")
+		if p, _, quoted := splitSendArgs(rest); rest != p && !(quoted && rest == `"`+p) {
 			return complNone, "", ""
 		}
 		return complPath, rest, ""
@@ -128,12 +129,6 @@ func multiWord(word, tail string, names []string) []string {
 		}
 	}
 	return out
-}
-
-// isFile : the path names a regular file ("~" expanded).
-func isFile(p string) bool {
-	st, err := os.Stat(config.Expand(p))
-	return err == nil && st.Mode().IsRegular()
 }
 
 // pathCandidates : the entries of the directory of p whose name starts with
@@ -324,6 +319,13 @@ func (u *UI) completeTab() {
 			u.ed.Replace(0, cursor, list[0])
 			u.completion = &completionState{line: u.ed.String(), cursor: u.ed.Cursor(), matches: list, cycle: true}
 			return
+		}
+	}
+	if src == complPath && !strings.HasPrefix(tail, `"`) {
+		// The completion adds a space to the path: open a double quote in
+		// front of it first (splitSendArgs), the completion goes on inside.
+		if c := pathCandidates(tail); len(c) > 0 && strings.Contains(commonPrefix(c)[len(tail):], " ") {
+			u.ed.Replace(cursor-len([]rune(tail)), cursor, `"`+tail)
 		}
 	}
 	if (src == complChats || src == complMute) && tail == "" {

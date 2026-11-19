@@ -371,18 +371,21 @@ func placeholderMedia(path string, photo bool) *model.Media {
 	return md
 }
 
-// splitSendArgs handles /send <path> [caption]. The path can hold spaces: it
-// grows word by word until an existing file is found, and the rest is the
-// caption. No file found: everything is the path, and the error names it
-// whole.
-func splitSendArgs(args string, exists func(string) bool) (path, caption string) {
-	args = strings.TrimSpace(args)
-	for i, r := range args {
-		if r == ' ' && exists(args[:i]) {
-			return args[:i], strings.TrimSpace(args[i:])
-		}
+// splitSendArgs handles /send <path> [caption]. The path is the first word.
+// A path with a space goes in double quotes: the path is the text up to the
+// next double quote, or to the end of the line when no quote closes it. The
+// rest is the caption. quoted: the path was written in double quotes. The
+// disk is never read: the same line always gives the same path.
+// ponytail: no escape, so a name that holds a space and a double quote cannot
+// be sent; add \" in this function if a user needs it.
+func splitSendArgs(args string) (path, caption string, quoted bool) {
+	args = strings.TrimLeft(args, " ")
+	if rest, ok := strings.CutPrefix(args, `"`); ok {
+		path, caption, _ = strings.Cut(rest, `"`)
+		return path, strings.TrimSpace(caption), true
 	}
-	return args, ""
+	path, caption, _ = strings.Cut(args, " ")
+	return path, strings.TrimSpace(caption), false
 }
 
 // sendCmd : /send <path> [caption].
@@ -394,13 +397,14 @@ func (u *UI) sendCmd(w *Window, args string) {
 		w.AddSys(i18n.T("window_not_bound"))
 		return
 	}
-	path, caption := splitSendArgs(args, func(p string) bool {
-		st, err := os.Stat(config.Expand(p))
-		return err == nil && st.Mode().IsRegular()
-	})
+	path, caption, quoted := splitSendArgs(args)
 	path = config.Expand(path)
 	st, err := os.Stat(path)
 	if err != nil {
+		if caption != "" && !quoted { // "/send ~/my file.pdf": maybe a path with a space
+			w.AddSys(i18n.T("send_error_quote", err))
+			return
+		}
 		w.AddSys(i18n.T("send_error", err))
 		return
 	}

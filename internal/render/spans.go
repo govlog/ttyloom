@@ -161,19 +161,17 @@ func SafeURL(s string) bool {
 	return false
 }
 
-// sameLink tells whether the text of a link shows its target: the scheme and
-// a last "/" aside ("example.com" is https://example.com/), case ignored.
-func sameLink(text, target string) bool {
-	norm := func(s string) string {
-		s = strings.TrimSuffix(strings.ToLower(s), "/")
-		for _, p := range []string{"https://", "http://", "mailto:"} {
-			if t, ok := strings.CutPrefix(s, p); ok {
-				return t
-			}
+// linkKey : the text of a link shows its target when both give the same key:
+// the scheme and a last "/" aside ("example.com" is https://example.com/),
+// case ignored.
+func linkKey(s string) string {
+	s = strings.TrimSuffix(strings.ToLower(s), "/")
+	for _, p := range []string{"https://", "http://", "mailto:"} {
+		if t, ok := strings.CutPrefix(s, p); ok {
+			return t
 		}
-		return s
 	}
-	return norm(text) == norm(target)
+	return s
 }
 
 func hasControl(s string) bool {
@@ -196,17 +194,18 @@ func Runs(text string, ents []model.Span, base theme.Style, th theme.Theme) []Sp
 	}
 	quote := map[int]bool{}
 	preLead := map[int]bool{} // rank of the first rune of each line of a Pre block: "┃ " to put in front
+	// link : rune drawn in the link style, clickable or not.
+	link := make([]bool, len(runes))
 	for _, e := range ents {
 		ri, rj := max(0, e.Start), min(len(runes), e.End)
 		if ri >= rj {
 			continue
 		}
 		var url string
-		masked := false
 		switch e.Kind {
 		case model.SpanURL:
 			if SafeURL(e.URL) { // scheme and control characters: what goes out in OSC 8 and under xdg-open
-				url, masked = e.URL, !sameLink(string(runes[ri:rj]), e.URL)
+				url = e.URL
 			}
 		case model.SpanQuote:
 			quote[ri] = true
@@ -237,11 +236,33 @@ func Runs(text string, ents []model.Span, base theme.Style, th theme.Theme) []Sp
 				s.Dim, s.Italic = true, true
 			case model.SpanURL:
 				s.FG, s.Underline, s.Curly = th.Color(theme.Link), true, theme.Curly
+				link[i] = true
 				if url != "" {
-					s.URL, s.Masked = url, masked
+					s.URL = url
 				}
 			case model.SpanMention:
 				s.FG = th.Color(theme.Mention)
+			}
+		}
+	}
+	// The reader takes a run of adjacent link runes for one link, whatever
+	// entities it comes from: each part whose target is not that whole text
+	// is masked. Each run is read once, each target compared once per part.
+	for i := range runes {
+		if !link[i] || (i > 0 && link[i-1]) {
+			continue // not the first rune of a run
+		}
+		j := i
+		for j < len(runes) && link[j] {
+			j++
+		}
+		shown, last, masked := linkKey(string(runes[i:j])), "", false
+		for k := i; k < j; k++ {
+			if u := styles[k].URL; u != "" {
+				if u != last {
+					masked = linkKey(u) != shown
+				}
+				last, styles[k].Masked = u, masked
 			}
 		}
 	}

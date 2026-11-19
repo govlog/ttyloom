@@ -7,6 +7,7 @@ import (
 	"math"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/govlog/ttyloom/internal/i18n"
 	"github.com/govlog/ttyloom/internal/media"
@@ -138,7 +139,7 @@ func Message(m *model.Msg, o Opts) []Line {
 		bw, indent, prefix = o.Width-Width(tick), 0, nil
 	}
 
-	lines, mk, ra, quote := msgBody(body, o, bw)
+	lines, mk, quote := msgBody(body, o, bw)
 	// --- image block ---
 	if md := m.Media; md != nil && md.Kind == model.MediaWebPage {
 		o.MaxImgRows = min(o.MaxImgRows, MaxLinkRows) // link thumbnail: never a big picture, inline or on hover
@@ -172,6 +173,14 @@ func Message(m *model.Msg, o Opts) []Line {
 		paintMark(lines, th, sel)
 	}
 	// --- actions ---
+	// msgBody placed the reactions from the start of the body: the prefix or
+	// the indent, and the marker, push them by TextCol.
+	for i := mk.reactFirst; i < mk.reactLast; i++ {
+		for k := range lines[i].Actions {
+			lines[i].Actions[k].Col0 += lines[i].TextCol
+			lines[i].Actions[k].Col1 += lines[i].TextCol
+		}
+	}
 	// The tick of my messages is a hover zone (who read the message). After
 	// the selection marker: the columns count it.
 	if tick != "" && m.Out {
@@ -181,9 +190,6 @@ func Message(m *model.Msg, o Opts) []Line {
 	// The "│ …" line of a reply points back to the quoted message.
 	if mk.reply >= 0 && m.Reply.ID != 0 {
 		lines[mk.reply].Actions = actionsIn(lines[mk.reply], []Act{{KeyJump, quote, "", m.Reply.ID}})
-	}
-	for i := mk.reactFirst; i < mk.reactLast; i++ {
-		lines[i].Actions = actionsIn(lines[i], ra)
 	}
 	// A click on the label of a media with a file opens the menu of its file
 	// (view, copy, open); on the label of a map, the preview. A link preview
@@ -299,9 +305,9 @@ type msgMarks struct {
 
 // msgBody : the sections of a message (quote, forward, text or "deleted",
 // media label, error, reactions) wrapped to bw columns, with the marks the
-// actions need, the clickable reactions and the raw quote, which is the label
-// of its link back.
-func msgBody(m *model.Msg, o Opts, bw int) (lines []Line, mk msgMarks, ra []Act, quote string) {
+// actions need and the raw quote, which is the label of its link back. The
+// reaction lines carry their actions, columns from the start of the body.
+func msgBody(m *model.Msg, o Opts, bw int) (lines []Line, mk msgMarks, quote string) {
 	th := o.Theme
 	dim := th.Style(theme.Dim)
 	shown := !m.Deleted || o.Reveal // content of a deleted message: on reveal only
@@ -368,21 +374,28 @@ func msgBody(m *model.Msg, o Opts, bw int) (lines []Line, mk msgMarks, ra []Act,
 	if m.Err != "" {
 		sections = append(sections, []Span{{i18n.T("msg_failed", Clean(m.Err)), th.Style(theme.Error)}})
 	}
-	// ra : clickable reactions, placed after the columns are made.
+	// ra : clickable reactions, placed once the section is wrapped; the label
+	// of ra[k] starts at the rune at[k] of the section.
 	reactSec := -1
+	var ra []Act
+	var at []int
 	if len(m.Reactions) > 0 && shown {
 		ra = reactActs(m.Reactions)
 		accent := th.Style(theme.Accent)
 		var spans []Span
+		n := 0
 		for i, a := range ra {
 			if i > 0 {
 				spans = append(spans, Span{"  ", dim})
+				n += 2
 			}
 			st := dim
 			if m.Reactions[i].Mine {
 				st = accent
 			}
 			spans = append(spans, Span{a.Label, st})
+			at = append(at, n)
+			n += utf8.RuneCountInString(a.Label)
 		}
 		reactSec = len(sections)
 		sections = append(sections, spans)
@@ -393,10 +406,12 @@ func msgBody(m *model.Msg, o Opts, bw int) (lines []Line, mk msgMarks, ra []Act,
 
 	mk = msgMarks{reply: -1, label: -1, reactFirst: -1, reactLast: -1}
 	for i, sec := range sections {
+		ls := Wrap(sec, bw)
 		if i == reactSec {
 			mk.reactFirst = len(lines)
+			placeActs(ls, sec, ra, at)
 		}
-		lines = append(lines, Wrap(sec, bw)...)
+		lines = append(lines, ls...)
 		if i == reactSec {
 			mk.reactLast = len(lines)
 		}
@@ -408,7 +423,7 @@ func msgBody(m *model.Msg, o Opts, bw int) (lines []Line, mk msgMarks, ra []Act,
 			mk.reply = len(lines) - 1
 		}
 	}
-	return lines, mk, ra, quote
+	return lines, mk, quote
 }
 
 // msgImage : the media block of a message — the lines to add under the body, or
@@ -625,6 +640,40 @@ func actionsIn(l Line, acts []Act) []Action {
 		out = append(out, Action{Col0: col, Col1: col + Width(a.Label), Key: a.Key, Emoji: a.Emoji, ID: a.ID})
 	}
 	return out
+}
+
+// placeActs gives each act the columns of its label in the line of ls that
+// holds it whole, from the start of the line. It does not search the text:
+// ls is the Wrap of sec, and the label of acts[k] (never empty) starts at the
+// rune at[k] of sec. Wrap keeps the runes in order and drops only spaces and
+// breaks, so each rune of a line is the next rune of sec that is equal to it.
+// A label cut by the line break is not clickable.
+func placeActs(ls []Line, sec []Span, acts []Act, at []int) {
+	var text []rune
+	for _, sp := range sec {
+		text = append(text, []rune(sp.Text)...)
+	}
+	p, k := 0, 0 // next rune of text, next act
+	for i := range ls {
+		lr := []rune(LineText(ls[i]))
+		pos := make([]int, len(lr)) // rune of text that each rune of the line shows
+		for j, r := range lr {
+			for p < len(text) && text[p] != r {
+				p++ // a space or a break that Wrap dropped
+			}
+			pos[j], p = p, p+1
+		}
+		for j := 0; k < len(acts) && at[k] < p; k++ { // the labels that start up to the end of this line
+			a, n := acts[k], utf8.RuneCountInString(acts[k].Label)
+			for j < len(lr) && pos[j] < at[k] {
+				j++
+			}
+			if j+n <= len(lr) && pos[j] == at[k] && pos[j+n-1] == at[k]+n-1 { // all its runes, side by side
+				col := Width(string(lr[:j]))
+				ls[i].Actions = append(ls[i].Actions, Action{Col0: col, Col1: col + Width(a.Label), Key: a.Key, Emoji: a.Emoji, ID: a.ID})
+			}
+		}
+	}
 }
 
 // LineText : text of a line, styles flattened.

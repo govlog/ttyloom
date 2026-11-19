@@ -493,7 +493,7 @@ nicks, WHOIS and MOTD answers at 10000 lines.
 | `/irc connect <name>`, `/irc disconnect <name>` | Start or stop one network. |
 | `/irc delete <name>` | Stop one network, remove its `[[irc]]` table from `config.toml`, close its windows and drop its chats from the sidebar. Its cache directory stays on disk. |
 | `/dcc` | DCC offers waiting and transfers running. |
-| `/dcc send <nick> <path>` | Send a file straight to that person (DCC SEND), from an IRC window or tab, or with a single IRC network; `/send` in a private IRC chat does the same, without its caption. |
+| `/dcc send <nick> <path>` | Send a file straight to that person (DCC SEND), from an IRC window or tab, or with a single IRC network; `/send` in a private IRC chat does the same, without its caption. The rest of the line is the path; double quotes around it are accepted. |
 | `/dcc get [nick]` | Fetch the last offer of the window, or of that nick's chat; `o` on the selected file line fetches it too, then opens it. |
 
 DCC goes from client to client over TCP: the sender listens on `dcc_ip` when
@@ -745,7 +745,7 @@ because `/quit` shares that prefix. Exact aliases take precedence when executing
 | `l` on a downloaded video | With mpv: play over the whole terminal with sound, mpv keys apply, `q` comes back. Otherwise: play in the conversation without sound; press again to pause. |
 | `s` | Stop playback and return to the first frame. |
 | `/set video hidden` | Keep only video labels in the conversation; `show` previews one frame and `autoplay` loops visible downloaded videos. |
-| `/send path [caption]` | Send a local file of 2 GB at most. On Telegram, PNG/JPEG goes as a photo, a video or a sound file as a playable media with its ffprobe metadata, other formats as documents; on Discord, as an attachment; in a private IRC chat, by DCC SEND. Tab completes the path: `~`, relative paths and spaces work, a directory gets its `/` and the next Tab goes on inside it. |
+| `/send path [caption]` | Send a local file of 2 GB at most. On Telegram, PNG/JPEG goes as a photo, a video or a sound file as a playable media with its ffprobe metadata, other formats as documents; on Discord, as an attachment; in a private IRC chat, by DCC SEND. The path is the first word and the rest of the line is the caption. A path with a space goes in double quotes: `/send "~/my report.pdf" for you`. A double quote inside a name needs nothing special when the path has no quotes around it; a name with both a space and a double quote cannot be sent. Tab completes the path: `~` and relative paths work, a path with a space gets its double quotes, a directory gets its `/` and the next Tab goes on inside it. |
 | Ctrl+V | Paste an image through `wl-paste` or `xclip`, then `e` sends it, `l` adds a caption first, `a` or Escape cancels. Plain text goes into the editor. |
 | Ctrl+G, `/gif [query]` | Search animated GIF previews: Telegram’s `@gif` bot or Discord’s GIF provider (currently KLIPY). Images must be on (F4). Trends appear immediately; typing searches. Up to 24 previews show at a time, six by four rows; they download three at a time in grid order. Until its preview appears, a cell fills with grey bars as its bytes arrive (a band sweeps it when the size is unknown), stays full while it decodes, and says "waiting" before its turn; a smaller terminal shrinks the previews first, then shows fewer columns or rows. A scrollbar on the right, thicker under the pointer, shows the others: click it or drag its thumb. Only the preview under the mouse, or the one the arrows reached, plays. Arrows, PgUp/PgDn, Home/End, the wheel or the scrollbar move; Enter or a click sends; Escape closes. Tab, or a click on `Stickers` at the top, goes to the Stickers tab. |
 | Tab in Ctrl+G, `/sticker [query]` | The Stickers tab of the GIF box, on the same grid. Telegram: your recent and favorite stickers, then your installed packs, each one loaded when the list reaches it (one request at a time, to stay clear of FLOOD_WAIT); typing a word or an emoji asks Telegram for the stickers of that emoji (`joy` finds 😂). Discord: your favorite and most used stickers of the server, then all its stickers; typing filters them by name and tags. Outside a server, or for the stickers of another server, Discord asks for Nitro, which ttyloom does not handle. A Lottie sticker with no still picture is not offered. Enter or a click sends; Tab goes back to the GIFs. IRC has no stickers. |
@@ -825,7 +825,8 @@ is never opened: copy its path from the menu of its label. Downloads are
 created with mode `0600` in `0700` directories.
 
 Image decoding rejects still images over about 40 megapixels (20 for a 16-bit
-PNG) and animated GIF frames over about 1.6 megapixels. GIFs in the
+PNG) and animated GIF frames over about 1.6 megapixels. An image or a video
+with a side over 32,768 pixels is rejected too, whatever its pixel count. GIFs in the
 conversation decode at most 100 frames; the GIF picker at most 40 per preview.
 Videos use `video_inline_frames`, capped
 at 1,000 frames and 200 MiB of decoded PNG per operation. Off-screen decoded

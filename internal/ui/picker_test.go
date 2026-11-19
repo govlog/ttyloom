@@ -304,7 +304,7 @@ func TestEmojiCellSingleLine(t *testing.T) {
 // dialog list: without them the picker of an old chat would list none.
 func TestRememberCustoms(t *testing.T) {
 	old := &model.Chat{Net: "discord", ID: 5}
-	u := &UI{chats: map[model.ChatKey]*model.Chat{old.Key(): old}}
+	u := &UI{ws: NewWindows(), chats: map[model.ChatKey]*model.Chat{old.Key(): old}}
 	got := u.remember(&model.Chat{Net: "discord", ID: 5, Customs: []string{":emoji_7:"}})
 	if got != old || len(old.Customs) != 1 {
 		t.Fatalf("customs after remember = %v", old.Customs)

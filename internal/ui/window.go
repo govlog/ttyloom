@@ -43,7 +43,10 @@ type Item struct {
 	part bool
 	// gap : hole marker of the history — the two ids the hole lies between
 	// (see markGap). Zero on every other item.
-	gap   [2]int
+	gap [2]int
+	// fill : the UI loads the hole of this marker page by page (see
+	// UI.history). The hole of a jump (MergeAround) has no fill.
+	fill  bool
 	Text  []render.Line
 	w     int
 	lines []render.Line
@@ -88,6 +91,9 @@ type Window struct {
 	// histErr : last history error shown. Under a FLOOD_WAIT each page asked
 	// is refused: one line is enough.
 	histErr string
+	// fillAsked : upper id of the hole whose page was asked last (UI.history);
+	// 0 when no answer is due.
+	fillAsked int
 	// Search : result of /search on Chat, not a history. The window is invisible
 	// to ForChat (the live messages go to the window of the chat) and to the
 	// cache, and its *model.Msg are shared with the window of the chat.
@@ -337,24 +343,36 @@ func (w *Window) idRange() (lo, hi int) {
 
 // markGap puts the hole marker between the messages loID and hiID, which the
 // window now holds one after the other with everything between them missing.
-// Nothing is inserted twice for the same hole.
-func (w *Window) markGap(loID, hiID int) {
+// Nothing is inserted twice for the same hole. fill: see Item.fill.
+func (w *Window) markGap(loID, hiID int, fill bool) {
 	for i, it := range w.Items {
 		if it.gap == [2]int{loID, hiID} {
 			return
 		}
 		if it.Msg != nil && it.Msg.ID == hiID {
-			w.Items = slices.Insert(w.Items, i, &Item{Sys: i18n.T("history_gap"), gap: [2]int{loID, hiID}})
+			w.Items = slices.Insert(w.Items, i, &Item{Sys: i18n.T("history_gap"), gap: [2]int{loID, hiID}, fill: fill})
 			return
 		}
 	}
+}
+
+// fillGaps gives the holes the UI fills (Item.fill), from the oldest to the
+// newest.
+func (w *Window) fillGaps() [][2]int {
+	var out [][2]int
+	for _, it := range w.Items {
+		if it.fill {
+			out = append(out, it.gap)
+		}
+	}
+	return out
 }
 
 // dropFilledGaps drops the markers whose hole a later page has filled: a
 // message now stands between the two boundary ids.
 // ponytail: a page that fills only part of a hole drops the marker all the
 // same — no code path loads a bounded range today. Split the marker in two if
-// one ever does.
+// one ever does. UI.history marks again the rest of a hole it fills.
 func (w *Window) dropFilledGaps() {
 	for i := 0; i < len(w.Items); i++ {
 		g := w.Items[i].gap
@@ -364,6 +382,22 @@ func (w *Window) dropFilledGaps() {
 		w.Items = slices.Delete(w.Items, i, i+1)
 		i--
 	}
+}
+
+// heldBelow gives the newest message id the window holds under id; 0 when it
+// holds id itself or nothing under it.
+func (w *Window) heldBelow(id int) int {
+	below := 0
+	for _, it := range w.Items {
+		switch {
+		case it.Msg == nil || it.Msg.ID <= 0:
+		case it.Msg.ID == id:
+			return 0
+		case it.Msg.ID < id:
+			below = max(below, it.Msg.ID)
+		}
+	}
+	return below
 }
 
 func (w *Window) hasBetween(loID, hiID int) bool {
@@ -432,7 +466,7 @@ func (w *Window) MergeAround(ms []*model.Msg, started ...time.Time) {
 	}
 	w.Items = append(out, add[k:]...)
 	if gapLo != 0 {
-		w.markGap(gapLo, gapHi)
+		w.markGap(gapLo, gapHi, false)
 	}
 	w.dropFilledGaps()
 	// ponytail: no trim here — it cuts from the head and would drop exactly the
@@ -445,14 +479,22 @@ func (w *Window) MergeAround(ms []*model.Msg, started ...time.Time) {
 // their message holds their media. The copy shares nothing with the item any
 // more: Media and the media of More are copied without their frames, because
 // the goroutine that writes the cache reads them while the UI goes on
-// changing them (animation, download).
+// changing them (animation, download). Msg.HoleBelow comes from the fill
+// markers (Item.fill), not from the message: the message right above a
+// marker carries it, so the cache keeps the hole until it is filled.
 func (w *Window) Msgs() []model.Msg {
 	out := make([]model.Msg, 0, len(w.Items))
+	hole := false
 	for _, it := range w.Items {
+		if it.fill {
+			hole = true
+			continue
+		}
 		if it.part || it.Msg == nil || it.Msg.ID == 0 {
 			continue
 		}
 		m := *it.Msg
+		m.HoleBelow, hole = hole, false
 		if m.Media != nil {
 			m.Media = cacheCopy(m.Media)
 		}

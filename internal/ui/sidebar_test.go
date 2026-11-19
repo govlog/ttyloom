@@ -253,6 +253,48 @@ func TestMarquee(t *testing.T) {
 	}
 }
 
+// A narrow sidebar with avatars, the network letter and an unseen reaction:
+// the client must not crash and each row must keep the width of the panel.
+// The windows mode with 2-digit ids and counters too.
+func TestRegressionSidebarNarrowRow(t *testing.T) {
+	th := theme.Terminal()
+	for width := sideMinW; width <= testSideW; width++ {
+		wins := []*Window{{}}
+		for i := 1; i <= 11; i++ {
+			wins = append(wins, &Window{Chat: &model.Chat{Net: "telegram", ID: int64(i), Kind: model.ChatGroup, Title: "abc", LastReaction: "👍"}, Act: 12})
+		}
+		for i, l := range sidebarLines(sideWindows, nil, wins, nil, 1, th, width, len(wins), 0, false, false, 0, -1, false, nil, sideState{}) {
+			if got := render.Width(render.LineText(l)); got != width+1 {
+				t.Fatalf("windows mode, width %d, row %d: %d cells, want %d: %q", width, i, got, width+1, render.LineText(l))
+			}
+		}
+		for _, avatars := range []bool{false, true} {
+			for _, nets := range []bool{false, true} {
+				for _, reaction := range []string{"", "👍"} {
+					cur := &model.Chat{Net: "telegram", ID: 1, Kind: model.ChatGroup, Title: "alice and a long title", LastReaction: reaction, Unread: 3}
+					other := &model.Chat{Net: "telegram", ID: 2, Title: "bob", LastReaction: reaction, Unread: 3}
+					ws := []*Window{{}, {Chat: cur}}
+					ctx := fmt.Sprintf("width %d, avatars %v, network letter %v, reaction %q", width, avatars, nets, reaction)
+					func() {
+						defer func() {
+							if r := recover(); r != nil {
+								t.Fatalf("%s: panic: %v", ctx, r)
+							}
+						}()
+						for step := range 30 {
+							for i, l := range sidebarLines(sideChats, []*model.Chat{cur, other}, ws, nil, 1, th, width, 2, 0, avatars, nets, step, -1, false, nil, sideState{}) {
+								if got := render.Width(render.LineText(l)); got != width+1 {
+									t.Fatalf("%s, step %d, row %d: %d cells, want %d: %q", ctx, step, i, got, width+1, render.LineText(l))
+								}
+							}
+						}
+					}()
+				}
+			}
+		}
+	}
+}
+
 // longUI : findUI on a terminal cols wide, the current window on a chat whose
 // title is wider than the panel.
 func longUI(cols int) *UI {

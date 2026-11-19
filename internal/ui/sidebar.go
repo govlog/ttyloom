@@ -893,8 +893,17 @@ func sidebarLines(mode sideMode, chats []*model.Chat, ws []*Window, wins []int, 
 				rb = " " + rb
 			}
 			// pfx, badge and rb are outside the scrolling string: they stay fixed,
-			// only the title scrolls.
+			// only the title scrolls. A narrow panel drops rb, then badge, to keep
+			// the space and one cell of the title; the row never gets wider than
+			// the panel.
 			textW := width - 5 - gut - render.Width(pfx) - render.Width(badge) - render.Width(rb)
+			if textW < 2 && rb != "" {
+				textW, rb = textW+render.Width(rb), ""
+			}
+			if textW < 2 && badge != "" {
+				textW, badge = textW+render.Width(badge), ""
+			}
+			textW = max(0, textW)
 			text := padTo(label, textW)
 			if isCur { // only the current line scrolls
 				text = marquee(label, textW, step)
@@ -982,6 +991,14 @@ func sidebarLines(mode sideMode, chats []*model.Chat, ws []*Window, wins []int, 
 				return append([]render.Span{{Text: num, Style: ls}}, hitSpans(render.Span{Text: marquee(pfx+s+act+rb, textW, k), Style: ls}, state.q, th)...), 0
 			case w.Chat != nil && w.Chat == state.menuChat: // line of the open menu
 				st, p, a = on, on, on
+			}
+			// As in the chats mode: rb, then act, go when they leave no room for
+			// the name; the row never gets wider than the panel.
+			if textW-render.Width(pfx)-render.Width(act)-render.Width(rb) < 1 {
+				rb = ""
+			}
+			if textW-render.Width(pfx)-render.Width(act) < 1 {
+				act = ""
 			}
 			name := render.Truncate(s, textW-render.Width(pfx)-render.Width(act)-render.Width(rb), "")
 			sp := append([]render.Span{{Text: num, Style: st}, {Text: pfx, Style: p}}, hitSpans(render.Span{Text: name, Style: st}, state.q, th)...)
@@ -1123,7 +1140,7 @@ func marquee(title string, width, step int) string {
 		b.WriteString(c)
 		w += cw
 	}
-	b.WriteString(strings.Repeat(" ", width-w))
+	b.WriteString(strings.Repeat(" ", max(0, width-w)))
 	return b.String()
 }
 

@@ -204,6 +204,33 @@ func TestRegressionQRDoneOwnership(t *testing.T) {
 	}
 }
 
+// The network closes a password prompt while the user types it: the rest of
+// the password and its Enter must not go into the chat draft and out as a
+// message. For a moment the keys are dropped and the status bar says why.
+func TestRegressionPromptClosedKeepsSecret(t *testing.T) {
+	u, b, room, _ := queryUI()
+	u.conn = map[string]bool{}
+	u.goTo(u.ws.ForChat(room.Key()))
+	u.ed.Set("draft")
+	u.dispatch(model.Envelope{Net: netDiscord, Ev: model.EvAuthPrompt{Question: "Password", Secret: true, Reply: make(chan string, 1)}})
+	for _, r := range "abc" {
+		u.key(term.Key{Rune: r})
+	}
+	u.dispatch(model.Envelope{Net: netDiscord, Ev: model.EvStopped{}})
+	u.key(term.Key{Rune: 'd'})
+	u.key(term.Key{Code: term.Paste, Text: "ef"})
+	u.key(term.Key{Code: term.Enter})
+	if len(b.sends) != 0 || u.ed.String() != "draft" || u.flashMsg != i18n.T("auth_prompt_closed") {
+		t.Fatalf("after the prompt closed: sent %q, input %q, status %q; want nothing sent, the draft alone and %q",
+			b.text, u.ed.String(), u.flashMsg, i18n.T("auth_prompt_closed"))
+	}
+	u.authClosed = time.Now().Add(-time.Second)
+	u.key(term.Key{Rune: '!'})
+	if u.ed.String() != "draft!" {
+		t.Fatalf("1 s later: input %q, want %q", u.ed.String(), "draft!")
+	}
+}
+
 func TestRegressionRecentActivity(t *testing.T) {
 	u, _, room, _ := queryUI()
 	room.LastDate = time.Now().AddDate(0, 0, -30)
@@ -753,5 +780,259 @@ func TestRegressionEditOfUnheldMessage(t *testing.T) {
 			got = append(got, it.Msg.Text)
 		}
 		t.Fatalf("window holds %q; want only the edited message", got)
+	}
+}
+
+// More messages than one page came while the client was away. The hole
+// between the cached messages and the recent page (or the page of the startup
+// sync) is marked, then loaded page by page until a page reaches the cached
+// messages: the window ends with every message in order and no marker. A live
+// message that comes before the page does not hide the hole.
+func TestRegressionHistoryHoleFilled(t *testing.T) {
+	for _, since := range []bool{false, true} {
+		u, b, room, _ := queryUI()
+		w := u.winFor(room)
+		for id := 1; id <= 10; id++ {
+			w.Upsert(&model.Msg{ChatID: room.ID, ID: id, Date: time.Now()})
+		}
+		page := func(lo, hi int, ev model.EvHistory) {
+			for id := lo; id <= hi; id++ {
+				ev.Msgs = append(ev.Msgs, model.Msg{ChatID: room.ID, ID: id, Date: time.Now()})
+			}
+			ev.ChatID = room.ID
+			u.dispatch(model.Envelope{Net: room.Net, Ev: ev})
+		}
+		// seam gives the ids around each hole marker the window shows.
+		seam := func() [][2]int {
+			var out [][2]int
+			for i, it := range w.Items {
+				if it.Msg == nil && it.Sys == i18n.T("history_gap") && i > 0 && i+1 < len(w.Items) {
+					out = append(out, [2]int{w.Items[i-1].Msg.ID, w.Items[i+1].Msg.ID})
+				}
+			}
+			return out
+		}
+		top := 310 // recent page: 100 messages, 211..310
+		if since {
+			top = 210 + syncLimit
+			u.syncCur = room
+		}
+		u.dispatch(model.Envelope{Net: room.Net, Ev: model.EvNewMessage{Chat: room, Msg: model.Msg{ChatID: room.ID, ID: top + 1, Date: time.Now()}}})
+		page(211, top, model.EvHistory{Since: since})
+		if got := seam(); !slices.Equal(got, [][2]int{{10, 211}}) || !slices.Equal(b.befores, []int{211}) {
+			t.Fatalf("sync %v, first page: markers %v, loads before %v; want a marker between 10 and 211 and a load before 211", since, got, b.befores)
+		}
+		page(111, 210, model.EvHistory{Older: true})
+		if got := seam(); !slices.Equal(got, [][2]int{{10, 111}}) || !slices.Equal(b.befores, []int{211, 111}) {
+			t.Fatalf("sync %v, second page: markers %v, loads before %v; want a marker between 10 and 111 and a load before 111", since, got, b.befores)
+		}
+		page(11, 110, model.EvHistory{Older: true})
+		page(1, 10, model.EvHistory{Older: true, Done: true}) // reaches the cached messages
+		var ids []int
+		for _, it := range w.Items {
+			if it.Msg == nil {
+				t.Fatalf("sync %v, at the end: line %q left in the window", since, it.Sys)
+			}
+			ids = append(ids, it.Msg.ID)
+		}
+		if len(ids) != top+1 || !slices.IsSorted(ids) || !slices.Equal(b.befores, []int{211, 111, 11}) {
+			t.Fatalf("sync %v, at the end: %d messages (sorted %v), loads before %v; want 1..%d and loads before 211, 111, 11",
+				since, len(ids), slices.IsSorted(ids), b.befores, top+1)
+		}
+	}
+}
+
+// A jump to a message inside a hole being filled (a quote, a search hit)
+// brings a page in the middle of it: both sides stay marked.
+func TestRegressionJumpIntoHoleKeepsBothSides(t *testing.T) {
+	u, _, room, _ := queryUI()
+	w := u.winFor(room)
+	page := func(lo, hi int, ev model.EvHistory) {
+		for id := lo; id <= hi; id++ {
+			ev.Msgs = append(ev.Msgs, model.Msg{ChatID: room.ID, ID: id, Date: time.Now()})
+		}
+		ev.ChatID = room.ID
+		u.dispatch(model.Envelope{Net: room.Net, Ev: ev})
+	}
+	page(1, 10, model.EvHistory{Older: true})
+	page(211, 310, model.EvHistory{}) // full recent page: a hole above 10
+	page(50, 150, model.EvHistory{Around: true, AroundID: 100})
+	var seams [][2]int
+	for i, it := range w.Items {
+		if it.Msg == nil && it.Sys == i18n.T("history_gap") {
+			seams = append(seams, [2]int{w.Items[i-1].Msg.ID, w.Items[i+1].Msg.ID})
+		}
+	}
+	if !slices.Equal(seams, [][2]int{{10, 50}, {150, 211}}) {
+		t.Fatalf("markers %v, want one between 10 and 50 and one between 150 and 211", seams)
+	}
+}
+
+// A hole costs the disk cache no message, and the cache keeps it marked: a
+// stop before the hole is filled (window, or startup sync with no window)
+// brings the marker back at the next start, and its load; once the hole is
+// filled and saved, the marker is gone for good.
+func TestRegressionHoleNotCached(t *testing.T) {
+	dir := t.TempDir()
+	msgs := func(chat int64, lo, hi int) []model.Msg {
+		var ms []model.Msg
+		for id := lo; id <= hi; id++ {
+			ms = append(ms, model.Msg{ChatID: chat, ID: id, Date: time.Now()})
+		}
+		return ms
+	}
+	start := func() (*UI, *queryBackend, []*model.Chat) { // a new UI on the same cache directory
+		u, b, _, _ := queryUI()
+		u.caches = map[string]*cache.Cache{netTelegram: cache.New(dir, 2000)}
+		u.dirty = map[model.ChatKey]bool{}
+		var cs []*model.Chat
+		for _, c := range []*model.Chat{{Net: netTelegram, ID: 3, Title: "busy"}, {Net: netTelegram, ID: 4, Title: "lone"}} {
+			cs = append(cs, u.remember(c))
+		}
+		return u, b, cs
+	}
+	page := func(u *UI, c *model.Chat, lo, hi int, ev model.EvHistory) {
+		ev.ChatID, ev.Msgs = c.ID, msgs(c.ID, lo, hi)
+		u.dispatch(model.Envelope{Net: c.Net, Ev: ev})
+	}
+	seams := func(u *UI, c *model.Chat) [][2]int {
+		w := u.winFor(c)
+		var out [][2]int
+		for i, it := range w.Items {
+			if it.Msg == nil && it.Sys == i18n.T("history_gap") && i > 0 && i+1 < len(w.Items) {
+				out = append(out, [2]int{w.Items[i-1].Msg.ID, w.Items[i+1].Msg.ID})
+			}
+		}
+		return out
+	}
+
+	u, _, cs := start()
+	busy, lone := cs[0], cs[1]
+	for _, c := range cs {
+		if err := u.caches[netTelegram].SaveHistory(c.ID, msgs(c.ID, 1, 10)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	u.openChat(busy)
+	page(u, busy, 211, 310, model.EvHistory{}) // full recent page: a hole above 10
+	u.syncCur = lone
+	page(u, lone, 211, 210+syncLimit, model.EvHistory{Since: true}) // full sync page, no window
+	u.flushCache(true)                                              // stop before the answer of the hole
+	for _, c := range cs {
+		got, err := u.caches[netTelegram].LoadHistory(c.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for id := 1; id <= 10; id++ {
+			if !slices.ContainsFunc(got, func(m model.Msg) bool { return m.ID == id }) {
+				t.Fatalf("%s: message %d left the cache when the hole came (%d messages left)", c.Title, id, len(got))
+			}
+		}
+	}
+
+	u, b, cs := start()
+	for _, c := range cs {
+		u.openChat(c)
+		if got := seams(u, c); !slices.Equal(got, [][2]int{{10, 211}}) {
+			t.Fatalf("%s, next start: markers %v, want one between 10 and 211", c.Title, got)
+		}
+		b.befores = nil
+		page(u, c, 211, 310, model.EvHistory{})
+		if !slices.Equal(b.befores, []int{211}) {
+			t.Fatalf("%s, next start: loads before %v after the first page, want 211", c.Title, b.befores)
+		}
+		page(u, c, 10, 210, model.EvHistory{Older: true}) // reaches the cached messages
+	}
+	u.flushCache(true)
+
+	u, _, cs = start()
+	for _, c := range cs {
+		u.openChat(c)
+		if got := seams(u, c); len(got) != 0 {
+			t.Fatalf("%s, after the hole was filled: markers %v, want none", c.Title, got)
+		}
+	}
+}
+
+// The cap of a window cuts its head: the old side of a hole, then its
+// marker. The window then starts on the message above the hole, and the
+// cache must keep the hole marked all the same.
+func TestRegressionHoleKeptPastWindowCap(t *testing.T) {
+	dir := t.TempDir()
+	start := func(capItems int) (*UI, *model.Chat) {
+		u, _, _, _ := queryUI()
+		u.caches = map[string]*cache.Cache{netTelegram: cache.New(dir, 2000)}
+		u.dirty = map[model.ChatKey]bool{}
+		u.ws.max = capItems
+		return u, u.remember(&model.Chat{Net: netTelegram, ID: 3, Title: "busy"})
+	}
+	msg := func(id int) model.Msg { return model.Msg{ChatID: 3, ID: id, Date: time.Now()} }
+	u, c := start(105)
+	var old, recent []model.Msg
+	for id := 1; id <= 4; id++ {
+		old = append(old, msg(id))
+	}
+	for id := 211; id <= 310; id++ {
+		recent = append(recent, msg(id))
+	}
+	if err := u.caches[netTelegram].SaveHistory(c.ID, old); err != nil {
+		t.Fatal(err)
+	}
+	u.openChat(c)
+	u.dispatch(model.Envelope{Net: c.Net, Ev: model.EvHistory{ChatID: c.ID, Msgs: recent}}) // 4 + marker + 100 items
+	u.flushCache(true)
+	for id := 311; id <= 315; id++ { // each one cuts an item at the head
+		u.dispatch(model.Envelope{Net: c.Net, Ev: model.EvNewMessage{Chat: c, Msg: msg(id)}})
+	}
+	if w := u.winFor(c); w.Items[0].Msg == nil || w.Items[0].Msg.ID != 211 {
+		t.Fatalf("setup: the window starts with %+v, want message 211", w.Items[0])
+	}
+	u.flushCache(true)
+
+	u, c = start(defaultMaxItems)
+	u.openChat(c)
+	w := u.winFor(c)
+	k := slices.IndexFunc(w.Items, func(it *Item) bool { return it.Msg != nil && it.Msg.ID == 211 })
+	if k < 1 || w.Items[k-1].Sys != i18n.T("history_gap") {
+		t.Fatalf("next start: no marker under message 211 (item before it: %+v)", w.Items[max(k-1, 0)])
+	}
+}
+
+// A private chat read up to its last message on another device leaves the
+// activity list, stops the pulse and drops the bell still waiting. A read of
+// an older message (a Discord ack) keeps the activity of the newer ones.
+func TestRegressionReadElsewhereClearsActivity(t *testing.T) {
+	u, _, _, peer := queryUI()
+	var out bytes.Buffer
+	u.t = term.NewOffscreen(&out, 80, 24)
+	u.self = map[string]selfInfo{}
+	u.typing = map[model.ChatKey]typing{}
+	u.focused = true
+	u.cfg.Bell, u.cfg.Notify = true, "off"
+	w := u.winFor(peer)
+	inAct := func() bool {
+		_, hits := u.actSpans(theme.Style{}, theme.Style{})
+		return slices.ContainsFunc(hits, func(h actHit) bool { return h.w == w })
+	}
+	for _, id := range []int{5, 6} { // the second one waits for its bell (alertGap)
+		u.dispatch(model.Envelope{Net: peer.Net, Ev: model.EvNewMessage{Chat: peer,
+			Msg: model.Msg{Net: peer.Net, ChatID: peer.ID, ID: id, Date: time.Now(), From: "Blop", FromID: 2, Text: "hi"}}})
+	}
+	u.dispatch(model.Envelope{Net: peer.Net, Ev: model.EvNewMessage{Chat: peer, // my reply from the phone
+		Msg: model.Msg{Net: peer.Net, ChatID: peer.ID, ID: 7, Date: time.Now(), Out: true, Text: "yes"}}})
+	if !inAct() || !u.anyHot() || peer.Unread != 2 {
+		t.Fatalf("setup: in [Act: …] %v, pulse %v, unread %d", inAct(), u.anyHot(), peer.Unread)
+	}
+	u.dispatch(model.Envelope{Net: peer.Net, Ev: model.EvReadInbox{ChatID: peer.ID, MaxID: 5, HasUnread: true}})
+	if !inAct() || !u.anyHot() || peer.Unread != 2 {
+		t.Fatalf("ack of message 5 with 6 unread: in [Act: …] %v, pulse %v, unread %d; want the activity kept", inAct(), u.anyHot(), peer.Unread)
+	}
+	u.t.Flush() // the bell of message 5
+	out.Reset()
+	u.dispatch(model.Envelope{Net: peer.Net, Ev: model.EvReadInbox{ChatID: peer.ID, MaxID: 6, HasUnread: true}})
+	u.flushAlert(time.Now().Add(alertGap))
+	u.t.Flush()
+	if inAct() || u.anyHot() || peer.Unread != 0 || strings.Contains(out.String(), "\a") {
+		t.Fatalf("read up to 6 elsewhere: in [Act: …] %v, pulse %v, unread %d, bell %v; want none", inAct(), u.anyHot(), peer.Unread, strings.Contains(out.String(), "\a"))
 	}
 }

@@ -801,6 +801,43 @@ func TestQuoteReadOffUpdateLoop(t *testing.T) {
 	}
 }
 
+// TestPostedChatBelongsToUI : once a reply is posted, the UI owns its chat and
+// the parts its message shares with the backend, and writes them in place
+// (stampChat and cleanMedia, then Unread in newMessage). The read of the quote
+// that follows works on copies taken before the post: a read of the posted
+// chat or media races with the UI (go test -race).
+func TestPostedChatBelongsToUI(t *testing.T) {
+	ev := make(chan model.Event) // unbuffered: the UI holds the chat as soon as Post returns
+	inv := &fakeInvoker{answer: func(bin.Encoder) (any, error) {
+		return &tg.MessagesMessages{Users: []tg.UserClass{withName(7, "alice")}, Messages: []tg.MessageClass{
+			&tg.Message{ID: 5, PeerID: &tg.PeerUser{UserID: 7}, FromID: &tg.PeerUser{UserID: 7}, Message: "quoted"}}}, nil
+	}}
+	c := fakeClient(inv, ev)
+	d := tg.NewUpdateDispatcher()
+	c.registerHandlers(d)
+	m := &tg.Message{ID: 10, PeerID: &tg.PeerUser{UserID: 7}, Date: 1700000000, Message: "hi"}
+	m.SetReplyTo(&tg.MessageReplyHeader{ReplyToMsgID: 5})
+	m.SetMedia(&tg.MessageMediaGeo{Geo: &tg.GeoPoint{Lat: 48.85, Long: 2.35}})
+	done := make(chan error, 1)
+	go func() {
+		done <- d.Handle(context.Background(), &tg.Updates{Users: []tg.UserClass{withName(7, "alice")},
+			Updates: []tg.UpdateClass{&tg.UpdateNewMessage{Message: m}}})
+	}()
+	e, ok := next(t, ev).(model.EvNewMessage)
+	if !ok || e.Chat == nil || e.Msg.Media == nil {
+		t.Fatalf("new message: %+v, want a chat and a media", e)
+	}
+	e.Chat.Net, e.Chat.Title, e.Chat.Username, e.Chat.Group = "telegram", "Alice", "alice", ""
+	e.Msg.Media.Label, e.Msg.Media.Name, e.Msg.Media.Err = "[map]", "", ""
+	e.Chat.Unread++
+	if q, ok := next(t, ev).(model.EvQuote); !ok || q.ID != 10 || q.Quote.Text != "quoted" || q.Quote.From != "alice" {
+		t.Fatalf("quote: %+v, want the quote of message 10 filled", q)
+	}
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+}
+
 // TestHistoryTripsFloodBreaker : a FLOOD_WAIT on a history page opens the
 // breaker, and the reads after it (the next chat of the sync, a /search) are
 // refused with no request — the sync would otherwise ask the server again
