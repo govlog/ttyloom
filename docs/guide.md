@@ -501,10 +501,17 @@ it is an address of the machine, else on the IRC socket's address, never on
 every interface; it announces `dcc_ip` (or that address) and the port, and the
 receiver has 2 minutes to connect. A send is reported as sent only once the
 peer has acknowledged the whole file; a peer that closes early or stays silent
-for 2 minutes gives an error on the line instead. Behind a NAT, set `dcc_ip`
+for 2 minutes gives an error on the line instead. While it goes, the status
+bar shows `sending <file>… N %`, as for a Telegram upload; once sent, the line
+is a file line like on the other networks: its menu, `o` and Ctrl+D open the
+file from where it was sent (a pasted image, removed after the send, has
+nothing left to open). Behind a NAT, set `dcc_ip`
 to the public address and `dcc_ports` to a forwarded range. A received offer
 shows as a file line in the private chat, labelled with the `ip:port` it
-points to (`passive` for a reverse offer); the file lands in `download_dir`.
+points to (`passive` for a reverse offer); it never downloads on its own.
+While it comes, its line shows `loading N %` and the status bar
+`downloading <file>… N %`, as for a document on Telegram or Discord; the file
+lands in `download_dir`.
 An offer pointing to `0.0.0.0`, to loopback (unless `dcc_ip` is itself
 loopback), or to a multicast or link-local address is dropped, with a warning
 in `/debug`. Reverse offers (a sender behind a NAT) are accepted. No resume, no
@@ -694,7 +701,7 @@ global again. A single network has no tabs.
 | `/telegram [status\|login\|logout\|disconnect]`, `/discord [status\|login\|logout\|disconnect]` | One network: its status, a new login (Discord runs `token_cmd` again), a logout (Telegram ends the session on the server) or a `disconnect`, which cuts the connection and keeps the session. |
 | `/fold [section]` | Toggle a sidebar section by key, such as `telegram` or `discord:Gophers`, or a displayed-name prefix. No argument lists sections and their collapsed/expanded state. |
 | `/mute [name]`, `/unmute [name]` | Mute the conversation of the window, or the one named (exact name or prefix): no bell, no notification and no pulse in the sidebar, even on a mention; its unread count stays, dimmed, in its own line only (not in `[Act: …]` nor in the count of its tab). A section key of the sidebar (the keys of `/fold`, such as `/mute discord:Gophers`; Tab completes them) mutes a whole section instead, a Discord server for example: all its conversations, the ones that come later too, its header dimmed, and a muted server goes after the other servers of its network whatever the sort, however many unread messages it holds; in the windows list its windows take the darkest colour, like the oldest ones. A conversation with that exact name comes first. `/mute` alone in a window with no conversation lists the muted conversations and sections. Saved in `muted.toml` (`chats`, `sections`); the network is not told. A section is known by its name: a server renamed must be muted again. |
-| `/note [text]`, `/unnote` | A local one-line note on the conversation of the window, shown in a red banner at the top like a pinned message — and over one while it is there. `/note` alone shows it, a new `/note` replaces it, `/unnote` removes it. Saved in `notes.toml`; the network is not told. |
+| `/note [text]`, `/unnote` | A local one-line note on the conversation of the window, shown in a red banner at the top like a pinned message — and over one while it is there. `/note` alone shows it, a new `/note` replaces it, `/unnote` removes it. Saved in `notes.toml`; the network is not told. On Telegram and Discord a note belongs to the account that wrote it: another account on the same network does not see it. On IRC it belongs to the network, and a nick change keeps it. |
 | `/history N`, `/hist N` | Load N older messages, 50 by default and at most what a window keeps (2000, or `cache_messages` when higher); PgUp at the top also loads older history. |
 | `/clear`, `/c` | Clear the current window. Ctrl+L only clears the screen: the lines stay in the history. `/clear` keeps the disk history too: the next write merges the window into the file instead of replacing it. |
 | `/rename [target] name`, `/unrename [target]` | Set or remove a local chat/contact alias, saved in `aliases.toml`. It applies to the sidebar, status bar, aggregate view, completion and the DM contact’s displayed name. It is not sent to the network. |
@@ -806,7 +813,12 @@ memory, are sent one frame at a time, as on other terminals. A link preview show
 on Telegram, title on Discord) and a description, with a thumbnail on
 Telegram. Only HTTP and HTTPS links, and mailto links without a `?` or `#`
 part, are made clickable and passed to `xdg-open`. Larger media stay as labels
-until requested. A file keeps the name its sender gave it, in the folder of
+until requested. While a media downloads, its label says `loading N %` when
+the network gives its size; a document, which never downloads on its own,
+also shows `downloading <file>… N %` in the status bar, so a download asked
+from another window (`/dcc get <nick>`, Ctrl+D) still shows. An upload shows
+`loading` on its line until the network has it; Telegram and IRC show its
+percent in the status bar. A file keeps the name its sender gave it, in the folder of
 its conversation, `download_dir/<network>/<conversation>/`, with the date of
 its message as its time. When another message already holds that name, the
 file takes the id of its own message: `report (1234).pdf`. A path separator, a
@@ -824,8 +836,20 @@ launcher (`.desktop`, `.sh`, `.AppImage`, `.run`, `.jar`, `.exe` and the like)
 is never opened: copy its path from the menu of its label. Downloads are
 created with mode `0600` in `0700` directories.
 
-Image decoding rejects still images over about 40 megapixels (20 for a 16-bit
-PNG) and animated GIF frames over about 1.6 megapixels. An image or a video
+Image decoding reads the size of an image from its header, before it
+decodes, and rejects an image that would take more than 256 MiB to decode: a
+50-megapixel photo (8192x6144) loads, and so does an 8K screenshot; a
+progressive JPEG over about 31 megapixels or a 16-bit colour PNG over about
+29 does not. An image that loads by itself (a line that shows, a download that
+lands) must also stay in proportion with its file: over 64 MiB decoded, it
+may take at most 128 bytes of memory for each byte of the file. A flat image
+of a few hundred KB that claims tens of megapixels is not decoded; its label
+says so, and the preview (`v`, or a click) shows it within the 256 MiB.
+`o` opens the file with the desktop in all cases. A file refused at decoding
+is not downloaded again when the network sends its message again; F4 and the
+next start decode it again from the disk. Animated GIF frames over about 1.6
+megapixels, or a GIF out of proportion with its file, show their first frame
+only. An image or a video
 with a side over 32,768 pixels is rejected too, whatever its pixel count. GIFs in the
 conversation decode at most 100 frames; the GIF picker at most 40 per preview.
 Videos use `video_inline_frames`, capped

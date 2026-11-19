@@ -158,6 +158,11 @@ type Media struct {
 	// size of the terminal (font zoom) = stale frames, to decode again.
 	CellW int
 	CellH int
+	// Refused : with State MediaFailed, the file came whole and the decoder
+	// refused it (too large, out of proportion, not an image); Err says why.
+	// A fresh location of its message does not download it again. False:
+	// the download itself failed.
+	Refused bool
 }
 
 func (m *Media) Previewable() bool {

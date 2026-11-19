@@ -193,9 +193,13 @@ func (c *Client) upload(ctx context.Context, chat *model.Chat, path, caption str
 			return
 		}
 		defer f.Close()
+		var size int64
+		if st, err := f.Stat(); err == nil {
+			size = st.Size()
+		}
 		chID, _ := ids(chat)
 		m, err := c.rest(ctx).SendMessageComplex(chID, api.SendMessageData{Content: caption,
-			Files: []sendpart.File{{Name: filepath.Base(path), Reader: f}}})
+			Files: []sendpart.File{{Name: filepath.Base(path), Reader: c.upReader(f, filepath.Base(path), size)}}})
 		if err != nil {
 			fail(err.Error()) // the file stays: the send can be tried again
 			return
@@ -209,6 +213,34 @@ func (c *Client) upload(ctx context.Context, chat *model.Chat, path, caption str
 		}
 		c.Post(ev)
 	}()
+}
+
+// upReader : the file of an upload, read by the multipart body as it goes
+// out. Each whole percent posts the status bar text, as tgc and irc do.
+// PostNB: a late status bar is better than a blocked upload. Nothing on an
+// empty file.
+func (c *Client) upReader(r io.Reader, name string, total int64) io.Reader {
+	return &upProgress{c: c, r: r, name: name, total: total, last: -1}
+}
+
+type upProgress struct {
+	c           *Client
+	r           io.Reader
+	name        string
+	done, total int64
+	last        int
+}
+
+func (p *upProgress) Read(b []byte) (int, error) {
+	n, err := p.r.Read(b)
+	p.done += int64(n)
+	if p.total > 0 {
+		if pct := int(min(p.done, p.total) * 100 / p.total); pct != p.last {
+			p.last = pct
+			p.c.PostNB(model.EvUpload{Text: i18n.T("upload_progress", p.name, pct)})
+		}
+	}
+	return n, err
 }
 
 // reCustom : ":name:" as typed, the shape of a custom emoji name.

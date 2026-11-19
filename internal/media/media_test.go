@@ -12,7 +12,9 @@ import (
 	"image"
 	"image/color"
 	"image/gif"
+	"image/jpeg"
 	"image/png"
+	"math/rand/v2"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -287,16 +289,37 @@ func pngHeader(w, h uint32, depth, kind byte) []byte {
 	return out.Bytes()
 }
 
-// zeroPNG writes a black greyscale PNG of w x h px and gives its path. The
-// chunks are made here: png.Encode writes row by row and takes seconds under
-// -race for millions of rows.
-func zeroPNG(t *testing.T, w, h int) string {
+// zeroPNG writes a black greyscale PNG of w x h px and gives its path.
+func zeroPNG(t *testing.T, w, h int) string { return flatPNG(t, w, h, 8, 0) }
+
+// flatPNG writes a black PNG of w x h px, depth bits a channel, colour type
+// kind (0 grey, 2 RGB, 6 RGBA), and gives its path. The chunks are made
+// here: png.Encode writes row by row and takes seconds under -race for
+// millions of rows.
+func flatPNG(t *testing.T, w, h int, depth, kind byte) string {
+	t.Helper()
+	return writePNG(t, w, h, depth, kind, nil)
+}
+
+// writePNG writes a w x h PNG and gives its path: each row is filter byte 0
+// then the pixels fill gives (black when fill is nil; fill sets every byte),
+// written to zlib by batches of about 1 MB.
+func writePNG(t *testing.T, w, h int, depth, kind byte, fill func(row []byte, y int)) string {
 	t.Helper()
 	var idat bytes.Buffer
 	z, _ := zlib.NewWriterLevel(&idat, zlib.BestSpeed)
-	z.Write(make([]byte, h*(1+w))) // each row: filter byte 0, then black pixels
+	n := 1 + (w*map[byte]int{0: 1, 2: 3, 6: 4}[kind]*int(depth)+7)/8 // bytes a row
+	batch := make([]byte, n*max(1, (1<<20)/n))
+	for y := 0; y < h; {
+		k := min(len(batch)/n, h-y)
+		for i := 0; fill != nil && i < k; i++ {
+			fill(batch[i*n+1:(i+1)*n], y+i)
+		}
+		z.Write(batch[:k*n])
+		y += k
+	}
 	z.Close()
-	b := pngHeader(uint32(w), uint32(h), 8, 0)
+	b := pngHeader(uint32(w), uint32(h), depth, kind)
 	for _, c := range [][]byte{append([]byte("IDAT"), idat.Bytes()...), []byte("IEND")} {
 		b = binary.BigEndian.AppendUint32(b, uint32(len(c)-4))
 		b = binary.BigEndian.AppendUint32(append(b, c...), crc32.ChecksumIEEE(c))
@@ -409,6 +432,215 @@ func TestLoadBigGIFShowsFirstFrame(t *testing.T) {
 	}
 	if len(fr.PNG) != 1 || fr.W != 400 || fr.H != 225 {
 		t.Fatalf("1920x1080 animated GIF: %d frames %dx%d, want 1 frame 400x225", len(fr.PNG), fr.W, fr.H)
+	}
+}
+
+// writeFile puts b in a file of its own and gives its path.
+func writeFile(t *testing.T, name string, b []byte) string {
+	t.Helper()
+	p := filepath.Join(t.TempDir(), name)
+	if err := os.WriteFile(p, b, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
+// flatJPEG writes a mid-grey greyscale JPEG of w x h px (w x h a multiple of
+// 256) and gives its path: every 8x8 block is a DC difference of 0 then an
+// end of block, 6 bits with the standard tables, so four blocks are the
+// three bytes 28 a2 8a. 36 Mpx take 422 KB, 36 MB once decoded.
+func flatJPEG(t *testing.T, w, h int) string {
+	t.Helper()
+	var small bytes.Buffer
+	grey := &image.Gray{Pix: bytes.Repeat([]byte{128}, 32*8), Stride: 32, Rect: image.Rect(0, 0, 32, 8)}
+	if err := jpeg.Encode(&small, grey, nil); err != nil {
+		t.Fatal(err)
+	}
+	b := small.Bytes() // ... SOS header, 28 a2 8a, ff d9
+	sof := bytes.Index(b, []byte{0xff, 0xc0})
+	binary.BigEndian.PutUint16(b[sof+5:], uint16(h))
+	binary.BigEndian.PutUint16(b[sof+7:], uint16(w))
+	return writeFile(t, "flat.jpg", slices.Concat(b[:len(b)-5], bytes.Repeat([]byte{0x28, 0xa2, 0x8a}, w*h/256), []byte{0xff, 0xd9}))
+}
+
+// photoJPEG writes a w x h colour JPEG and gives its path: one 16x16 tile
+// with the shades and the grain of a photo, encoded alone, is every MCU,
+// each one a restart interval of its own (DRI 1). The encoder of Go would
+// take seconds for 48 Mpx under -race; this takes a copy. The bytes a pixel
+// are the ones of a phone photo (about 2 bits a pixel).
+func photoJPEG(t *testing.T, w, h int) string {
+	t.Helper()
+	tile := image.NewRGBA(image.Rect(0, 0, 16, 16))
+	for i := 0; i < len(tile.Pix); i += 4 {
+		x, y, g := uint8(i/4%16), uint8(i/64), uint8(i*2654435761>>24)&31 // g: grain (Knuth hash)
+		tile.Pix[i], tile.Pix[i+1], tile.Pix[i+2], tile.Pix[i+3] = 90+4*x+g, 120+3*y+g, 160-x-y+g, 255
+	}
+	var small bytes.Buffer
+	if err := jpeg.Encode(&small, tile, &jpeg.Options{Quality: 85}); err != nil {
+		t.Fatal(err)
+	}
+	b := small.Bytes()
+	sof, sos := bytes.Index(b, []byte{0xff, 0xc0}), bytes.Index(b, []byte{0xff, 0xda})
+	binary.BigEndian.PutUint16(b[sof+5:], uint16(h))
+	binary.BigEndian.PutUint16(b[sof+7:], uint16(w))
+	scan := sos + 2 + int(binary.BigEndian.Uint16(b[sos+2:]))
+	mcu := b[scan : len(b)-2]
+	n := (w + 15) / 16 * ((h + 15) / 16)
+	out := slices.Grow(slices.Concat(b[:sos], []byte{0xff, 0xdd, 0, 4, 0, 1}, b[sos:scan]), n*(len(mcu)+2)+2)
+	for i := range n {
+		if i > 0 {
+			out = append(out, 0xff, 0xd0+byte((i-1)%8))
+		}
+		out = append(out, mcu...)
+	}
+	return writeFile(t, "photo.jpg", append(out, 0xff, 0xd9))
+}
+
+// shotPNG writes a w x h screenshot of text on white, kind 0 grey or 2 RGB,
+// and gives its path: lines lines of text from the top, 40 rows each, whose
+// 16 middle rows carry glyph-like noise (black or white) over 60 % of the
+// width. Its weight is near the one of a screenshot drawn with fonts: a
+// page of a chat of 1170x12000 takes 2.4 MB (0.9 MB with fonts, still in
+// proportion), 6 lines of an 8K terminal 838 KB (188 KB with fonts).
+func shotPNG(t *testing.T, w, h int, kind byte, lines int) string {
+	t.Helper()
+	r := rand.New(rand.NewPCG(1, 2))
+	noise := make([]byte, 1<<20) // larger than the window of deflate: no match between rows
+	for i := range noise {
+		noise[i] = byte(r.Uint32()&1) * 255
+	}
+	white := bytes.Repeat([]byte{255}, w*3)
+	off := 0
+	return writePNG(t, w, h, 8, kind, func(row []byte, y int) {
+		text := 0
+		if y/40 < lines && y%40 >= 12 && y%40 < 28 {
+			text = len(row) * 6 / 10
+		}
+		if off+text > len(noise) {
+			off = 0
+		}
+		copy(row, noise[off:off+text])
+		copy(row[text:], white)
+		off += text
+	})
+}
+
+// shape tells the frames of fr, for a failure message.
+func shape(fr *Frames) string {
+	if fr == nil {
+		return "no frame"
+	}
+	return fmt.Sprintf("%d frames of %dx%d", len(fr.PNG), fr.W, fr.H)
+}
+
+// allocated gives the MB do allocates.
+func allocated(do func()) uint64 {
+	runtime.GC()
+	var before, after runtime.MemStats
+	runtime.ReadMemStats(&before)
+	do()
+	runtime.ReadMemStats(&after)
+	return (after.TotalAlloc - before.TotalAlloc) >> 20
+}
+
+// TestLoadRefusesBombs : a flat picture weighs a few hundred KB at most and
+// tens of MB once decoded. With no user action it is refused from its header
+// and its file size, before the decoder allocates. The cap of 40 Mpx took the
+// 16-bit PNG (90 MB in Load) and the JPEG (36 MB, plus the scaler).
+func TestLoadRefusesBombs(t *testing.T) {
+	for _, c := range []struct{ what, size, path string }{
+		{"48 Mpx grey PNG of 48 KB", "8000x6000", zeroPNG(t, 8000, 6000)},
+		{"16-bit RGB PNG", "3000x3000", flatPNG(t, 3000, 3000, 16, 2)},
+		{"greyscale JPEG of 422 KB", "6000x6000", flatJPEG(t, 6000, 6000)},
+	} {
+		var err error
+		if mb := allocated(func() { _, err = Load(context.Background(), c.path, "", 600, 220, 1) }); mb > 16 {
+			t.Errorf("%s: Load allocated %d MB, want 16 MB at most", c.what, mb)
+		}
+		if err == nil || !strings.Contains(err.Error(), c.size) {
+			t.Errorf("%s: err %v, want %s refused", c.what, err, c.size)
+		}
+	}
+}
+
+// TestLoadGIFBombShowsFirstFrame : 100 flat frames of 820x820 weigh about
+// 100 KB and took 70 MB in gif.DecodeAll, every frame at once, with no user
+// action. The animation is refused for its proportion; the first frame shows.
+func TestLoadGIFBombShowsFirstFrame(t *testing.T) {
+	var one bytes.Buffer
+	g := &gif.GIF{Image: []*image.Paletted{image.NewPaletted(image.Rect(0, 0, 820, 820), color.Palette{color.Black, color.White})}, Delay: []int{10}}
+	if err := gif.EncodeAll(&one, g); err != nil {
+		t.Fatal(err)
+	}
+	b := one.Bytes()
+	at := bytes.Index(b, []byte{0x21, 0xf9, 0x04}) // the frame: control extension, descriptor, pixels
+	p := writeFile(t, "bomb.gif", slices.Concat(b[:at], bytes.Repeat(b[at:len(b)-1], maxFrames), []byte{0x3b}))
+	var fr *Frames
+	var err error
+	if mb := allocated(func() { fr, err = Load(context.Background(), p, "image/gif", 400, 300, maxFrames) }); mb > 16 {
+		t.Errorf("flat GIF of %d frames: Load allocated %d MB, want 16 MB at most", maxFrames, mb)
+	}
+	if err != nil || len(fr.PNG) != 1 {
+		t.Fatalf("flat GIF of %d frames: %s, err %v; want its first frame only", maxFrames, shape(fr), err)
+	}
+}
+
+// TestLoadAskedTakesOutOfProportion : what Load refuses for its proportion
+// (an 8K screenshot of a terminal: 158 MB from a file of 838 KB) shows in
+// the preview, which the user asked for. maxCost still holds there.
+func TestLoadAskedTakesOutOfProportion(t *testing.T) {
+	p := shotPNG(t, 7680, 4320, 2, 6)
+	if _, err := Load(context.Background(), p, "", 600, 220, 1); err == nil || !strings.Contains(err.Error(), "7680x4320") {
+		t.Fatalf("8K terminal shot with no user action: err %v, want it refused", err)
+	}
+	fr, err := LoadAsked(context.Background(), p, "", 1920, 1080, 1)
+	if err != nil || fr.W != 1920 || fr.H != 1080 {
+		t.Fatalf("8K terminal shot in the preview: %s, err %v; want a 1920x1080 frame", shape(fr), err)
+	}
+	huge := writeFile(t, "huge.png", pngHeader(9000, 9000, 8, 6))
+	if _, err := LoadAsked(context.Background(), huge, "", 3840, 2160, 1); err == nil || !strings.Contains(err.Error(), "9000x9000") {
+		t.Fatalf("9000x9000 RGBA in the preview: err %v, want it refused (over maxCost)", err)
+	}
+}
+
+// TestLoadBigPictures : a phone photo of 48 or 50 Mpx (8000x6000,
+// 8192x6144), a few MB as a JPEG, and a long screenshot load with no user
+// action, fitted to the box asked. The cap of 40 Mpx refused the photos.
+func TestLoadBigPictures(t *testing.T) {
+	if testing.Short() {
+		t.Skip("decodes 112 Mpx: 2 s, 25 s under -race")
+	}
+	for _, c := range []struct {
+		what string
+		w, h int
+		path string
+	}{
+		{"48 Mpx photo", 8000, 6000, photoJPEG(t, 8000, 6000)},
+		{"50 Mpx photo", 8192, 6144, photoJPEG(t, 8192, 6144)},
+		{"long screenshot", 1170, 12000, shotPNG(t, 1170, 12000, 2, 300)},
+	} {
+		fr, err := Load(context.Background(), c.path, "", 1920, 1080, 1)
+		w, h := Fit(c.w, c.h, 1920, 1080)
+		if err != nil || fr.W != w || fr.H != h {
+			t.Errorf("%s: %s, err %v; want a %dx%d frame", c.what, shape(fr), err, w, h)
+		}
+	}
+}
+
+// TestLoadScaleMemory : CatmullRom keeps dstW x srcH x 32 bytes, so a
+// 12 Mpx photo in the 4K preview took 334 MB in Load. The source is halved
+// first, and the last step needs no buffer when CatmullRom would need more
+// than scaleBudget.
+func TestLoadScaleMemory(t *testing.T) {
+	p := photoJPEG(t, 4000, 3000)
+	var fr *Frames
+	var err error
+	mb := allocated(func() { fr, err = Load(context.Background(), p, "", 3840, 2160, 1) })
+	if err != nil || fr.W != 2880 || fr.H != 2160 {
+		t.Fatalf("12 Mpx photo in a 4K box: %s, err %v; want a 2880x2160 frame", shape(fr), err)
+	}
+	if mb > 128 {
+		t.Fatalf("12 Mpx photo in a 4K box: Load allocated %d MB, want 128 MB at most", mb)
 	}
 }
 

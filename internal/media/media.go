@@ -2,6 +2,7 @@
 package media
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/binary"
@@ -49,13 +50,32 @@ const (
 	// time thus hold twice that. A shared counter if it ever hurts.
 	videoBudget  = 200 << 20 // bytes of decoded PNG at most
 	progressStep = 30        // frames between two partial reports
-	// maxPixels : pixel budget of one decoded image (40 Mpx ≈ 160 MB in
-	// RGBA; half the pixels for 16 bits a channel, which take 8 bytes),
-	// plus the temporary of the scaler (dstW × srcH × 32 bytes). The header
-	// announces the size before the decoder allocates for it, so it is read
-	// first — a 4 MB PNG can claim 65535x65535. Same guard as fetchTile
-	// (osm.go) on the OSM side.
-	maxPixels = 40 << 20
+	// maxCost : bytes one decoding may hold, whoever asks for it. The cost
+	// is read from the header before the decoder allocates (a 4 MB PNG can
+	// claim 65535x65535): the pixels times the bytes a pixel takes in the
+	// decoder of its format (pixelCost), plus 1 for the first halving of fit.
+	// 256 MB takes a 50 Mpx photo (8192x6144: 120 MB as a JPEG, 240 MB as an
+	// RGB PNG) and an 8K screenshot (158 MB). It refuses a progressive JPEG
+	// over 31 Mpx (8.5 bytes a pixel: Go keeps its coefficients). Measured
+	// peak of Load: 253 MB for a 48 Mpx RGB PNG in the 4K preview.
+	maxCost = 256 << 20
+	// autoFloor, autoRatio : a decoding with no user action (a line that
+	// shows, a download that lands) also refuses a bomb, a picture that costs
+	// more than autoFloor and more than autoRatio bytes a byte of its file.
+	// Measured cost per byte of file: photos 11 to 42 (JPEG q95 to q60, 12
+	// to 50 Mpx), long screenshots of a chat 76 to 78, flat baseline JPEGs
+	// 146 to 426, a 4K screenshot 149, an 8K screenshot of text 262, an 8K
+	// terminal 882, flat PNGs 1285 and more, a flat lossless WebP 177000.
+	// Under the floor a picture loads whatever its file: a 4K screenshot
+	// (40 MB), a progressive Telegram photo of 2560 px (40 MB), a lossless
+	// 4K WebP (55 MB). The preview (LoadAsked) skips this rule.
+	autoFloor = 64 << 20
+	autoRatio = 128
+	// scaleBudget : bytes of the buffer of CatmullRom (dstW x srcH x 32).
+	// Over it, fit halves the source first and takes ApproxBiLinear when the
+	// last step would still need more: a 12 Mpx photo in the 4K preview took
+	// 334 MB in Load, 264 of them for that buffer (47 MB now).
+	scaleBudget = 64 << 20
 	// maxSide : longest side of an image, in px. The scaler keeps 1 px of
 	// output width at least, and it pays 32 bytes of temporary per source row
 	// plus 64 bytes of weights per source row and column, whatever the pixel
@@ -64,21 +84,190 @@ const (
 	// screenshot (1170x12000), an 8K screenshot or a panorama still loads.
 	maxSide = 1 << 15
 	// Limit the canvas and the input frame count before gif.DecodeAll.
-	// Paletted frames use one byte per pixel.
-	maxGIFPixels = maxPixels * 4 / maxFrames
+	// Paletted frames use one byte per pixel: 160 MB for maxFrames frames.
+	maxGIFPixels = (160 << 20) / maxFrames
 )
 
-// errNoAnim : a GIF too big to animate (maxGIFPixels). Load then shows its
-// first frame under the cap of a still image.
+// errNoAnim : a GIF too big to animate (maxGIFPixels), or out of proportion
+// with its file (checkCost). Load then shows its first frame under the rule
+// of a still image.
 var errNoAnim = errors.New("gif: too big to animate")
 
-// checkPixels refuses the dimensions announced by a header before the
-// decoding allocates for them: more than maxPx pixels, or a side over maxSide.
-func checkPixels(w, h, maxPx int) error {
-	if w <= 0 || h <= 0 || w > maxSide || h > maxSide || w > maxPx/h {
+// checkCost refuses a decoding from what a header announces, before the
+// decoder allocates: a side over maxSide or a cost over maxCost bytes for a
+// w x h picture, and, when nobody asked for it, a cost over autoFloor that
+// is also over autoRatio bytes a byte of its file (size).
+func checkCost(w, h int, cost float64, size int64, asked bool) error {
+	switch {
+	case w <= 0 || h <= 0 || w > maxSide || h > maxSide || cost > maxCost:
 		return fmt.Errorf(i18n.T("image_too_big"), w, h)
+	case !asked && cost > autoFloor && cost > autoRatio*float64(size):
+		return fmt.Errorf(i18n.T("image_out_of_proportion"), w, h, max(size>>10, 1))
 	}
 	return nil
+}
+
+// gifFits : a canvas or a frame of w x h px may animate.
+func gifFits(w, h int) bool {
+	return w > 0 && h > 0 && w <= maxSide && h <= maxSide && w*h <= maxGIFPixels
+}
+
+// pixelCost : bytes a pixel of the still picture in r takes in Load (the
+// decoder of its format, then 1 for the first halving of fit). PNG and GIF:
+// the bytes of the colour model, 1 for grey or a palette, 2 for grey 16, 4
+// for RGBA, 8 for RGBA 64; twice that for an interlaced PNG, whose passes are
+// pictures of their own (8 measured for RGBA). JPEG: jpegCost. WebP: webpCost.
+func pixelCost(r io.ReaderAt, size int64, format string, cm color.Model) float64 {
+	n := 4.0
+	switch {
+	case format == "jpeg":
+		return jpegCost(io.NewSectionReader(r, 0, size)) + 1
+	case format == "webp":
+		return webpCost(io.NewSectionReader(r, 0, size)) + 1
+	case format == "gif" || cm == color.GrayModel:
+		n = 1
+	case cm == color.Gray16Model:
+		n = 2
+	case cm == color.RGBA64Model || cm == color.NRGBA64Model:
+		n = 8
+	}
+	if _, ok := cm.(color.Palette); ok {
+		n = 1
+	}
+	if format == "png" {
+		var b [1]byte
+		if _, err := r.ReadAt(b[:], 28); err == nil && b[0] == 1 { // interlace method of IHDR: Adam7
+			n *= 2
+		}
+	}
+	return n + 1
+}
+
+// jpegCost : bytes a pixel takes in image/jpeg, read from the frame header
+// (SOF) of r: one byte a sample of each plane at its sampling (a plane of an
+// unusual sampling is decoded whole), 4 bytes more a sample for the
+// coefficients a progressive file keeps, and the 4 bytes of the picture a
+// 4-plane file is turned into. Measured: baseline 4:2:0 1.5, CMYK 7.6,
+// progressive 4:2:0 7.2, 4:4:4 14.3, CMYK 22.9. A header it cannot read
+// counts as the worst case.
+func jpegCost(r io.Reader) float64 {
+	const worst = 24
+	br := bufio.NewReader(r)
+	if b, err := br.Peek(2); err != nil || b[0] != 0xff || b[1] != 0xd8 {
+		return worst
+	}
+	br.Discard(2)
+	for {
+		c, err := br.ReadByte()
+		if err != nil || c != 0xff {
+			return worst
+		}
+		for c == 0xff && err == nil { // fill bytes, then the code of the marker
+			c, err = br.ReadByte()
+		}
+		if err != nil {
+			return worst
+		}
+		if c == 0x01 || c >= 0xd0 && c <= 0xd9 { // TEM, RSTn, SOI, EOI: no length
+			continue
+		}
+		var l [2]byte
+		if _, err := io.ReadFull(br, l[:]); err != nil {
+			return worst
+		}
+		n := int(binary.BigEndian.Uint16(l[:])) - 2
+		if c < 0xc0 || c > 0xc2 { // not a frame Go decodes (SOF0, SOF1, SOF2)
+			if n < 0 || c == 0xda { // a scan before the frame
+				return worst
+			}
+			if _, err := br.Discard(n); err != nil {
+				return worst
+			}
+			continue
+		}
+		b := make([]byte, max(n, 0))
+		if _, err := io.ReadFull(br, b); err != nil || n < 6 || n < 6+3*int(b[5]) || b[5] == 0 {
+			return worst
+		}
+		nf, comp := int(b[5]), b[6:]
+		maxH, maxV := 1, 1
+		for i := range nf {
+			maxH, maxV = max(maxH, int(comp[3*i+1]>>4)), max(maxV, int(comp[3*i+1]&15))
+		}
+		samples := 0.0
+		for i := range nf {
+			if nf == 1 { // one plane is read whole, whatever its sampling
+				samples = 1
+				break
+			}
+			samples += float64(int(comp[3*i+1]>>4)*int(comp[3*i+1]&15)) / float64(maxH*maxV)
+		}
+		cost := samples
+		if nf == 3 && (comp[4] != comp[7] || int(comp[1]) != maxH<<4|maxV || maxV/max(int(comp[4]&15), 1) == 4) {
+			cost = 3 // the "flex" mode of image/jpeg: three whole planes
+		}
+		if c == 0xc2 {
+			cost += 4 * samples
+		}
+		if nf == 4 {
+			cost += 4
+		}
+		return cost
+	}
+}
+
+// webpCost : bytes a pixel takes in x/image/webp, read from the chunks of r
+// (the header of an extended file, VP8X, does not tell). Lossy (VP8):
+// YCbCr 4:2:0, 1.5. Lossless (VP8L): NRGBA, 4, plus up to 2 of packed
+// pixels before its palette applies, 6. An alpha plane (ALPH) is a lossless
+// picture of its own, kept as 1 byte a pixel: 7.
+func webpCost(r io.ReadSeeker) float64 {
+	const worst = 7
+	if _, err := r.Seek(12, io.SeekStart); err != nil {
+		return worst
+	}
+	for alpha := false; ; {
+		var h [8]byte
+		if _, err := io.ReadFull(r, h[:]); err != nil {
+			return worst
+		}
+		switch string(h[:4]) {
+		case "ALPH":
+			alpha = true
+		case "VP8L":
+			return 6
+		case "VP8 ":
+			if alpha {
+				return worst
+			}
+			return 1.5
+		}
+		n := int64(binary.LittleEndian.Uint32(h[4:]))
+		if _, err := r.Seek(n+n&1, io.SeekCurrent); err != nil {
+			return worst
+		}
+	}
+}
+
+// animatedCost : the rule of a still picture for an animated PNG or WebP
+// that ffmpeg plays, from its header: 8 bytes a pixel, the frame and the one
+// before it that the decoder of ffmpeg keeps (read from ffmpeg, not
+// measured).
+func animatedCost(path string, asked bool) error {
+	f, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	cfg, _, err := image.DecodeConfig(f)
+	if err != nil {
+		return err
+	}
+	st, err := f.Stat()
+	if err != nil {
+		return err
+	}
+	return checkCost(cfg.Width, cfg.Height, float64(cfg.Width)*float64(cfg.Height)*8, st.Size(), asked)
 }
 
 var HaveFFmpeg = func() bool {
@@ -150,7 +339,20 @@ func mpvOut(s Screen) []string {
 // ctx ends the decoding: a video being played is cancelled between two frames
 // and its ffmpeg goes with it. A still image is one call of the standard
 // library, nothing to cut in two there.
+//
+// Load is the decoding nobody asked for (a line that shows, a download that
+// lands): a picture out of proportion with its file is refused (checkCost).
 func Load(ctx context.Context, path, mime string, maxW, maxH, frames int, progress ...func(*Frames)) (*Frames, error) {
+	return load(ctx, false, path, mime, maxW, maxH, frames, progress...)
+}
+
+// LoadAsked is Load for a decoding the user asked for (the preview): only
+// maxCost bounds it, so it shows what Load refused for its proportion.
+func LoadAsked(ctx context.Context, path, mime string, maxW, maxH, frames int, progress ...func(*Frames)) (*Frames, error) {
+	return load(ctx, true, path, mime, maxW, maxH, frames, progress...)
+}
+
+func load(ctx context.Context, asked bool, path, mime string, maxW, maxH, frames int, progress ...func(*Frames)) (*Frames, error) {
 	if mt := Sniff(path); mt != "" { // the type a network announces is not always the one of the bytes
 		mime = mt
 	}
@@ -164,9 +366,12 @@ func Load(ctx context.Context, path, mime string, maxW, maxH, frames int, progre
 	case mime == "image/webp" && animatedWebP(head(path)),
 		mime == "image/png" && HaveFFmpeg && animatedPNG(head(path)): // no ffmpeg: its first picture
 		// The Go decoders read the first picture only; ffmpeg plays the others.
+		if err := animatedCost(path, asked); err != nil {
+			return nil, err
+		}
 		return loadVideo(ctx, path, maxW, maxH, frames, p)
 	case mime == "image/gif" && frames > 1:
-		fr, err := loadGIF(ctx, path, maxW, maxH, min(frames, maxFrames))
+		fr, err := loadGIF(ctx, asked, path, maxW, maxH, min(frames, maxFrames))
 		if !errors.Is(err, errNoAnim) {
 			return fr, err
 		}
@@ -176,15 +381,16 @@ func Load(ctx context.Context, path, mime string, maxW, maxH, frames int, progre
 		return nil, err
 	}
 	defer f.Close()
-	cfg, _, err := image.DecodeConfig(f)
+	cfg, format, err := image.DecodeConfig(f)
 	if err != nil {
 		return nil, err
 	}
-	limit := maxPixels
-	if cfg.ColorModel == color.RGBA64Model || cfg.ColorModel == color.NRGBA64Model {
-		limit /= 2 // 16 bits a channel: 8 bytes a pixel
+	st, err := f.Stat()
+	if err != nil {
+		return nil, err
 	}
-	if err := checkPixels(cfg.Width, cfg.Height, limit); err != nil {
+	px := float64(cfg.Width) * float64(cfg.Height)
+	if err := checkCost(cfg.Width, cfg.Height, px*pixelCost(f, st.Size(), format, cfg.ColorModel), st.Size(), asked); err != nil {
 		return nil, err
 	}
 	if _, err := f.Seek(0, io.SeekStart); err != nil {
@@ -281,14 +487,32 @@ func Fit(w, h, maxW, maxH int) (int, int) {
 	return max(int(float64(w)*s), 1), max(int(float64(h)*s), 1)
 }
 
+// fit scales img down into maxW x maxH. CatmullRom keeps dstW x srcH x 32
+// bytes and reads srcH rows for each column of the box, so the source is
+// halved first while it stays at least twice the box (ApproxBiLinear at 2:1
+// is the mean of 2x2 pixels, with no buffer; the first halving takes 1 byte
+// a source pixel). The last step takes ApproxBiLinear when CatmullRom would
+// still need more than scaleBudget (the box of a large preview).
 func fit(img image.Image, maxW, maxH int) image.Image {
 	b := img.Bounds()
 	w, h := Fit(b.Dx(), b.Dy(), maxW, maxH)
 	if w == b.Dx() && h == b.Dy() {
 		return img
 	}
+	for b.Dx() >= 2*w && b.Dy() >= 2*h {
+		half := image.NewRGBA(image.Rect(0, 0, b.Dx()/2, b.Dy()/2))
+		xdraw.ApproxBiLinear.Scale(half, half.Bounds(), img, b, xdraw.Src, nil)
+		img, b = half, half.Bounds()
+	}
+	if w == b.Dx() && h == b.Dy() {
+		return img
+	}
+	var sc xdraw.Scaler = xdraw.CatmullRom
+	if w*b.Dy()*32 > scaleBudget {
+		sc = xdraw.ApproxBiLinear
+	}
 	dst := image.NewRGBA(image.Rect(0, 0, w, h))
-	xdraw.CatmullRom.Scale(dst, dst.Bounds(), img, b, xdraw.Over, nil)
+	sc.Scale(dst, dst.Bounds(), img, b, xdraw.Over, nil)
 	return dst
 }
 
@@ -321,11 +545,12 @@ func encode(img image.Image) ([]byte, error) {
 const gifSlot = 100 * time.Millisecond
 
 // loadGIF keeps n frames at most. errNoAnim: the canvas or a frame is over
-// maxGIFPixels.
+// maxGIFPixels, or the frames and the canvas (1 and 4 bytes a pixel) fail
+// checkCost.
 // ponytail: no GIF "disposal" handling, each frame is drawn on top of the one before.
 // ponytail: one delay for the clip, the median of its frames — a pause on one
 // frame is lost; a delay per frame in Frames and Media, read by animate, would keep it.
-func loadGIF(ctx context.Context, path string, maxW, maxH, n int) (*Frames, error) {
+func loadGIF(ctx context.Context, asked bool, path string, maxW, maxH, n int) (*Frames, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
@@ -335,15 +560,23 @@ func loadGIF(ctx context.Context, path string, maxW, maxH, n int) (*Frames, erro
 	if err != nil {
 		return nil, err
 	}
-	if checkPixels(cfg.Width, cfg.Height, maxGIFPixels) != nil {
+	if !gifFits(cfg.Width, cfg.Height) {
 		return nil, errNoAnim
+	}
+	st, err := f.Stat()
+	if err != nil {
+		return nil, err
 	}
 	if _, err := f.Seek(0, io.SeekStart); err != nil {
 		return nil, err
 	}
-	r, err := gifPreview(ctx, f)
+	px := 0
+	r, err := gifPreview(ctx, f, &px)
 	if err != nil {
 		return nil, err
+	}
+	if checkCost(cfg.Width, cfg.Height, float64(px)+4*float64(cfg.Width*cfg.Height), st.Size(), asked) != nil {
+		return nil, errNoAnim
 	}
 	g, err := gif.DecodeAll(r)
 	if err != nil {
@@ -352,7 +585,7 @@ func loadGIF(ctx context.Context, path string, maxW, maxH, n int) (*Frames, erro
 	if len(g.Image) == 0 {
 		return nil, errors.New(i18n.T("gif_empty"))
 	}
-	w, h := g.Config.Width, g.Config.Height // checkPixels refused a zero size
+	w, h := g.Config.Width, g.Config.Height // gifFits refused a zero size
 	canvas := image.NewRGBA(image.Rect(0, 0, w, h))
 	// One scaler and one destination for every frame: the package-level
 	// Scale makes both again at each call.
@@ -401,7 +634,8 @@ func loadGIF(ctx context.Context, path string, maxW, maxH, n int) (*Frames, erro
 
 // gifPreview gives the decoder at most maxFrames complete image blocks.
 // A trailer ends the preview before the decoder can allocate later frames.
-func gifPreview(ctx context.Context, f *os.File) (io.Reader, error) {
+// px gets the pixels of the frames given.
+func gifPreview(ctx context.Context, f *os.File, px *int) (io.Reader, error) {
 	var header [13]byte
 	if _, err := io.ReadFull(f, header[:]); err != nil {
 		return nil, err
@@ -437,9 +671,10 @@ func gifPreview(ctx context.Context, f *os.File) (io.Reader, error) {
 				return nil, err
 			}
 			w, h := int(binary.LittleEndian.Uint16(descriptor[4:6])), int(binary.LittleEndian.Uint16(descriptor[6:8]))
-			if checkPixels(w, h, maxGIFPixels) != nil {
+			if !gifFits(w, h) {
 				return nil, errNoAnim
 			}
+			*px += w * h
 			if descriptor[8]&0x80 != 0 {
 				if err := skip(3 << (1 + (descriptor[8] & 7))); err != nil {
 					return nil, err
@@ -518,7 +753,9 @@ func loadVideo(ctx context.Context, path string, maxW, maxH, frames int, progres
 		return nil, fmt.Errorf(i18n.T("ffprobe_output"), out)
 	}
 	w, h = upright(w, h, line, 4)
-	if err := checkPixels(w, h, maxPixels); err != nil {
+	// One RGBA frame at the size of the source, read by the scale filter; no
+	// proportion: a clip of a few seconds can weigh little.
+	if err := checkCost(w, h, float64(w)*float64(h)*4, 0, true); err != nil {
 		return nil, err
 	}
 	// Down to 10 fps at most; a slower source keeps its rate, otherwise ffmpeg

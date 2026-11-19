@@ -112,7 +112,7 @@ func (u *UI) pinBanner(w *Window) (text string, jump int, ok bool) {
 		return "", 0, false
 	}
 	k := w.Chat.Key()
-	if n := u.notes[k]; n != "" {
+	if n := u.noteOf(k); n != "" {
 		return i18n.T("note_banner", n), 0, true
 	}
 	if p, found := u.pins[k]; found {

@@ -7,6 +7,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"path/filepath"
@@ -17,7 +18,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/govlog/ttyloom/internal/i18n"
 	"github.com/govlog/ttyloom/internal/model"
+	"github.com/govlog/ttyloom/internal/render"
 )
 
 var _ model.Backend = (*Client)(nil)
@@ -702,6 +705,53 @@ func TestDCCGet(t *testing.T) {
 	}
 }
 
+// A DCC receive reports its bytes on the media of the offer, as a Telegram or
+// Discord download does (EvDownloadProgress), up to the whole size before it
+// lands; it never takes the status-bar event of an upload (EvUpload).
+func TestDCCGetProgress(t *testing.T) {
+	c, s, events, _ := start(t, Config{DCCIP: "127.0.0.1"}, false)
+	payload := strings.Repeat("x", 300*1024)
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer l.Close()
+	go func() {
+		conn, err := l.Accept()
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		conn.Write([]byte(payload))
+		io.Copy(io.Discard, conn) // the acks
+	}()
+	s.send(":bob!b@h PRIVMSG me :\x01DCC SEND big.bin 2130706433 %d %d\x01", l.Addr().(*net.TCPAddr).Port, len(payload))
+	md := waitFor[model.EvNewMessage](t, events).Msg.Media
+	c.Download(context.Background(), md, filepath.Join(t.TempDir(), "big.bin"))
+	var last model.EvDownloadProgress
+	for deadline := time.After(5 * time.Second); ; {
+		select {
+		case ev := <-events:
+			switch e := ev.(type) {
+			case model.EvUpload:
+				t.Fatalf("a receive reported as an upload: %q", e.Text)
+			case model.EvDownloadProgress:
+				if e.Media != md || e.Total != int64(len(payload)) || e.Done < last.Done {
+					t.Fatalf("progress %d/%d on %p, want the offer %p of %d bytes, never back", e.Done, e.Total, e.Media, md, len(payload))
+				}
+				last = e
+			case model.EvDownloaded:
+				if e.Err != "" || last.Done != int64(len(payload)) {
+					t.Fatalf("landed (%q) after %d of %d bytes reported", e.Err, last.Done, len(payload))
+				}
+				return
+			}
+		case <-deadline:
+			t.Fatalf("no EvDownloaded; last progress %d", last.Done)
+		}
+	}
+}
+
 // A reverse offer (port 0, token): we listen and send the line back with
 // our port, the peer connects.
 func TestDCCGetReverse(t *testing.T) {
@@ -776,9 +826,55 @@ func TestDCCSend(t *testing.T) {
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
 		t.Fatal("removeAfter: file still there")
 	}
+	// The file is gone with the send (a paste): its line has nothing to open.
+	if echo := waitFor[model.EvNewMessage](t, events); echo.Msg.ID != e.ID || echo.Msg.Media == nil || echo.Msg.Media.Loc != nil {
+		t.Fatalf("line of a removed file: %+v", echo.Msg)
+	}
 	c.SendFile(context.Background(), chatOf("#go"), path, "", false, 4)
 	if e = waitFor[model.EvSent](t, events); e.Err == "" {
 		t.Fatal("a room must refuse a DCC SEND")
+	}
+}
+
+// Once the peer has the file, the line of the send becomes a file line, as
+// the echo of a Telegram or Discord upload makes it: the receipt, then the
+// message of the same id with a file media. Its download is the file sent,
+// from where it went out; gone from there, the download fails.
+func TestDCCSentFileLine(t *testing.T) {
+	c, s, events, _ := start(t, Config{DCCIP: "127.0.0.1"}, false)
+	path := filepath.Join(t.TempDir(), "report.pdf")
+	payload := strings.Repeat("p", 5000)
+	os.WriteFile(path, []byte(payload), 0o600)
+	c.SendFile(context.Background(), chatOf("bob"), path, "caption IRC cannot send", false, 6)
+	line := s.expect("PRIVMSG bob :\x01DCC SEND ")
+	f := strings.Fields(strings.Trim(strings.TrimPrefix(line, "PRIVMSG bob :"), "\x01"))
+	conn, err := net.Dial("tcp", net.JoinHostPort("127.0.0.1", f[4]))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	io.ReadFull(conn, make([]byte, len(payload)))
+	ack := make([]byte, 4)
+	binary.BigEndian.PutUint32(ack, uint32(len(payload)))
+	conn.Write(ack)
+	sent := waitFor[model.EvSent](t, events)
+	echo := waitFor[model.EvNewMessage](t, events)
+	m, md := echo.Msg, echo.Msg.Media
+	if sent.Err != "" || m.ID != sent.ID || !m.Out || m.Text != "" || m.ChatID != chatID("bob") || md == nil {
+		t.Fatalf("line after the receipt %+v: %+v", sent, m)
+	}
+	if md.Kind != model.MediaFile || md.Name != "report.pdf" || md.Size != int64(len(payload)) || md.Loc == nil ||
+		md.Label != i18n.T("media_file", "report.pdf", render.HumanSize(int64(len(payload)))) {
+		t.Fatalf("media of the line: %+v", md)
+	}
+	c.Download(context.Background(), md, filepath.Join(t.TempDir(), "elsewhere.pdf"))
+	if d := waitFor[model.EvDownloaded](t, events); d.Err != "" || d.Path != path {
+		t.Fatalf("download of the file sent: %+v, want %s", d, path)
+	}
+	os.Remove(path)
+	c.Download(context.Background(), md, filepath.Join(t.TempDir(), "elsewhere.pdf"))
+	if d := waitFor[model.EvDownloaded](t, events); d.Err == "" {
+		t.Fatalf("download of a file gone: %+v", d)
 	}
 }
 

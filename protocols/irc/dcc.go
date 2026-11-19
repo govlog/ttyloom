@@ -202,7 +202,10 @@ func (c *Client) DCC() []string {
 }
 
 // SendFile : DCC SEND to the person of chat. The local line stays pending
-// until the peer took the whole file (EvSent), or failed (EvSent.Err).
+// until the peer took the whole file (EvSent), or failed (EvSent.Err). An
+// IRC server sends no echo: the message of the file comes from here after
+// the receipt, as the echo of the other networks does, with the file that
+// went out as its download. A caption cannot go with it.
 func (c *Client) SendFile(ctx context.Context, chat *model.Chat, path, _ string, removeAfter bool, tmpID int64) {
 	snapshot := *chat
 	chat = &snapshot
@@ -211,40 +214,50 @@ func (c *Client) SendFile(ctx context.Context, chat *model.Chat, path, _ string,
 			c.Post(model.EvSent{ChatID: chat.ID, TmpID: tmpID, Err: i18n.T("upload_error", filepath.Base(path), err)})
 		}
 		defer c.Guard("SendFile", fail)
-		if err := c.dccSend(ctx, nameOf(chat), path); err != nil {
+		size, err := c.dccSend(ctx, nameOf(chat), path)
+		if err != nil {
 			fail(err.Error())
 			return
 		}
+		name := filepath.Base(path)
+		md := &model.Media{Kind: model.MediaFile, Name: name, Size: size, Ext: media.SafeExtension(name, ""),
+			Label: i18n.T("media_file", name, render.HumanSize(size))}
 		if removeAfter {
-			os.Remove(path)
+			os.Remove(path) // a paste: its line has nothing left to open
+		} else if abs, err := filepath.Abs(path); err == nil {
+			md.Loc = dccFile{Path: abs}
 		}
-		c.Post(model.EvSent{ChatID: chat.ID, TmpID: tmpID, ID: c.ids.next()})
+		id := c.ids.next()
+		c.Post(model.EvSent{ChatID: chat.ID, TmpID: tmpID, ID: id})
+		c.Post(model.EvNewMessage{Chat: chat, Msg: model.Msg{ID: id, ChatID: chat.ID, ChatLabel: chat.Title,
+			Date: time.Now(), From: c.me(), FromID: c.chatID(c.me()), Out: true, Media: md}})
 	}()
 }
 
-func (c *Client) dccSend(ctx context.Context, nick, path string) error {
+// dccSend gives the size of the file sent.
+func (c *Client) dccSend(ctx context.Context, nick, path string) (int64, error) {
 	if IsChannel(nick) {
-		return errors.New(i18n.T("dcc_private_only"))
+		return 0, errors.New(i18n.T("dcc_private_only"))
 	}
 	f, err := os.Open(path)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	defer f.Close()
 	st, err := f.Stat()
 	if err != nil {
-		return err
+		return 0, err
 	}
 	if st.Size() == 0 {
-		return errors.New(i18n.T("dcc_empty"))
+		return 0, errors.New(i18n.T("dcc_empty"))
 	}
 	ip := c.localIP()
 	if ip == "" {
-		return errors.New(i18n.T("dcc_no_ip"))
+		return 0, errors.New(i18n.T("dcc_no_ip"))
 	}
 	l, err := c.listen()
 	if err != nil {
-		return err
+		return 0, err
 	}
 	defer l.Close()
 	port := l.Addr().(*net.TCPAddr).Port
@@ -253,7 +266,7 @@ func (c *Client) dccSend(ctx context.Context, nick, path string) error {
 	defer untrack()
 	line := fmt.Sprintf("\x01DCC SEND %s %s %d %d\x01", dccName(name), ipArg(ip), port, st.Size())
 	if err := c.sendLine(ctx, nick, line); err != nil {
-		return err
+		return 0, err
 	}
 	// The peer has dccWait to connect; ctx (a logout, a quit) cuts it short.
 	wctx, cancel := context.WithTimeout(ctx, dccWait)
@@ -265,22 +278,24 @@ func (c *Client) dccSend(ctx context.Context, nick, path string) error {
 	conn, err := l.Accept()
 	if err != nil {
 		if wctx.Err() != nil {
-			return errors.New(i18n.T("dcc_no_answer", nick))
+			return 0, errors.New(i18n.T("dcc_no_answer", nick))
 		}
-		return err
+		return 0, err
 	}
 	conn = watchDCC(ctx, conn)
 	defer conn.Close()
 	acks := acked(conn, st.Size())
+	// The status bar, as a Telegram upload: the line of a send has no media
+	// of the network yet to carry a percent.
 	if err := c.stream(ctx, f, conn, st.Size(), func(pct int) {
-		c.PostNB(model.EvUpload{Text: i18n.T("dcc_progress", name, pct)})
+		c.PostNB(model.EvUpload{Text: i18n.T("upload_progress", name, pct)})
 	}); err != nil {
-		return err
+		return 0, err
 	}
 	// The peer has the file once it acked the last byte: a close with bytes
 	// still in the send queue would drop them (RST). The read carries the
 	// dccWait idle deadline of dccConn, ctx cuts it.
-	return <-acks
+	return st.Size(), <-acks
 }
 
 // sendLine : one PRIVMSG of a DCC offer through the output queue, in turn
@@ -331,7 +346,8 @@ func acked(r io.Reader, size int64) <-chan error {
 	return ch
 }
 
-// stream copies size bytes from src to dst, progress every 5 %; ctx cuts it.
+// stream copies size bytes from src to dst, progress (nil: none) at each
+// whole percent; ctx cuts it.
 func (c *Client) stream(ctx context.Context, src io.Reader, dst io.Writer, size int64, progress func(int)) error {
 	buf := make([]byte, dccBlock)
 	var done int64
@@ -346,7 +362,7 @@ func (c *Client) stream(ctx context.Context, src io.Reader, dst io.Writer, size 
 				return werr
 			}
 			done += int64(n)
-			if pct := int(done * 100 / size); pct/5 != last/5 {
+			if pct := int(done * 100 / size); pct != last && progress != nil {
 				last = pct
 				progress(pct)
 			}
@@ -364,7 +380,8 @@ func (c *Client) stream(ctx context.Context, src io.Reader, dst io.Writer, size 
 	return nil
 }
 
-// dccGet fetches an offer into path through media.Save.
+// dccGet fetches an offer into path through media.Save. Its bytes are
+// counted on m (model.Progress), as a download of the other networks.
 func (c *Client) dccGet(ctx context.Context, m *model.Media, off dccOffer, path string) {
 	result := model.EvDownloaded{Media: m}
 	defer func() { c.Post(result) }() // Report completion after resource cleanup.
@@ -385,15 +402,14 @@ func (c *Client) dccGet(ctx context.Context, m *model.Media, off dccOffer, path 
 	}
 	c.mu.Unlock()
 	ack := make([]byte, 4)
+	p := &model.Progress{Poster: c.Poster, Media: m, Total: off.Size}
 	err = media.Save(path, func(f *os.File) error {
-		w := &ackWriter{w: f, ack: func(n int64) {
+		w := &ackWriter{w: f, p: p, ack: func(n int64) {
 			// ponytail: 32-bit counter, wraps past 4 GB; the sender ignores it anyway.
 			binary.BigEndian.PutUint32(ack, uint32(n))
 			conn.Write(ack)
 		}}
-		err := c.stream(ctx, io.LimitReader(conn, off.Size), w, off.Size, func(pct int) {
-			c.PostNB(model.EvUpload{Text: i18n.T("dcc_progress", off.Name, pct)})
-		})
+		err := c.stream(ctx, io.LimitReader(conn, off.Size), w, off.Size, nil)
 		if err == nil && w.n != off.Size {
 			err = io.ErrUnexpectedEOF
 		}
@@ -464,9 +480,11 @@ func (c *Client) dccConnect(ctx context.Context, off dccOffer) (net.Conn, error)
 	return conn, err
 }
 
-// ackWriter counts the bytes written and tells the sender after each block.
+// ackWriter counts the bytes written, in p too (EvDownloadProgress), and
+// tells the sender after each block.
 type ackWriter struct {
 	w    io.Writer
+	p    *model.Progress
 	n    int64
 	ack  func(int64)
 	last int64
@@ -475,6 +493,7 @@ type ackWriter struct {
 func (a *ackWriter) Write(p []byte) (int, error) {
 	n, err := a.w.Write(p)
 	a.n += int64(n)
+	a.p.Add(n)
 	if a.n-a.last >= dccBlock || err != nil || len(p) < dccBlock {
 		a.last = a.n
 		a.ack(a.n)

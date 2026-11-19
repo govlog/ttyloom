@@ -94,6 +94,10 @@ type Window struct {
 	// fillAsked : upper id of the hole whose page was asked last (UI.history);
 	// 0 when no answer is due.
 	fillAsked int
+	// loadOlder, loadAround : the page of the load that holds Loading, as its
+	// answer says it (startLoad, endLoad).
+	loadOlder  bool
+	loadAround int
 	// Search : result of /search on Chat, not a history. The window is invisible
 	// to ForChat (the live messages go to the window of the chat) and to the
 	// cache, and its *model.Msg are shared with the window of the chat.
@@ -123,6 +127,28 @@ type sepKey struct {
 	day   [3]int // year, month, day
 	width int
 	lang  string
+}
+
+// startLoad : a history load of w goes out — a page before beforeID (0: the
+// recent page) or a page centred on the message around. Loading stops a
+// second load of w until endLoad gets its answer, or the network stops
+// (clearNetWork).
+func (w *Window) startLoad(beforeID, around int) {
+	w.Loading, w.loadOlder, w.loadAround = true, beforeID > 0, around
+}
+
+// endLoad frees Loading when e answers the load that took it: its page, or
+// its error. A sync page (Since) and the page of a media refresh (refetch)
+// come from loads that never take the gate, and leave it as it is.
+// ponytail: EvHistory has no request id, so the kind of the page is the
+// match: two loads of one kind in flight on one window (attach to the chat
+// it already shows, a jump and a media refresh around the same message) let
+// the first answer free the gate, at worst one page asked twice. An id that
+// the UI gives and the three backends echo in EvHistory would make it exact.
+func (w *Window) endLoad(e model.EvHistory) {
+	if !e.Since && e.Older == w.loadOlder && e.AroundID == w.loadAround {
+		w.Loading = false
+	}
 }
 
 func (w *Window) Name() string {
@@ -229,7 +255,9 @@ func refreshMedia(old, fresh *model.Media) {
 	} else {
 		old.Full = fresh.Full
 	}
-	if old.State == model.MediaFailed && fresh.Loc != nil {
+	// A failed download can work with a fresh location; a file the decoder
+	// refused would come back the same: it stays refused.
+	if old.State == model.MediaFailed && !old.Refused && fresh.Loc != nil {
 		old.State, old.Err = model.MediaNone, ""
 	}
 }

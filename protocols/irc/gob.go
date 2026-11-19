@@ -26,7 +26,13 @@ type dccOffer struct {
 	Token string
 }
 
+// dccFile : model.Media.Loc of a file sent by DCC SEND — the absolute path it
+// went out from. No server keeps a copy: its download is that file, while it
+// is still there.
+type dccFile struct{ Path string }
+
 func init() {
 	gob.Register(peer{})
 	gob.Register(dccOffer{})
+	gob.Register(dccFile{})
 }

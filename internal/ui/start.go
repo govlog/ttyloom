@@ -28,7 +28,7 @@ func newUI(ctx context.Context, cancel context.CancelFunc, t *term.Term, cfg *co
 		side:        sideModeOf(cfg.Sidebar), // F2 and F3 as the last session left them
 		partsOn:     cfg.Members,
 		aliases:     map[model.ChatKey]string{},
-		notes:       map[model.ChatKey]string{},
+		notes:       map[noteKey]string{},
 		pins:        map[model.ChatKey]pinInfo{},
 		folded:      map[string]bool{},
 		self:        map[string]selfInfo{},

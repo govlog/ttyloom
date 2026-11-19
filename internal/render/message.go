@@ -351,7 +351,11 @@ func msgBody(m *model.Msg, o Opts, bw int) (lines []Line, mk msgMarks, quote str
 		label := Clean(md.Label)
 		switch md.State {
 		case model.MediaLoading:
-			label += i18n.T("media_loading")
+			if pct, ok := LoadPercent(md); ok {
+				label += i18n.T("media_loading_pct", pct)
+			} else {
+				label += i18n.T("media_loading")
+			}
 		case model.MediaReady:
 			if md.Kind == model.MediaVideo && md.Want > len(md.Frames) {
 				label += i18n.T("media_decoding_pct", 100*len(md.Frames)/md.Want)
@@ -526,6 +530,15 @@ func Actionable(m *model.Msg) bool { return m.ID != 0 && !m.Deleted }
 // Openable tells whether "o" has a target — a file to download, or the page
 // of a link preview.
 func Openable(md *model.Media) bool { return md != nil && (md.Loc != nil || SafeURL(md.URL)) }
+
+// LoadPercent : the share of the download of md received so far
+// (EvDownloadProgress); false when the network gave no size.
+func LoadPercent(md *model.Media) (int, bool) {
+	if md.DLTotal <= 0 {
+		return 0, false
+	}
+	return int(min(md.DLDone, md.DLTotal) * 100 / md.DLTotal), true
+}
 
 // Playable : downloaded video, playable inline (key l).
 func Playable(m *model.Msg) bool {

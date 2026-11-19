@@ -226,7 +226,7 @@ func (u *UI) command(name string, args []string, text string) {
 		if b == nil || w.Loading { // one load in flight per window, as for the scroll
 			return
 		}
-		w.Loading = true
+		w.startLoad(w.OldestID(), 0)
 		b.LoadHistory(u.backendContext(b), w.Chat, w.OldestID(), n)
 	case "search":
 		if u.botOnly() {

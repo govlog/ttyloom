@@ -385,8 +385,17 @@ func (c *Client) DeleteChat(ctx context.Context, chat *model.Chat) {
 	c.Refuse("DeleteChat", model.EvChatGone{ChatID: chat.ID})
 }
 
-// Download : a DCC offer is the only media of this network.
+// Download : the media of this network are DCC files. A file sent from here
+// is the one that went out, not a copy at path: its time stays its own.
 func (c *Client) Download(ctx context.Context, m *model.Media, path string) {
+	if f, ok := m.Loc.(dccFile); ok {
+		ev := model.EvDownloaded{Media: m, Path: f.Path}
+		if _, err := os.Stat(f.Path); err != nil {
+			ev = model.EvDownloaded{Media: m, Err: err.Error()}
+		}
+		c.Refuse("Download", ev)
+		return
+	}
 	off, ok := m.Loc.(dccOffer)
 	if !ok {
 		c.Refuse("Download", model.EvDownloaded{Media: m, Err: i18n.T("media_foreign")})

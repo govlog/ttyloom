@@ -2,7 +2,10 @@ package ui
 
 import (
 	"bytes"
+	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
@@ -347,6 +350,99 @@ func TestHistoryGapOverlapNoMarker(t *testing.T) {
 	}
 }
 
+// gateUI : the shown window of a chat that holds the messages 101..200, its
+// network, and older, which rests the scroll at the top of the window: the
+// older page goes when no load of the window is in flight.
+func gateUI() (u *UI, b *fakeBackend, w *Window, older func()) {
+	u = netUI(netTelegram)
+	u.ctx = context.Background()
+	b = u.nets[netTelegram].(*fakeBackend)
+	w = u.ws.New(false)
+	w.Chat, w.Loaded = u.chatList[0], true
+	for id := 101; id <= 200; id++ {
+		w.Upsert(&model.Msg{Net: netTelegram, ChatID: w.Chat.ID, ID: id, Date: time.Now()})
+	}
+	older = func() {
+		u.scroll(w, 10000)
+		u.tickAt(time.Now().Add(olderDelay))
+	}
+	return u, b, w, older
+}
+
+// gatePage : a history page of the chat of w that the network sends.
+func gatePage(u *UI, w *Window, lo, hi int, ev model.EvHistory) {
+	ev.ChatID = w.Chat.ID
+	for id := lo; id <= hi; id++ {
+		ev.Msgs = append(ev.Msgs, model.Msg{ChatID: w.Chat.ID, ID: id, Date: time.Now()})
+	}
+	u.dispatch(model.Envelope{Net: netTelegram, Ev: ev})
+}
+
+// One history load at a time per window. A page that another load asked —
+// a page of the startup sync, the page around a message that a media
+// refresh asks — lands during a scroll load: the scroll does not ask a
+// second page. The answer of the scroll load frees the window.
+func TestHistoryGateHeldByOtherPages(t *testing.T) {
+	u, b, w, older := gateUI()
+	older()
+	if b.history != 1 {
+		t.Fatalf("scroll at the top: %d loads, want 1", b.history)
+	}
+	u.syncCur = w.Chat
+	for _, p := range []struct {
+		name   string
+		lo, hi int
+		ev     model.EvHistory
+	}{{"sync page", 201, 202, model.EvHistory{Since: true}}, {"media refresh page", 149, 151, model.EvHistory{Around: true, AroundID: 150}}} {
+		gatePage(u, w, p.lo, p.hi, p.ev)
+		older()
+		if b.history != 1 {
+			t.Fatalf("%s during the scroll load: %d loads, want 1 (befores %v)", p.name, b.history, b.befores)
+		}
+	}
+	gatePage(u, w, 1, 100, model.EvHistory{Older: true})
+	older()
+	if b.history != 2 {
+		t.Fatalf("after the answer of the scroll load: %d loads, want 2", b.history)
+	}
+}
+
+// The window is never stuck: the error of its load frees it, and so does the
+// end of its network, whose answer can no longer come.
+func TestHistoryGateFreedByErrorAndStop(t *testing.T) {
+	u, b, _, older := gateUI()
+	older()
+	u.dispatch(model.Envelope{Net: netTelegram, Ev: model.EvHistory{ChatID: u.chatList[0].ID, Older: true, Err: "FLOOD_WAIT"}})
+	older()
+	if b.history != 2 {
+		t.Fatalf("after the error of the load: %d loads, want 2", b.history)
+	}
+	u.dispatch(model.Envelope{Net: netTelegram, Ev: model.EvStopped{}})
+	u.nets[netTelegram] = b // logged in again
+	older()
+	if b.history != 3 {
+		t.Fatalf("after the network stopped with a load in flight: %d loads, want 3", b.history)
+	}
+}
+
+// A jump to a message the window does not hold, asked during a scroll load,
+// waits for the answer of that load. A sync page that lands meanwhile does
+// not send the page around the message: two loads would run at once.
+func TestJumpWaitsForLoadInFlight(t *testing.T) {
+	u, b, w, older := gateUI()
+	older()
+	u.jumpTo(w.Chat, 50)
+	u.syncCur = w.Chat
+	gatePage(u, w, 201, 202, model.EvHistory{Since: true})
+	if len(b.arounds) != 0 {
+		t.Fatalf("sync page during the scroll load: pages around %v asked, want none", b.arounds)
+	}
+	gatePage(u, w, 60, 100, model.EvHistory{Older: true})
+	if !slices.Equal(b.arounds, []int{50}) {
+		t.Fatalf("answer of the scroll load: pages around %v asked, want [50]", b.arounds)
+	}
+}
+
 // TestUpdateReplacedMedia : an edit that replaces the media (another photo)
 // must not keep the old one; an edit of the text alone keeps the loaded media.
 func TestUpdateReplacedMedia(t *testing.T) {
@@ -360,6 +456,67 @@ func TestUpdateReplacedMedia(t *testing.T) {
 	w.Update(&model.Msg{ID: 1, Text: "b", Media: &model.Media{Kind: model.MediaPhoto, Size: 200}})
 	if w.Items[0].Msg.Media == old {
 		t.Fatal("media replaced by the edit: the old one is still shown")
+	}
+}
+
+// refreshUI : a photo in a Telegram window whose download failed with
+// dlErr, or, with dlErr "", whose file came whole and was refused by the
+// decoder. The network then sends its message again with a fresh reference
+// and its line shows. It gives the downloads asked after that, and the media.
+func refreshUI(t *testing.T, dlErr string) ([]string, *model.Media) {
+	t.Helper()
+	u, b := gifUI()
+	u.cfg.AutoMediaMaxKB, u.cfg.DownloadDir = 5120, t.TempDir()
+	u.events = make(chan model.Event, 4)
+	photo := func(loc string) *model.Media {
+		return &model.Media{Kind: model.MediaPhoto, Loc: loc, Ext: ".jpg", Mime: "image/jpeg", Size: 13}
+	}
+	md := photo("ref 1")
+	md.State = model.MediaLoading
+	w := u.ws.List[1]
+	date := time.Now()
+	w.Upsert(&model.Msg{Net: netTelegram, ChatID: 1, ID: 5, Date: date, Media: md})
+	if dlErr != "" {
+		u.downloaded(model.EvDownloaded{Media: md, Err: dlErr})
+	} else {
+		p := filepath.Join(t.TempDir(), "photo.jpg")
+		if err := os.WriteFile(p, []byte("not a picture"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		u.downloaded(model.EvDownloaded{Media: md, Path: p}) // its decoding starts
+		select {
+		case e := <-u.events:
+			u.framesLoaded(e.(evFrames))
+		case <-time.After(5 * time.Second):
+			t.Fatal("no decoding result")
+		}
+	}
+	if md.State != model.MediaFailed {
+		t.Fatalf("before the refresh: state %v, want failed", md.State)
+	}
+	w.Upsert(&model.Msg{Net: netTelegram, ChatID: 1, ID: 5, Date: date, Media: photo("ref 2")})
+	u.showItem(w.Items[len(w.Items)-1])
+	return b.downloads, md
+}
+
+// TestRefreshKeepsRefusedImage : a file that came whole and that the decoder
+// refused (too large, out of proportion, not an image) was downloaded again
+// each time the network sent its message again, for the same refusal. It
+// stays refused, and its label keeps the reason.
+func TestRefreshKeepsRefusedImage(t *testing.T) {
+	downloads, md := refreshUI(t, "")
+	if len(downloads) != 0 || md.State != model.MediaFailed || md.Err == "" {
+		t.Fatalf("refused file after a refresh: downloads %v, state %v, error %q; want none, failed with its reason", downloads, md.State, md.Err)
+	}
+}
+
+// TestRefreshRetriesFailedDownload : a download that failed (the network, a
+// dead reference) starts again when its message comes back with a fresh
+// reference.
+func TestRefreshRetriesFailedDownload(t *testing.T) {
+	downloads, md := refreshUI(t, "timeout")
+	if len(downloads) != 1 || md.State != model.MediaLoading {
+		t.Fatalf("failed download after a refresh: downloads %v, state %v; want one, loading", downloads, md.State)
 	}
 }
 

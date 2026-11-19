@@ -155,7 +155,7 @@ func (c *Client) upload(ctx context.Context, chat *model.Chat, path, caption str
 			return
 		}
 		defer func() { <-c.ulSem }()
-		f, err := uploader.NewUploader(c.api).WithProgress(&upProgress{c: c, last: -1}).FromPath(ctx, path)
+		f, err := uploader.NewUploader(c.api).WithProgress(&upProgress{c: c, name: filepath.Base(path), last: -1}).FromPath(ctx, path)
 		if err != nil {
 			fail(err.Error())
 			return
@@ -233,6 +233,7 @@ func mimeOf(path string) string {
 // single thread by default: Chunk is not concurrent.
 type upProgress struct {
 	c    *Client
+	name string // of the file, for the status bar
 	last int
 }
 
@@ -245,6 +246,6 @@ func (p *upProgress) Chunk(_ context.Context, s uploader.ProgressState) error {
 		return nil
 	}
 	p.last = pct
-	p.c.PostNB(model.EvUpload{Text: i18n.T("upload_progress", pct)})
+	p.c.PostNB(model.EvUpload{Text: i18n.T("upload_progress", p.name, pct)})
 	return nil
 }

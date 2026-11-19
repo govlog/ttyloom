@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -527,6 +528,38 @@ func TestUploadReportsTmpID(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("no event")
+	}
+}
+
+// An upload reports its progress in the status bar as tgc and irc do: one
+// event per whole percent that names the file, nothing on an empty file.
+func TestUploadProgress(t *testing.T) {
+	ev := make(chan model.Event, 8)
+	c := New(Config{}, ev)
+	r := c.upReader(strings.NewReader(strings.Repeat("x", 200)), "doc.pdf", 200)
+	buf := make([]byte, 100)
+	if _, err := io.ReadFull(r, buf); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case e := <-ev:
+		if u, ok := e.(model.EvUpload); !ok || !strings.Contains(u.Text, "50") || !strings.Contains(u.Text, "doc.pdf") {
+			t.Fatalf("after half of the file: %#v, want an EvUpload with 50 and the name", e)
+		}
+	default:
+		t.Fatal("after half of the file: no EvUpload")
+	}
+	r.Read(buf[:0]) // nothing read: same percent, no event
+	select {
+	case e := <-ev:
+		t.Fatalf("same percent posted again: %#v", e)
+	default:
+	}
+	io.Copy(io.Discard, c.upReader(strings.NewReader(""), "empty", 0))
+	select {
+	case e := <-ev:
+		t.Fatalf("empty file: %#v, want no event", e)
+	default:
 	}
 }
 

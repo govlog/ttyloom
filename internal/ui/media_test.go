@@ -2,8 +2,11 @@ package ui
 
 import (
 	"bytes"
+	"compress/zlib"
 	"context"
+	"encoding/binary"
 	"fmt"
+	"hash/crc32"
 	"image"
 	"image/png"
 	"os"
@@ -207,6 +210,59 @@ func TestDecodedFramesLand(t *testing.T) {
 	}
 	if len(u.decodes) != 0 {
 		t.Fatalf("%d decoding(s) still tracked once over", len(u.decodes))
+	}
+}
+
+// greyPNG writes a black greyscale PNG of w x h px and gives its path. The
+// chunks are made here: png.Encode takes seconds under -race at that size.
+func greyPNG(t *testing.T, w, h int) string {
+	t.Helper()
+	var idat bytes.Buffer
+	z, _ := zlib.NewWriterLevel(&idat, zlib.BestSpeed)
+	rows := make([]byte, (1+w)*max(1, (1<<20)/(1+w))) // rows of filter byte 0 and black pixels
+	for y := 0; y < h; y += len(rows) / (1 + w) {
+		z.Write(rows[:min(len(rows)/(1+w), h-y)*(1+w)])
+	}
+	z.Close()
+	ihdr := binary.BigEndian.AppendUint32(binary.BigEndian.AppendUint32([]byte("IHDR"), uint32(w)), uint32(h))
+	b := []byte("\x89PNG\r\n\x1a\n")
+	for _, c := range [][]byte{append(ihdr, 8, 0, 0, 0, 0), append([]byte("IDAT"), idat.Bytes()...), []byte("IEND")} {
+		b = binary.BigEndian.AppendUint32(b, uint32(len(c)-4))
+		b = binary.BigEndian.AppendUint32(append(b, c...), crc32.ChecksumIEEE(c))
+	}
+	p := filepath.Join(t.TempDir(), "flat.png")
+	if err := os.WriteFile(p, b, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
+// TestPreviewShowsRefusedImage : a picture out of proportion with its file
+// (36 Mpx in 36 KB) is not decoded by itself, and its label says why; the
+// preview, which the user asks for, shows it.
+func TestPreviewShowsRefusedImage(t *testing.T) {
+	u := &UI{ws: NewWindows(), agg: &Window{}, cfg: &config.Config{}, ctx: context.Background(),
+		events: make(chan model.Event, 4), images: "halfblock", t: &term.Term{Cols: 80, Rows: 24}}
+	md := &model.Media{Kind: model.MediaPhoto, Loc: 1, Path: greyPNG(t, 6000, 6000), Mime: "image/png", State: model.MediaLoading}
+	m := &model.Msg{Net: netTelegram, ChatID: 1, ID: 1, Media: md}
+	u.ws.New(false).Upsert(m)
+	next := func() {
+		select {
+		case e := <-u.events:
+			u.framesLoaded(e.(evFrames))
+		case <-time.After(10 * time.Second):
+			t.Fatal("no decoding result")
+		}
+	}
+	u.decodeFor(md) // its line
+	next()
+	if md.State != model.MediaFailed || !strings.Contains(md.Err, "6000x6000") {
+		t.Fatalf("line: state %v, error %q; want failed, with the size", md.State, md.Err)
+	}
+	u.openViewer(m) // v, or a click
+	next()
+	if v := u.viewer.md; v.State != model.MediaReady || len(v.Frames) != 1 {
+		t.Fatalf("preview: state %v, %d frames, error %q; want the picture", v.State, len(v.Frames), v.Err)
 	}
 }
 

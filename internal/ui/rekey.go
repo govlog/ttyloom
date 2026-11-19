@@ -102,11 +102,15 @@ func (u *UI) rekeyChats(net string, idFor func(string) int64) {
 			delete(u.muted, old)
 			u.muted[key], mutedChanged = true, true
 		}
-		if note := u.notes[old]; note != "" {
-			if u.notes[key] == "" {
-				u.notes[key] = note
+		for nk, note := range u.notes { // the notes of every account on the chat
+			if nk.chat != old {
+				continue
 			}
-			delete(u.notes, old)
+			moved := noteKey{nk.acct, key}
+			if u.notes[moved] == "" {
+				u.notes[moved] = note
+			}
+			delete(u.notes, nk)
 			notesChanged = true
 		}
 		u.dialogsDirty = true

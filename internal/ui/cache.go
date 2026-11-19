@@ -52,6 +52,7 @@ func (u *UI) loadCache() {
 			continue
 		}
 		u.cacheSelf[net] = selfID
+		u.attachNotes(net, selfID) // its chats show before EvReady, with the notes of that account
 		for i := range chats {
 			// The gob was written before the networks had a name: without this the
 			// chat would reach u.net() un-stamped and its calls would go nowhere.

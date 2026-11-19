@@ -443,7 +443,7 @@ func (u *UI) downloaded(e model.EvDownloaded) {
 			u.sys(i18n.T("file_failed", render.CleanLine(cmp.Or(md.Name, md.Label)), e.Err))
 		}
 		delete(u.fileNext, md) // the next download of md, whatever starts it, opens nothing
-		md.State, md.Err = model.MediaFailed, e.Err
+		md.State, md.Err, md.Refused = model.MediaFailed, e.Err, false
 		if v := u.viewer; v != nil && v.src == md {
 			v.md.State, v.md.Err = model.MediaFailed, e.Err
 		}
@@ -451,8 +451,11 @@ func (u *UI) downloaded(e model.EvDownloaded) {
 		return
 	}
 	md.Path = e.Path
-	if mine {
-		os.Chtimes(e.Path, d.date, d.date) // the file takes the date of its message (taken)
+	// The file takes the date of its message (taken). Only the file asked
+	// for: one the network gives of its own (an IRC send, the file that
+	// went out) belongs to the user and keeps its time.
+	if mine && e.Path == d.path {
+		os.Chtimes(e.Path, d.date, d.date)
 	}
 	if do := u.fileNext[md]; do != nil {
 		delete(u.fileNext, md)
@@ -739,7 +742,11 @@ func (u *UI) loadFrames(md *model.Media, maxW, maxH, frames, gen int) {
 				post(evFrames{Media: md, Frames: f, Gen: gen, ctx: ctx, CellW: cw, CellH: ch, Partial: true})
 			})
 		}
-		f, err := media.Load(ctx, path, mime, maxW, maxH, frames, progress...)
+		load := media.Load // a line, a box, an emoji: nobody asked for it
+		if gen != 0 {      // the preview: the user asked for this media (v, a click)
+			load = media.LoadAsked
+		}
+		f, err := load(ctx, path, mime, maxW, maxH, frames, progress...)
 		ev := evFrames{Media: md, Frames: f, Gen: gen, ctx: ctx, CellW: cw, CellH: ch}
 		if err != nil {
 			ev.Err = err.Error()
@@ -792,6 +799,7 @@ func (u *UI) framesLoaded(e evFrames) {
 	}
 	if e.Err != "" {
 		md.State, md.Err, md.Want = model.MediaFailed, e.Err, 0
+		md.Refused = true // the file is there: a new download would bring the same refusal
 		u.invalidateMedia(md)
 		return
 	}

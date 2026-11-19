@@ -235,7 +235,8 @@ type UI struct {
 	folded     map[string]bool           // folded sidebar sections, by key (sidebar.toml); nil = no section
 	muted      map[model.ChatKey]bool    // chats with no bell nor notification (muted.toml)
 	mutedSecs  map[string]bool           // sections muted as a whole, by key (muted.toml)
-	notes      map[model.ChatKey]string  // local note per chat (/note), saved in notes.toml
+	notes      map[noteKey]string        // local note per chat and account (/note), saved in notes.toml
+	noteAcct   map[string]int64          // per network, the account whose notes show (noteKey); none: not known yet
 	pins       map[model.ChatKey]pinInfo // newest pinned message known per chat (EvPinned)
 	marquee    marqueeState              // scrolling title of the current sidebar line
 	find       sideFind                  // typing in the sidebar: keyboard, filter, cursor
@@ -1252,6 +1253,7 @@ func (u *UI) event(ev model.Event) {
 		}
 		u.accountID[net] = e.SelfID
 		u.self[net] = selfInfo{ID: e.SelfID, Name: render.CleanLine(e.SelfName), Bot: e.Bot}
+		u.attachNotes(net, e.SelfID)
 		if b, ok := u.nets[net].(model.ChatIDer); ok {
 			u.rekeyChats(net, b.ChatID)
 		}
@@ -1481,11 +1483,7 @@ func (u *UI) event(ev model.Event) {
 	case model.EvDownloaded:
 		u.downloaded(e)
 	case model.EvDownloadProgress:
-		// Late reports of a parallel download (out of order, or past the
-		// landing) never move the count back nor touch a decoding.
-		if md := e.Media; md.State == model.MediaLoading && u.decodes[md] == nil {
-			md.DLDone, md.DLTotal = max(md.DLDone, e.Done), e.Total
-		}
+		u.downloadProgress(e)
 	case evFrames:
 		u.framesLoaded(e)
 	case evPlayed:
@@ -1764,7 +1762,7 @@ func (u *UI) history(e model.EvHistory) {
 		return
 	}
 	w := u.ws.List[i]
-	w.Loading = false
+	w.endLoad(e)
 	if !e.Older || e.Err != "" { // not the page of a hole: a later page asks it again
 		w.fillAsked = 0
 	}
@@ -1848,9 +1846,10 @@ func (u *UI) history(e model.EvHistory) {
 	}
 	// Appointment of a jump (search, quote): the selection is set as soon as
 	// the message is there (selShow moves the view at the next draw). Any
-	// other page that ends starts the centred page again — including a scroll
-	// up in flight at the time of the jump, which had held it. Only the page
-	// centred on the target, back without it, closes the appointment.
+	// other page that leaves the window free starts the centred page again —
+	// including the answer of a scroll up in flight at the time of the jump,
+	// which had held it. Only the page centred on the target, back without
+	// it, closes the appointment.
 	if u.jump.msgID != 0 && u.jump.chat == key {
 		switch it := itemByID(w, u.jump.msgID); {
 		case it != nil:
@@ -1860,7 +1859,7 @@ func (u *UI) history(e model.EvHistory) {
 		case e.Around && e.AroundID == u.jump.msgID:
 			u.jumpDone(key) // page centred on it, without it: message gone
 			w.AddSys(i18n.T("message_gone"))
-		default:
+		case !w.Loading:
 			u.loadAround(w, u.jump.msgID)
 		}
 	}
@@ -1945,6 +1944,7 @@ func (u *UI) sent(e model.EvSent) {
 	if e.TmpID == 0 {
 		return
 	}
+	u.settleUpload(e)
 	for _, w := range u.ws.List {
 		w.echoSent(e.TmpID, e.ID, e.Err)
 	}
@@ -2127,7 +2127,7 @@ func (u *UI) loadHistory(w *Window, beforeID int) {
 	if b == nil {
 		return // no network: w.Loading stays false, the window is not stuck
 	}
-	w.Loading = true
+	w.startLoad(beforeID, 0)
 	b.LoadHistory(u.backendContext(b), w.Chat, beforeID, 100)
 }
 
@@ -2138,7 +2138,7 @@ func (u *UI) loadAround(w *Window, id int) {
 	if b == nil {
 		return
 	}
-	w.Loading = true
+	w.startLoad(0, id)
 	b.LoadHistoryAround(u.backendContext(b), w.Chat, id, 100)
 }
 

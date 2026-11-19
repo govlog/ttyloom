@@ -421,7 +421,7 @@ func TestDocMediaKinds(t *testing.T) {
 // upProgress : one event per whole percent, nothing on an unknown size.
 func TestUploadProgress(t *testing.T) {
 	ev := make(chan model.Event, 4)
-	p := &upProgress{c: offline(ev)}
+	p := &upProgress{c: offline(ev), name: "doc.pdf"}
 	ctx := context.Background()
 	if err := p.Chunk(ctx, uploader.ProgressState{Total: 0, Uploaded: 10}); err != nil {
 		t.Fatal(err)
@@ -429,7 +429,7 @@ func TestUploadProgress(t *testing.T) {
 	if err := p.Chunk(ctx, uploader.ProgressState{Total: 100, Uploaded: 50}); err != nil {
 		t.Fatal(err)
 	}
-	if e := (<-ev).(model.EvUpload); !strings.Contains(e.Text, "50") {
+	if e := (<-ev).(model.EvUpload); !strings.Contains(e.Text, "50") || !strings.Contains(e.Text, "doc.pdf") {
 		t.Fatalf("progress: %+v", e)
 	}
 	p.Chunk(ctx, uploader.ProgressState{Total: 100, Uploaded: 50}) // same percent: no event
