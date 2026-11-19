@@ -464,7 +464,7 @@ var haveLibvpx = sync.OnceValue(func() bool {
 	if !HaveFFmpeg {
 		return false
 	}
-	out, err := exec.Command("ffmpeg", "-hide_banner", "-decoders").Output()
+	out, err := ffCmd(context.Background(), "", "ffmpeg", "-hide_banner", "-decoders").Output()
 	return err == nil && bytes.Contains(out, []byte(" libvpx-vp9 "))
 })
 
@@ -708,7 +708,7 @@ func gifPreview(ctx context.Context, f *os.File, px *int) (io.Reader, error) {
 // refuses an unknown section, and every video would fail. With an old
 // ffprobe a rotated video keeps its stored size.
 var sideRotation = sync.OnceValue(func() string {
-	out, err := exec.Command("ffprobe", "-hide_banner", "-sections").Output()
+	out, err := ffCmd(context.Background(), "", "ffprobe", "-hide_banner", "-sections").Output()
 	if err != nil || !bytes.Contains(out, []byte("/stream_side_data\n")) {
 		return ""
 	}
@@ -740,7 +740,7 @@ func loadVideo(ctx context.Context, path string, maxW, maxH, frames int, progres
 	frames = min(max(frames, 1), maxVideoFrames)
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, "ffprobe", "-v", "error", "-select_streams", "v:0",
+	out, err := ffCmd(ctx, path, "ffprobe", "-v", "error", "-select_streams", "v:0",
 		"-show_entries", "stream=codec_name,width,height,r_frame_rate"+sideRotation(), "-of", "csv=p=0", "-protocol_whitelist", "file,pipe", "-i", path).Output()
 	if err != nil {
 		return nil, fmt.Errorf(i18n.T("ffprobe_error"), err)
@@ -770,7 +770,7 @@ func loadVideo(ctx context.Context, path string, maxW, maxH, frames int, progres
 	if codec == "vp9" && haveLibvpx() {
 		args = append(args, "-c:v", "libvpx-vp9") // keeps the alpha
 	}
-	cmd := exec.CommandContext(ctx, "ffmpeg", append(args, "-i", path,
+	cmd := ffCmd(ctx, path, "ffmpeg", append(args, "-i", path,
 		"-vf", fmt.Sprintf("fps=%g,scale=%d:%d", fps, w, h),
 		"-frames:v", strconv.Itoa(frames),
 		"-f", "rawvideo", "-pix_fmt", "rgba", "-")...)
@@ -824,7 +824,7 @@ func ProbeVideo(ctx context.Context, path string) (w, h int, dur time.Duration, 
 	}
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, "ffprobe", "-v", "error", "-select_streams", "v:0",
+	out, err := ffCmd(ctx, path, "ffprobe", "-v", "error", "-select_streams", "v:0",
 		"-show_entries", "stream=width,height"+sideRotation()+":format=duration", "-of", "csv=p=0", "-protocol_whitelist", "file,pipe", "-i", path).Output()
 	if err != nil {
 		return 0, 0, 0, fmt.Errorf(i18n.T("ffprobe_error"), err)

@@ -752,6 +752,9 @@ func (u *UI) loadFrames(md *model.Media, maxW, maxH, frames, gen int) {
 			ev.Err = err.Error()
 		}
 		post(ev)
+		if note := media.SandboxNote(); note != "" { // after the first run of ffmpeg: its mode, once
+			u.post(model.EvLog{Level: "INFO", Msg: note})
+		}
 	}()
 }
 

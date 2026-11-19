@@ -861,6 +861,20 @@ at 1,000 frames and 200 MiB of decoded PNG per operation. Off-screen decoded
 images are released when the 256 MiB target budget is exceeded, then decoded
 again from their files when visible. This is not a cap on total process memory.
 
+Videos, animated PNG and animated WebP go to `ffmpeg` and `ffprobe`, C
+programs that read a file a peer chose. They run in a sandbox: ttyloom starts
+itself again as a small launcher that limits the program (no file written, no
+core dump, 64 open files, 10 minutes of CPU, 256 MiB of memory plus 128 MiB per
+CPU), sets `no_new_privs` and, where the kernel has Landlock, lets it read only
+its own libraries and the one file it decodes. It writes nowhere, and it can
+open no TCP connection (Landlock ABI 4 and later) and send no UDP (ABI 10). A
+kernel without Landlock keeps the limits and `no_new_privs`; when even those
+stop ffmpeg from starting, it runs as before. The mode is chosen once, at the
+first video, and one line in `/debug` says which protections are active.
+`TTYLOOM_FFMPEG_SANDBOX=off` in the environment of ttyloom turns the sandbox
+off. mpv (it plays a video when you ask, with the screen, the GPU and the
+sound) and the Go decoders of still images and GIFs are not in it.
+
 Kitty images are transmitted when first visible. At most `kitty_images` stay
 in the terminal; least recently displayed images are freed first. Alternating
 GIF placements avoid black flashes between frames, and stable placement IDs
