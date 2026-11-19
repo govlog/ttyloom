@@ -186,6 +186,8 @@ intro = true
 screensaver = "0"
 sidebar_sort = "recent"
 sidebar_split = false
+sidebar_autohide = false
+sidebar_autohide_delay = "1s"
 spell = "off"
 spell_quotes = false
 sidebar_width = 26
@@ -232,6 +234,8 @@ update_check = false
 | `sidebar_width` | Width in columns, from 12 to half the terminal width. Drag its vertical border to resize and save it. |
 | `sidebar_sort` | `recent`, `alpha` or `unread`. `F7` cycles these orders. |
 | `sidebar_split` | Windows list in two sections, channels then direct messages, each in `sidebar_sort` order. The `⊟` of the sidebar header toggles it. |
+| `sidebar_autohide` | `true` (`/set sidebar_autohide on`): the sidebar slides away when the mouse leaves it and comes back at the left edge of the screen. See [Sidebar and notifications](#sidebar-and-notifications). |
+| `sidebar_autohide_delay` | How long the mouse stays off the sidebar before it slides away: a Go duration (`500ms`, `1s`, `2s`), `1s` by default; `0` slides it away at once. |
 | `sidebar` | `hidden`, `chats` or `windows`: the sidebar mode at start. `F2` writes it, so the panel comes back as you left it. |
 | `members` | The member box (F3) open at start. `F3` writes it. |
 | `spell` | `off`, or installed Hunspell dictionary codes joined with `+`, such as `fr+en_US`. Dictionaries are `.aff`/`.dic` pairs in `/usr/share/hunspell`. Two-letter prefixes resolve to installed dictionaries; `us` is an alias for `en_US`. Misspellings get a red underline. `Ctrl+R` cycles corrections; Enter applies, `i` ignores, `a` adds to `spell.txt`, Escape closes. Right-click a word to correct only that word. |
@@ -925,6 +929,23 @@ Kitty can show avatars. A long current-chat title scrolls once within the
 column, then rests. Drag the vertical border to resize and save the panel
 width. A terminal too narrow to leave 20 columns to the messages hides the
 panel.
+
+With `sidebar_autohide` on, the panel slides out to the left once the mouse
+has been off it for `sidebar_autohide_delay` (one second by default), in five
+steps over about 150 ms, and the messages take its columns; it slides back as
+soon as the mouse touches the first column of the screen. Only a move brings
+it back: a click on that column stays a click on the messages. It stays out
+while the mouse is over it, while the menu of one of its lines is open, while
+its filter or its keyboard (Shift+Tab) is on, and while its border is dragged.
+F2, F7, Shift+F2 and Shift+Tab bring it back too; F2 then keeps its mode, and
+the next F2 cycles as usual. The panel stays open for F2 and for the saved
+`sidebar` mode while it is away. With no mouse move seen in the session (ssh
+without mouse reporting, a tmux that does not pass the mouse) it never slides
+away. A focus change moves nothing: the last position of the mouse decides.
+Unread activity still shows in `[Act: …]` and rings the bell; a message never
+brings the panel back. Kitty avatars of the panel stay in place during a
+slide; sixel and Terminology pictures show again once it ends, and nothing
+slides under the full-screen viewer.
 
 Click a conversation to open it; click a section header or use `/fold` to
 collapse it. With hover tracking enabled, the wheel over the sidebar switches

@@ -246,7 +246,7 @@ func (u *UI) hoverAt(x, y int) bool {
 // the │ bar is no line. true when the line changed.
 func (u *UI) sideHoverAt(x, y int) bool {
 	hov := 0
-	if u.zoneOf(x, y) == zoneSide && x < u.sideW && y >= sideHdr && y < sideHdr+u.sideRows() {
+	if u.zoneOf(x, y) == zoneSide && x < u.sideNow() && y >= sideHdr && y < sideHdr+u.sideRows() {
 		hov = y - sideHdr + 1
 	}
 	if u.sideHov == hov {

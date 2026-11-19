@@ -219,7 +219,10 @@ func (u *UI) draw() {
 	if u.t.Kitty {
 		u.endFrameKitty(&g, cur) // after every placement: never a hole
 	}
-	pics := u.cellPics(x0)
+	var pics []cellPic
+	if u.hide.next.IsZero() { // a picture in the cells goes again at each move: it waits for the end of a slide
+		pics = u.cellPics(x0)
+	}
 	if u.intro != nil {
 		pics = nil
 	}

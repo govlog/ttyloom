@@ -242,6 +242,7 @@ video = "show"               # first frame; l plays the selected video
 gifplay = "always"           # always, hover (the GIF under the mouse only), off
 sidebar_sort = "recent"      # recent, alpha, unread
 sidebar_split = false        # channels, then direct messages
+sidebar_autohide = false     # true: slides away when the mouse leaves it, back at the left edge
 sidebar = "hidden"           # hidden, chats, windows; F2 writes it
 members = false              # member box open at start; F3 writes it
 spell = "off"                # fr+en_US enables installed dictionaries

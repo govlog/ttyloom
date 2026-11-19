@@ -38,8 +38,8 @@ func (u *UI) sideHasKeys() bool {
 // sideFocus : Shift+Tab — the keyboard goes to the sidebar, or back to the
 // input line. The filter stays until Escape, Enter, a click or the wheel.
 func (u *UI) sideFocus() {
-	if x0, _ := u.layout(); x0 == 0 {
-		return // no sidebar drawn: nothing to give the keyboard to
+	if !u.sideOn() {
+		return // no sidebar: nothing to give the keyboard to (one slid away comes back)
 	}
 	u.find.keys = !u.find.keys
 }
@@ -195,7 +195,7 @@ func (u *UI) winMatch(w *Window, q string) bool {
 // and the column of that end: the terminal cursor goes there.
 func (u *UI) sideFindText() (string, int) {
 	text := []rune(i18n.T("sidebar_filter", render.CleanLine(u.find.q)))
-	shown, w, _ := hwindow(text, len(text), max(1, u.sideW-1))
+	shown, w, _ := hwindow(text, len(text), max(1, u.sideNow()-1))
 	return shown, w
 }
 

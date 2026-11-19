@@ -88,8 +88,10 @@ func (u *UI) introResume(now time.Time) {
 
 // noteInput : every event of the terminal goes by here first. A key, a
 // click, the wheel or a paste is activity, for the screensaver; a mouse move
-// is not. A focus event tells that the terminal reports the focus.
+// is not. A focus event tells that the terminal reports the focus. The
+// auto-hide of the sidebar follows the pointer from here (hideNote).
 func (u *UI) noteInput(k term.Key, now time.Time) {
+	u.hideNote(k, now)
 	switch {
 	case k.Code == term.FocusIn || k.Code == term.FocusOut:
 		u.focusSeen, u.focusOut = true, k.Code == term.FocusOut

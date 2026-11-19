@@ -232,6 +232,7 @@ type UI struct {
 	sideW      int                       // width of its content (sidebar_width, drag of the bar)
 	sideScroll int                       // first entry shown in the sidebar
 	sideHov    int                       // list line of the sidebar under the pointer, counted from 1; 0 = none
+	hide       sideHide                  // auto-hide of the sidebar: its slide and its delay (autohide.go)
 	folded     map[string]bool           // folded sidebar sections, by key (sidebar.toml); nil = no section
 	muted      map[model.ChatKey]bool    // chats with no bell nor notification (muted.toml)
 	mutedSecs  map[string]bool           // sections muted as a whole, by key (muted.toml)
@@ -353,6 +354,10 @@ func Run(ctx context.Context, cancel context.CancelFunc, t *term.Term, cfg *conf
 			u.clear()
 		case <-tick.C:
 			if !u.tick() {
+				continue
+			}
+		case now := <-u.hideC(): // a step of the slide of the sidebar (auto-hide)
+			if !u.hideTick(now) {
 				continue
 			}
 		case now := <-u.introC():
@@ -2460,14 +2465,20 @@ func (u *UI) key(k term.Key) {
 	case k.Code == term.Mouse:
 		u.mouse(k.Mouse)
 	case k.Code == term.F2 && k.Shift: // /net cycle, like /net with no argument
+		u.hideShow(time.Now())
 		u.cycleNet()
 	case k.Code == term.F2:
+		if u.hide.out { // slid away by the auto-hide: F2 brings the panel back first, in its mode
+			u.hideShow(time.Now())
+			return
+		}
 		// The width of the message area changes: everything is wrapped again.
 		u.nextSide()
 		u.clear()
 		u.cfg.Sidebar = sideNames[u.side] // the next start opens the panel the same way
 		u.saveCfg()
 	case k.Code == term.Tab && k.Shift: // keyboard to the sidebar (filter, arrows, Enter) and back
+		u.hideShow(time.Now())
 		u.sideFocus()
 	case k.Code == term.F3: // members of the chat, on top
 		u.toggleParts()
@@ -2487,6 +2498,7 @@ func (u *UI) key(k term.Key) {
 		}
 		u.saveCfg()
 	case k.Code == term.F7: // sidebar sort, like /set sidebar_sort
+		u.hideShow(time.Now()) // the panel slid away comes back to show it
 		u.cycleSort()
 	case k.Code == term.Ctrl:
 		switch k.Rune {
@@ -3059,6 +3071,9 @@ func (u *UI) tickAt(now time.Time) bool {
 		if u.anyHot() {
 			redraw = true
 		}
+	}
+	if u.hideTick(now) { // before the marquee: the width of the sidebar moves
+		redraw = true
 	}
 	if u.marqueeTick(now) { // always called (no lazy ||): its rate depends on it
 		redraw = true

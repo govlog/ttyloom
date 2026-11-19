@@ -119,6 +119,8 @@ type Config struct {
 	Intro             bool      `toml:"intro"`       // the demo at start
 	Screensaver       string    `toml:"screensaver"` // the demo after that long with no key (Go duration: 60m, 1h); 0: off
 	SidebarSort       string    `toml:"sidebar_sort"`
+	SidebarAutohide   bool      `toml:"sidebar_autohide"`       // the sidebar slides away when the mouse is off it
+	SidebarHideDelay  string    `toml:"sidebar_autohide_delay"` // ... for that long (Go duration: 500ms, 1s)
 	SidebarSplit      bool      `toml:"sidebar_split"`
 	Spell             string    `toml:"spell"`        // off | a hunspell code, chained with + (fr, us, en_GB, fr+us)
 	SpellQuotes       bool      `toml:"spell_quotes"` // check the > quotes and the ``` fences too
@@ -204,6 +206,8 @@ sidebar = "hidden"      # sidebar at start: hidden | chats | windows (F2 writes 
 sidebar_sort = "recent" # sort of the F2 sidebar (F7 cycles it): recent | alpha | unread
 sidebar_width = 26      # width of the F2 sidebar; the vertical bar drags with the mouse
 sidebar_split = false   # windows list in two sections, channels then direct messages (⊟ of the header)
+sidebar_autohide = false # the sidebar slides away when the mouse leaves it, and back at the left edge of the screen
+sidebar_autohide_delay = "1s" # how long the mouse stays off the sidebar before it slides away: 500ms, 1s, 2s
 members = false         # member box (F3) open at start (F3 writes it)
 spell = "off"           # spell checking: off, or Hunspell dictionaries joined with + (fr, en_US, fr+en_US)
 spell_quotes = false    # also check the quoted lines and the code blocks
@@ -269,7 +273,7 @@ func LoadFrom(dir string, mods ...module.Module) (*Config, error) {
 		}
 	}
 	c := &Config{dir: dir, mods: mods, DownloadDir: "~/Downloads/ttyloom", AutoMediaMaxKB: 5120, Images: "auto", Avatars: true, KittyImages: 48, VideoFrames: 300, Video: "show", GifPlay: "always", Timestamps: true, LinkPreviews: true, Hover: HoverMenu,
-		Bell: true, Notify: "terminal", AutoOpenDays: 7, Cache: true, CacheMessages: 2000, LogDir: "~/.local/share/ttyloom/logs", Separator: true, Redline: true, Intro: true, Screensaver: "0", SidebarSort: "recent", SidebarWidth: 26, Sidebar: "hidden", Spell: "off", CycleMode: "next"}
+		Bell: true, Notify: "terminal", AutoOpenDays: 7, Cache: true, CacheMessages: 2000, LogDir: "~/.local/share/ttyloom/logs", Separator: true, Redline: true, Intro: true, Screensaver: "0", SidebarSort: "recent", SidebarHideDelay: "1s", SidebarWidth: 26, Sidebar: "hidden", Spell: "off", CycleMode: "next"}
 	md, err := toml.DecodeFile(path, c)
 	if err != nil {
 		return nil, fmt.Errorf(i18n.T("error_with_prefix"), path, err)

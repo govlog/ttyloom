@@ -148,6 +148,8 @@ var helpTopics = []topic{
 	{"sidebar_sort", "help_sidebar_sort", "options"},
 	{"sidebar_split", "help_sidebar_split", "options"},
 	{"sidebar_width", "help_sidebar_width", "options"},
+	{"sidebar_autohide", "help_sidebar_autohide", "options"},
+	{"sidebar_autohide_delay", "help_sidebar_autohide_delay", "options"},
 	{"kitty_images", "help_kitty_images", "options"},
 	{"cache_messages", "help_cache_messages", "options"},
 	{"lang", "help_lang", "options"},

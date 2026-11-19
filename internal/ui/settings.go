@@ -192,6 +192,18 @@ var settings = []setting{
 			u.clear() // the message area changes width: everything is wrapped again
 			return true
 		}},
+	boolSetting("sidebar_autohide", func(c *config.Config) *bool { return &c.SidebarAutohide },
+		func(u *UI) { u.hideReset(time.Now()) }), // off: the panel is back at full width at once
+	{"sidebar_autohide_delay", fixed("500ms", "1s", "2s"),
+		func(u *UI) string { return "sidebar_autohide_delay = " + u.cfg.SidebarHideDelay },
+		func(u *UI, w *Window, v string) bool {
+			if d, err := time.ParseDuration(v); err != nil || d < 0 { // as screensaver
+				w.AddSys(i18n.T("sidebar_autohide_delay_bad"))
+				return false
+			}
+			u.cfg.SidebarHideDelay = v
+			return true
+		}},
 	{"spell", func() []string { return append([]string{"off", "us"}, spell.Available(spell.DictDir)...) }, // a chain ("fr+us") is typed by hand
 		func(u *UI) string { return "spell = " + u.cfg.Spell },
 		func(u *UI, _ *Window, v string) bool {

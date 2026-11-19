@@ -46,8 +46,22 @@ const (
 // clampSideW gives the width of the sidebar content, bounded to [12, cols/2].
 func clampSideW(w, cols int) int { return max(sideMinW, min(w, cols/2)) }
 
+// sideOn : F2 shows the sidebar and the screen has room for it — drawn, or
+// slid away by the auto-hide.
+func (u *UI) sideOn() bool { return u.side != sideHidden && u.t.Cols >= u.sideW+1+sideKeep }
+
+// sideNow : the width of the sidebar content on the screen now — sideW at
+// rest, less during a slide of the auto-hide, 0 when it is hidden or has no
+// room. The one width the layout, the drawing and the hit tests read.
+func (u *UI) sideNow() int {
+	if !u.sideOn() {
+		return 0
+	}
+	return u.sideW * (hideSteps - u.hide.step) / hideSteps
+}
+
 // sideCol : first column of the message area (│ bar of the sidebar included).
-func (u *UI) sideCol() int { return u.sideW + 1 }
+func (u *UI) sideCol() int { return u.sideNow() + 1 }
 
 // chatLess gives the comparator of a sort mode (F7, /set sidebar_sort) — the
 // one ordering rule of the sidebar, shared by the chat mode (sortChats) and by
@@ -1071,10 +1085,10 @@ func (u *UI) sideBlock(sepRow int) ([]render.Line, []sideRow) {
 		u.marquee = marqueeState{title: shown.text, width: shown.width} // another line: a new cycle
 	}
 	if u.side != sideChats {
-		return side, nil
+		return u.sideCut(side), nil
 	}
 	side = append(side, sideNewLine(u.th, u.sideW, hot)) // last line, outside the scroll
-	return side, rows
+	return u.sideCut(side), rows
 }
 
 // sideHot : the │ bar of the panel goes to the accent colour — while it is
@@ -1195,7 +1209,7 @@ func hasWindow(ws []*Window, k model.ChatKey) bool {
 // not: the wrap width thus never changes and nothing is to be wrapped again
 // when the bar shows up.
 func (u *UI) layout() (x0, width int) {
-	if u.side == sideHidden || u.t.Cols < u.sideCol()+sideKeep {
+	if u.sideNow() == 0 {
 		return 0, max(1, u.t.Cols-1)
 	}
 	return u.sideCol(), max(1, u.t.Cols-u.sideCol()-1)
