@@ -59,10 +59,10 @@ func newUI(ctx context.Context, cancel context.CancelFunc, t *term.Term, cfg *co
 	} else {
 		u.notes = n
 	}
-	if m, err := loadMuted(mutedPath()); err != nil {
+	if m, secs, err := loadMuted(mutedPath()); err != nil {
 		u.status0(i18n.T("mute_error", err)) // unreadable file: nothing muted, the bell rings as before
 	} else {
-		u.muted = m
+		u.muted, u.mutedSecs = m, secs
 	}
 	if a, err := loadCmdAliases(cmdAliasPath()); err != nil {
 		u.status0(i18n.T("alias_error", err)) // unreadable file: no alias

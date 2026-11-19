@@ -141,7 +141,7 @@ func (u *UI) rekeyChats(net string, idFor func(string) int64) {
 		_ = saveAliases(aliasPath(), u.aliases)
 	}
 	if mutedChanged {
-		_ = saveMuted(mutedPath(), u.muted)
+		_ = saveMuted(mutedPath(), u.muted, u.mutedSecs)
 	}
 	if notesChanged {
 		_ = saveNotes(notesPath(), u.notes)

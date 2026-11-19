@@ -311,7 +311,20 @@ func sortLabel(mode string) string {
 // ponytail: computed again at each call, no cache; ≤ 1000 chats, so the cost
 // is nothing — cache it if it ever gets noticeable.
 func (u *UI) sortedChats() []*model.Chat {
-	return sortChats(u.chatList, u.cfg.SidebarSort)
+	out := sortChats(u.chatList, u.cfg.SidebarSort)
+	if len(u.mutedSecs) > 0 { // a muted section goes last whatever the sort (/mute)
+		slices.SortStableFunc(out, func(a, b *model.Chat) int { return u.sunk(a) - u.sunk(b) })
+	}
+	return out
+}
+
+// sunk : 1 for a chat of a muted section, which sorts after every other chat;
+// 0 otherwise.
+func (u *UI) sunk(c *model.Chat) int {
+	if u.mutedSecs[sectionOf(c)] {
+		return 1
+	}
+	return 0
 }
 
 // sideChats : list shown in the sidebar — sorted, then cut to the /net filter
@@ -422,6 +435,9 @@ func (u *UI) sideWins() []int {
 				return 1
 			}
 			return -1
+		}
+		if d := u.sunk(ca) - u.sunk(cb); d != 0 { // a muted section goes last here too
+			return d
 		}
 		return less(ca, cb)
 	})
@@ -695,11 +711,16 @@ type sideState struct {
 	sel    *model.Chat
 	selWin *Window
 	muted  map[model.ChatKey]bool // their unread counts are dimmed
-	hov    int                    // list line on the screen under the pointer, counted from 1; 0 = none
+	// mutedSecs : sections muted as a whole; their chats count as muted.
+	mutedSecs map[string]bool
+	hov       int // list line on the screen under the pointer, counted from 1; 0 = none
 	// shown : when not nil, takes the text and the width of the current line
 	// if the frame draws it — the only line marqueeTick scrolls.
 	shown *marqueeLine
 }
+
+// isMuted : c is muted, by itself or with its section.
+func (s sideState) isMuted(c *model.Chat) bool { return chatMuted(s.muted, s.mutedSecs, c) }
 
 // marqueeLine : the scrolling part of the current line, and its width.
 type marqueeLine struct {
@@ -741,9 +762,14 @@ func ageFG(th theme.Theme, last, now time.Time) theme.Color {
 // sideSecLine : spans of a section header — "── name ───────[-]" laid over the
 // same mark and unread columns as the chat lines, so the titles stay aligned;
 // folded, those two columns carry what the section hides ([·] and the unread
-// total in red).
-func sideSecLine(r sideRow, th theme.Theme, width, gut int) []render.Span {
+// total in red). muted: the section is muted as a whole (/mute), its header
+// and its total are dimmed.
+func sideSecLine(r sideRow, th theme.Theme, width, gut int, muted bool) []render.Span {
 	dim := th.Style(theme.Dim)
+	un, rule := theme.Style{FG: th.Color(theme.Error), Bold: true}, th.Style(theme.Sep)
+	if muted {
+		un, rule = dim, dim
+	}
 	mark, unread := "   ", "  "
 	if r.window {
 		mark = "[·]"
@@ -764,8 +790,8 @@ func sideSecLine(r sideRow, th theme.Theme, width, gut int) []render.Span {
 		sp = append(sp, render.Span{Text: strings.Repeat(" ", gut)})
 	}
 	return append(sp, render.Span{Text: mark, Style: dim},
-		render.Span{Text: unread, Style: theme.Style{FG: th.Color(theme.Error), Bold: true}},
-		render.Span{Text: text, Style: th.Style(theme.Sep)})
+		render.Span{Text: unread, Style: un},
+		render.Span{Text: text, Style: rule})
 }
 
 // sideTitle gives the title drawn on a chat row. Under the header of its own
@@ -828,7 +854,7 @@ func sidebarLines(mode sideMode, chats []*model.Chat, ws []*Window, wins []int, 
 		row = func(k int) ([]render.Span, int64) {
 			r := secs[k]
 			if r.chat == nil { // section header
-				return sideSecLine(r, th, width, gut), 0
+				return sideSecLine(r, th, width, gut, state.mutedSecs[r.sec]), 0
 			}
 			c := r.chat
 			mark, unread := "   ", "  "
@@ -841,7 +867,7 @@ func sidebarLines(mode sideMode, chats []*model.Chat, ws []*Window, wins []int, 
 			pfx := kindPrefix(c.Kind)
 			label := " " + sideTitle(r, title)
 			m, u, t := dim, red, theme.Style{}
-			if state.muted[c.Key()] {
+			if state.isMuted(c) {
 				u = dim
 			}
 			isCur := c == curChat
@@ -884,7 +910,7 @@ func sidebarLines(mode sideMode, chats []*model.Chat, ws []*Window, wins []int, 
 				switch {
 				case isCur, c == state.menuChat, c == state.sel:
 					rs = t
-				case state.muted[c.Key()]:
+				case state.isMuted(c):
 					rs = dim
 				}
 				sp = append(sp, render.Span{Text: rb, Style: rs})
@@ -930,11 +956,14 @@ func sidebarLines(mode sideMode, chats []*model.Chat, ws []*Window, wins []int, 
 			}
 			textW := width - render.Width(num)
 			st, p, a := theme.Style{}, dim, red
-			if w.Chat != nil && state.muted[w.Chat.Key()] {
+			if state.isMuted(w.Chat) {
 				a = dim
 			}
 			if !state.now.IsZero() && w.Chat != nil && w.Search == "" {
 				st.FG = ageFG(th, w.Chat.LastDate, state.now)
+			}
+			if w.Chat != nil && state.mutedSecs[sectionOf(w.Chat)] { // sorted last, with the old ones: their colour too
+				st.FG = th.Color(theme.Dim)
 			}
 			if w.Hot { // private message or mention waiting: the mention colour pulses
 				a = theme.Style{FG: th.Color(theme.Mention), Bold: true, Reverse: state.pulse}
@@ -961,7 +990,7 @@ func sidebarLines(mode sideMode, chats []*model.Chat, ws []*Window, wins []int, 
 			}
 			if rb != "" {
 				rs := react
-				if state.muted[w.Chat.Key()] {
+				if state.isMuted(w.Chat) {
 					rs = dim
 				}
 				sp = append(sp, render.Span{Text: " ", Style: st}, render.Span{Text: rb[1:], Style: rs})
@@ -1011,7 +1040,7 @@ func (u *UI) sideBlock(sepRow int) ([]render.Line, []sideRow) {
 	hot := u.sideHot()
 	side := sideHeader(u.side, u.cfg.SidebarSort, u.cfg.SidebarSplit, u.th, u.sideW, hot)
 	var shown marqueeLine
-	state := sideState{folded: u.foldState(), pulse: u.pulse, now: time.Now(), q: u.find.q, muted: u.muted, hov: u.sideHov, shown: &shown}
+	state := sideState{folded: u.foldState(), pulse: u.pulse, now: time.Now(), q: u.find.q, muted: u.muted, mutedSecs: u.mutedSecs, hov: u.sideHov, shown: &shown}
 	if m := u.menu; m != nil && m.member == "" {
 		state.menuChat = m.chat // menu of a sidebar line (nil for the menu of a message)
 	}

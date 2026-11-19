@@ -343,7 +343,7 @@ func TestFoldCmd(t *testing.T) {
 	var hdr string
 	for _, r := range u.sideRowList() {
 		if r.sec == "discord:Gophers" && r.chat == nil {
-			hdr = render.LineText(render.Line{Spans: sideSecLine(r, u.th, testSideW, 0)})
+			hdr = render.LineText(render.Line{Spans: sideSecLine(r, u.th, testSideW, 0, false)})
 		}
 	}
 	if !strings.Contains(hdr, "[+]") || !strings.Contains(hdr, "Gophers") {

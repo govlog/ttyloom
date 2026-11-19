@@ -228,6 +228,7 @@ type UI struct {
 	sideHov    int                       // list line of the sidebar under the pointer, counted from 1; 0 = none
 	folded     map[string]bool           // folded sidebar sections, by key (sidebar.toml); nil = no section
 	muted      map[model.ChatKey]bool    // chats with no bell nor notification (muted.toml)
+	mutedSecs  map[string]bool           // sections muted as a whole, by key (muted.toml)
 	notes      map[model.ChatKey]string  // local note per chat (/note), saved in notes.toml
 	pins       map[model.ChatKey]pinInfo // newest pinned message known per chat (EvPinned)
 	marquee    marqueeState              // scrolling title of the current sidebar line
@@ -1551,7 +1552,7 @@ func (u *UI) newMessage(e model.EvNewMessage) {
 	}
 	if added && !m.Out {
 		// A muted chat counts its unread messages and nothing more.
-		hot := (chat.Kind == model.ChatUser || u.mentioned(chat, &m)) && !u.muted[chat.Key()]
+		hot := (chat.Kind == model.ChatUser || u.mentioned(chat, &m)) && !u.isMuted(chat)
 		if !seen { // shown and read in the aggregate too: no bell either
 			w.Act++
 			chat.Unread++
@@ -2868,6 +2869,8 @@ func (u *UI) candidates(word string, atStart bool) []string {
 		return out
 	case complFold:
 		return multiWord(word, tail, sectionKeys(u.foldSections()))
+	case complMute:
+		return append(u.chatCandidates(word, tail), multiWord(word, tail, u.muteSections())...)
 	default:
 		return nil
 	}

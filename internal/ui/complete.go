@@ -29,6 +29,7 @@ const (
 	complHelp                            // /help <topic>
 	complNet                             // /net <network>
 	complFold                            // /fold <section>
+	complMute                            // /mute /unmute: a chat, or a section key
 	complPath                            // /send <path>: files of the disk
 	complWords                           // a closed list: /log <on|off>, /media <tab> (argWords)
 	complAliases                         // /alias /unalias <name>
@@ -67,7 +68,9 @@ func complContext(line string, cursor int, names cmdNames) (src complSource, tai
 		return complModule, rest, name
 	}
 	switch name {
-	case "query", "msg", "join", "whois", "rename", "unrename", "mute", "unmute":
+	case "mute", "unmute":
+		return complMute, rest, ""
+	case "query", "msg", "join", "whois", "rename", "unrename":
 		// After the target, the rest is free text (message, new name).
 		if (name == "msg" || name == "rename") && strings.Contains(rest, " ") {
 			return complNone, "", ""
@@ -296,7 +299,7 @@ func (u *UI) completeTab() {
 			s.expanded = true
 			// Presence and the member list may have changed between the two presses.
 			src, _, _ := complContext(line, cursor, u.commandNames())
-			if src == complChats {
+			if src == complChats || src == complMute {
 				start := cursor
 				for start > 0 && !sep(u.ed.buf[start-1]) {
 					start--
@@ -323,7 +326,7 @@ func (u *UI) completeTab() {
 			return
 		}
 	}
-	if src == complChats && tail == "" {
+	if (src == complChats || src == complMute) && tail == "" {
 		list = u.chatCandidates("", "")
 	} else {
 		list = u.ed.Complete(u.candidates)

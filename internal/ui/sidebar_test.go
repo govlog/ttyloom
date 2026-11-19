@@ -1373,3 +1373,52 @@ func TestDialogsBringGroup(t *testing.T) {
 		t.Fatalf("chat after the dialog list: %+v", c)
 	}
 }
+
+// A muted section (/mute discord:Gophers) goes last whatever the sort, in the
+// chat list and in the windows list: its unread messages never bring it up.
+func TestMutedSectionSinks(t *testing.T) {
+	now := time.Now()
+	bob := &model.Chat{Net: netDiscord, ID: 1, Kind: model.ChatUser, Title: "bob", LastDate: now.Add(-3 * time.Hour)}
+	loud := &model.Chat{Net: netDiscord, ID: 2, Kind: model.ChatGroup, Title: "Gophers / #general", Group: "Gophers", LastDate: now, Unread: 50}
+	calm := &model.Chat{Net: netDiscord, ID: 3, Kind: model.ChatGroup, Title: "Rustaceans / #general", Group: "Rustaceans", LastDate: now.Add(-time.Hour)}
+	u := &UI{ws: NewWindows(), cfg: &config.Config{}, chatList: []*model.Chat{bob, loud, calm},
+		mutedSecs: map[string]bool{"discord:Gophers": true}}
+	for _, c := range u.chatList { // windows 1, 2, 3
+		u.ws.New(true).Chat = c
+	}
+	for _, mode := range []string{"recent", "alpha", "unread"} {
+		u.cfg.SidebarSort = mode
+		if got := chatTitles(u.sortedChats()); got[len(got)-1] != loud.Title {
+			t.Errorf("%s: chats %v, want the muted section last", mode, got)
+		}
+		if got := u.sideWins(); got[len(got)-1] != 2 {
+			t.Errorf("%s: windows %v, want the window of the muted section (2) last", mode, got)
+		}
+	}
+}
+
+// In the windows list, a window of a muted section takes the darkest age
+// colour however recent its last message: it sits at the bottom, with the old ones.
+func TestMutedSectionWindowDim(t *testing.T) {
+	th, now := theme.Terminal(), time.Now()
+	loud := &model.Chat{Net: netDiscord, ID: 2, Kind: model.ChatGroup, Title: "loud", Group: "Gophers", LastDate: now}
+	calm := &model.Chat{Net: netDiscord, ID: 3, Kind: model.ChatGroup, Title: "calm", Group: "Rustaceans", LastDate: now}
+	ws := []*Window{{}, {Chat: loud}, {Chat: calm}}
+	lines := sidebarLines(sideWindows, nil, ws, nil, 0, th, testSideW, len(ws), 0, false, false, 0, -1, false, nil,
+		sideState{now: now, mutedSecs: map[string]bool{"discord:Gophers": true}})
+	fg := func(line render.Line, name string) theme.Color {
+		for _, s := range line.Spans {
+			if s.Text == name {
+				return s.Style.FG
+			}
+		}
+		t.Fatalf("no span %q in %q", name, body(line))
+		return theme.Color{}
+	}
+	if got := fg(lines[1], "loud"); got != th.Color(theme.Dim) {
+		t.Errorf("muted section window: colour %v, want Dim %v", got, th.Color(theme.Dim))
+	}
+	if got := fg(lines[2], "calm"); got != th.FG {
+		t.Errorf("other window: colour %v, want the text colour %v", got, th.FG)
+	}
+}

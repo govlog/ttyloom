@@ -90,7 +90,7 @@ func (u *UI) flushAlert(now time.Time) bool {
 		return false
 	}
 	u.alertNext, u.alertAt = nil, now
-	if u.muted[a.chat.Key()] || u.seenNow(a.chat, &a.msg) { // muted, or read, while it waited
+	if u.isMuted(a.chat) || u.seenNow(a.chat, &a.msg) { // muted, or read, while it waited
 		return false
 	}
 	if u.cfg.Bell && !a.quiet {

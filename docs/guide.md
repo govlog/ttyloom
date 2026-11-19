@@ -693,7 +693,7 @@ global again. A single network has no tabs.
 | `/net [network]` | Filter the sidebar and aggregate view; `telegram`, `discord`, `irc:libera`, `all`, or no argument to cycle. |
 | `/telegram [status\|login\|logout\|disconnect]`, `/discord [status\|login\|logout\|disconnect]` | One network: its status, a new login (Discord runs `token_cmd` again), a logout (Telegram ends the session on the server) or a `disconnect`, which cuts the connection and keeps the session. |
 | `/fold [section]` | Toggle a sidebar section by key, such as `telegram` or `discord:Gophers`, or a displayed-name prefix. No argument lists sections and their collapsed/expanded state. |
-| `/mute [name]`, `/unmute [name]` | Mute the conversation of the window, or the one named (exact name or prefix): no bell, no notification and no pulse in the sidebar, even on a mention; its unread count stays, dimmed, in its own line only (not in `[Act: …]` nor in the count of its tab). `/mute` alone in a window with no conversation lists the muted ones. Saved in `muted.toml`; the network is not told. |
+| `/mute [name]`, `/unmute [name]` | Mute the conversation of the window, or the one named (exact name or prefix): no bell, no notification and no pulse in the sidebar, even on a mention; its unread count stays, dimmed, in its own line only (not in `[Act: …]` nor in the count of its tab). A section key of the sidebar (the keys of `/fold`, such as `/mute discord:Gophers`; Tab completes them) mutes a whole section instead, a Discord server for example: all its conversations, the ones that come later too, its header dimmed, and a muted server goes after the other servers of its network whatever the sort, however many unread messages it holds; in the windows list its windows take the darkest colour, like the oldest ones. A conversation with that exact name comes first. `/mute` alone in a window with no conversation lists the muted conversations and sections. Saved in `muted.toml` (`chats`, `sections`); the network is not told. A section is known by its name: a server renamed must be muted again. |
 | `/note [text]`, `/unnote` | A local one-line note on the conversation of the window, shown in a red banner at the top like a pinned message — and over one while it is there. `/note` alone shows it, a new `/note` replaces it, `/unnote` removes it. Saved in `notes.toml`; the network is not told. |
 | `/history N`, `/hist N` | Load N older messages, 50 by default and at most what a window keeps (2000, or `cache_messages` when higher); PgUp at the top also loads older history. |
 | `/clear`, `/c` | Clear the current window. Ctrl+L only clears the screen: the lines stay in the history. `/clear` keeps the disk history too: the next write merges the window into the file instead of replacing it. |
@@ -953,7 +953,8 @@ Private messages and mentions
 window is not shown or the terminal is not focused; `/set bell off` disables
 it. Desktop or terminal notifications follow the same rule and `notify`. A
 burst merges: one alert at once, then one for the last message after 2
-seconds. `/mute` silences one conversation.
+seconds. `/mute` silences one conversation, or a whole section of the sidebar
+(a Discord server).
 
 A window holding an unread private message or a mention of you is hot: its
 `(N)` counter takes the mention color, in bold, and pulses once a second, in
