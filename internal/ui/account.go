@@ -2,7 +2,6 @@ package ui
 
 import (
 	"maps"
-	"path/filepath"
 	"slices"
 
 	"github.com/govlog/ttyloom/internal/model"
@@ -124,16 +123,8 @@ func (u *UI) clearAccount(net string) {
 			delete(u.whoCache, k)
 		}
 	}
-	changed := false
-	for k := range u.aliases {
-		if k.Net == net {
-			delete(u.aliases, k)
-			changed = true
-		}
-	}
-	if changed && u.cfg != nil && filepath.Dir(u.cfg.Path()) != "." {
-		_ = saveAliases(aliasPath(), u.aliases)
-	}
+	// The local names (/rename) and the mutes stay: an id names the same person
+	// or room for every account, and a local name erased here was lost for good.
 	for _, md := range u.customs {
 		u.dropFrames(md)
 	}
