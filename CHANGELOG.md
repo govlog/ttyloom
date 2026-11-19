@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.18-beta — 2026-11-19
 
 ### Added
 
