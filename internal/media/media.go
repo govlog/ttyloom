@@ -68,6 +68,10 @@ const (
 	maxGIFPixels = maxPixels * 4 / maxFrames
 )
 
+// errNoAnim : a GIF too big to animate (maxGIFPixels). Load then shows its
+// first frame under the cap of a still image.
+var errNoAnim = errors.New("gif: too big to animate")
+
 // checkPixels refuses the dimensions announced by a header before the
 // decoding allocates for them: more than maxPx pixels, or a side over maxSide.
 func checkPixels(w, h, maxPx int) error {
@@ -138,7 +142,8 @@ func mpvOut(s Screen) []string {
 
 // Load decodes a file into PNG frames fitted in maxW x maxH px (never made
 // bigger). frames = 1 for a still image or the first frame of a video,
-// maxFrames for a GIF, up to maxVideoFrames for a video being played.
+// maxFrames for a GIF (its first frame only when it is too big to animate),
+// up to maxVideoFrames for a video being played.
 // progress, when given, receives a video while it decodes every progressStep
 // frames (inline play: the animation starts before the end).
 //
@@ -161,7 +166,10 @@ func Load(ctx context.Context, path, mime string, maxW, maxH, frames int, progre
 		// The Go decoders read the first picture only; ffmpeg plays the others.
 		return loadVideo(ctx, path, maxW, maxH, frames, p)
 	case mime == "image/gif" && frames > 1:
-		return loadGIF(ctx, path, maxW, maxH, min(frames, maxFrames))
+		fr, err := loadGIF(ctx, path, maxW, maxH, min(frames, maxFrames))
+		if !errors.Is(err, errNoAnim) {
+			return fr, err
+		}
 	}
 	f, err := os.Open(path)
 	if err != nil {
@@ -312,7 +320,8 @@ func encode(img image.Image) ([]byte, error) {
 // motion, and weigh for nothing.
 const gifSlot = 100 * time.Millisecond
 
-// loadGIF keeps n frames at most.
+// loadGIF keeps n frames at most. errNoAnim: the canvas or a frame is over
+// maxGIFPixels.
 // ponytail: no GIF "disposal" handling, each frame is drawn on top of the one before.
 // ponytail: one delay for the clip, the median of its frames — a pause on one
 // frame is lost; a delay per frame in Frames and Media, read by animate, would keep it.
@@ -326,8 +335,8 @@ func loadGIF(ctx context.Context, path string, maxW, maxH, n int) (*Frames, erro
 	if err != nil {
 		return nil, err
 	}
-	if err := checkPixels(cfg.Width, cfg.Height, maxGIFPixels); err != nil {
-		return nil, err
+	if checkPixels(cfg.Width, cfg.Height, maxGIFPixels) != nil {
+		return nil, errNoAnim
 	}
 	if _, err := f.Seek(0, io.SeekStart); err != nil {
 		return nil, err
@@ -428,8 +437,8 @@ func gifPreview(ctx context.Context, f *os.File) (io.Reader, error) {
 				return nil, err
 			}
 			w, h := int(binary.LittleEndian.Uint16(descriptor[4:6])), int(binary.LittleEndian.Uint16(descriptor[6:8]))
-			if err := checkPixels(w, h, maxGIFPixels); err != nil {
-				return nil, err
+			if checkPixels(w, h, maxGIFPixels) != nil {
+				return nil, errNoAnim
 			}
 			if descriptor[8]&0x80 != 0 {
 				if err := skip(3 << (1 + (descriptor[8] & 7))); err != nil {
@@ -713,7 +722,9 @@ const maxOriginalName = 200
 // OriginalName gives the name the sender gave a file, made safe as one name
 // on the disk: a path separator, a control character or a bidi override
 // becomes _, and a name too long is cut before its suffix. "" when nothing
-// is left (an empty name, "." or "..").
+// is left (an empty name, "." or ".."). A leading ".part-" becomes "_part-":
+// the clean-up at start (cmd/ttyloom cleanFiles) removes the temporary
+// download files of that name.
 func OriginalName(name string) string {
 	n := strings.TrimSpace(strings.Map(func(r rune) rune {
 		switch {
@@ -726,6 +737,9 @@ func OriginalName(name string) string {
 	if n == "." || n == ".." {
 		return ""
 	}
+	if strings.HasPrefix(n, ".part-") {
+		n = "_" + n[1:]
+	}
 	if len(n) > maxOriginalName {
 		ext := filepath.Ext(n)
 		if len(ext) > 16 {
@@ -734,4 +748,41 @@ func OriginalName(name string) string {
 		n = strings.ToValidUTF8(n[:maxOriginalName-len(ext)], "") + ext
 	}
 	return n
+}
+
+// Save puts a received file at path; write fills it. The directory gets
+// 0700 and the file 0600: a private media must not be readable by the other
+// accounts of the machine. write gets a temporary file of its own in the same
+// directory, ".part-" and digits (cmd/ttyloom cleanFiles removes the ones a
+// killed session leaves). Two downloads of the same media do not write to the
+// same file, and a symbolic link at path is replaced, never followed. Only a
+// whole file gets the name: on an error of write, of the close or of the
+// rename, and on a panic of write, the temporary file goes and path stays as
+// it was. An error of write comes before an error of the close. A file
+// already at path is replaced: the caller decides before.
+func Save(path string, write func(*os.File) error) error {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return err
+	}
+	f, err := os.CreateTemp(dir, ".part-*")
+	if err != nil {
+		return err
+	}
+	saved := false
+	defer func() {
+		if !saved {
+			f.Close() // a second close only returns an error
+			os.Remove(f.Name())
+		}
+	}()
+	err = write(f)
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	if err == nil {
+		err = os.Rename(f.Name(), path)
+	}
+	saved = err == nil
+	return err
 }

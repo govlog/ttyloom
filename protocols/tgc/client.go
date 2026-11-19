@@ -52,8 +52,12 @@ type Client struct {
 	// loggedIn : tg.UpdateLoginToken signal, armed from New (the QR is offered
 	// before the gap handler runs).
 	loggedIn qrlogin.LoggedIn
+	// connEv : the newest connection state not posted yet; connWake (capacity
+	// 1) wakes relayConn for it (see onConnState).
+	connEv   atomic.Pointer[model.Event]
+	connWake chan struct{}
 
-	mu sync.Mutex // guards seen, floodUntil, gifUser, fills and stickers
+	mu sync.Mutex // guards seen, floodUntil, gifUser, fills, stickers and pinFetched
 	// ponytail: session cache with no eviction, a few hundred bytes per peer
 	// seen; move to an LRU if an account ever sees tens of thousands.
 	seen       map[int64]peers.Peer // peers already seen, by TDLib id: names with no network
@@ -65,15 +69,15 @@ type Client struct {
 	fills   map[[2]int64]uint64
 	fillSem chan struct{} // quote reads running (fillLater)
 	fillSeq uint64
-	// pinFetched : chats whose newest pinned message was read (fetchPins),
-	// once per session. UI goroutine only (LoadHistory before its goroutine).
+	// pinFetched : chats whose newest pinned message was read, or is being
+	// read (fetchPins), once per session. A failed read removes its chat.
 	pinFetched map[int64]bool
 }
 
 func New(cfg Config, events chan<- model.Event) *Client {
 	c := &Client{Poster: model.Poster{Events: events}, cfg: cfg, dl: downloader.NewDownloader(),
 		dlSem: make(chan struct{}, 3), ulSem: make(chan struct{}, 2), seen: map[int64]peers.Peer{}, fills: map[[2]int64]uint64{},
-		fillSem: make(chan struct{}, 2), pinFetched: map[int64]bool{}}
+		fillSem: make(chan struct{}, 2), pinFetched: map[int64]bool{}, connWake: make(chan struct{}, 1)}
 	lg := logger{c}
 	// The gap handler is built before the client (it is its UpdateHandler); it
 	// hands over to c.hook, wired after the peers are made.
@@ -93,14 +97,7 @@ func New(cfg Config, events chan<- model.Event) *Client {
 			hook.AffectedHook(c.gaps),
 			floodwait.NewSimpleWaiter().WithMaxWait(15 * time.Second),
 		},
-		OnConnectionState: func(s telegram.ConnectionState) {
-			switch s {
-			case telegram.ConnectionStateReady:
-				c.PostNB(model.EvConnected{})
-			case telegram.ConnectionStateDisconnected:
-				c.PostNB(model.EvDisconnected{})
-			}
-		},
+		OnConnectionState: c.onConnState,
 	})
 	c.api = c.client.API()
 	c.peers = peers.Options{Logger: lg}.Build(c.api)
@@ -110,6 +107,53 @@ func New(cfg Config, events chan<- model.Event) *Client {
 	c.registerHandlers(d)
 	c.hook = c.peers.UpdateHook(d)
 	return c
+}
+
+// onConnState : the connection callback of gotd, which must not block.
+// EvConnected and EvDisconnected are the only carriers of the state, so a
+// drop is not allowed either: it keeps the newest state and wakes relayConn.
+func (c *Client) onConnState(s telegram.ConnectionState) {
+	var e model.Event
+	switch s {
+	case telegram.ConnectionStateReady:
+		e = model.EvConnected{}
+	case telegram.ConnectionStateDisconnected:
+		e = model.EvDisconnected{}
+	default:
+		return
+	}
+	c.connEv.Store(&e)
+	select {
+	case c.connWake <- struct{}{}:
+	default: // a wake is pending: it reads the newest state
+	}
+}
+
+// relayConn posts the state that onConnState keeps, from one goroutine and
+// with the blocking Post: a full channel delays the state and never drops
+// it; two quick changes can post the newest one only. Run starts it; stop
+// ends the goroutine and waits for it, so no state comes after Run.
+func (c *Client) relayConn(ctx context.Context) (stop func()) {
+	ctx, cancel := context.WithCancel(ctx)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		defer c.Guard("relayConn", nil)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-c.connWake:
+			}
+			if e := c.connEv.Swap(nil); e != nil {
+				c.Post(*e)
+			}
+		}
+	}()
+	return func() {
+		cancel()
+		<-done
+	}
 }
 
 // Caps : Telegram does everything the UI knows how to show.
@@ -125,14 +169,8 @@ func (c *Client) Contacts(ctx context.Context) {
 			ev.Err = err
 			c.Post(ev)
 		})
-		if !c.floodOK() {
-			ev.Err = errFlood().Error()
-			c.Post(ev)
-			return
-		}
-		res, err := c.api.ContactsGetContacts(ctx, 0)
-		if err != nil {
-			c.floodTrip(err)
+		var res tg.ContactsContactsClass
+		if err := c.rpc(func() (err error) { res, err = c.api.ContactsGetContacts(ctx, 0); return err }); err != nil {
 			ev.Err = err.Error()
 			c.Post(ev)
 			return
@@ -164,14 +202,11 @@ func (c *Client) SearchContacts(ctx context.Context, q string, limit int) {
 			ev.Err = err
 			c.Post(ev)
 		})
-		if !c.floodOK() {
-			ev.Err = errFlood().Error()
-			c.Post(ev)
-			return
-		}
-		res, err := c.api.ContactsSearch(ctx, &tg.ContactsSearchRequest{Q: q, Limit: limit})
-		if err != nil {
-			c.floodTrip(err)
+		var res *tg.ContactsFound
+		if err := c.rpc(func() (err error) {
+			res, err = c.api.ContactsSearch(ctx, &tg.ContactsSearchRequest{Q: q, Limit: limit})
+			return err
+		}); err != nil {
 			ev.Err = err.Error()
 			c.Post(ev)
 			return

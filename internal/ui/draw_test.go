@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/govlog/ttyloom/internal/config"
 	"github.com/govlog/ttyloom/internal/media"
@@ -538,6 +539,25 @@ func TestDrawSkipsSameFrame(t *testing.T) {
 	u.draw()
 	if out.Len() == first {
 		t.Fatal("Ctrl+L sent nothing")
+	}
+}
+
+// A link whose text is not its target goes out with no OSC 8 hyperlink: the
+// terminal would open it on a Shift-click with no question. A link that shows
+// its target keeps its hyperlink.
+func TestMaskedLinkNoHyperlink(t *testing.T) {
+	u := hoverUI()
+	var out bytes.Buffer
+	u.t = term.NewOffscreen(&out, 80, 10)
+	u.view().Upsert(&model.Msg{ID: 1, From: "alice", FromID: 7, Date: time.Now(), Text: "bank.example example.org",
+		Entities: []model.Span{{Start: 0, End: 12, Kind: model.SpanURL, URL: "https://evil.example/login"},
+			{Start: 13, End: 24, Kind: model.SpanURL, URL: "https://example.org/"}}})
+	u.draw()
+	u.t.Flush()
+	s := out.String()
+	if strings.Contains(s, "\x1b]8;;https://evil.example/login") || !strings.Contains(s, "\x1b]8;;https://example.org/") {
+		t.Fatalf("hyperlinks: masked one sent %v, plain one sent %v; want only the plain one",
+			strings.Contains(s, "\x1b]8;;https://evil.example/login"), strings.Contains(s, "\x1b]8;;https://example.org/"))
 	}
 }
 

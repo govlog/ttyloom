@@ -12,7 +12,13 @@
 
 - **The reactions you use most come first**: the reaction picker and the quick reactions of the right-click menu now start with the reactions your account uses most, as the network counts them across all your apps, phone included. On Telegram that is the quick bar of the official apps (`messages.getTopReactions`), ordered within what the chat allows; on Discord, your favorite emojis then your most used reactions, read from the settings Discord syncs between its apps, before the local recents. The order is read again at each connection; when the network does not answer, the order stays as before. Telegram does not offer 😂 as a reaction, so it never shows there; IRC has no reactions.
 - **Telegram logout empties the session file**: `/telegram logout` now logs out on every Telegram data center the session used and empties `session.json`; the next login makes a new key. The library now keeps the keys of the other data centers in that file, and they must not stay after a logout.
-- **Dependencies**: gotd/td v0.166.1 (connection core rewritten upstream: a clock that is off no longer blocks the connection, a ping is sent again after a salt change, the QR login retries a temporary error), gotd/contrib v0.26.0, `golang.org/x/net` v0.63.0, and five modules that are not compiled into the binary (ogen, goldmark, `x/exp`, `x/mod`, `x/tools`); govulncheck v1.10.0 in the CI. Each diff was read before the update.
+- **Dependencies**: gotd/td v0.166.1 (connection core rewritten upstream: a clock that is off no longer blocks the connection, a ping is sent again after a salt change, the QR login retries a temporary error), gotd/contrib v0.26.0, `golang.org/x/net` v0.63.0, and five modules that are not compiled into the binary (ogen, goldmark, `x/exp`, `x/mod`, `x/tools`); govulncheck v1.10.0 and `actions/setup-go` v7.1.0 in the CI. Each diff was read before the update; the bundle of `setup-go` was rebuilt from its sources and is identical to the published one.
+- **Scrolled-up view keeps its place**: while you read older messages, new messages, history pages, edits and a resize no longer move the lines you are reading. At the bottom, new messages still show.
+- **Ctrl+K in the expanded editor stays on its line**: it deleted every line after the cursor, with no undo. It now deletes to the end of the current line, and at the end of a line it joins the next one, as in readline.
+- **Window after a chat goes**: when the chat you are reading is left, removed or dropped at an account change, the window before it now shows, as with `/close`, instead of window 0.
+- **IRC rooms that need a registered nick join at start**: on a network without SASL, ttyloom now waits up to 5 seconds for NickServ to confirm the login before it joins your rooms, so a room with +r no longer refuses you at each start and reconnection.
+- **Masked links carry no terminal hyperlink**: a link whose text is not its address is no longer sent to the terminal as an OSC 8 link, so a Shift-click of the terminal cannot open it with no question. A click in ttyloom still shows the address first.
+- **Reproducible local release builds**: `scripts/release.sh` now ignores the Go settings of the caller (`GOFLAGS`, `GOEXPERIMENT`, `go env -w`) and any `go.work` above its build folder, which is now private under `dist/`.
 
 ### Fixed
 
@@ -29,6 +35,33 @@
 - **Discord keeps every message of the history it loads**: when a message came before a conversation was opened (or after a reconnection), almost all of the history loaded next was forgotten at once, so reactions and link previews that came later on those messages did not show, and reacting, "who reacted" and `i` on them cost one more request each.
 - **A Discord conversation opened from the cache is marked read on Discord too**: when its newest message was already in the disk cache, opening the conversation marked it read only in ttyloom, and it stayed unread on the phone and at the next start until a new message came.
 - **Telegram: a data race on an incoming reply**: the conversation of a reply whose quote was still to read was copied while the screen updated it, which the race detector reports and which could in rare cases put a wrong name on the quote.
+- **Typing right after Ctrl+V no longer sends the clipboard**: the paste and image prompts of Ctrl+V open when the clipboard read ends, so a key typed meanwhile could answer them, and an `e` sent several lines or an image at once. For 300 ms after such a prompt opens, its `e`, `c` and `l` keys are ignored, as the `y` of a confirmation is.
+- **No pinned banner from another account**: after a switch to another account on the same network, a chat no longer shows the pinned message of the first account. A removed chat also loses its banner.
+- **Switching windows during an image caption keeps each draft**: the draft of the first window went into the second, and Enter sent it there.
+- **Received files no longer deleted at start**: a received file whose name starts with `.part-` was deleted at the next start; it now keeps a safe name and stays. An empty or relative `download_dir` no longer makes the clean-up look outside it.
+- **History backups kept**: a second unreadable history file no longer replaces the backup of the first, and a history file that cannot be opened (permissions, too many open files) is no longer moved aside or overwritten.
+- **IRC unread counts kept at login**: the unread count of an IRC room or private chat saved at exit now survives the next login.
+- **Long IRC messages keep their end**: the pieces of a long message are now sized for the room name and your nick; the server no longer cuts the end of each piece for the other users in rooms with long names.
+- **`/join` no longer stays on "resolving…"**: a join refused for a reason ttyloom did not know (bad name, join throttle, TLS-only or oper-only room) now shows the reason of the server, and a join with no answer fails after 30 seconds.
+- **IRC commands in rooms with unusual names**: in the window of a room whose name holds a control or bidi character, `/part`, `/topic`, `/mode`, `/kick`, `/ban`, `/cycle` and the room completion now use the real room name. Such a room no longer shows up twice after a reconnection: its history stays under one entry.
+- **Pinned banner after a slow start**: on Telegram, a pinned message that could not be read when a chat first opened (rate limit during the start-up sync, network error) is read again the next time the window loads.
+- **Who reacted, on Telegram**: in a private chat where you and your contact pick the same reaction, the popup now names you both; in a group, a reaction sent as a channel shows the name of the channel instead of "?".
+- **Telegram connection state**: the status bar no longer stays on "disconnected" after a reconnection during a large burst of updates.
+- **Discord custom emojis stay current**: when a guild changes its emojis while ttyloom is loading chats, the picker and the emoji pictures of that guild now show the new set.
+- **Discord inline code keeps `:name:` as typed**: a custom emoji name inside `` `code` `` no longer goes out as raw `<:name:id>`.
+- **Discord: your own typing, and a blank `token_cmd`**: your own typing no longer shows as a typing line; a `token_cmd` that holds only spaces counts as no command, so the QR login saves its token and `/discord logout` revokes it.
+- **Large GIFs show again**: an animated GIF too large to animate (1920×1080 for example) now shows its first frame instead of an error.
+- **Multi-line quotes**: a Telegram blockquote of several lines shows the `│` bar in front of every line, not only the first.
+- **Scrollbar after Ctrl+L**: a click on the empty last column no longer jumps into the hidden lines.
+- **Open a file of an unknown type from a box**: the question now shows with the file browser, the media browser or the preview closed, so `y` answers it.
+- **A code block pasted mid-line goes out as a code block**: in the expanded editor its closing fence now gets its own line.
+- **The menu search keeps your draft**: "search" in the menu of a conversation replaced the draft that conversation kept; a draft now stays, and the status bar says to send or clear it first.
+- **`/msg` with only a conversation name sends nothing**: `/msg Fri` + Tab gave `/msg Friends room `, and Enter sent "room" to "Friends room".
+- **`/sticker` works like the other commands**: Tab completes it, a prefix runs it, and `/alias` can no longer take its name.
+- **`/unmute` says when the section still mutes**, and the first Tab after `/mute` lists the sections too.
+- **Paste works in the Ctrl+F search**.
+- **Smaller fixes**: sync counts of a second sync in one session; the "last message" pill on a very narrow terminal; a Ghostty `theme = light:x, dark:y` value with spaces; a link whose address is not valid UTF-8 is no longer clickable; `v1.0-rc.10` is newer than `v1.0-rc.9` for the update check; Hunspell dictionaries that are not UTF-8 (source builds); a word added to `spell.txt` after a last line with no newline.
+- **Lighter and faster**: the file browser (Ctrl+D) searches the disk in the background; an unchanged screen with kitty pictures sends nothing; a Telegram delete of many messages costs about five times less; plain Telegram messages allocate nothing for their formatting; the start demo allocates about 40 % less a frame; old sticker previews are freed.
 
 ## v0.17-beta — 2026-11-13
 

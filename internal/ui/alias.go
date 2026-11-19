@@ -59,15 +59,32 @@ func parseAliasKey(s string) (model.ChatKey, bool) {
 // aliasPath gives aliases.toml, beside config.toml (TTYLOOM_DIR included).
 func aliasPath() string { return filepath.Join(config.Dir(), "aliases.toml") }
 
+// loadTOML decodes the file at path into v. A missing file is an empty one:
+// v stays as it is, with no error. The local files of the UI (aliases,
+// notes, mutes, folds, command aliases, last chat) all read this way.
+func loadTOML(path string, v any) error {
+	if _, err := toml.DecodeFile(path, v); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	return nil
+}
+
+// saveTOML writes v to path as TOML, 0600 and atomic: a crash never leaves
+// half a file, and a command alias can hold a password.
+func saveTOML(path string, v any) error {
+	var buf bytes.Buffer
+	if err := toml.NewEncoder(&buf).Encode(v); err != nil {
+		return err
+	}
+	return config.WriteAtomic(path, buf.Bytes(), 0o600)
+}
+
 // loadAliases gives the local names by chat. A missing file = no alias,
 // not an error; an unreadable line (file edited by hand) is ignored.
 func loadAliases(path string) (map[model.ChatKey]string, error) {
 	out := map[model.ChatKey]string{}
 	var f aliasFile
-	if _, err := toml.DecodeFile(path, &f); err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return out, nil
-		}
+	if err := loadTOML(path, &f); err != nil {
 		return out, err
 	}
 	for k, v := range f.Aliases {
@@ -89,11 +106,7 @@ func saveAliases(path string, al map[model.ChatKey]string) error {
 	for k, name := range al {
 		f.Aliases[aliasKey(k)] = name
 	}
-	var buf bytes.Buffer
-	if err := toml.NewEncoder(&buf).Encode(f); err != nil {
-		return err
-	}
-	return config.WriteAtomic(path, buf.Bytes(), 0o600)
+	return saveTOML(path, f)
 }
 
 // title gives the shown name of a chat — the local name (/rename), else the

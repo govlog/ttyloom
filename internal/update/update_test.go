@@ -2,6 +2,7 @@ package update
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -63,6 +64,46 @@ func TestCheck(t *testing.T) {
 		}
 		if rel.Tag != "v0.10-beta" || rel.ID() != "11111111" || rel.URL != "https://github.com/govlog/ttyloom/releases/tag/v0.10-beta" {
 			t.Errorf("%s: release = %+v, want the newest published v0.10-beta", tc.name, rel)
+		}
+	}
+}
+
+// A release build compares the pre-release fields one by one, as semver does:
+// digits by value and before words, words as text, more fields after fewer.
+// rc.10 used to come before rc.9.
+func TestCheckOrdersPreReleases(t *testing.T) {
+	newer := func(rel, build string) bool {
+		mux := http.NewServeMux()
+		mux.HandleFunc("GET /repos/govlog/ttyloom/releases", func(w http.ResponseWriter, r *http.Request) {
+			fmt.Fprintf(w, `[{"tag_name": %q, "published_at": "2026-10-01T10:00:00Z"}]`, rel)
+		})
+		mux.HandleFunc("GET /repos/govlog/ttyloom/commits/{tag}", func(w http.ResponseWriter, r *http.Request) {
+			w.Write([]byte(sha10))
+		})
+		srv := httptest.NewServer(mux)
+		defer srv.Close()
+		_, n, err := Check(context.Background(), http.DefaultClient, srv.URL, Build{Version: build, Commit: sha9})
+		if err != nil {
+			t.Fatalf("release %s, build %s: %v", rel, build, err)
+		}
+		return n
+	}
+	for _, tc := range []struct {
+		rel, build string
+		newer      bool
+	}{
+		{"v1.0-rc.10", "v1.0-rc.9", true},
+		{"v1.0-rc.9", "v1.0-rc.10", false},
+		{"v1.0-rc.1", "v1.0-rc", true},
+		{"v1.0-beta.2", "v1.0-alpha.9", true},
+		{"v1.0-rc.1", "v1.0-rc.a", false},
+		{"v0.18-beta", "v0.17-beta", true},
+		{"v0.18", "v0.18-beta", true},
+		{"v0.18-beta", "v0.18", false},
+		{"v0.18-beta", "v0.18-beta", false},
+	} {
+		if got := newer(tc.rel, tc.build); got != tc.newer {
+			t.Errorf("release %s, build %s: newer = %v, want %v", tc.rel, tc.build, got, tc.newer)
 		}
 	}
 }

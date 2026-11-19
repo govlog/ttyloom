@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -35,19 +36,30 @@ var commit = "unknown"
 // (a second instance on the same download_dir may be writing the others);
 // pasted images never sent (a failed send keeps its file, a quit at the
 // prompt too) after a day; the pictures of the GIF box, the media browser and
-// the emoji picker after a week: they are fetched again when they show.
+// the emoji picker after a week: they are fetched again when they show. A
+// directory that is empty or not absolute is left alone: its patterns would
+// start at / or at the working directory.
 func cleanFiles(dl, cache string) {
 	const day = 24 * time.Hour
 	for _, p := range []struct {
-		pat string
-		age time.Duration
+		dir, pat string
+		age      time.Duration
 	}{
-		{dl + "/.part-*", time.Hour}, {dl + "/*/.part-*", time.Hour}, {dl + "/*/*/.part-*", time.Hour},
-		{dl + "/paste/[0-9]*-[0-9]*.*", day}, // the names clipName gives: a user's own files there stay
-		{cache + "/gifs/*/*", 7 * day}, {cache + "/thumbs/*/*", 7 * day}, {cache + "/emoji/*/*", 7 * day},
+		{dl, "/.part-*", time.Hour}, {dl, "/*/.part-*", time.Hour}, {dl, "/*/*/.part-*", time.Hour},
+		{dl, "/paste/[0-9]*-[0-9]*.*", day}, // the names clipName gives: a user's own files there stay
+		{cache, "/gifs/*/*", 7 * day}, {cache, "/thumbs/*/*", 7 * day}, {cache, "/emoji/*/*", 7 * day},
 	} {
-		m, _ := filepath.Glob(p.pat)
+		if !filepath.IsAbs(p.dir) {
+			continue
+		}
+		m, _ := filepath.Glob(p.dir + p.pat)
 		for _, f := range m {
+			// os.CreateTemp names a temporary file ".part-" and digits. A
+			// received file kept as ".part-notes.pdf" by a version before
+			// media.OriginalName renamed such names is not one.
+			if r, ok := strings.CutPrefix(filepath.Base(f), ".part-"); ok && (r == "" || strings.Trim(r, "0123456789") != "") {
+				continue
+			}
 			if st, err := os.Lstat(f); err == nil && time.Since(st.ModTime()) > p.age {
 				_ = os.Remove(f)
 			}
@@ -128,13 +140,7 @@ func run(build update.Build) error {
 			fmt.Fprintln(os.Stderr, "ttyloom: "+t.Panic)
 		}
 	}()
-	defer func() {
-		if r := recover(); r != nil {
-			t.Close()
-			panic(r)
-		}
-	}()
-	defer t.Close()
+	defer t.Close() // on a panic too: the terminal is back before the runtime prints the trace
 
 	return ui.Run(ctx, cancel, t, cfg, th, build, mods...)
 }

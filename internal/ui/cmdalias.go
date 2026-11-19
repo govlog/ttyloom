@@ -1,15 +1,10 @@
 package ui
 
 import (
-	"bytes"
-	"errors"
-	"os"
 	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
-
-	"github.com/BurntSushi/toml"
 
 	"github.com/govlog/ttyloom/internal/config"
 	"github.com/govlog/ttyloom/internal/i18n"
@@ -37,10 +32,7 @@ func cmdAliasPath() string { return filepath.Join(config.Dir(), "commands.toml")
 func loadCmdAliases(path string) (map[string]string, error) {
 	out := map[string]string{}
 	var f commandsFile
-	if _, err := toml.DecodeFile(path, &f); err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return out, nil
-		}
+	if err := loadTOML(path, &f); err != nil {
 		return out, err
 	}
 	for name, text := range f.Alias {
@@ -54,11 +46,7 @@ func loadCmdAliases(path string) (map[string]string, error) {
 // saveCmdAliases writes the file 0600: an alias can hold a password
 // (/msg nickserv identify …).
 func saveCmdAliases(path string, aliases map[string]string) error {
-	var buf bytes.Buffer
-	if err := toml.NewEncoder(&buf).Encode(commandsFile{Alias: aliases}); err != nil {
-		return err
-	}
-	return config.WriteAtomic(path, buf.Bytes(), 0o600)
+	return saveTOML(path, commandsFile{Alias: aliases})
 }
 
 // reservedCommand : a name a command of the client or of a module already

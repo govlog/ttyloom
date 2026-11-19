@@ -35,12 +35,15 @@ func (c *Client) wire() {
 		// messages apart by this id.
 		c.self.Store(int64(e.User.ID))
 		c.emojis.Clear() // a new session: the emojis may have changed meanwhile
+		c.emojiGen.Add(1)
 		c.dmRecipients(e.RawEventBody)
 	})
 	// A guild that comes (back) or changes its emojis is read again by the
 	// next customsOf: the state has applied the event before these handlers.
-	st.AddSyncHandler(func(e *gateway.GuildCreateEvent) { c.emojis.Delete(e.ID) })
-	st.AddSyncHandler(func(e *gateway.GuildEmojisUpdateEvent) { c.emojis.Delete(e.GuildID) })
+	// A new generation and not a delete: a build that read the old emojis
+	// just before the event would store them after the delete.
+	st.AddSyncHandler(func(*gateway.GuildCreateEvent) { c.emojiGen.Add(1) })
+	st.AddSyncHandler(func(*gateway.GuildEmojisUpdateEvent) { c.emojiGen.Add(1) })
 	st.AddSyncHandler(func(e *gateway.MessageCreateEvent) {
 		defer c.Guard("MessageCreate", nil)
 		// Chat never nil: the UI lists the chat of a message it does not know.
@@ -74,6 +77,9 @@ func (c *Client) wire() {
 	})
 	st.AddSyncHandler(func(e *gateway.TypingStartEvent) {
 		defer c.Guard("TypingStart", nil)
+		if int64(e.UserID) == c.self.Load() {
+			return // my own typing (Typing, another device): the UI shows only the others
+		}
 		// No end event is needed: the UI drops a typing line after six seconds.
 		c.Post(model.EvTyping{ChatID: int64(e.ChannelID), Who: c.typist(e)})
 	})
@@ -184,6 +190,7 @@ func (c *Client) chatFor(id discord.ChannelID) *model.Chat {
 type guildCustoms struct {
 	names []string
 	locs  map[string]any
+	gen   uint64 // Client.emojiGen before the read of the emojis
 }
 
 // customsOf : the custom emojis of a guild as ":name:", and the image of each
@@ -194,7 +201,8 @@ func (c *Client) customsOf(guild discord.GuildID) ([]string, map[string]any) {
 	if !guild.IsValid() {
 		return nil, nil
 	}
-	if v, ok := c.emojis.Load(guild); ok {
+	gen := c.emojiGen.Load() // before the read: an event after it makes the value old
+	if v, ok := c.emojis.Load(guild); ok && v.(guildCustoms).gen == gen {
 		g := v.(guildCustoms)
 		return g.names, g.locs
 	}
@@ -202,7 +210,7 @@ func (c *Client) customsOf(guild discord.GuildID) ([]string, map[string]any) {
 	if err != nil {
 		return nil, nil // not cached yet: read again next time
 	}
-	g := guildCustoms{make([]string, 0, len(es)), make(map[string]any, len(es))}
+	g := guildCustoms{make([]string, 0, len(es)), make(map[string]any, len(es)), gen}
 	for _, e := range es {
 		g.names = append(g.names, ":"+e.Name+":")
 		g.locs[":"+e.Name+":"] = fileURL(e.EmojiURL())

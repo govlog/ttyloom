@@ -240,6 +240,8 @@ type sendAsk struct {
 	tmp     bool   // file written by the paste: dropped once sent or cancelled
 	caption bool   // the input line holds the caption
 	draft   string // input in progress at the time of the "l", given back on cancel
+	// at : when the prompt opened (typedAhead).
+	at time.Time
 }
 
 // prompt : prompt of the input line.
@@ -274,7 +276,7 @@ func (u *UI) clipImage(e evClipImage) {
 		return
 	}
 	u.cancelSend() // an image waiting is replaced by the new one
-	u.sendAsk = &sendAsk{path: e.Path, size: e.Size, chat: w.Chat, title: u.title(w.Chat), tmp: true}
+	u.sendAsk = &sendAsk{path: e.Path, size: e.Size, chat: w.Chat, title: u.title(w.Chat), tmp: true, at: time.Now()}
 }
 
 // sendKey handles the keys while u.sendAsk waits for a decision, like
@@ -286,6 +288,7 @@ func (u *UI) sendKey(k term.Key) bool {
 		return false
 	}
 	switch {
+	case typedAhead(k, a.at, "el"): // swallowed, the prompt stays
 	case k.Code == term.None && k.Rune == 'e':
 		u.sendAsk = nil
 		u.sendPath(a.chat, a.path, "", a.tmp)

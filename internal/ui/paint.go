@@ -28,7 +28,7 @@ type cellPic struct {
 // frame : what draw made, by layer.
 type frame struct {
 	text  string // pieces of text, each one after a cursor move
-	gfx   string // kitty commands: sent whenever there are some (placeDiff already keeps them to what changed)
+	gfx   string // kitty commands: sent when they differ from the last ones sent, or with a whole frame
 	pics  []cellPic
 	trail string // cursor at its place, shown or not
 }
@@ -63,7 +63,15 @@ func (u *UI) paint(f frame) {
 		}
 	}
 	u.prevRows, u.prevPics = rows, f.pics
-	if len(dirty) == 0 && f.gfx == "" && len(pics) == 0 && f.trail == u.prevTrail {
+	// The same kitty commands as the last ones sent place the same images at
+	// the same places: the terminal holds them already. An animation step
+	// swaps the image id, which changes them.
+	gfx := f.gfx
+	if !whole && gfx == u.prevGfx {
+		gfx = ""
+	}
+	u.prevGfx = f.gfx
+	if len(dirty) == 0 && gfx == "" && len(pics) == 0 && f.trail == u.prevTrail {
 		u.t.Flush() // what other code queued still goes
 		return
 	}
@@ -81,7 +89,7 @@ func (u *UI) paint(f frame) {
 			u.t.WriteString(rows[r])
 		}
 	}
-	u.t.WriteString(f.gfx)
+	u.t.WriteString(gfx)
 	for _, s := range pics {
 		u.t.WriteString(s)
 	}

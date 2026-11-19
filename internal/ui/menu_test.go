@@ -406,3 +406,48 @@ func TestMenuUndeletable(t *testing.T) {
 		t.Fatalf("menu of an undeletable chat: %+v", u.menu.entries)
 	}
 }
+
+// The entry "search" opens the chat with "/search " ready in an empty input.
+// A draft that the chat kept stays as it is, and the status bar says why.
+func TestRegressionMenuSearchKeepsDraft(t *testing.T) {
+	u, _, room, peer := queryUI()
+	iRoom, iPeer := u.ws.ForChat(room.Key()), u.ws.ForChat(peer.Key())
+	u.goTo(iPeer)
+	u.ed.Set("half-written for peer")
+	u.goTo(iRoom)
+	u.menuDo(&ctxMenu{chat: peer}, "search")
+	if got := u.ed.String(); u.ws.Cur != iPeer || got != "half-written for peer" || u.flashMsg != i18n.T("menu_search_draft") {
+		t.Fatalf("search on a chat with a draft: window %d, input %q, status %q; want window %d, the draft and %q",
+			u.ws.Cur, got, u.flashMsg, iPeer, i18n.T("menu_search_draft"))
+	}
+	u.menuDo(&ctxMenu{chat: room}, "search")
+	if got := u.ed.String(); u.ws.Cur != iRoom || got != "/search " {
+		t.Fatalf("search on a chat with no draft: window %d, input %q; want window %d and %q", u.ws.Cur, got, iRoom, "/search ")
+	}
+}
+
+// A chat dropped from the list (left, deleted, gone) takes its pinned banner
+// with it: when the chat comes back, nothing old shows above its messages.
+func TestRegressionDropChatForgetsPin(t *testing.T) {
+	u, _, w := msgUI(t)
+	k := w.Chat.Key()
+	u.dispatch(model.Envelope{Net: netTelegram, Ev: model.EvPinned{ChatID: k.ID, Fetched: true,
+		Top: &model.Msg{Net: netTelegram, ChatID: k.ID, ID: 2, From: "alice", Text: "deux", Pinned: true}}})
+	u.dropChat(k)
+	u.dispatch(model.Envelope{Net: netTelegram, Ev: model.EvNewMessage{Chat: &model.Chat{ID: k.ID, Title: "grp", Kind: model.ChatGroup},
+		Msg: model.Msg{ChatID: k.ID, ID: 9, From: "bob", Text: "back", Date: time.Now()}}})
+	if text, _, ok := u.pinBanner(u.winFor(u.chats[k])); ok {
+		t.Fatalf("the chat came back with the old banner %q", text)
+	}
+}
+
+// A chat gone while it is shown takes its window away the way /close does:
+// the window before it comes, not window 0.
+func TestChatGoneLandsOnWindowBefore(t *testing.T) {
+	u, _, wr, wp := draftUI()
+	u.goTo(slices.Index(u.ws.List, wp))
+	u.chatGone(wp.Chat.Key())
+	if u.view() != wr || u.ed.String() != "draft for the room" {
+		t.Fatalf("after the chat went: in %q, input %q; want the room with its draft", u.view().Name(), u.ed.String())
+	}
+}

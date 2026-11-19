@@ -11,5 +11,4 @@
 - IRC: a taken nick prints its 433 line again each time the client tries to take it back (every few minutes).
 - IRC: the modes of a WHOIS and the setter of a topic (333) are not shown.
 - `/discord` and `/telegram` say "disconnected, reconnecting…" before the first connection, the Discord QR included.
-- A blank `token_cmd` written by hand keeps the token of the QR login from being saved.
 - Hooks: a local clock running fast skips every hook (the age of a message is the server date against the local clock).

@@ -2,6 +2,7 @@ package irc
 
 import (
 	"hash/fnv"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -166,10 +167,35 @@ func styled(segs []model.Seg) string {
 	return sb.String()
 }
 
-// maxLine : bytes of text per PRIVMSG. 512 minus the prefix the server adds
-// (":nick!user@host PRIVMSG #chan :") leaves about 400 for the longest
-// user@host; cutting there never hits the server limit.
+// maxLine : bytes of the room list of one JOIN line of the burst (connected),
+// far under the 512 bytes of a line. A PRIVMSG piece follows lineMax.
 const maxLine = 400
+
+// minLine : the floor of lineMax. A target or a nick too long for the
+// formula must not cut a text into pieces of a few bytes.
+const minLine = 100
+
+// lineMax : bytes of text per PRIVMSG piece to target. The server relays
+// ":nick!user@host PRIVMSG target :text\r\n" to the others in 512 bytes and
+// cuts the end in silence. The nick is the one of now; the user@host the
+// server shows is not known, so the longest one it allows counts (USERLEN and
+// HOSTLEN of 005, else 10 and 63).
+//
+// ponytail: the longest user@host costs up to about 55 bytes a piece on a
+// network with short hosts. Learn the real one (the source of the self JOIN,
+// 396, CHGHOST) if longer pieces matter; never by a WHO, its answer shows.
+func (c *Client) lineMax(target string) int {
+	n := 512 - len(":!@ PRIVMSG  :\r\n") - len(c.me()) - c.limit("USERLEN", 10) - c.limit("HOSTLEN", 63) - len(target)
+	return max(n, minLine)
+}
+
+// limit : the number of the 005 token key, def when the server sends none.
+func (c *Client) limit(key string, def int) int {
+	if n, err := strconv.Atoi(c.conn.ISupport()[key]); err == nil && n > 0 {
+		return n
+	}
+	return def
+}
 
 // splitLines cuts text into PRIVMSG-sized pieces: one per line, a line longer
 // than max cut on the last blank before the limit (a rune boundary otherwise).

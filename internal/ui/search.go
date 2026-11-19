@@ -173,6 +173,9 @@ func (u *UI) searchKey(k term.Key) bool {
 	case k.Code == term.None && k.Rune != 0 && !k.Alt:
 		s.q = append(s.q, k.Rune)
 		u.searchFind()
+	case k.Code == term.Paste:
+		s.q = append(s.q, []rune(render.CleanLine(k.Text))...)
+		u.searchFind()
 	}
 	return true
 }

@@ -364,8 +364,7 @@ func (c *Client) stream(ctx context.Context, src io.Reader, dst io.Writer, size 
 	return nil
 }
 
-// dccGet fetches an offer into path — a ".part-" file next to it first, the
-// name once whole (a killed session leaves a part file cleanParts removes).
+// dccGet fetches an offer into path through media.Save.
 func (c *Client) dccGet(ctx context.Context, m *model.Media, off dccOffer, path string) {
 	result := model.EvDownloaded{Media: m}
 	defer func() { c.Post(result) }() // Report completion after resource cleanup.
@@ -385,38 +384,22 @@ func (c *Client) dccGet(ctx context.Context, m *model.Media, off dccOffer, path 
 		delete(c.offers, c.casefold(off.Nick))
 	}
 	c.mu.Unlock()
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		fail(err.Error())
-		return
-	}
-	f, err := os.CreateTemp(filepath.Dir(path), ".part-*")
-	if err != nil {
-		fail(err.Error())
-		return
-	}
-	part := f.Name()
-	defer f.Close()
-	defer os.Remove(part) // no-op once renamed
 	ack := make([]byte, 4)
-	w := &ackWriter{w: f, ack: func(n int64) {
-		// ponytail: 32-bit counter, wraps past 4 GB; the sender ignores it anyway.
-		binary.BigEndian.PutUint32(ack, uint32(n))
-		conn.Write(ack)
-	}}
-	err = c.stream(ctx, io.LimitReader(conn, off.Size), w, off.Size, func(pct int) {
-		c.PostNB(model.EvUpload{Text: i18n.T("dcc_progress", off.Name, pct)})
-	})
-	if cerr := f.Close(); err == nil {
-		err = cerr
-	}
-	if err != nil || w.n != off.Size {
-		if err == nil {
+	err = media.Save(path, func(f *os.File) error {
+		w := &ackWriter{w: f, ack: func(n int64) {
+			// ponytail: 32-bit counter, wraps past 4 GB; the sender ignores it anyway.
+			binary.BigEndian.PutUint32(ack, uint32(n))
+			conn.Write(ack)
+		}}
+		err := c.stream(ctx, io.LimitReader(conn, off.Size), w, off.Size, func(pct int) {
+			c.PostNB(model.EvUpload{Text: i18n.T("dcc_progress", off.Name, pct)})
+		})
+		if err == nil && w.n != off.Size {
 			err = io.ErrUnexpectedEOF
 		}
-		fail(err.Error())
-		return
-	}
-	if err := os.Rename(part, path); err != nil {
+		return err
+	})
+	if err != nil {
 		fail(err.Error())
 		return
 	}

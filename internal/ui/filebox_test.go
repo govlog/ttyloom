@@ -2,12 +2,15 @@ package ui
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/govlog/ttyloom/internal/cache"
 	"github.com/govlog/ttyloom/internal/config"
+	"github.com/govlog/ttyloom/internal/media"
 	"github.com/govlog/ttyloom/internal/model"
 	"github.com/govlog/ttyloom/internal/render"
 	"github.com/govlog/ttyloom/internal/term"
@@ -159,5 +162,59 @@ func TestFileMatch(t *testing.T) {
 		if got := fileMatch(c.q, &model.Media{Name: c.name}); got != c.want {
 			t.Errorf("fileMatch(%q, %q) = %v, want %v", c.q, c.name, got, c.want)
 		}
+	}
+}
+
+// The file browser looks for the documents on the disk in its background
+// read, never on the UI loop (5000 documents took 38 ms there, seconds on a
+// network home). The result stays the same: a document downloaded under the
+// name of its message moves to the folder of its conversation, and the box
+// knows the file of each document on the disk, the ones of the open windows
+// included.
+func TestFileBrowserDiskOffLoop(t *testing.T) {
+	u := filesUI(t)
+	dir := t.TempDir()
+	u.cfg.DownloadDir = dir
+	day1 := time.Date(2026, 11, 1, 10, 0, 0, 0, time.Local)
+	legacy := filepath.Join(dir, media.FileName(model.ChatKey{Net: netTelegram, ID: 1}, "Alice", 1, day1, ""))
+	report := filepath.Join(dir, "telegram", "Alice", "report.pdf")
+	notes := filepath.Join(dir, "discord", "general", "notes.md")
+	for _, p := range []string{legacy, notes} {
+		if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte("x"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.Chtimes(notes, time.Date(2026, 11, 5, 10, 0, 0, 0, time.Local), time.Date(2026, 11, 5, 10, 0, 0, 0, time.Local)); err != nil {
+		t.Fatal(err)
+	}
+	path := func(name string) string { // the file the box knows for the document name
+		for _, p := range u.files.all {
+			for _, it := range p.files {
+				if it.Msg.Media.Name == name {
+					return it.Msg.Media.Path
+				}
+			}
+		}
+		t.Fatalf("%s not in the box", name)
+		return ""
+	}
+
+	hist, err := u.caches[netTelegram].LoadHistory(1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	u.files = &filesBox{loading: true}
+	u.filesLoaded(evFiles{box: u.files, hist: map[model.ChatKey][]model.Msg{{Net: netTelegram, ID: 1}: hist}})
+	if _, err := os.Stat(legacy); err != nil || path("report.pdf") != "" {
+		t.Fatalf("the UI loop looked at the disk: old name %v, path %q; want both untouched", err, path("report.pdf"))
+	}
+
+	openedFiles(u)
+	if _, err := os.Stat(report); err != nil || path("report.pdf") != report || path("notes.md") != notes {
+		t.Fatalf("after the disk read: report.pdf %v at %q, notes.md at %q; want %s and %s",
+			err, path("report.pdf"), path("notes.md"), report, notes)
 	}
 }

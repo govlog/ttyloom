@@ -14,6 +14,7 @@ import (
 
 	"github.com/gotd/td/bin"
 
+	"github.com/gotd/td/telegram"
 	"github.com/gotd/td/telegram/message/peer"
 	"github.com/gotd/td/telegram/peers"
 	"github.com/gotd/td/telegram/uploader"
@@ -1073,11 +1074,12 @@ func TestDownloadError(t *testing.T) {
 }
 
 // TestDownloadForeignHandle : a media coming from another backend has nothing
-// to download here — one ERROR log and one failed event, no temp file.
+// to download here — one ERROR log and one failed event, no directory and no
+// temp file made.
 func TestDownloadForeignHandle(t *testing.T) {
 	ev := make(chan model.Event, 4)
 	dir := t.TempDir()
-	path := filepath.Join(dir, "photo.jpg")
+	path := filepath.Join(dir, "sub", "photo.jpg")
 	fakeClient(&fakeInvoker{}, ev).Download(context.Background(), &model.Media{Loc: "discord"}, path)
 	if l := next(t, ev).(model.EvLog); l.Level != "ERROR" {
 		t.Fatalf("log: %+v", l)
@@ -1194,5 +1196,111 @@ func TestNewReaction(t *testing.T) {
 	}
 	if e, _ := c.newReaction(ent, recent[2:]); e != "" {
 		t.Fatalf("nothing unread from others: %q", e)
+	}
+}
+
+// TestPinsReadAgainAfterFailure : the pinned banner of a chat is read at its
+// first open. A transient failure of that read (the network, the FLOOD_WAIT
+// breaker of the start-up sync) reads it again at the next open; a refusal
+// of the server (no right to search) is final for the session.
+func TestPinsReadAgainAfterFailure(t *testing.T) {
+	ev := make(chan model.Event, 8)
+	var fail error // answer of the next pin read; nil gives the pinned message
+	inv := &fakeInvoker{answer: func(req bin.Encoder) (any, error) {
+		switch req.(type) {
+		case *tg.MessagesGetHistoryRequest:
+			return &tg.MessagesMessages{}, nil
+		case *tg.MessagesSearchRequest:
+			if fail != nil {
+				return nil, fail
+			}
+			return &tg.MessagesMessages{Messages: []tg.MessageClass{
+				&tg.Message{ID: 3, PeerID: &tg.PeerUser{UserID: 7}, Message: "pinned", Pinned: true}}}, nil
+		}
+		return nil, fmt.Errorf("unexpected request %T", req)
+	}}
+	c := fakeClient(inv, ev)
+	c.me.Store(&tg.User{ID: 1}) // logged in as a user: a bot cannot search
+	chat := &model.Chat{ID: 7, Kind: model.ChatUser, Title: "alice", Peer: &tg.InputPeerUser{UserID: 7}}
+	// open opens the chat with the pin read answering err, and gives the event
+	// of that read.
+	open := func(err error) model.Event {
+		t.Helper()
+		fail = err
+		c.LoadHistory(context.Background(), chat, 0, 1)
+		var pin model.Event
+		for range 2 { // the page and the pin read, in any order
+			if e := next(t, ev); !isHistory(e) {
+				pin = e
+			}
+		}
+		return pin
+	}
+	if e, ok := open(fmt.Errorf("connection lost")).(model.EvLog); !ok || e.Level != "DEBUG" {
+		t.Fatalf("first open: %+v, want the DEBUG line of the failed read", e)
+	}
+	if e, ok := open(tgerr.New(400, "CHAT_ADMIN_REQUIRED")).(model.EvLog); !ok || e.Level != "DEBUG" {
+		t.Fatalf("second open: %+v, want the pins read again after a network error", e)
+	}
+	fail = nil
+	c.LoadHistory(context.Background(), chat, 0, 1)
+	if e := next(t, ev); !isHistory(e) {
+		t.Fatalf("third open: %+v, want the page alone", e)
+	}
+	select {
+	case e := <-ev:
+		t.Fatalf("third open: %+v, the server refused the read: no new request in this session", e)
+	case <-time.After(100 * time.Millisecond):
+	}
+}
+
+func isHistory(e model.Event) bool { _, ok := e.(model.EvHistory); return ok }
+
+// TestConnStateNeverLost : the connection state reaches the UI even when its
+// channel is full (a burst of updates). The callback of gotd must not block;
+// the newest state waits and goes out once the UI reads again, so a quick
+// drop and come back ends on EvConnected. Nothing is posted after Run.
+func TestConnStateNeverLost(t *testing.T) {
+	ev := make(chan model.Event, 1)
+	c := New(Config{AppID: 1, AppHash: "hash", SessionPath: filepath.Join(t.TempDir(), "session.json")}, ev)
+	ev <- model.EvLog{Msg: "burst"}           // the UI channel is full
+	stop := c.relayConn(context.Background()) // what Run starts
+	called := make(chan struct{})
+	go func() {
+		c.onConnState(telegram.ConnectionStateDisconnected) // what gotd calls
+		c.onConnState(telegram.ConnectionStateReady)
+		close(called)
+	}()
+	select {
+	case <-called:
+	case <-time.After(time.Second):
+		t.Fatal("the connection callback blocks on a full channel: gotd forbids it")
+	}
+	<-ev // the UI reads again
+	for connected := false; !connected; {
+		select {
+		case e := <-ev:
+			switch e.(type) {
+			case model.EvConnected:
+				connected = true
+			case model.EvDisconnected:
+			default:
+				t.Fatalf("%+v, want the connection state", e)
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatal("no EvConnected: the state was dropped while the UI channel was full")
+		}
+	}
+	stop() // Run returns
+	select {
+	case e := <-ev:
+		t.Fatalf("%+v after EvConnected: the newest state is Ready", e)
+	default:
+	}
+	c.onConnState(telegram.ConnectionStateDisconnected)
+	select {
+	case e := <-ev:
+		t.Fatalf("%+v posted after Run returned", e)
+	case <-time.After(100 * time.Millisecond):
 	}
 }

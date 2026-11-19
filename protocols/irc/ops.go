@@ -50,14 +50,14 @@ func (c *Client) LoadHistorySince(_ context.Context, chat *model.Chat, _, _ int)
 
 // sendText : text to the chat, one PRIVMSG per line piece.
 func (c *Client) sendText(ctx context.Context, name string, chat *model.Chat, text string, tmpID int64) {
-	c.sendLines(ctx, name, chat, splitLines(text, maxLine), tmpID)
+	c.sendLines(ctx, name, chat, splitLines(text, c.lineMax(nameOf(chat))), tmpID)
 }
 
 // SendAction : /me as a CTCP ACTION, the "* nick" left to the clients that
 // show it; an action as long as a paste goes out as several.
 func (c *Client) SendAction(ctx context.Context, chat *model.Chat, segs []model.Seg, tmpID int64) {
 	const open, end = "\x01ACTION ", "\x01"
-	lines := splitLines(styled(segs), maxLine-len(open+end))
+	lines := splitLines(styled(segs), c.lineMax(nameOf(chat))-len(open+end))
 	for i := range lines {
 		lines[i] = open + lines[i] + end
 	}
@@ -145,6 +145,11 @@ func (c *Client) Contacts(context.Context) {
 	c.Refuse("Contacts", model.EvContacts{Err: c.unsupported()})
 }
 
+// joinWait : how long a /join waits for the answer to its JOIN. A refusal
+// with a numeric this client does not know (or a NOTICE) answers nothing.
+// A variable: the tests shorten it.
+var joinWait = 30 * time.Second
+
 // Resolve : "#room" joins it (the answer comes with the JOIN, or with the
 // error numeric); anything else is a nick, a private chat opens at once.
 func (c *Client) Resolve(_ context.Context, q string, _ bool, request uint64) {
@@ -186,15 +191,63 @@ func (c *Client) Resolve(_ context.Context, q string, _ bool, request uint64) {
 		}
 		if err := c.send("JOIN", params...); err != nil {
 			c.mu.Lock()
-			waiting := c.joining[c.casefold(name)]
-			delete(c.joining, c.casefold(name))
+			waiting, _ := c.takeJoining(c.casefold(name))
 			c.mu.Unlock()
 			for _, ev := range waiting {
 				ev.Err = err.Error()
 				c.Post(ev)
 			}
+			return
 		}
+		c.waitJoin(c.casefold(name), request)
 	}()
+}
+
+// takeJoining takes the /join requests that wait for room k, their timers
+// stopped; c.mu held.
+func (c *Client) takeJoining(k string) ([]model.EvChat, bool) {
+	q, ok := c.joining[k]
+	delete(c.joining, k)
+	for _, ev := range q {
+		if t := c.joinT[ev.Request]; t != nil {
+			t.Stop()
+			delete(c.joinT, ev.Request)
+		}
+	}
+	return q, ok
+}
+
+// waitJoin gives the /join of request joinWait to be answered, unless an
+// answer or a drop came while its JOIN went out.
+func (c *Client) waitJoin(k string, request uint64) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if slices.ContainsFunc(c.joining[k], func(ev model.EvChat) bool { return ev.Request == request }) {
+		c.joinT[request] = time.AfterFunc(joinWait, func() { c.joinTimeout(k, request) })
+	}
+}
+
+// joinTimeout : joinWait is over and the JOIN of request got no answer. Its
+// requests leave joining with an error; a late echo then only joins the room.
+func (c *Client) joinTimeout(k string, request uint64) {
+	var late []model.EvChat
+	c.mu.Lock()
+	c.joining[k] = slices.DeleteFunc(c.joining[k], func(ev model.EvChat) bool {
+		mine := ev.Request == request
+		if mine {
+			late = append(late, ev)
+		}
+		return mine
+	})
+	if len(c.joining[k]) == 0 {
+		delete(c.joining, k)
+	}
+	delete(c.joinT, request)
+	c.mu.Unlock()
+	for _, ev := range late {
+		ev.Err = i18n.T("irc_timeout")
+		c.Post(ev)
+	}
 }
 
 // Members : who the client knows in chat, as the UI completes them — the

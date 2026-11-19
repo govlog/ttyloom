@@ -22,7 +22,7 @@ var aliases = map[string]string{
 }
 
 var commandNames = []string{"/window", "/close", "/query", "/join", "/new", "/msg", "/me", "/shrug", "/away", "/chats", "/networks", "/hooks", "/net", "/fold", "/mute", "/unmute", "/history",
-	"/search", "/whois", "/rename", "/unrename", "/note", "/unnote", "/alias", "/unalias", "/open", "/view", "/send", "/theme", "/demo", "/set", "/clear", "/log", "/debug", "/emoji", "/gif", "/media", "/files", "/help", "/quit"}
+	"/search", "/whois", "/rename", "/unrename", "/note", "/unnote", "/alias", "/unalias", "/open", "/view", "/send", "/theme", "/demo", "/set", "/clear", "/log", "/debug", "/emoji", "/gif", "/sticker", "/media", "/files", "/help", "/quit"}
 
 // cmdNames : the commands valid now. general resolve first by prefix, then
 // context — the ones a network adds in its own windows (IRC's /kick), which
@@ -134,7 +134,9 @@ func (u *UI) command(name string, args []string, text string) {
 	case "new":
 		u.openNewChat()
 	case "msg":
-		if len(args) < 2 {
+		// The whole line is the name of a chat (Tab puts a title of several
+		// words): no text is left to send.
+		if exact, _, _ := matchNames(u.chatNames(), text); len(args) < 2 || len(exact) > 0 {
 			w.AddSys(i18n.T("usage_msg"))
 			return
 		}

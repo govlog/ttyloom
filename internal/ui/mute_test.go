@@ -248,3 +248,19 @@ func TestAlertDroppedOnceRead(t *testing.T) {
 		t.Fatalf("%d bells, want 1: the held one was read before it went out", n)
 	}
 }
+
+// /unmute of a chat that its section mutes too lifts the mute of the chat
+// and says the section still mutes it, with the command that undoes that.
+func TestRegressionUnmuteChatOfMutedSection(t *testing.T) {
+	t.Setenv("TTYLOOM_DIR", t.TempDir())
+	u, _, room, _ := queryUI()
+	w := u.winFor(room)
+	sec := sectionOf(room)
+	u.muteCmd(w, "", true)
+	u.muteCmd(w, sec, true)
+	u.muteCmd(w, "", false)
+	chats, secs, _ := loadMuted(mutedPath())
+	if got := lastSys(w); !strings.Contains(got, "/unmute "+sec) || chats[room.Key()] || !secs[sec] || !u.isMuted(room) {
+		t.Fatalf("/unmute says %q, muted.toml chats %v sections %v; want the chat unmuted, the section kept and its command said", got, chats, secs)
+	}
+}

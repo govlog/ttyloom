@@ -122,7 +122,7 @@ become spaces. An empty output does nothing, whatever the mode.
 
 | `reply` | What happens |
 | --- | --- |
-| `send` | Sent as a normal message in the chat of the message, even when its window is not shown. Your input line, the reply you are preparing and the typing indicator stay as they are. Several lines make one message; on IRC each line is a message, and a line over 400 bytes is cut in several. On Telegram and Discord, a reply too long for the network fails like any send. |
+| `send` | Sent as a normal message in the chat of the message, even when its window is not shown. Your input line, the reply you are preparing and the typing indicator stay as they are. Several lines make one message; on IRC each line is a message, and a line too long for the server (about 400 bytes, less in a room with a long name) is cut in several. On Telegram and Discord, a reply too long for the network fails like any send. |
 | `draft` | Put in the input line of the chat when it is empty: the input on the screen, or the draft you find when you go to that window. Your own text is never replaced, nor a reply or an edit you are preparing, nor a search or a question on the input line: then the output shows as with `display`. |
 | `display` | Each line becomes a line of the window of the chat, `[name] text`. Nothing leaves your machine. |
 | `none` | The output is ignored: the hook works for what it does (a notification, a log). |

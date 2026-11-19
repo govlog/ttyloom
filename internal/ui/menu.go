@@ -344,6 +344,10 @@ func (u *UI) menuDo(m *ctxMenu, key string) {
 			return
 		}
 		u.openChat(c)
+		if u.ed.String() != "" { // the draft the chat kept is never overwritten
+			u.flash(i18n.T("menu_search_draft"))
+			return
+		}
 		u.ed.Set("/search ") // cursor at the end: Enter starts the search
 	}
 }
@@ -436,13 +440,7 @@ func (u *UI) dropChat(k model.ChatKey) bool {
 			}
 		}
 		u.freeImages(w)
-		u.ws.List = slices.Delete(u.ws.List, i, i+1)
-		switch {
-		case u.ws.Cur == i:
-			u.ws.Cur = 0
-		case u.ws.Cur > i:
-			u.ws.Cur--
-		}
+		u.ws.CloseAt(i)
 	}
 	u.chatList = slices.DeleteFunc(u.chatList, func(x *model.Chat) bool { return x.Key() == k })
 	// The sync queue keeps pointers: a step on a chat that was left would
@@ -457,6 +455,7 @@ func (u *UI) dropChat(k model.ChatKey) bool {
 	delete(u.presence, k)
 	delete(u.avatars, k)
 	delete(u.cached, k)
+	delete(u.pins, k)
 	if !keep {
 		u.dropHistory(k)
 	}

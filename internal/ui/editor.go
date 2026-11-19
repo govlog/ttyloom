@@ -142,6 +142,16 @@ func (e *Editor) Delete() {
 
 func (e *Editor) KillToEnd() { e.buf = e.buf[:e.cur] }
 
+// KillLine deletes to the end of the current line. At the end of a line it
+// deletes the line break: the next line joins this one (readline).
+func (e *Editor) KillLine() {
+	_, end := e.lineBounds(e.cur)
+	if end == e.cur && end < len(e.buf) {
+		end++
+	}
+	e.buf = slices.Delete(e.buf, e.cur, end)
+}
+
 func (e *Editor) KillWord() {
 	i := e.cur
 	for i > 0 && sep(e.buf[i-1]) {

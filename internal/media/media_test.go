@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"hash/crc32"
 	"image"
@@ -383,6 +384,34 @@ func TestLoadGIFRefusesPixelBomb(t *testing.T) {
 	}
 }
 
+// TestLoadBigGIFShowsFirstFrame : a GIF too big to animate (1920x1080 is over
+// maxGIFPixels) but not too big for a still image shows its first frame. It
+// used to fail as "image too large".
+func TestLoadBigGIFShowsFirstFrame(t *testing.T) {
+	pal := color.Palette{color.Black, color.White}
+	g := &gif.GIF{Config: image.Config{Width: 1920, Height: 1080}}
+	for range 2 {
+		g.Image = append(g.Image, image.NewPaletted(image.Rect(0, 0, 1920, 1080), pal))
+		g.Delay = append(g.Delay, 10)
+	}
+	p := filepath.Join(t.TempDir(), "big.gif")
+	f, err := os.Create(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := gif.EncodeAll(f, g); err != nil {
+		t.Fatal(err)
+	}
+	f.Close()
+	fr, err := Load(context.Background(), p, "image/gif", 400, 300, 40)
+	if err != nil {
+		t.Fatalf("1920x1080 animated GIF: %v, want its first frame", err)
+	}
+	if len(fr.PNG) != 1 || fr.W != 400 || fr.H != 225 {
+		t.Fatalf("1920x1080 animated GIF: %d frames %dx%d, want 1 frame 400x225", len(fr.PNG), fr.W, fr.H)
+	}
+}
+
 // TestSafeNameCapped : a chat title is not bounded on the network side, and
 // ui.logMsg names its log file from it.
 func TestSafeNameCapped(t *testing.T) {
@@ -535,6 +564,10 @@ func TestOriginalName(t *testing.T) {
 		{"gpj‮.exe", "gpj_.exe"},
 		{" .. ", ""},
 		{"", ""},
+		// The name of a temporary download file: the clean-up at start
+		// removes those.
+		{".part-notes.pdf", "_part-notes.pdf"},
+		{" .part-123", "_part-123"},
 	}
 	for _, c := range cases {
 		if got := OriginalName(c.in); got != c.want {
@@ -543,6 +576,95 @@ func TestOriginalName(t *testing.T) {
 	}
 	if got := OriginalName(long); len(got) > maxOriginalName || !strings.HasSuffix(got, ".pdf") || !utf8.ValidString(got) {
 		t.Errorf("long name: %d bytes %q", len(got), got)
+	}
+}
+
+// Save puts the whole file under its name, and nothing else stays beside it.
+func TestSaveWholeFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "notes.txt")
+	if err := Save(path, func(f *os.File) error { _, err := f.WriteString("whole"); return err }); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	if got, err := os.ReadFile(path); err != nil || string(got) != "whole" {
+		t.Fatalf("content %q (%v), want %q", got, err, "whole")
+	}
+	if got, _ := os.ReadDir(dir); len(got) != 1 {
+		t.Fatalf("files in the directory: %v, want notes.txt alone", got)
+	}
+}
+
+// A received file is private: the directory made for it is 0700, the file
+// 0600.
+func TestSaveModes(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "irc_libera", "alice")
+	path := filepath.Join(dir, "notes.txt")
+	if err := Save(path, func(*os.File) error { return nil }); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	for _, c := range []struct {
+		path string
+		want os.FileMode
+	}{{dir, 0o700}, {path, 0o600}} {
+		st, err := os.Stat(c.path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := st.Mode().Perm(); got != c.want {
+			t.Fatalf("%s: mode %v, want %v", c.path, got, c.want)
+		}
+	}
+}
+
+// A save that fails leaves no file: none under the name, where a half file
+// would pass for the media, and no temporary file. A panic of write still
+// reaches the caller (the Guard of a backend).
+func TestSaveFailureLeavesNothing(t *testing.T) {
+	for name, write := range map[string]func(*os.File) error{
+		"write": func(f *os.File) error { f.WriteString("half"); return errors.New("cut") },
+		"close": func(f *os.File) error { f.WriteString("half"); return f.Close() }, // the close of Save then fails
+		"panic": func(f *os.File) error { f.WriteString("half"); panic("cut") },
+	} {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			err := func() (err error) {
+				defer func() {
+					if r := recover(); r != nil {
+						err = fmt.Errorf("panic: %v", r)
+					}
+				}()
+				return Save(filepath.Join(dir, "notes.txt"), write)
+			}()
+			if err == nil {
+				t.Fatal("failed save: no error")
+			}
+			if got, _ := os.ReadDir(dir); len(got) != 0 {
+				t.Fatalf("files left after %v: %v", err, got)
+			}
+		})
+	}
+}
+
+// A symbolic link at the name is replaced by the file: the file it points to
+// keeps its content.
+func TestSaveReplacesSymlink(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "private.txt")
+	path := filepath.Join(dir, "notes.txt")
+	if err := os.WriteFile(target, []byte("original"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, path); err != nil {
+		t.Fatal(err)
+	}
+	if err := Save(path, func(f *os.File) error { _, err := f.WriteString("received"); return err }); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	if got, _ := os.ReadFile(target); string(got) != "original" {
+		t.Fatalf("link target written: %q", got)
+	}
+	if st, err := os.Lstat(path); err != nil || !st.Mode().IsRegular() {
+		t.Fatalf("%s is not a regular file now (%v)", path, err)
 	}
 }
 

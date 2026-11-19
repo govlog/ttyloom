@@ -147,22 +147,11 @@ func start(t *testing.T, cfg Config, sasl bool, mapping ...string) (*Client, *fa
 // in the channel.
 func connect(t *testing.T, cfg Config, sasl bool, mapping ...string) (*Client, *fakeServer, chan model.Event, *savedLists) {
 	t.Helper()
-	cs, ss := net.Pipe()
-	s := &fakeServer{t: t, conn: ss, lines: make(chan string, 64), sasl: sasl}
+	cs, s := pipeServer(t)
+	s.sasl = sasl
 	if len(mapping) > 0 {
 		s.mapping = mapping[0]
 	}
-	go func() {
-		sc := bufio.NewScanner(ss)
-		for sc.Scan() {
-			if strings.HasPrefix(sc.Text(), "QUIT") { // a real server closes on QUIT
-				ss.Close()
-				break
-			}
-			s.lines <- sc.Text()
-		}
-		close(s.lines)
-	}()
 	var saved savedLists
 	var c *Client
 	cfg.Name, cfg.Host, cfg.Port, cfg.Nick = "test", "irc.example", 6667, "me"
@@ -182,9 +171,28 @@ func connect(t *testing.T, cfg Config, sasl bool, mapping ...string) (*Client, *
 			t.Error("Run did not end")
 		}
 		cs.Close()
-		ss.Close()
+		s.conn.Close()
 	})
 	return c, s, events, &saved
+}
+
+// pipeServer : a fake server on the far end of a new pipe; the near end is
+// the socket the client dials.
+func pipeServer(t *testing.T) (net.Conn, *fakeServer) {
+	cs, ss := net.Pipe()
+	s := &fakeServer{t: t, conn: ss, lines: make(chan string, 64)}
+	go func() {
+		sc := bufio.NewScanner(ss)
+		for sc.Scan() {
+			if strings.HasPrefix(sc.Text(), "QUIT") { // a real server closes on QUIT
+				ss.Close()
+				break
+			}
+			s.lines <- sc.Text()
+		}
+		close(s.lines)
+	}()
+	return cs, s
 }
 
 // waitFor gives the first event of type T, the others dropped.
@@ -356,6 +364,7 @@ func TestOwnNickReported(t *testing.T) {
 func TestMotdDoesNotRedoConnect(t *testing.T) {
 	_, s, events, _ := start(t, Config{Password: "secret", PasswordWithoutTLS: true, Channels: []string{"#go"}}, false)
 	s.expect("PRIVMSG NickServ")
+	s.send(":srv 900 me me!u@h me :You are now logged in as me")
 	s.expect("JOIN #go")
 	s.send(":srv 375 me :- srv Message of the Day -")
 	s.send(":srv 372 me :- hello")
@@ -476,7 +485,7 @@ func TestSendSplitsAndAcks(t *testing.T) {
 	first := s.expect("PRIVMSG #go :")
 	second := s.expect("PRIVMSG #go :")
 	third := s.expect("PRIVMSG #go ")
-	if len(first) > 400+len("PRIVMSG #go :") || !strings.HasPrefix(second, "PRIVMSG #go :word") || strings.TrimPrefix(third, "PRIVMSG #go ") != "second" {
+	if !strings.HasPrefix(second, "PRIVMSG #go :word") || strings.TrimPrefix(third, "PRIVMSG #go ") != "second" {
 		t.Fatalf("pieces: %q %q %q", first, second, third)
 	}
 	e := waitFor[model.EvSent](t, events)

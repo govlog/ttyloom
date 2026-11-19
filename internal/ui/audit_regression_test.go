@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -18,6 +19,7 @@ import (
 	"github.com/govlog/ttyloom/internal/render"
 	"github.com/govlog/ttyloom/internal/term"
 	"github.com/govlog/ttyloom/internal/theme"
+	"github.com/govlog/ttyloom/protocols/irc"
 )
 
 func TestRegressionQueryNetworkIsolation(t *testing.T) {
@@ -391,6 +393,47 @@ func TestRegressionIRCNickCollisionKeepsHistory(t *testing.T) {
 	if len(msgs) == 0 || u.chats[model.ChatKey{Net: net, ID: 42}] == nil {
 		t.Fatalf("IRC history dropped after a nick change at login: %d cached messages left, chat known: %v",
 			len(msgs), u.chats[model.ChatKey{Net: net, ID: 42}] != nil)
+	}
+}
+
+// A room whose name holds a bidi override: the UI cleans the title for
+// display, and the id must still come from the name the server knows. Else
+// each EvReady moves the room and its cache to the id of the cleaned title.
+func TestRegressionIRCRekeyKeepsRawRoomName(t *testing.T) {
+	const net = "irc:libera"
+	room := "#news\u202eroom"
+	events := make(chan model.Event, 16)
+	b := irc.New(irc.Config{Channels: []string{room}}, events)
+	id, cleanID := b.ChatID(room), b.ChatID(render.CleanLine(room))
+	c := cache.New(t.TempDir(), 2000)
+	if err := c.SaveHistory(id, []model.Msg{{ID: 7, ChatID: id, Text: "only copy of this IRC line", Date: time.Now()}}); err != nil {
+		t.Fatal(err)
+	}
+	u := ircCacheUI(net, c)
+	u.nets[net] = b
+	dialogs := func() { // the room list the backend posts, as Run would forward it
+		select {
+		case e := <-events:
+			u.dispatch(model.Envelope{Net: net, Ev: e})
+		case <-time.After(2 * time.Second):
+			t.Fatal("no room list from the backend")
+		}
+	}
+	b.LoadDialogs(u.ctx)
+	dialogs()
+	for range 2 { // each EvReady asks for the room list again
+		u.dispatch(model.Envelope{Net: net, Ev: model.EvReady{SelfID: 1001, SelfName: "me"}})
+		dialogs()
+	}
+	u.bgWait.Wait()
+	if len(u.chats) != 1 || u.chats[model.ChatKey{Net: net, ID: id}] == nil {
+		t.Fatalf("chats of the network: %v, want the room %q alone, at its id %d", slices.Collect(maps.Keys(u.chats)), room, id)
+	}
+	if moved, _ := c.LoadHistory(cleanID); len(moved) != 0 {
+		t.Fatalf("history of %q moved to the id %d of the cleaned title: %v", room, cleanID, moved)
+	}
+	if msgs, _ := c.LoadHistory(id); len(msgs) != 1 || msgs[0].Text != "only copy of this IRC line" {
+		t.Fatalf("history of %q under its id: %v", room, msgs)
 	}
 }
 

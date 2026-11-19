@@ -23,6 +23,7 @@ import (
 	"github.com/diamondburned/arikawa/v3/utils/sendpart"
 
 	"github.com/govlog/ttyloom/internal/i18n"
+	"github.com/govlog/ttyloom/internal/media"
 	"github.com/govlog/ttyloom/internal/model"
 	rend "github.com/govlog/ttyloom/internal/render"
 )
@@ -215,8 +216,11 @@ var reCustom = regexp.MustCompile(`:([A-Za-z0-9_~]+):`)
 
 // customs turns every ":name:" the guild knows as a custom emoji into the
 // <:name:id> Discord shows as the image — the mirror of parse. An unknown
-// name stays text, and outside a guild nothing changes. Inside a ``` block
-// Discord shows <:name:id> as it is: the text there stays as typed.
+// name stays text, and outside a guild nothing changes. Inside code Discord
+// shows <:name:id> as it is: the text there stays as typed. A run of
+// backticks opens code and the next run of the same length closes it (a
+// block is a run of three); a run never closed and an escaped backtick are
+// text.
 // ponytail: the emojis of the other guilds are not looked at; add them when
 // somebody with Nitro asks.
 func (c *Client) customs(text string, guild discord.GuildID) string {
@@ -227,9 +231,8 @@ func (c *Client) customs(text string, guild discord.GuildID) string {
 	if err != nil || len(es) == 0 {
 		return text
 	}
-	parts := strings.Split(text, "```") // the odd ones are inside a block
-	for i := 0; i < len(parts); i += 2 {
-		parts[i] = reCustom.ReplaceAllStringFunc(parts[i], func(m string) string {
+	sub := func(s string) string {
+		return reCustom.ReplaceAllStringFunc(s, func(m string) string {
 			name := m[1 : len(m)-1]
 			for _, e := range es {
 				if e.Name == name {
@@ -239,7 +242,48 @@ func (c *Client) customs(text string, guild discord.GuildID) string {
 			return m
 		})
 	}
-	return strings.Join(parts, "```")
+	var b strings.Builder
+	from := 0 // start of the text not written yet
+	for i := 0; i < len(text); {
+		n := ticks(text[i:])
+		switch {
+		case text[i] == '\\':
+			i += 2 // the escaped character is text
+		case n == 0:
+			i++
+		default:
+			end := closing(text[i+n:], n)
+			if end < 0 {
+				i += n
+				break
+			}
+			end += i + 2*n
+			b.WriteString(sub(text[from:i]))
+			b.WriteString(text[i:end])
+			i, from = end, end
+		}
+	}
+	b.WriteString(sub(text[from:]))
+	return b.String()
+}
+
+// ticks : the number of backticks at the start of s.
+func ticks(s string) int { return len(s) - len(strings.TrimLeft(s, "`")) }
+
+// closing : where the first run of exactly n backticks starts in s, -1 when
+// there is none.
+func closing(s string, n int) int {
+	for i := 0; i < len(s); {
+		switch k := ticks(s[i:]); k {
+		case n:
+			return i
+		case 0:
+			i++
+		default:
+			i += k // a run of another length is text of the code
+		}
+	}
+	return -1
 }
 
 // --- edit, delete ---
@@ -600,8 +644,10 @@ func (c *Client) LoadHistoryAround(ctx context.Context, chat *model.Chat, id, li
 // MessagesAfter is not used: it pages forward, so a channel with more than
 // limit new messages would give the OLDEST ones after minID and leave an
 // unmarked hole in the middle of the window. The walk goes from the newest
-// down to minID instead, like tgc — a page too short can then only miss the
-// far end of the past, which the window loads on its own by scrolling up.
+// down to minID instead, like tgc. When more than limit messages came, the
+// full page stops above minID: the UI marks the hole between the page and the
+// messages it held, and loads it page by page (LoadHistory before the oldest
+// message of the page).
 func (c *Client) LoadHistorySince(ctx context.Context, chat *model.Chat, minID, limit int) {
 	c.history(ctx, "LoadHistorySince", chat, model.EvHistory{Started: time.Now(), ChatID: chat.ID, Since: true}, limit, minID,
 		func(a *api.Client, ch discord.ChannelID) ([]discord.Message, error) {
@@ -930,10 +976,7 @@ func (c *Client) fresh(ctx context.Context, u string) string {
 	return cmp.Or(res.URLs[0].Refreshed, u)
 }
 
-// fetch writes url to path, max bytes at most. 0700 on the directory and a
-// temp file of its own like tgc: a private media must not be readable by the
-// other accounts of the machine, two downloads of the same media no longer
-// walk on each other, and no pre-existing symbolic link is followed. p counts
+// fetch writes url to path through media.Save, max bytes at most. p counts
 // the bytes as they come (nil: no count).
 func fetch(ctx context.Context, url, path string, max int64, p *model.Progress) error {
 	ctx, cancel := context.WithCancelCause(ctx)
@@ -956,32 +999,17 @@ func fetch(ctx context.Context, url, path string, max int64, p *model.Progress) 
 	if resp.StatusCode != http.StatusOK {
 		return errors.New(resp.Status)
 	}
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return err
-	}
-	f, err := os.CreateTemp(dir, ".part-*")
-	if err != nil {
-		return err
-	}
-	tmp := f.Name()
 	if p != nil && resp.ContentLength > 0 {
 		p.Total = resp.ContentLength // what the CDN sends, better than the size of the message
 	}
-	n, cerr := io.Copy(counted{f, p}, io.LimitReader(moving{resp.Body, idle}, max+1))
-	switch {
-	case n > max:
-		cerr = fmt.Errorf(i18n.T("download_too_big"), rend.HumanSize(max))
-	case cerr != nil:
-		cerr = cmp.Or(context.Cause(ctx), cerr) // "stalled" rather than "context canceled"
-	}
-	if err := cmp.Or(cerr, f.Close()); err != nil {
-		os.Remove(tmp)
-		return err
-	}
-	if err := os.Rename(tmp, path); err != nil {
-		os.Remove(tmp)
-		return err
-	}
-	return nil
+	return media.Save(path, func(f *os.File) error {
+		n, err := io.Copy(counted{f, p}, io.LimitReader(moving{resp.Body, idle}, max+1))
+		switch {
+		case n > max:
+			return fmt.Errorf(i18n.T("download_too_big"), rend.HumanSize(max))
+		case err != nil:
+			return cmp.Or(context.Cause(ctx), err) // "stalled" rather than "context canceled"
+		}
+		return nil
+	})
 }

@@ -124,7 +124,7 @@ func (c *Client) fillReplies(ctx context.Context, chat *model.Chat, msgs []*mode
 		}
 		want[m.Reply.ID] = append(want[m.Reply.ID], m)
 	}
-	if len(ids) == 0 || !c.floodOK() {
+	if len(ids) == 0 {
 		return
 	}
 	res, err := c.getMessages(ctx, chat, ids)
@@ -148,17 +148,18 @@ func (c *Client) fillReplies(ctx context.Context, chat *model.Chat, msgs []*mode
 }
 
 // getMessages reads messages of chat by id: channels.getMessages in a
-// channel or a supergroup, messages.getMessages elsewhere. A FLOOD_WAIT opens
-// the breaker.
+// channel or a supergroup, messages.getMessages elsewhere. Behind the
+// FLOOD_WAIT breaker.
 func (c *Client) getMessages(ctx context.Context, chat *model.Chat, ids []tg.InputMessageClass) (tg.MessagesMessagesClass, error) {
 	var res tg.MessagesMessagesClass
-	var err error
-	if ch, ok := c.peer(chat).(*tg.InputPeerChannel); ok {
-		res, err = c.api.ChannelsGetMessages(ctx, &tg.ChannelsGetMessagesRequest{Channel: inputChannel(ch), ID: ids})
-	} else {
-		res, err = c.api.MessagesGetMessages(ctx, ids)
-	}
-	c.floodTrip(err)
+	err := c.rpc(func() (err error) {
+		if ch, ok := c.peer(chat).(*tg.InputPeerChannel); ok {
+			res, err = c.api.ChannelsGetMessages(ctx, &tg.ChannelsGetMessagesRequest{Channel: inputChannel(ch), ID: ids})
+		} else {
+			res, err = c.api.MessagesGetMessages(ctx, ids)
+		}
+		return err
+	})
 	return res, err
 }
 
@@ -278,15 +279,12 @@ func (c *Client) LoadHistoryAround(ctx context.Context, chat *model.Chat, id, li
 			ev.Err = err
 			c.Post(ev)
 		})
-		if !c.floodOK() {
-			ev.Err = errFlood().Error()
-			c.Post(ev)
-			return
-		}
-		res, err := c.api.MessagesGetHistory(ctx, &tg.MessagesGetHistoryRequest{
-			Peer: c.peer(chat), OffsetID: id, AddOffset: -limit / 2, Limit: limit})
-		if err != nil {
-			c.floodTrip(err)
+		var res tg.MessagesMessagesClass
+		if err := c.rpc(func() (err error) {
+			res, err = c.api.MessagesGetHistory(ctx, &tg.MessagesGetHistoryRequest{
+				Peer: c.peer(chat), OffsetID: id, AddOffset: -limit / 2, Limit: limit})
+			return err
+		}); err != nil {
 			ev.Err = err.Error()
 			c.Post(ev)
 			return
@@ -326,21 +324,18 @@ func (c *Client) finishPage(ctx context.Context, chat *model.Chat, msgs []model.
 // breaker sits here, refused before the first request and opened by a
 // FLOOD_WAIT on any of them.
 func (c *Client) each(ctx context.Context, it *messages.Iterator, f func(mc tg.MessageClass, ents peer.Entities) bool) error {
-	if !c.floodOK() {
-		return errFlood()
-	}
-	var last peer.Entities
-	for it.Next(ctx) {
-		e := it.Value()
-		c.applyBatch(ctx, e.Entities, &last)
-		mc, ok := e.Msg.(tg.MessageClass) // Elem.Msg: NotEmptyMessage subset
-		if ok && !f(mc, e.Entities) {
-			break
+	return c.rpc(func() error {
+		var last peer.Entities
+		for it.Next(ctx) {
+			e := it.Value()
+			c.applyBatch(ctx, e.Entities, &last)
+			mc, ok := e.Msg.(tg.MessageClass) // Elem.Msg: NotEmptyMessage subset
+			if ok && !f(mc, e.Entities) {
+				break
+			}
 		}
-	}
-	err := it.Err()
-	c.floodTrip(err)
-	return err
+		return it.Err()
+	})
 }
 
 // page reads it up to limit messages, down to the first id at or below minID
@@ -434,33 +429,30 @@ func (c *Client) SearchGlobal(ctx context.Context, q string, limit int) {
 			ev.Err = err
 			c.Post(ev)
 		})
-		if !c.floodOK() {
-			ev.Err = errFlood().Error()
-			c.Post(ev)
-			return
-		}
 		it := query.Messages(c.api).SearchGlobal().Q(q).BatchSize(min(limit, 100)).Iter()
 		var last peer.Entities
-		// Walk cap: three batches at most. Without it, a request whose results
-		// are all dropped would page over the whole account.
-		for seen := 0; len(ev.Hits) < limit && seen < 3*limit && it.Next(ctx); seen++ {
-			e := it.Value()
-			c.applyBatch(ctx, e.Entities, &last)
-			mc, ok := e.Msg.(tg.MessageClass) // Elem.Msg: NotEmptyMessage subset
-			if !ok {
-				continue
+		err := c.rpc(func() error {
+			// Walk cap: three batches at most. Without it, a request whose results
+			// are all dropped would page over the whole account.
+			for seen := 0; len(ev.Hits) < limit && seen < 3*limit && it.Next(ctx); seen++ {
+				e := it.Value()
+				c.applyBatch(ctx, e.Entities, &last)
+				mc, ok := e.Msg.(tg.MessageClass) // Elem.Msg: NotEmptyMessage subset
+				if !ok {
+					continue
+				}
+				if _, ok := c.peerOf(e.Entities, e.Msg.GetPeerID()); !ok {
+					continue // unknown chat: convert() would go and resolve it through the network
+				}
+				m, chat, ok := c.convert(ctx, mc, e.Entities, nil)
+				if !ok {
+					continue // nothing to show and nothing to open
+				}
+				ev.Hits = append(ev.Hits, model.SearchHit{Chat: chat, MsgID: m.ID, Date: m.Date, From: m.From, Text: m.Summary()})
 			}
-			if _, ok := c.peerOf(e.Entities, e.Msg.GetPeerID()); !ok {
-				continue // unknown chat: convert() would go and resolve it through the network
-			}
-			m, chat, ok := c.convert(ctx, mc, e.Entities, nil)
-			if !ok {
-				continue // nothing to show and nothing to open
-			}
-			ev.Hits = append(ev.Hits, model.SearchHit{Chat: chat, MsgID: m.ID, Date: m.Date, From: m.From, Text: m.Summary()})
-		}
-		if err := it.Err(); err != nil {
-			c.floodTrip(err)
+			return it.Err()
+		})
+		if err != nil {
 			ev.Err = err.Error()
 		}
 		c.Post(ev)

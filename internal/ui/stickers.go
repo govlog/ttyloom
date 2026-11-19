@@ -2,11 +2,9 @@ package ui
 
 import (
 	"cmp"
-	"path/filepath"
 	"strings"
 	"time"
 
-	"github.com/govlog/ttyloom/internal/config"
 	"github.com/govlog/ttyloom/internal/emoji"
 	"github.com/govlog/ttyloom/internal/i18n"
 	"github.com/govlog/ttyloom/internal/model"
@@ -166,8 +164,19 @@ func (u *UI) stickerSearch(e model.EvStickerSearch) {
 		u.stickerAsk() // the query moved during the round trip
 		return
 	}
-	s.results, s.answered, s.err = e.Stickers, e.Query, e.Err
+	u.stickerResults(e.Stickers, e.Query, e.Err)
 	u.stickerCells()
+}
+
+// stickerResults replaces the results of the search. The previews of the
+// results before go, frames and images, as in the GIF box: a late download of
+// one is dropped when it lands.
+func (u *UI) stickerResults(res []model.Sticker, answered, err string) {
+	s := u.stickers
+	for i := range s.results {
+		u.thumbFree(s.results[i].Preview)
+	}
+	s.results, s.answered, s.err = res, answered, err
 }
 
 // stickerAsk sends the search of the query (Telegram), once the typing has
@@ -181,7 +190,7 @@ func (u *UI) stickerAsk() {
 	}
 	e, ok := stickerQuery(q)
 	if !ok {
-		s.results, s.answered, s.err = nil, "", ""
+		u.stickerResults(nil, "", "")
 		u.stickerCells()
 		return
 	}
@@ -276,16 +285,7 @@ func (u *UI) stickerCells() {
 }
 
 func (u *UI) stickerLoad() {
-	s := u.stickers
-	b := u.net(s.chat)
-	if b == nil {
-		return
-	}
-	u.gridRelease(s)
-	u.gridLoad(s, func(_ int, md *model.Media) {
-		md.State = model.MediaLoading
-		b.Download(u.backendContext(b), md, filepath.Join(config.CacheDir(), "stickers", s.chat.Net, thumbName(md)))
-	})
+	u.gridFetch(u.stickers, u.stickers.chat, "stickers", nil)
 }
 
 // stickerClose frees the pictures of every sticker the box held, the ones the
@@ -346,12 +346,7 @@ func (u *UI) stickerKey(k term.Key) {
 
 func (u *UI) stickerMouse(e term.MouseEvent) {
 	r := u.stickerRect()
-	if u.drag != dragGrid && !r.hits(e.Y, e.X, 1, 1) { // a drag of the thumb may leave the box
-		if e.Press && !e.Motion {
-			u.stickerClose()
-		} else {
-			u.stickers.g.live = -1
-		}
+	if u.gridOutside(&u.stickers.g, r, e, u.stickerClose) {
 		return
 	}
 	if e.Press && !e.Motion && e.Button == 0 && e.Y == r.row+1 {

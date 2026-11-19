@@ -1,7 +1,9 @@
 package ui
 
 import (
+	"bytes"
 	"fmt"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -9,6 +11,7 @@ import (
 
 	"github.com/govlog/ttyloom/internal/config"
 	"github.com/govlog/ttyloom/internal/i18n"
+	"github.com/govlog/ttyloom/internal/intro"
 	"github.com/govlog/ttyloom/internal/model"
 	"github.com/govlog/ttyloom/internal/render"
 	"github.com/govlog/ttyloom/internal/term"
@@ -600,4 +603,119 @@ func TestAttachmentActsOnMessage(t *testing.T) {
 	if len(b.pins) != 1 || b.pins[0] != "7:true" {
 		t.Fatalf("Pin calls: %v, want [7:true]", b.pins)
 	}
+}
+
+// A Telegram global delete (no chat id) reaches every chat of its network,
+// the aggregate with them; a channel and another network keep their
+// messages, which carry their own ids.
+func TestGlobalDelete(t *testing.T) {
+	u, _, room, peer := queryUI()
+	u.nets[netDiscord] = &queryBackend{}
+	u.self, u.typing = map[string]selfInfo{}, map[model.ChatKey]typing{}
+	channel := &model.Chat{Net: netTelegram, ID: 3, Title: "news", Kind: model.ChatGroup, Channel: true}
+	other := &model.Chat{Net: netDiscord, ID: 4, Title: "general", Kind: model.ChatGroup}
+	for i, c := range []*model.Chat{room, peer, channel, other} {
+		u.dispatch(model.Envelope{Net: c.Net, Ev: model.EvNewMessage{Chat: c,
+			Msg: model.Msg{ChatID: c.ID, ID: 7 + i%2, From: "bob", Text: c.Title + " text", Date: time.Now()}}})
+	}
+	if agg := viewText(u, u.agg); strings.Count(agg, " text") != 4 { // drawn once: the delete must draw them again
+		t.Fatalf("setup: the aggregate shows\n%s", agg)
+	}
+	u.dispatch(model.Envelope{Net: netTelegram, Ev: model.EvDeleted{IDs: []int{7, 8}}})
+	agg := viewText(u, u.agg)
+	for _, c := range []*model.Chat{room, peer} {
+		if strings.Contains(viewText(u, u.winFor(c)), c.Title+" text") || strings.Contains(agg, c.Title+" text") {
+			t.Fatalf("%s: the deleted message still shows:\n%s", c.Title, agg)
+		}
+	}
+	for _, c := range []*model.Chat{channel, other} {
+		if !strings.Contains(viewText(u, u.winFor(c)), c.Title+" text") || !strings.Contains(agg, c.Title+" text") {
+			t.Fatalf("%s: a message out of the delete went:\n%s", c.Title, agg)
+		}
+	}
+}
+
+// A reader scrolled up keeps the message read on the top row: what comes
+// under it (a new message, a page that fills a hole, an edit that makes a
+// message taller) and a new width do not move the view. At the bottom, a new
+// message shows.
+func TestScrolledViewKeepsPlace(t *testing.T) {
+	const cols, rows = 80, 12
+	msg := func(c *model.Chat, id int) model.Msg {
+		return model.Msg{Net: c.Net, ChatID: c.ID, ID: id, From: "bob", FromID: 9, Date: time.Now(),
+			Text: fmt.Sprintf("m%d %s", id, strings.Repeat("x", 60))} // one row at 80 columns, two at 50
+	}
+	start := func(ids ...[2]int) (*UI, *bytes.Buffer, *model.Chat) {
+		u, _, room, _ := queryUI()
+		u.self, u.typing, u.focused, u.side = map[string]selfInfo{}, map[model.ChatKey]typing{}, true, sideHidden
+		out := &bytes.Buffer{}
+		u.t = term.NewOffscreen(out, cols, rows)
+		u.goTo(u.ws.ForChat(room.Key()))
+		for _, r := range ids {
+			for id := r[0]; id <= r[1]; id++ {
+				m := msg(room, id)
+				u.view().Upsert(&m)
+			}
+		}
+		return u, out, room
+	}
+	// shown : the message ids on the rows of the message area, top first.
+	shown := func(u *UI, out *bytes.Buffer) []string {
+		out.Reset()
+		u.repaint()
+		u.draw()
+		s := intro.Parse(out.String(), u.t.Cols, u.t.Rows)
+		var ids []string
+		for y := range u.viewRows() {
+			var b strings.Builder
+			for _, c := range s.Cells[y*s.Cols : (y+1)*s.Cols] {
+				b.WriteString(c.Text)
+			}
+			ids = append(ids, regexp.MustCompile(`\bm\d+\b`).FindString(b.String()))
+		}
+		return ids
+	}
+	for _, c := range []struct {
+		name string
+		ids  [][2]int
+		move func(u *UI, room *model.Chat)
+	}{
+		{"new message", [][2]int{{1, 60}}, func(u *UI, room *model.Chat) {
+			u.dispatch(model.Envelope{Net: room.Net, Ev: model.EvNewMessage{Chat: room, Msg: msg(room, 61)}})
+		}},
+		{"page in a hole", [][2]int{{1, 60}, {100, 103}}, func(u *UI, room *model.Chat) {
+			var page []model.Msg
+			for id := 61; id <= 90; id++ {
+				page = append(page, msg(room, id))
+			}
+			u.dispatch(model.Envelope{Net: room.Net, Ev: model.EvHistory{ChatID: room.ID, Older: true, Msgs: page}})
+		}},
+		{"taller message", [][2]int{{1, 60}}, func(u *UI, room *model.Chat) {
+			m := msg(room, 58)
+			m.Text += strings.Repeat("\nmore", 8)
+			u.dispatch(model.Envelope{Net: room.Net, Ev: model.EvEditMessage{Msg: m}})
+		}},
+		{"new width", [][2]int{{1, 60}}, func(u *UI, _ *model.Chat) {
+			u.t.Cols = 50
+			u.clear()
+		}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			u, out, room := start(c.ids...)
+			u.key(term.Key{Code: term.PgUp})
+			before := shown(u, out)
+			c.move(u, room)
+			if after := shown(u, out); after[0] == "" || after[0] != before[0] {
+				t.Fatalf("top row %q before, %q after; want the same message", before[0], after[0])
+			}
+		})
+	}
+	t.Run("at the bottom", func(t *testing.T) {
+		u, out, room := start([2]int{1, 60})
+		shown(u, out)
+		u.dispatch(model.Envelope{Net: room.Net, Ev: model.EvNewMessage{Chat: room, Msg: msg(room, 61)}})
+		if ids := shown(u, out); ids[len(ids)-1] != "m61" {
+			t.Fatalf("rows %q: want the new message on the last row", ids)
+		}
+	})
 }

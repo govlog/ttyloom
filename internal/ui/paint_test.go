@@ -8,9 +8,11 @@ import (
 	"image/color"
 	"image/png"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/clipperhouse/uax29/v2/graphemes"
 
@@ -234,6 +236,75 @@ func TestSixelSentOnlyWhenItsRowsChange(t *testing.T) {
 	u.draw()
 	if !strings.Contains(out.String(), "\x1bP") {
 		t.Fatal("moved: the picture was not drawn again")
+	}
+}
+
+// kittyShown : the kitty placements a terminal holds after the stream s, as
+// {image id, placement id}. Only the commands draw and animate send.
+func kittyShown(s string) map[[2]string]bool {
+	shown := map[[2]string]bool{}
+	for {
+		i := strings.Index(s, "\x1b_G")
+		if i < 0 {
+			return shown
+		}
+		s = s[i+3:]
+		ctrl, _, _ := strings.Cut(s[:strings.Index(s, "\x1b\\")], ";")
+		k := map[string]string{}
+		for kv := range strings.SplitSeq(ctrl, ",") {
+			key, val, _ := strings.Cut(kv, "=")
+			k[key] = val
+		}
+		switch {
+		case k["a"] == "T" || k["a"] == "p":
+			shown[[2]string{k["i"], k["p"]}] = true
+		case k["a"] == "d":
+			for pl := range shown {
+				if pl[0] == k["i"] && (k["d"] == "I" || k["p"] == "" || pl[1] == k["p"]) {
+					delete(shown, pl)
+				}
+			}
+		}
+	}
+}
+
+// In kitty, a repaint with nothing changed sends nothing, with a GIF on the
+// screen too. Each animation step swaps the image id of the GIF: the screen
+// still holds the GIF once, under its current id, and the next unchanged
+// repaint again sends nothing.
+func TestKittyUnchangedFrameSendsNothing(t *testing.T) {
+	var out bytes.Buffer
+	gif := drawnGIF(t)
+	gif.Frames = append(gif.Frames, gif.Frames[0]) // two frames: it animates
+	gif.CellW, gif.CellH = 8, 17                   // the cells of shotUI: no new decoding
+	u := shotUI(t, theme.Terminal(), &out, gif)
+	u.draw() // sends the image (a=T)
+	u.draw() // places it (a=p): from here on the frame does not change
+	all := out.String()
+	if !strings.Contains(all, "\x1b_G") {
+		t.Fatal("first frames: no kitty command")
+	}
+	for step := range 3 {
+		out.Reset()
+		u.draw()
+		if out.Len() != 0 {
+			t.Fatalf("animation step %d: unchanged repaint wrote %q", step, out.String())
+		}
+		out.Reset()
+		u.animate(time.Now().Add(time.Duration(step+1) * time.Hour))
+		if gif.KittyAlt == 0 {
+			t.Fatal("setup: the GIF did not animate")
+		}
+		u.draw()
+		all += out.String()
+		id := strconv.Itoa(int(gif.KittyID))
+		var ids []string
+		for pl := range kittyShown(all) {
+			ids = append(ids, pl[0])
+		}
+		if !slices.Contains(ids, id) || slices.Contains(ids, strconv.Itoa(int(gif.KittyAlt))) {
+			t.Fatalf("animation step %d: images placed %v, want the GIF under its current id %s only", step, ids, id)
+		}
 	}
 }
 

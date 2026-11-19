@@ -3,6 +3,11 @@ set -euo pipefail
 umask 022
 
 cd "$(git rev-parse --show-toplevel)"
+# The binary and BUILD.txt depend on the commit and the toolchain only, as in
+# CI: no go.work of a parent folder, no GOFLAGS, GOEXPERIMENT or GOFIPS140 of
+# the caller, no file of 'go env -w' (an empty variable alone falls back to
+# that file).
+export GOENV=off GOWORK=off GOFLAGS='' GOEXPERIMENT='' GOFIPS140=''
 version=${1:?Usage: scripts/release.sh v0.N-beta}
 if [[ ! $version =~ ^v[0-9]+\.[0-9]+(\.[0-9]+)?(-[0-9A-Za-z.]+)?$ ]]; then
     echo "Expected a release version such as v0.5-beta" >&2
@@ -28,7 +33,8 @@ if [[ -n $(ls -A "$out") ]]; then
     echo "Release output already exists: $out" >&2
     exit 1
 fi
-stage=$(mktemp -d)
+# Private (0700) and under dist/, not under a folder that any user can write.
+stage=$(mktemp -d "$PWD/dist/.stage.XXXXXX")
 trap 'rm -rf "$stage"' EXIT
 timestamp=$(git show -s --format=%ct HEAD)
 

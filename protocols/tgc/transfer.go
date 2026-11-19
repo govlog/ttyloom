@@ -1,11 +1,9 @@
 package tgc
 
 import (
-	"cmp"
 	"context"
 	"io"
 	"os"
-	"path/filepath"
 
 	"github.com/gotd/td/tg"
 
@@ -20,6 +18,11 @@ func (c *Client) Download(ctx context.Context, m *model.Media, path string) {
 	p := &model.Progress{Poster: c.Poster, Media: m, Total: m.Size}
 	go func() {
 		defer c.Guard("Download", func(err string) { c.Post(model.EvDownloaded{Media: m, Err: err}) })
+		if !ok { // handle of another backend: nothing to download here
+			c.Post(model.EvLog{Level: "ERROR", Msg: i18n.T("media_foreign")})
+			c.Post(model.EvDownloaded{Media: m, Err: i18n.T("media_foreign")})
+			return
+		}
 		select {
 		case c.dlSem <- struct{}{}:
 		case <-ctx.Done():
@@ -30,38 +33,11 @@ func (c *Client) Download(ctx context.Context, m *model.Media, path string) {
 			c.Post(model.EvDownloaded{Media: m, Path: path})
 			return
 		}
-		// 0700 like the rest of the project (config, cache, logs, maps): a
-		// private media must not be readable by the other accounts of the
-		// machine. os.CreateTemp gives a 0600 file with a name of its own —
-		// two downloads of the same media no longer walk on each other, and
-		// no pre-existing symbolic link is followed.
-		dir := filepath.Dir(path)
-		if err := os.MkdirAll(dir, 0o700); err != nil {
-			c.Post(model.EvDownloaded{Media: m, Err: err.Error()})
-			return
-		}
-		f, err := os.CreateTemp(dir, ".part-*")
+		err := media.Save(path, func(f *os.File) error {
+			_, err := c.dl.Download(c.api, loc).Parallel(ctx, countedAt{f, p})
+			return err
+		})
 		if err != nil {
-			c.Post(model.EvDownloaded{Media: m, Err: err.Error()})
-			return
-		}
-		tmp := f.Name()
-		if !ok { // handle of another backend: nothing to download here
-			f.Close()
-			os.Remove(tmp)
-			c.Post(model.EvLog{Level: "ERROR", Msg: i18n.T("media_foreign")})
-			c.Post(model.EvDownloaded{Media: m, Err: i18n.T("media_foreign")})
-			return
-		}
-		_, derr := c.dl.Download(c.api, loc).Parallel(ctx, countedAt{f, p})
-		cerr := f.Close()
-		if derr != nil || cerr != nil {
-			os.Remove(tmp)
-			c.Post(model.EvDownloaded{Media: m, Err: cmp.Or(derr, cerr).Error()})
-			return
-		}
-		if err := os.Rename(tmp, path); err != nil {
-			os.Remove(tmp)
 			c.Post(model.EvDownloaded{Media: m, Err: err.Error()})
 			return
 		}

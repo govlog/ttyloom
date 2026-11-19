@@ -168,16 +168,33 @@ func (c *Cache) LoadHistory(chatID int64) ([]model.Msg, error) {
 }
 
 // keepUnreadable sets a history file that does not decode aside, as
-// <name>.bak-<version> (one copy per format, 0: no readable header), before
-// a write replaces it: a truncated file, or one in a format the current types
-// cannot read, may be the only copy of that history.
-func keepUnreadable(path string) {
+// <name>.bak-<version>-<time>-<random> (0: no readable header), before a
+// write replaces it: a truncated file, or one in a format the current types
+// cannot read, may be the only copy of that history. Each copy gets a name of
+// its own. A file that cannot be opened or read (EACCES, EMFILE, EIO) is not
+// corrupt: its error comes back and the write must not happen.
+func keepUnreadable(path string) error {
 	var probe []model.Msg
 	ver, err := readCache(path, &probe)
-	if err == nil || errors.Is(err, fs.ErrNotExist) {
-		return
+	var pe *fs.PathError
+	switch {
+	case err == nil, errors.Is(err, fs.ErrNotExist):
+		return nil
+	case errors.As(err, &pe): // open and read fail with a PathError, a decoding error never does
+		return err
 	}
-	_ = os.Rename(path, path+".bak-"+strconv.Itoa(ver))
+	// CreateTemp reserves a name no other copy has; the rename replaces only
+	// that empty file.
+	bak, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".bak-"+strconv.Itoa(ver)+"-"+time.Now().Format("20060102-150405")+"-*")
+	if err != nil {
+		return err
+	}
+	bak.Close()
+	if err := os.Rename(path, bak.Name()); err != nil {
+		os.Remove(bak.Name())
+		return err
+	}
+	return nil
 }
 
 // SaveHistory keeps the last c.max messages by rising ID and writes a clean
@@ -209,7 +226,9 @@ func (c *Cache) SaveHistory(chatID int64, msgs []model.Msg) error {
 		clean[i] = m
 	}
 	path := c.historyPath(chatID)
-	keepUnreadable(path)
+	if err := keepUnreadable(path); err != nil {
+		return err
+	}
 	return writeCache(path, clean)
 }
 

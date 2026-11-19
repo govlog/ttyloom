@@ -3,6 +3,7 @@ package ui
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/govlog/ttyloom/internal/config"
 	"github.com/govlog/ttyloom/internal/model"
@@ -104,6 +105,7 @@ func TestMultilinePasteInsert(t *testing.T) {
 	if u.pasteAsk == "" || !u.pasteIns {
 		t.Fatalf("prompt: ask=%q ins=%v", u.pasteAsk, u.pasteIns)
 	}
+	u.pasteAt = time.Now().Add(-promptGuard) // an answer, not typing (typedAhead)
 	u.key(term.Key{Rune: 'c'})
 	if got := u.ed.String(); got != "avant\n```\nx\ny\n```" {
 		t.Fatalf("code insertion: %q", got)
@@ -113,6 +115,7 @@ func TestMultilinePasteInsert(t *testing.T) {
 	}
 	u.ed.Set("")
 	u.pasteText(u.view(), "x\ny")
+	u.pasteAt = time.Now().Add(-promptGuard)
 	u.key(term.Key{Rune: 'e'})
 	if got := u.ed.String(); got != "x\ny" {
 		t.Fatalf("as-is insertion: %q", got)
@@ -147,5 +150,27 @@ func TestMultilineLayout(t *testing.T) {
 	}
 	if row != 9 || col == 0 { // cursor at the end of "bb", second line of the zone
 		t.Fatalf("cursor: line %d col %d", row, col)
+	}
+}
+
+// Ctrl+K in the expanded zone deletes to the end of the current line only, as
+// Home/End stay on it; at the end of a line it joins the next one (readline).
+// The lines below stay.
+func TestRegressionMultilineKillLine(t *testing.T) {
+	u := multiUI()
+	u.multi = true
+	u.ed.Set("line one\nline two\nline three")
+	u.key(term.Key{Code: term.Up})
+	u.key(term.Key{Code: term.Home})
+	for range len("line") {
+		u.key(term.Key{Code: term.Right})
+	}
+	u.key(term.Key{Code: term.Ctrl, Rune: 'k'})
+	if got := u.ed.String(); got != "line one\nline\nline three" {
+		t.Fatalf("Ctrl+K inside line two: %q, want %q", got, "line one\nline\nline three")
+	}
+	u.key(term.Key{Code: term.Ctrl, Rune: 'k'})
+	if got := u.ed.String(); got != "line one\nlineline three" {
+		t.Fatalf("Ctrl+K at the end of line two: %q, want %q", got, "line one\nlineline three")
 	}
 }

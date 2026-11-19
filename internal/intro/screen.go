@@ -253,12 +253,16 @@ func extColor(p []string) (theme.Color, int) {
 
 // Emit gives a frame that draws s: each row after its own cursor move, an SGR
 // at its start and wherever the style changes, so every row stands alone.
+// The frame grows in a strings.Builder: its String() makes no copy.
 func (s *Screen) Emit() string {
-	b := make([]byte, 0, s.Cols*s.Rows*24)
+	var b strings.Builder
+	b.Grow(s.Cols * s.Rows * 24)
+	var seq []byte // one sequence at a time, in a buffer kept for the frame
 	for y := 0; y < s.Rows; y++ {
-		b = append(b, "\x1b["...)
-		b = strconv.AppendInt(b, int64(y+1), 10)
-		b = append(b, ";1H"...)
+		seq = append(seq[:0], "\x1b["...)
+		seq = strconv.AppendInt(seq, int64(y+1), 10)
+		seq = append(seq, ";1H"...)
+		b.Write(seq)
 		first := true
 		var prev theme.Style
 		for _, c := range s.Cells[y*s.Cols : (y+1)*s.Cols] {
@@ -267,15 +271,17 @@ func (s *Screen) Emit() string {
 			}
 			switch {
 			case first:
-				b = appendSGR(b, c.Style)
+				seq = c.Style.AppendSGR(seq[:0])
+				b.Write(seq)
 			case c.Style != prev:
-				b = appendChange(b, prev, c.Style)
+				seq = appendChange(seq[:0], prev, c.Style)
+				b.Write(seq)
 			}
 			prev, first = c.Style, false
-			b = append(b, c.Text...)
+			b.WriteString(c.Text)
 		}
 	}
-	return string(b)
+	return b.String()
 }
 
 // appendChange appends what takes the terminal from style a to style b: the
@@ -284,89 +290,30 @@ func (s *Screen) Emit() string {
 func appendChange(buf []byte, a, b theme.Style) []byte {
 	if a.Bold != b.Bold || a.Dim != b.Dim || a.Italic != b.Italic || a.Underline != b.Underline || a.Curly != b.Curly ||
 		a.Reverse != b.Reverse || a.Strike != b.Strike || (b.Underline && b.Curly) {
-		return appendSGR(buf, b)
+		return b.AppendSGR(buf)
 	}
 	buf = append(buf, "\x1b["...)
 	sep := false
 	if a.FG != b.FG {
-		buf = appendColourOrDefault(buf, b.FG, 30, "38", "39")
+		buf = appendColourOrDefault(buf, b.FG, true, "39")
 		sep = true
 	}
 	if a.BG != b.BG {
 		if sep {
 			buf = append(buf, ';')
 		}
-		buf = appendColourOrDefault(buf, b.BG, 40, "48", "49")
+		buf = appendColourOrDefault(buf, b.BG, false, "49")
 	}
 	return append(buf, 'm')
 }
 
 // appendColourOrDefault : the parameters of c without a leading ';', with
 // def for the default colour.
-func appendColourOrDefault(b []byte, c theme.Color, base int, ext, def string) []byte {
+func appendColourOrDefault(b []byte, c theme.Color, fg bool, def string) []byte {
 	if c.Kind == 0 {
 		return append(b, def...)
 	}
 	n := len(b)
-	b = appendColour(b, c, base, ext)
-	return append(b[:n], b[n+1:]...) // drop the ';' appendColour opens with
-}
-
-// appendSGR appends the SGR of st, the same as theme.Style.SGR writes (a
-// reset first), without its allocations: a frame of the demo changes colour
-// at almost every cell.
-func appendSGR(b []byte, st theme.Style) []byte {
-	b = append(b, "\x1b[0"...)
-	if st.Bold {
-		b = append(b, ";1"...)
-	}
-	if st.Dim {
-		b = append(b, ";2"...)
-	}
-	if st.Italic {
-		b = append(b, ";3"...)
-	}
-	if st.Underline {
-		if st.Curly {
-			b = append(b, ";4:3"...)
-		} else {
-			b = append(b, ";4"...)
-		}
-	}
-	if st.Reverse {
-		b = append(b, ";7"...)
-	}
-	if st.Strike {
-		b = append(b, ";9"...)
-	}
-	b = appendColour(b, st.FG, 30, "38")
-	b = appendColour(b, st.BG, 40, "48")
-	if st.Underline && st.Curly && st.FG.Kind == 2 {
-		b = appendColour(b, st.FG, 0, "58")
-	}
-	return append(b, 'm')
-}
-
-// appendColour : ;<base+n> for an ANSI colour (base 0: none), ;<ext>;2;r;g;b
-// for an RGB one, nothing for the default.
-func appendColour(b []byte, c theme.Color, base int, ext string) []byte {
-	switch {
-	case c.Kind == 1 && base > 0:
-		n := base + int(c.Idx)
-		if c.Idx >= 8 {
-			n = base + 60 + int(c.Idx) - 8
-		}
-		b = append(b, ';')
-		return strconv.AppendInt(b, int64(n), 10)
-	case c.Kind == 2:
-		b = append(b, ';')
-		b = append(b, ext...)
-		b = append(b, ";2;"...)
-		b = strconv.AppendInt(b, int64(c.RGB.R), 10)
-		b = append(b, ';')
-		b = strconv.AppendInt(b, int64(c.RGB.G), 10)
-		b = append(b, ';')
-		return strconv.AppendInt(b, int64(c.RGB.B), 10)
-	}
-	return b
+	b = c.AppendSGR(b, fg)
+	return append(b[:n], b[n+1:]...) // drop the ';' AppendSGR opens with
 }

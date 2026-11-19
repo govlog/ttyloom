@@ -389,11 +389,9 @@ func (u *UI) readOutbox(c *model.Chat, maxID int) {
 		return
 	}
 	c.ReadOutboxMaxID = maxID
-	for _, w := range u.viewsOf(c.Key()) {
-		for _, it := range w.Items {
-			if it.Msg != nil && it.Msg.Key() == c.Key() && it.Msg.Out {
-				it.lines = nil
-			}
+	for _, it := range u.eachMsg(c.Key()) {
+		if it.Msg.Out {
+			it.lines = nil
 		}
 	}
 }
@@ -409,11 +407,9 @@ func (u *UI) readInbox(c *model.Chat, maxID, unread int, hasUnread bool) {
 	}
 	if maxID > c.ReadInboxMaxID {
 		c.ReadInboxMaxID = maxID
-		for _, w := range u.viewsOf(c.Key()) {
-			for _, it := range w.Items {
-				if it.Msg != nil && it.Msg.Key() == c.Key() && !it.Msg.Out {
-					it.lines = nil
-				}
+		for _, it := range u.eachMsg(c.Key()) {
+			if !it.Msg.Out {
+				it.lines = nil
 			}
 		}
 	}
@@ -511,7 +507,7 @@ func (u *UI) askKey(k term.Key) bool {
 // answeredYes : k confirms a question asked at at — y or Y, 300 ms or more
 // after it; sooner, it is typing, not an answer.
 func answeredYes(k term.Key, at time.Time) bool {
-	return k.Code == term.None && (k.Rune == 'y' || k.Rune == 'Y') && time.Since(at) >= 300*time.Millisecond
+	return k.Code == term.None && (k.Rune == 'y' || k.Rune == 'Y') && time.Since(at) >= promptGuard
 }
 
 // applyEdit sends the edit; an empty text = cancel.
@@ -554,17 +550,15 @@ func (u *UI) edited(e model.EvEdited) {
 	key := u.evKey(e.ChatID)
 	var cur *Item // copy shown, to take the edit up again on a failure
 	found := false
-	for _, w := range u.viewsOf(key) {
-		for _, it := range w.Items {
-			if it.Msg == nil || it.Msg.ID != e.ID || it.Msg.Key() != key {
-				continue
-			}
-			it.Msg.Pending, it.Msg.Err, it.lines = false, e.Err, nil
-			it.Msg.LiveAt = time.Now()
-			found = true
-			if w == view && !it.part {
-				cur = it
-			}
+	for w, it := range u.eachMsg(key) {
+		if it.Msg.ID != e.ID {
+			continue
+		}
+		it.Msg.Pending, it.Msg.Err, it.lines = false, e.Err, nil
+		it.Msg.LiveAt = time.Now()
+		found = true
+		if w == view && !it.part {
+			cur = it
 		}
 	}
 	if !found {
@@ -776,19 +770,17 @@ func nextReaction(rs []model.Reaction, pick string) string {
 func (u *UI) reactions(e model.EvReactions) {
 	key := u.evKey(e.ChatID)
 	found, mine, text := false, true, "" // a message not loaded may be mine: read to be safe
-	for _, w := range u.viewsOf(key) {   // same as edited: each copy of the message
-		for _, it := range w.Items {
-			if it.Msg != nil && it.Msg.ID == e.ID && it.Msg.Key() == key {
-				// A re-read does not empty a list already filled: only an update
-				// (or a re-read that really sees zero reaction) has the say to
-				// wipe it.
-				if e.Refetch && len(e.Reactions) == 0 && len(it.Msg.Reactions) > 0 {
-					continue
-				}
-				it.Msg.Reactions, it.lines = e.Reactions, nil
-				it.Msg.LiveAt = time.Now()
-				found, mine, text = true, it.Msg.Out, it.Msg.Summary()
+	for _, it := range u.eachMsg(key) {  // same as edited: each copy of the message
+		if it.Msg.ID == e.ID {
+			// A re-read does not empty a list already filled: only an update
+			// (or a re-read that really sees zero reaction) has the say to
+			// wipe it.
+			if e.Refetch && len(e.Reactions) == 0 && len(it.Msg.Reactions) > 0 {
+				continue
 			}
+			it.Msg.Reactions, it.lines = e.Reactions, nil
+			it.Msg.LiveAt = time.Now()
+			found, mine, text = true, it.Msg.Out, it.Msg.Summary()
 		}
 	}
 	if found {

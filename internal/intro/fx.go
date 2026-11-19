@@ -3,7 +3,6 @@ package intro
 import (
 	"image"
 	"image/color"
-	"slices"
 
 	"github.com/govlog/ttyloom/internal/theme"
 )
@@ -52,12 +51,13 @@ const (
 	darkPic = 0.6 // a picture of the chat: dimmed, still seen
 )
 
-// Composite lays fx over chat. dark (0..1) is how far the chat goes toward
-// Backdrop. A text colour rgb cannot resolve is left as it is; an unknown
-// background takes Backdrop at once. A cell nothing touches comes out exactly
-// as it went in.
+// Composite lays fx over chat, in place, and returns chat: the caller parses
+// a screen for each frame, and a copy would cost one more screen a frame.
+// dark (0..1) is how far the chat goes toward Backdrop. A text colour rgb
+// cannot resolve is left as it is; an unknown background takes Backdrop at
+// once. A cell nothing touches comes out exactly as it went in.
 func Composite(chat *Screen, fx *Layer, dark float32, rgb Resolve) *Screen {
-	out := &Screen{Cols: chat.Cols, Rows: chat.Rows, Cells: slices.Clone(chat.Cells)}
+	out := chat
 	for y := 0; y < out.Rows; y++ {
 		for x := 0; x < out.Cols; x++ {
 			var f FX

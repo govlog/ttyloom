@@ -35,7 +35,7 @@ func (u *UI) draw() {
 	view := u.viewRows()
 	lines, items := w.Visible(u.opts())
 	maxScroll := max(0, len(lines)-view)
-	w.Scroll = max(0, min(w.Scroll, maxScroll))
+	w.Scroll = max(0, min(w.anchor(items, view), maxScroll))
 	if u.selShow { // on a selection change only: the scroll stays free
 		u.selShow = false
 		if first, last := blockOf(items, w.Sel); last >= 0 {
@@ -58,6 +58,7 @@ func (u *UI) draw() {
 		}
 	}
 	start, end := viewSlice(lines, w.Scroll, view)
+	w.keepTop(items, start)
 
 	// The overlay is computed before the message area: an image placed under
 	// it would be drawn over, by this repaint as well as by animate().
@@ -702,11 +703,14 @@ func (u *UI) writeLine(b *strings.Builder, l render.Line, cols int, rh *rowHit) 
 			rh.urls = append(rh.urls, urlSpan{col0: w, col1: w + tw, url: st.URL, masked: st.Masked})
 		}
 		b.WriteString(u.sgr(st))
-		if st.URL != "" {
+		// A masked link gets no OSC 8: the terminal opens it with no
+		// question. The in-app click (rh.urls) asks first.
+		link := st.URL != "" && !st.Masked
+		if link {
 			b.WriteString("\x1b]8;;" + st.URL + "\x1b\\")
 		}
 		b.WriteString(text)
-		if st.URL != "" {
+		if link {
 			b.WriteString("\x1b]8;;\x1b\\")
 		}
 		w += tw

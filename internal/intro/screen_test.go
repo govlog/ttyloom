@@ -58,25 +58,6 @@ func TestParseBreaksWideOnOverwrite(t *testing.T) {
 	}
 }
 
-// Emit writes the same SGR as theme.Style.SGR, for every attribute and kind
-// of colour: a terminal sees the styles the UI drew.
-func TestEmitSGRMatchesTheme(t *testing.T) {
-	theme.Curly = true
-	defer func() { theme.Curly = false }()
-	for _, st := range []theme.Style{
-		{},
-		{Bold: true, Dim: true, Italic: true, Reverse: true, Strike: true},
-		{Underline: true},
-		{Underline: true, Curly: true, FG: theme.Color{Kind: 2, RGB: theme.RGB{R: 1, G: 2, B: 3}}},
-		{FG: theme.Ansi(3), BG: theme.Ansi(12)},
-		{FG: theme.Ansi(9), BG: theme.Color{Kind: 2, RGB: theme.RGB{R: 255, G: 128}}},
-	} {
-		if got, want := string(appendSGR(nil, st)), st.SGR(); got != want {
-			t.Errorf("%+v: %q, want %q", st, got, want)
-		}
-	}
-}
-
 // A cluster that opens with an ASCII byte (a keycap, a letter with a
 // combining accent) stays one cluster, with its width.
 func TestParseClustersAfterASCII(t *testing.T) {

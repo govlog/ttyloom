@@ -251,3 +251,36 @@ func TestStickerSearchAgain(t *testing.T) {
 		t.Fatalf("same search again: %v, want %v", got, want)
 	}
 }
+
+// Telegram: a new search answer replaces the results, and the previews of the
+// old ones are freed as the GIF box frees its list. A preview of the old
+// results whose download lands late decodes nothing.
+func TestStickerSearchFreesOldResults(t *testing.T) {
+	u, b := stickerUI(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel) // a decoding of the test file ends with the test
+	u.ctx, u.events = ctx, make(chan model.Event, 4)
+	search := func(word, name string) {
+		for range len(u.stickers.query) {
+			u.key(term.Key{Code: term.Backspace})
+		}
+		for _, r := range word {
+			u.key(term.Key{Rune: r})
+		}
+		u.tickAt(time.Now().Add(time.Second))
+		e, _ := stickerQuery(word)
+		u.dispatch(model.Envelope{Net: netTelegram, Ev: model.EvStickerSearch{ChatID: 1, Query: e, Stickers: []model.Sticker{sticker(name)}}})
+		u.stickerLines(u.stickerRect()) // a frame: the previews on the screen download
+	}
+	search("joy", "old")
+	old := u.stickers.results[0].Preview
+	if old.State != model.MediaLoading || len(b.downloads) != 1 {
+		t.Fatalf("setup: preview of the first result %v, downloads %v; want it on its way", old.State, b.downloads)
+	}
+	search("smile", "new")
+	u.dispatch(model.Envelope{Net: netTelegram, Ev: model.EvDownloaded{Media: old, Path: "/nonexistent.webp"}})
+	if old.State != model.MediaNone || old.Path != "" || u.decodes[old] != nil {
+		t.Fatalf("late preview of an old result: state %v, path %q, decoding %v; want it dropped",
+			old.State, old.Path, u.decodes[old] != nil)
+	}
+}

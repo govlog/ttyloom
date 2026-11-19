@@ -65,7 +65,7 @@ func fakeClient(inv tg.Invoker, events chan<- model.Event) *Client {
 	api := tg.NewClient(inv)
 	return &Client{api: api, peers: peers.Options{}.Build(api), sender: message.NewSender(api),
 		dl: downloader.NewDownloader(), dlSem: make(chan struct{}, 3), ulSem: make(chan struct{}, 2), fillSem: make(chan struct{}, 2),
-		seen: map[int64]peers.Peer{}, fills: map[[2]int64]uint64{}, Poster: model.Poster{Events: events}}
+		seen: map[int64]peers.Peer{}, fills: map[[2]int64]uint64{}, pinFetched: map[int64]bool{}, Poster: model.Poster{Events: events}}
 }
 
 // next : the event the method under test posts. Every network method of the

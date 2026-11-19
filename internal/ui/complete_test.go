@@ -332,3 +332,15 @@ func TestRegressionTabAfterLineBreak(t *testing.T) {
 		t.Fatalf("Tab: %q", got)
 	}
 }
+
+// The first Tab on "/mute " lists the section keys with the chats: /mute takes
+// both, and the second Tab only makes the list longer.
+func TestRegressionMuteTabListsSections(t *testing.T) {
+	u, _, _, _ := queryUI()
+	u.ed.Set("/mute ")
+	u.key(term.Key{Code: term.Tab})
+	want := i18n.T("complete_choices", "Friends room  @blop  telegram")
+	if got := lastSys(u.view()); got != want || u.ed.String() != "/mute " {
+		t.Fatalf("first Tab on /mute: list %q, input %q; want %q, input unchanged", got, u.ed.String(), want)
+	}
+}

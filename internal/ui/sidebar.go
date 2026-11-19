@@ -1,17 +1,13 @@
 package ui
 
 import (
-	"bytes"
-	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/BurntSushi/toml"
 	"github.com/clipperhouse/uax29/v2/graphemes"
 
 	"github.com/govlog/ttyloom/internal/config"
@@ -588,10 +584,7 @@ func sidebarPath() string { return filepath.Join(config.Dir(), "sidebar.toml") }
 func loadFolds(path string) (map[string]bool, error) {
 	out := map[string]bool{}
 	var f foldFile
-	if _, err := toml.DecodeFile(path, &f); err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return out, nil
-		}
+	if err := loadTOML(path, &f); err != nil {
 		return out, err
 	}
 	for k, v := range f.Folded {
@@ -606,11 +599,7 @@ func loadFolds(path string) (map[string]bool, error) {
 // so an unfolded section (sideToggle drops its key) leaves the file instead of
 // piling up in it.
 func saveFolds(path string, folded map[string]bool) error {
-	var buf bytes.Buffer
-	if err := toml.NewEncoder(&buf).Encode(foldFile{Folded: folded}); err != nil {
-		return err
-	}
-	return config.WriteAtomic(path, buf.Bytes(), 0o600)
+	return saveTOML(path, foldFile{Folded: folded})
 }
 
 // sideToggle folds or unfolds the section sec — click on its header, /fold.
@@ -717,6 +706,9 @@ type sideState struct {
 	// shown : when not nil, takes the text and the width of the current line
 	// if the frame draws it — the only line marqueeTick scrolls.
 	shown *marqueeLine
+	// rows : when not nil, takes the rows of the chat mode, which the avatar
+	// loop of draw() reads; they are built once a frame.
+	rows *[]sideRow
 }
 
 // isMuted : c is muted, by itself or with its section.
@@ -850,6 +842,9 @@ func sidebarLines(mode sideMode, chats []*model.Chat, ws []*Window, wins []int, 
 		// (state.folded not nil, two sections at least) and gives one row per
 		// chat otherwise — the drawing of before, untouched.
 		secs := sectionRows(chats, ws, state.folded)
+		if state.rows != nil {
+			*state.rows = secs
+		}
 		n = len(secs)
 		row = func(k int) ([]render.Span, int64) {
 			r := secs[k]
@@ -1057,7 +1052,8 @@ func (u *UI) sideBlock(sepRow int) ([]render.Line, []sideRow) {
 	hot := u.sideHot()
 	side := sideHeader(u.side, u.cfg.SidebarSort, u.cfg.SidebarSplit, u.th, u.sideW, hot)
 	var shown marqueeLine
-	state := sideState{folded: u.foldState(), pulse: u.pulse, now: time.Now(), q: u.find.q, muted: u.muted, mutedSecs: u.mutedSecs, hov: u.sideHov, shown: &shown}
+	var rows []sideRow
+	state := sideState{folded: u.foldState(), pulse: u.pulse, now: time.Now(), q: u.find.q, muted: u.muted, mutedSecs: u.mutedSecs, hov: u.sideHov, shown: &shown, rows: &rows}
 	if m := u.menu; m != nil && m.member == "" {
 		state.menuChat = m.chat // menu of a sidebar line (nil for the menu of a message)
 	}
@@ -1078,7 +1074,7 @@ func (u *UI) sideBlock(sepRow int) ([]render.Line, []sideRow) {
 		return side, nil
 	}
 	side = append(side, sideNewLine(u.th, u.sideW, hot)) // last line, outside the scroll
-	return side, sectionRows(sorted, u.ws.List, u.foldState())
+	return side, rows
 }
 
 // sideHot : the │ bar of the panel goes to the accent colour — while it is

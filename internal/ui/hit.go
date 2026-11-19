@@ -117,8 +117,8 @@ func (u *UI) mouse(m term.MouseEvent) {
 		return
 	}
 	if m.Button == 0 && m.X == bar && m.Y < view {
-		if _, _, ok := scrollbar(len(u.view().Lines(u.opts())), view, 0); !ok {
-			return // no bar: nothing to grab
+		if !u.barShown {
+			return // no bar drawn (Ctrl+L included): nothing to grab
 		}
 		u.drag = dragBar
 		u.dragTo(m.Y, view)
@@ -218,9 +218,11 @@ func isDoubleClick(prev, cur *Item, prevAt, now time.Time) bool {
 
 // dragTo brings the top of the bar cursor to line y. It goes through
 // scroll() so that the top of a partial window loads the history, like PgUp.
+// The bar counts the lines that draw() shows: after Ctrl+L, not the backlog.
 func (u *UI) dragTo(y, view int) {
 	w := u.view()
-	total := len(w.Lines(u.opts()))
+	lines, _ := w.Visible(u.opts())
+	total := len(lines)
 	u.scroll(w, scrollFromY(min(max(y, 0), view-1), view, total)-w.Scroll)
 }
 

@@ -35,7 +35,11 @@ func New(mode, perso string) (*Checker, error) {
 		if n == "" {
 			return nil, errors.New(i18n.T("spell_lang_unknown", lang, strings.Join(av, ", ")))
 		}
-		c.hs = append(c.hs, newHunspell(DictDir+"/"+n+".aff", DictDir+"/"+n+".dic"))
+		h, err := newHunspell(DictDir+"/"+n+".aff", DictDir+"/"+n+".dic")
+		if err != nil {
+			return nil, err
+		}
+		c.hs = append(c.hs, h)
 	}
 	if perso != "" {
 		f, err := os.Open(perso)
@@ -118,11 +122,20 @@ func (c *Checker) AddPersist(word string) error {
 	if c.perso == "" {
 		return nil
 	}
-	f, err := os.OpenFile(c.perso, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+	f, err := os.OpenFile(c.perso, os.O_APPEND|os.O_CREATE|os.O_RDWR, 0o600)
 	if err != nil {
 		return err
 	}
 	defer f.Close()
-	_, err = f.WriteString(norm(word) + "\n")
+	line := norm(word) + "\n"
+	// A file edited by hand may end without a newline: the word would join
+	// its last line. An empty line costs nothing, New skips it.
+	if st, err := f.Stat(); err == nil && st.Size() > 0 {
+		var last [1]byte
+		if _, err := f.ReadAt(last[:], st.Size()-1); err != nil || last[0] != '\n' {
+			line = "\n" + line
+		}
+	}
+	_, err = f.WriteString(line)
 	return err
 }

@@ -1,13 +1,8 @@
 package ui
 
 import (
-	"bytes"
-	"errors"
-	"os"
 	"path/filepath"
 	"strings"
-
-	"github.com/BurntSushi/toml"
 
 	"github.com/govlog/ttyloom/internal/config"
 	"github.com/govlog/ttyloom/internal/i18n"
@@ -35,10 +30,7 @@ func notesPath() string { return filepath.Join(config.Dir(), "notes.toml") }
 func loadNotes(path string) (map[model.ChatKey]string, error) {
 	out := map[model.ChatKey]string{}
 	var f noteFile
-	if _, err := toml.DecodeFile(path, &f); err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return out, nil
-		}
+	if err := loadTOML(path, &f); err != nil {
 		return out, err
 	}
 	for k, v := range f.Notes {
@@ -58,11 +50,7 @@ func saveNotes(path string, notes map[model.ChatKey]string) error {
 	for k, v := range notes {
 		f.Notes[aliasKey(k)] = v
 	}
-	var buf bytes.Buffer
-	if err := toml.NewEncoder(&buf).Encode(f); err != nil {
-		return err
-	}
-	return config.WriteAtomic(path, buf.Bytes(), 0o600)
+	return saveTOML(path, f)
 }
 
 // noteCmd : /note <text> on the chat of the window; the text replaces the

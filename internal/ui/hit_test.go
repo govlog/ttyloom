@@ -3,6 +3,7 @@ package ui
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -159,6 +160,37 @@ func TestOverlayMouseClose(t *testing.T) {
 	u.menuMouse(out)
 	if u.menu != nil {
 		t.Fatal("menu: click outside box")
+	}
+
+	// The picture boxes: the pointer going by outside only stops the cell
+	// that plays.
+	c := &model.Chat{Net: netTelegram, ID: 1}
+	for _, box := range []struct {
+		name  string
+		open  func(u *UI) *grid
+		shown func(u *UI) bool
+		mouse func(u *UI, e term.MouseEvent)
+	}{
+		{"gifs", func(u *UI) *grid { u.gifs = &gifBox{chat: c, g: grid{live: -1}}; return &u.gifs.g },
+			func(u *UI) bool { return u.gifs != nil }, (*UI).gifMouse},
+		{"stickers", func(u *UI) *grid { u.stickers = &stickerBox{chat: c, g: grid{live: -1}}; return &u.stickers.g },
+			func(u *UI) bool { return u.stickers != nil }, (*UI).stickerMouse},
+		{"media", func(u *UI) *grid { u.mbox = &mediaBox{chat: c, g: grid{live: -1}, asked: -1}; return &u.mbox.g },
+			func(u *UI) bool { return u.mbox != nil }, (*UI).mboxMouse},
+	} {
+		u = newUI()
+		g := box.open(u)
+		r := u.gridRect(g)
+		box.mouse(u, term.MouseEvent{X: r.col + 2, Y: r.row + 3, Button: 65, Press: true})
+		g.live = 0
+		box.mouse(u, term.MouseEvent{X: 0, Y: 0, Button: 3, Motion: true})
+		if !box.shown(u) || g.live != -1 {
+			t.Fatalf("%s: wheel inside, then the pointer outside: open %v, live cell %d; want open, none", box.name, box.shown(u), g.live)
+		}
+		box.mouse(u, out)
+		if box.shown(u) {
+			t.Fatalf("%s: click outside box", box.name)
+		}
 	}
 }
 
@@ -345,6 +377,42 @@ func TestTabBarClick(t *testing.T) {
 	u.mouse(term.MouseEvent{Button: 0, X: 2, Y: u.tabRow(), Press: true}) // sidebar column
 	if u.netFilter != "" || u.ws.Cur != 1 {                               // window of that panel line
 		t.Fatalf("click in the panel taken by the tabs: filter %q cur %d", u.netFilter, u.ws.Cur)
+	}
+}
+
+// A press on the scrollbar column acts on the bar that is drawn. After Ctrl+L
+// no bar shows: the press leaves the backlog hidden. Once new lines draw a bar
+// again, its top is the first line after the clear, not the hidden backlog.
+func TestRegressionBarPressAfterCtrlL(t *testing.T) {
+	u := hoverUI()
+	u.side = sideHidden
+	u.t = term.NewOffscreen(&bytes.Buffer{}, 40, 10)
+	w := u.view()
+	for i := range 30 {
+		w.AddSys(fmt.Sprintf("old %d", i))
+	}
+	u.key(term.Key{Code: term.Ctrl, Rune: 'l'})
+	u.draw()
+	x0, cols := u.layout()
+	press := func() string { // press then release at the top of the column; the top row drawn after
+		t.Helper()
+		u.key(term.Key{Code: term.Mouse, Mouse: term.MouseEvent{X: x0 + cols, Y: 0, Press: true}})
+		u.key(term.Key{Code: term.Mouse, Mouse: term.MouseEvent{X: x0 + cols, Y: 0}})
+		u.draw()
+		if it := u.hits[0].item; it != nil {
+			return it.Sys
+		}
+		return ""
+	}
+	if got := press(); got != "" {
+		t.Fatalf("press on the blank column after Ctrl+L: top row %q, want the backlog kept hidden", got)
+	}
+	for i := range 20 {
+		w.AddSys(fmt.Sprintf("new %d", i))
+	}
+	u.draw()
+	if got := press(); got != "new 0" {
+		t.Fatalf("press at the top of the bar drawn after Ctrl+L: top row %q, want %q", got, "new 0")
 	}
 }
 

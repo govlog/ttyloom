@@ -214,6 +214,14 @@ func (u *UI) filePath(m *model.Msg, md *model.Media, suffix string) string {
 	if c := u.chats[m.Key()]; c != nil {
 		title = c.Title
 	}
+	return fileSpot(config.Expand(u.cfg.DownloadDir), title, u.dls, m, md, suffix)()
+}
+
+// fileSpot : filePath in two steps, with what it reads of the UI given —
+// download_dir, the title of the conversation, the downloads on their way.
+// It reads them, m and md at once; the function it gives looks at the disk
+// and may run on another goroutine (the file browser).
+func fileSpot(dir, title string, dls map[*model.Media]dlOf, m *model.Msg, md *model.Media, suffix string) func() string {
 	// A media of m.More takes a file of its own, and so does its larger
 	// variant: Download gives the lead back at once on a file already there,
 	// and the name of the message alone would hand each one the file of the
@@ -228,11 +236,10 @@ func (u *UI) filePath(m *model.Msg, md *model.Media, suffix string) string {
 		fmt.Fprint(h, identOf(m.Media))
 		suffix = "_" + strconv.FormatUint(uint64(h.Sum32()), 36) + suffix
 	}
-	dir := config.Expand(u.cfg.DownloadDir)
 	path := filepath.Join(dir, media.FileName(m.Key(), title, m.ID, m.Date, suffix+md.Ext))
 	if orig := keptName(md, path); orig != "" {
 		return namedPath(dir, title, m, md, orig, strconv.Itoa(m.ID)+suffix, path, func(p string) bool {
-			for other, d := range u.dls {
+			for other, d := range dls {
 				if other != md && d.path == p {
 					return true
 				}
@@ -240,7 +247,7 @@ func (u *UI) filePath(m *model.Msg, md *model.Media, suffix string) string {
 			return false
 		})
 	}
-	return path
+	return func() string { return path }
 }
 
 // keptName : the name the sender gave the file of md when its file keeps
@@ -267,29 +274,36 @@ func keptName(md *model.Media, old string) string {
 // by the file of another message gets the tag of its own media: "report
 // (1234).pdf"; so does a name another download on its way goes to (busy).
 // The file of the message downloaded before under the name of the message
-// (legacy) moves there: nothing is fetched twice.
-func namedPath(dir, chat string, m *model.Msg, md *model.Media, orig, tag, legacy string, busy func(string) bool) string {
+// (legacy) moves there: nothing is fetched twice. It reads m, md and busy at
+// once; the function it gives does the disk part (fileSpot).
+func namedPath(dir, chat string, m *model.Msg, md *model.Media, orig, tag, legacy string, busy func(string) bool) func() string {
 	folder := filepath.Join(dir, media.SafeName(m.Net), cmp.Or(media.OriginalName(chat), strconv.FormatInt(m.ChatID, 10)))
-	path := filepath.Join(folder, orig)
-	if taken(path, md, m.Date) || busy(path) {
-		ext := filepath.Ext(orig)
-		path = filepath.Join(folder, strings.TrimSuffix(orig, ext)+" ("+tag+")"+ext)
-	}
+	named := filepath.Join(folder, orig)
+	ext := filepath.Ext(orig)
+	tagged := filepath.Join(folder, strings.TrimSuffix(orig, ext)+" ("+tag+")"+ext)
+	other, cur, size, date := busy(named), md.Path, md.Size, m.Date
 	// Two names of before: the name of the message, and the folder of its own
 	// the first version of the kept names gave it.
-	moveLegacy(path, m.Date, legacy, filepath.Join(strings.TrimSuffix(legacy, md.Ext), orig))
-	return path
+	own := filepath.Join(strings.TrimSuffix(legacy, md.Ext), orig)
+	return func() string {
+		path := named
+		if taken(path, cur, size, date) || other {
+			path = tagged
+		}
+		moveLegacy(path, date, legacy, own)
+		return path
+	}
 }
 
-// taken : a file is at path, and it is not the file of md — the time of
-// the file is not the date of its message (downloaded gives it that date),
-// or its size differs.
-func taken(path string, md *model.Media, date time.Time) bool {
+// taken : a file is at path, and it is not the file of the media — cur, the
+// file the media knows; the time of the file is not the date of its message
+// (downloaded gives it that date), or its size differs from size.
+func taken(path, cur string, size int64, date time.Time) bool {
 	fi, err := os.Stat(path)
-	if err != nil || md.Path == path {
+	if err != nil || cur == path {
 		return false
 	}
-	return fi.ModTime().Unix() != date.Unix() || (md.Size > 0 && fi.Size() != md.Size)
+	return fi.ModTime().Unix() != date.Unix() || (size > 0 && fi.Size() != size)
 }
 
 // moveLegacy moves the file of a name of before to path when path is free,
@@ -1083,7 +1097,16 @@ func (u *UI) withFile(w *Window, m *model.Msg, do func(*model.Media)) {
 // openHidden asks before opening a URL the screen does not show: a link
 // preview names its page by a title the network chose (A07).
 func (u *UI) openHidden(url string) {
-	u.confirm(i18n.T("confirm_open_link", render.CleanLine(url)), func() { u.open(url) })
+	u.askOpen(i18n.T("confirm_open_link", render.CleanLine(url)), func() { u.open(url) })
+}
+
+// askOpen asks q on the input line before do opens something. The preview
+// and the box with the lead take every key: they close first, or the y would
+// go to them and the question would stay.
+func (u *UI) askOpen(q string, do func()) {
+	u.closeViewer()
+	u.closeOverlays()
+	u.confirm(q, do)
 }
 
 // openable : last net before xdg-open. The URLs from the network are already
@@ -1108,7 +1131,7 @@ func (u *UI) open(path string) {
 			u.sys(i18n.T("open_denied_type", name))
 			return
 		}
-		u.confirm(i18n.T("confirm_open_type", name), func() { u.xdgOpen(path) })
+		u.askOpen(i18n.T("confirm_open_type", name), func() { u.xdgOpen(path) })
 		return
 	}
 	u.xdgOpen(path)

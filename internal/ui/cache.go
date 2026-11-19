@@ -130,16 +130,10 @@ func (u *UI) dropCache(net string) {
 	u.setSel(u.view(), nil)
 	stale := func(k model.ChatKey) bool { return k.Net == net }
 	u.dropTargets(func(c *model.Chat) bool { return stale(c.Key()) })
+	shown := u.ws.Current()
 	for i := len(u.ws.List) - 1; i > 0; i-- {
-		if w := u.ws.List[i]; w.Chat == nil || !stale(w.Chat.Key()) {
-			continue
-		}
-		u.ws.List = slices.Delete(u.ws.List, i, i+1)
-		switch {
-		case u.ws.Cur == i:
-			u.ws.Cur = 0
-		case u.ws.Cur > i:
-			u.ws.Cur--
+		if w := u.ws.List[i]; w.Chat != nil && stale(w.Chat.Key()) {
+			u.ws.CloseAt(i)
 		}
 	}
 	u.chatList = slices.DeleteFunc(u.chatList, func(c *model.Chat) bool { return stale(c.Key()) })
@@ -157,6 +151,9 @@ func (u *UI) dropCache(net string) {
 	delete(u.cacheSelf, net)
 	if cc := u.cacheFor(net); cc != nil {
 		_ = cc.Archive()
+	}
+	if u.ws.Current() != shown {
+		u.landed() // the window reached loads, with its own draft
 	}
 	u.status0(i18n.T("cache_other_account"))
 }
@@ -374,6 +371,11 @@ func (u *UI) syncStart(net string) {
 	q := syncOrder(u.netChats(net))
 	if len(q) == 0 {
 		return
+	}
+	// A new sync: nothing queued and no step in flight. The counts of the
+	// last one go, even when it never ended (its network stopped).
+	if len(u.syncQueue) == 0 && u.syncCur == nil {
+		u.syncTotal, u.syncNew = 0, 0
 	}
 	u.syncQueue = append(u.syncQueue, q...)
 	u.syncTotal += len(q)

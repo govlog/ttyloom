@@ -31,7 +31,7 @@ type Settings struct {
 // exist yet, and the backend then logs in by QR and writes it. The token
 // never lands in config.toml, the log or an event.
 func (d *Settings) Token(file string) (string, error) {
-	if strings.TrimSpace(d.TokenCmd) == "" {
+	if d.fileToken() {
 		b, err := os.ReadFile(file)
 		if errors.Is(err, os.ErrNotExist) {
 			return "", nil
@@ -43,6 +43,11 @@ func (d *Settings) Token(file string) (string, error) {
 	}
 	return config.SecretCmd("discord: token_cmd", d.TokenCmd)
 }
+
+// fileToken : the token comes from the token file, not from token_cmd. Token
+// and Launch both ask here: a token read from the file always gives the
+// backend that file to write and to remove.
+func (d *Settings) fileToken() bool { return strings.TrimSpace(d.TokenCmd) == "" }
 
 // Module : the Discord account, section [discord].
 type Module struct {
@@ -168,7 +173,7 @@ func (m *Module) Launch(_ context.Context, _ module.Host, _ string, ev chan<- mo
 		return nil, err
 	}
 	file := ""
-	if m.set.TokenCmd == "" {
+	if m.set.fileToken() {
 		file = tokenPath()
 	}
 	return New(Config{Token: tok, TokenFile: file}, ev), nil

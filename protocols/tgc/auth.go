@@ -18,6 +18,8 @@ import (
 
 // Run blocks: connection, authentication, then the update loop.
 func (c *Client) Run(ctx context.Context) error {
+	stop := c.relayConn(ctx)
+	defer stop()
 	return c.client.Run(ctx, func(ctx context.Context) error {
 		if c.cfg.BotToken == "" {
 			st, err := c.client.Auth().Status(ctx)

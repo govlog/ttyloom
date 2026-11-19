@@ -49,12 +49,11 @@ func (c *Client) loadReactions(ctx context.Context) {
 // picker keeps the order of the server.
 func (c *Client) loadTopReactions(ctx context.Context) {
 	defer c.Guard("loadTopReactions", nil)
-	if !c.floodOK() {
-		return
-	}
-	res, err := c.api.MessagesGetTopReactions(ctx, &tg.MessagesGetTopReactionsRequest{Limit: 20})
-	if err != nil {
-		c.floodTrip(err)
+	var res tg.MessagesReactionsClass
+	if err := c.rpc(func() (err error) {
+		res, err = c.api.MessagesGetTopReactions(ctx, &tg.MessagesGetTopReactionsRequest{Limit: 20})
+		return err
+	}); err != nil {
 		return
 	}
 	if top := topEmojis(res); len(top) > 0 {
@@ -142,9 +141,6 @@ func (c *Client) React(ctx context.Context, chat *model.Chat, id int, e string) 
 // getMessage re-reads a message (reactions up to date, info). No peer is
 // resolved: only the message counts.
 func (c *Client) getMessage(ctx context.Context, chat *model.Chat, id int) (*tg.Message, error) {
-	if !c.floodOK() {
-		return nil, errFlood()
-	}
 	res, err := c.getMessages(ctx, chat, []tg.InputMessageClass{&tg.InputMessageID{ID: id}})
 	if err != nil {
 		return nil, err
@@ -175,21 +171,23 @@ func (c *Client) reactors(ctx context.Context, p tg.InputPeerClass, kind model.C
 			who := title
 			if r.Mine {
 				who = i18n.T("me")
+				if r.Count > 1 { // the same emoji from both: one count of 2
+					who += ", " + title
+				}
 			}
 			out = append(out, r.Emoji+" "+who)
 		}
 		return strings.Join(out, " · ")
 	}
-	if !c.floodOK() {
+	var res *tg.MessagesMessageReactionsList
+	if err := c.rpc(func() (err error) {
+		res, err = c.api.MessagesGetMessageReactionsList(ctx, &tg.MessagesGetMessageReactionsListRequest{
+			Peer: p, ID: id, Limit: reactorsLimit})
+		return err
+	}); err != nil {
 		return i18n.T("unavailable")
 	}
-	res, err := c.api.MessagesGetMessageReactionsList(ctx, &tg.MessagesGetMessageReactionsListRequest{
-		Peer: p, ID: id, Limit: reactorsLimit})
-	if err != nil {
-		c.floodTrip(err)
-		return i18n.T("unavailable")
-	}
-	ent := c.entities(res.Users)
+	ent := c.applyResult(ctx, res.Users, res.Chats) // the chats: a reaction sent as a channel
 	var order []string
 	names := map[string][]string{}
 	for _, r := range res.Reactions {
@@ -271,13 +269,12 @@ func (c *Client) Info(ctx context.Context, chat *model.Chat, id, readMax, readIn
 // readers gives the members who read the message, named from the entities
 // already seen (never a network lookup: an active group would list dozens).
 func (c *Client) readers(ctx context.Context, chat *model.Chat, id int) string {
-	if !c.floodOK() {
-		return i18n.T("unavailable")
-	}
-	parts, err := c.api.MessagesGetMessageReadParticipants(ctx,
-		&tg.MessagesGetMessageReadParticipantsRequest{Peer: c.peer(chat), MsgID: id})
-	if err != nil {
-		c.floodTrip(err)
+	var parts []tg.ReadParticipantDate
+	if err := c.rpc(func() (err error) {
+		parts, err = c.api.MessagesGetMessageReadParticipants(ctx,
+			&tg.MessagesGetMessageReadParticipantsRequest{Peer: c.peer(chat), MsgID: id})
+		return err
+	}); err != nil {
 		return i18n.T("unavailable")
 	}
 	if len(parts) == 0 {
@@ -303,14 +300,13 @@ func (c *Client) WhoRead(ctx context.Context, chat *model.Chat, id, readMax int)
 			ev.Text = i18n.T("info_unread")
 		case kind == model.ChatUser:
 			ev.Text = i18n.T("info_read")
-			if c.floodOK() {
-				res, err := c.api.MessagesGetOutboxReadDate(ctx,
+			var res *tg.OutboxReadDate
+			if err := c.rpc(func() (err error) {
+				res, err = c.api.MessagesGetOutboxReadDate(ctx,
 					&tg.MessagesGetOutboxReadDateRequest{Peer: c.peer(chat), MsgID: id})
-				if err != nil {
-					c.floodTrip(err) // privacy of the peer: the plain "read" stays
-				} else {
-					ev.Text = i18n.T("who_read_at", i18n.LocalTime(unixTime(res.Date)))
-				}
+				return err
+			}); err == nil { // else privacy of the peer or breaker: the plain "read" stays
+				ev.Text = i18n.T("who_read_at", i18n.LocalTime(unixTime(res.Date)))
 			}
 		case kind == model.ChatGroup:
 			ev.Text = i18n.T("info_read_by", c.readers(ctx, chat, id))

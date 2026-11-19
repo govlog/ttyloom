@@ -4,9 +4,11 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/govlog/ttyloom/internal/config"
 	"github.com/govlog/ttyloom/internal/i18n"
 	"github.com/govlog/ttyloom/internal/model"
 	"github.com/govlog/ttyloom/internal/render"
@@ -478,6 +480,41 @@ func (u *UI) gridLoad(t thumbs, start func(i int, md *model.Media)) {
 	}
 }
 
+// gridFetch : the pictures of t near the view — the frames far from it go
+// (gridRelease), the cells on the screen download a few at a time (gridLoad)
+// into the folder sub of the cache, by network of c. own, when not nil,
+// fetches cell i its own way and says so. false: c has no network now.
+func (u *UI) gridFetch(t thumbs, c *model.Chat, sub string, own func(i int, md *model.Media) bool) bool {
+	b := u.net(c)
+	if b == nil {
+		return false
+	}
+	u.gridRelease(t)
+	u.gridLoad(t, func(i int, md *model.Media) {
+		if own != nil && own(i, md) {
+			return
+		}
+		md.State = model.MediaLoading
+		b.Download(u.backendContext(b), md, filepath.Join(config.CacheDir(), sub, c.Net, thumbName(md)))
+	})
+	return true
+}
+
+// gridOutside : the mouse event e is outside the box r of g, with no drag of
+// its thumb running (a drag may leave the box). A press there closes the box,
+// the pointer going by stops the cell that plays. false: e is for the box.
+func (u *UI) gridOutside(g *grid, r rect, e term.MouseEvent, close func()) bool {
+	if u.drag == dragGrid || r.hits(e.Y, e.X, 1, 1) {
+		return false
+	}
+	if e.Press && !e.Motion {
+		close()
+	} else {
+		g.live = -1
+	}
+	return true
+}
+
 // gridPlacements : the pictures of the cells on the screen as kitty
 // placements of the frame, centred in their cell; row0, col0: screen
 // position of the top left cell, x0: first column of the message area (Col
@@ -536,29 +573,34 @@ func (u *UI) gridMouse(g *grid, e term.MouseEvent, row0, col0 int) int {
 	return click
 }
 
-// gridFree drops what the pictures of t decoded and sent to the terminal. A
-// download still on its way is orphaned: dropped when it lands. A picture
-// that was decoding is loading too, but its download has landed already.
+// gridFree drops what the pictures of t decoded and sent to the terminal.
 func (u *UI) gridFree(t thumbs) {
 	if u.drag == dragGrid { // the box closes or changes its list under the thumb
 		u.drag, t.grid().held = dragNone, false
 	}
 	for i := range t.grid().n {
-		md := t.thumb(i)
-		if md == nil {
-			continue
-		}
-		decoding := u.cancelDecode(md)
-		u.dropImage(md)
-		if md.State == model.MediaLoading && !decoding {
-			if u.gridOrphan == nil {
-				u.gridOrphan = map[*model.Media]bool{}
-			}
-			u.gridOrphan[md] = true
-		}
-		u.framesLRU.drop(md)
-		md.Frames, md.State, md.Frame, md.Want = nil, model.MediaNone, 0, 0
+		u.thumbFree(t.thumb(i))
 	}
+}
+
+// thumbFree drops what the picture md of a box decoded and sent to the
+// terminal; nil is no picture. A download still on its way is orphaned:
+// dropped when it lands. A picture that was decoding is loading too, but its
+// download has landed already.
+func (u *UI) thumbFree(md *model.Media) {
+	if md == nil {
+		return
+	}
+	decoding := u.cancelDecode(md)
+	u.dropImage(md)
+	if md.State == model.MediaLoading && !decoding {
+		if u.gridOrphan == nil {
+			u.gridOrphan = map[*model.Media]bool{}
+		}
+		u.gridOrphan[md] = true
+	}
+	u.framesLRU.drop(md)
+	md.Frames, md.State, md.Frame, md.Want = nil, model.MediaNone, 0, 0
 }
 
 // thumbName : file of a picture in the cache, named by a hash of its handle

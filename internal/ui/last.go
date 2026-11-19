@@ -1,10 +1,7 @@
 package ui
 
 import (
-	"bytes"
 	"path/filepath"
-
-	"github.com/BurntSushi/toml"
 
 	"github.com/govlog/ttyloom/internal/config"
 	"github.com/govlog/ttyloom/internal/model"
@@ -26,7 +23,7 @@ func lastPath() string { return filepath.Join(config.Dir(), "last.toml") }
 // file gives none: the client then starts on window 0, as before.
 func loadLast(path string) model.ChatKey {
 	var f lastFile
-	if _, err := toml.DecodeFile(path, &f); err != nil {
+	if err := loadTOML(path, &f); err != nil {
 		return model.ChatKey{}
 	}
 	k, _ := parseAliasKey(f.Chat)
@@ -45,11 +42,7 @@ func (u *UI) saveLast() {
 	if k.Net != "" {
 		f.Chat = aliasKey(k)
 	}
-	var buf bytes.Buffer
-	if err := toml.NewEncoder(&buf).Encode(f); err != nil {
-		return
-	}
-	_ = config.WriteAtomic(lastPath(), buf.Bytes(), 0o600) // exit: the screen is gone, nobody to tell
+	_ = saveTOML(lastPath(), f) // exit: the screen is gone, nobody to tell
 }
 
 // restoreLast : first chat list of net — the chat left last time opens again

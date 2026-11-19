@@ -2,6 +2,7 @@ package dsc
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"slices"
@@ -103,6 +104,38 @@ func TestModuleDiscordTokenFile(t *testing.T) {
 	os.WriteFile(filepath.Join(filepath.Dir(cfg.Path()), "discord.token"), []byte("tok\n"), 0o600)
 	if b, err := m.Launch(ctx, nil, "discord", make(chan model.Event, 8)); err != nil || b == nil {
 		t.Fatalf("launch with the token file: %v %v", b, err)
+	}
+}
+
+// A token_cmd of blanks is no command: the token comes from the file of the
+// QR login, and that file belongs to the backend. /discord logout then
+// revokes the token on the server and removes the file.
+func TestModuleBlankTokenCmdOwnsFile(t *testing.T) {
+	cfg, m := loadDiscord(t, "[discord]\ntoken_cmd = \"  \"\n")
+	file := filepath.Join(filepath.Dir(cfg.Path()), "discord.token")
+	if err := os.WriteFile(file, []byte("tok\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	b, err := m.Launch(context.Background(), nil, "discord", make(chan model.Event, 8))
+	if err != nil {
+		t.Fatalf("launch: %v", err)
+	}
+	c := b.(*Client)
+	reqs := make(chan string, 4)
+	useTestAPI(t, c, fakeChannel(t, 0, reqs))
+	if err := c.Logout(context.Background()); err != nil {
+		t.Fatalf("logout: %v", err)
+	}
+	select {
+	case r := <-reqs:
+		if r != "POST /api/v9/auth/logout" {
+			t.Fatalf("request %q, want the logout", r)
+		}
+	default:
+		t.Fatal("logout: the token was not revoked on the server")
+	}
+	if _, err := os.Stat(file); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("logout: token file kept (%v)", err)
 	}
 }
 

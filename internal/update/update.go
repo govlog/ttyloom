@@ -125,7 +125,7 @@ func newer(b Build, rel Release, published time.Time) bool {
 }
 
 // compareVersions orders two tags: numbers first, then a final version
-// before its pre-releases, then the pre-release names.
+// before its pre-releases, then the pre-release names (comparePre).
 func compareVersions(a, b string) int {
 	an, ap := parseVersion(a)
 	bn, bp := parseVersion(b)
@@ -142,7 +142,31 @@ func compareVersions(a, b string) int {
 	case bp == "":
 		return -1
 	}
-	return strings.Compare(ap, bp)
+	return comparePre(ap, bp)
+}
+
+// comparePre orders two pre-release names field by field, as semver does:
+// digits by value and before words, words as text, then more fields after
+// fewer (rc.9 < rc.10 < rc.a, rc < rc.1).
+func comparePre(a, b string) int {
+	af, bf := strings.Split(a, "."), strings.Split(b, ".")
+	for i := range min(len(af), len(bf)) {
+		an, aerr := strconv.ParseUint(af[i], 10, 64)
+		bn, berr := strconv.ParseUint(bf[i], 10, 64)
+		c := strings.Compare(af[i], bf[i])
+		switch {
+		case aerr == nil && berr == nil:
+			c = cmp.Compare(an, bn)
+		case aerr == nil:
+			c = -1
+		case berr == nil:
+			c = 1
+		}
+		if c != 0 {
+			return c
+		}
+	}
+	return cmp.Compare(len(af), len(bf))
 }
 
 func parseVersion(v string) (n [3]int, pre string) {

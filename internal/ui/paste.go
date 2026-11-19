@@ -2,6 +2,7 @@ package ui
 
 import (
 	"strings"
+	"time"
 
 	"github.com/govlog/ttyloom/internal/i18n"
 	"github.com/govlog/ttyloom/internal/render"
@@ -39,12 +40,12 @@ func (u *UI) pasteText(w *Window, text string) {
 	case u.multi && pasteNeedsPrompt(text):
 		// Expanded editor: the choice inserts into the draft (as is / fenced),
 		// it never sends.
-		u.pasteAsk, u.pasteIns = text, true
+		u.pasteAsk, u.pasteIns, u.pasteAt = text, true, time.Now()
 	case u.edit != nil: // while editing, a paste fills the text, it does not send it
 		u.ed.Insert(text)
 		u.sendTyping(w)
 	case pasteNeedsPrompt(text):
-		u.pasteAsk = text
+		u.pasteAsk, u.pasteAt = text, time.Now()
 	default:
 		u.ed.Insert(text)
 		u.sendTyping(w)
@@ -58,10 +59,27 @@ func (u *UI) insertFenced(text string) {
 		text += "\n"
 	}
 	ins := "```\n" + text + "```"
-	if r, c := []rune(u.ed.String()), u.ed.Cursor(); c > 0 && c <= len(r) && r[c-1] != '\n' {
+	r, c := []rune(u.ed.String()), u.ed.Cursor()
+	if c > 0 && c <= len(r) && r[c-1] != '\n' {
 		ins = "\n" + ins
 	}
+	if c < len(r) && r[c] != '\n' {
+		ins += "\n"
+	}
 	u.ed.Insert(ins)
+}
+
+// promptGuard : a prompt that acts on one key (a confirmation, the paste and
+// the image prompts) ignores that key for this long after it opens. Ctrl+V
+// reads the clipboard in the background, so its prompt can open between two
+// typed keys: a key that comes this soon was typed before the prompt showed.
+const promptGuard = 300 * time.Millisecond
+
+// typedAhead : k is one of the answer keys of a prompt opened at at, and
+// comes within promptGuard: typing, not an answer. The caller swallows it and
+// keeps the prompt.
+func typedAhead(k term.Key, at time.Time, keys string) bool {
+	return k.Code == term.None && strings.ContainsRune(keys, k.Rune) && time.Since(at) < promptGuard
 }
 
 // pasteKey handles the keys while u.pasteAsk waits for a decision. Called at
@@ -69,9 +87,10 @@ func (u *UI) insertFenced(text string) {
 func (u *UI) pasteKey(k term.Key) bool {
 	text := u.pasteAsk
 	switch {
+	case typedAhead(k, u.pasteAt, "ec"): // swallowed, the prompt stays
 	case k.Code == term.Paste:
 		if next := normalizePaste(k.Text); pasteNeedsPrompt(next) {
-			u.pasteAsk = next // a new multiline paste replaces the one waiting
+			u.pasteAsk, u.pasteAt = next, time.Now() // a new multiline paste replaces the one waiting
 		} // otherwise: single line, ignored (no "Paste of 1 lines")
 	case k.Code == term.None && k.Rune == 'e':
 		u.pasteAsk = ""

@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"maps"
 	"path/filepath"
 	"slices"
 
@@ -115,6 +116,9 @@ func (u *UI) clearAccount(net string) {
 			delete(u.presence, k)
 		}
 	}
+	// A private chat has the key of its peer on both accounts: the banner
+	// would show the pinned text of the first account.
+	maps.DeleteFunc(u.pins, func(k model.ChatKey, _ pinInfo) bool { return k.Net == net })
 	for k := range u.whoCache {
 		if k.net == net {
 			delete(u.whoCache, k)

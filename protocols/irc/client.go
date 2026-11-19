@@ -75,6 +75,8 @@ type Client struct {
 	names    map[string][]string          // NAMES in progress, folded channel -> nicks
 	queries  map[string]string            // folded nick -> nick, private chats open
 	joining  map[string][]model.EvChat    // folded channel -> Resolve query waiting for the JOIN
+	joinT    map[uint64]*time.Timer       // Resolve request -> its joinWait timer, while it waits in joining
+	hold     *time.Timer                  // the rooms of the list wait for 900 until it ends (connected); nil = none held
 	naming   map[string]*model.Chat
 	whois    map[string]*whoisReq
 	offers   map[string]dccOffer  // folded nick -> last DCC offer received
@@ -106,7 +108,7 @@ func New(cfg Config, events chan<- model.Event) *Client {
 	c := &Client{Poster: model.Poster{Events: events}, cfg: cfg,
 		out: newPacer(outBurst, outFill), ctcp: newPacer(3, 2*time.Second), wake: make(chan struct{}, 1),
 		members: map[string]map[string]string{}, names: map[string][]string{}, queries: map[string]string{},
-		joining: map[string][]model.EvChat{}, naming: map[string]*model.Chat{}, whois: map[string]*whoisReq{},
+		joining: map[string][]model.EvChat{}, joinT: map[uint64]*time.Timer{}, naming: map[string]*model.Chat{}, whois: map[string]*whoisReq{},
 		offers: map[string]dccOffer{}, asked: map[string]int64{}, pings: map[string]time.Time{}}
 	for _, m := range cfg.Ignores { // a hand-written "bob" is the mask bob!*@*
 		c.ignores = append(c.ignores, ignoreMask(m))
@@ -229,6 +231,7 @@ func (c *Client) Run(ctx context.Context) error {
 		stopWork()
 		<-worked
 	}()
+	defer c.failJoins(i18n.T("irc_not_connected", c.net()))
 	if ctx.Err() != nil {
 		return nil // a launch already given up (a logout during the token read)
 	}
@@ -319,6 +322,7 @@ func (c *Client) wire(conn *ircevent.Connection) {
 			}
 		})
 	}
+	conn.AddCallback(ircevent.RPL_LOGGEDIN, c.onLoggedIn)
 	conn.AddCallback(ircevent.RPL_TOPIC, func(e ircmsg.Message) { // 332 on join, and answer of /topic
 		if len(e.Params) < 3 {
 			return
@@ -346,10 +350,14 @@ func (c *Client) wire(conn *ircevent.Connection) {
 	conn.AddCallback(ircevent.ERR_NOSUCHNICK, c.onNoSuchNick)
 	// 470 is a forward (+f, a ban to ##fix_your_connection): its text names
 	// the room the server sends us to. 437 is a room held during a split
-	// (and a nick refused, which no /join waits for).
+	// (and a nick refused, which no /join waits for). The numbers refuse a
+	// JOIN on Solanum (479 bad name, 480 throttle), InspIRCd (489 TLS only,
+	// 520 opers only, 926 forbidden) or UnrealIRCd (448 forbidden, 489, 500
+	// join flood); joinWait covers the others.
 	for _, code := range []string{ircevent.ERR_NOSUCHCHANNEL, ircevent.ERR_TOOMANYCHANNELS, ircevent.ERR_CHANNELISFULL,
 		ircevent.ERR_INVITEONLYCHAN, ircevent.ERR_BANNEDFROMCHAN, ircevent.ERR_BADCHANNELKEY, ircevent.ERR_BADCHANMASK,
-		ircevent.ERR_NEEDREGGEDNICK, ircevent.ERR_CANNOTSENDTOCHAN, ircevent.ERR_LINKCHANNEL, ircevent.ERR_UNAVAILRESOURCE} {
+		ircevent.ERR_NEEDREGGEDNICK, ircevent.ERR_CANNOTSENDTOCHAN, ircevent.ERR_LINKCHANNEL, ircevent.ERR_UNAVAILRESOURCE,
+		"448", "479", "480", "489", "500", "520", "926"} {
 		conn.AddCallback(code, c.onChannelError)
 	}
 	conn.AddCallback("ERROR", func(e ircmsg.Message) {
@@ -366,10 +374,10 @@ func (c *Client) wire(conn *ircevent.Connection) {
 	conn.AddCallback(ircevent.ERR_NOMOTD, c.onMotdEnd)
 	conn.AddCallback(ircevent.RPL_WHOREPLY, c.onWho)
 	conn.AddCallback(ircevent.RPL_WHOSPCRPL, c.onWho)
-	conn.AddCallback(ircevent.RPL_ENDOFWHO, c.onWhoEnd)
+	conn.AddCallback(ircevent.RPL_ENDOFWHO, c.reply("who"))
 	conn.AddCallback(ircevent.RPL_WHOWASUSER, c.onWhowas)
-	conn.AddCallback(ircevent.RPL_ENDOFWHOWAS, c.onWhowasEnd)
-	conn.AddCallback(ircevent.ERR_WASNOSUCHNICK, c.onWhowasEnd)
+	conn.AddCallback(ircevent.RPL_ENDOFWHOWAS, c.reply("whowas"))
+	conn.AddCallback(ircevent.ERR_WASNOSUCHNICK, c.reply("whowas"))
 	conn.AddCallback(ircevent.RPL_USERHOST, c.onUserhost)
 	for _, code := range []string{ircevent.RPL_CHANNELMODEIS, ircevent.RPL_CREATIONTIME, ircevent.RPL_UMODEIS,
 		ircevent.RPL_BANLIST, ircevent.RPL_ENDOFBANLIST, ircevent.RPL_INVITELIST, ircevent.RPL_ENDOFINVITELIST,
@@ -393,6 +401,10 @@ func (c *Client) me() string { return c.conn.CurrentNick() }
 
 // isMe : e comes from us (our own JOIN, NICK…).
 func (c *Client) isMe(nick string) bool { return c.casefold(nick) == c.casefold(c.me()) }
+
+// identifyWait : how long the rooms of the list wait for services to log us
+// in after IDENTIFY (connected). A variable: the tests shorten it.
+var identifyWait = 5 * time.Second
 
 // connected : end of the registration, on every connection. EvReady once,
 // then the rooms of the list joined again and NickServ told when the server
@@ -421,7 +433,6 @@ func (c *Client) connected() {
 	c.mu.Lock()
 	first := !c.ready
 	c.ready = true
-	chans := slices.Clone(c.channels)
 	c.mu.Unlock()
 	if first {
 		c.Post(model.EvReady{SelfID: chatID(c.me(), "ascii"), SelfName: c.me()})
@@ -431,9 +442,50 @@ func (c *Client) connected() {
 	c.Post(model.EvConnected{})
 	if _, sasl := c.conn.AcknowledgedCaps()["sasl"]; !sasl && c.password() != "" {
 		c.conn.Send("PRIVMSG", "NickServ", "IDENTIFY "+c.password())
+		// A room that needs a registered nick (+r) refuses a JOIN that comes
+		// before services log us in: the rooms wait for 900 (onLoggedIn), or
+		// for identifyWait when services answer with a NOTICE only. A timer
+		// that is no longer the one held (900 came, or the connection
+		// dropped and maybe came back) joins nothing.
+		c.mu.Lock()
+		var t *time.Timer
+		t = time.AfterFunc(identifyWait, func() {
+			c.mu.Lock()
+			mine := c.hold == t
+			if mine {
+				c.hold = nil
+			}
+			c.mu.Unlock()
+			if mine {
+				c.joinAll()
+			}
+		})
+		c.hold = t
+		c.mu.Unlock()
+		return
 	}
-	// The rooms in as few lines as fit (JOIN #a,#b,…): a line per room in a
-	// burst is what an "Excess Flood" kill counts.
+	c.joinAll()
+}
+
+// onLoggedIn : 900, services logged us in. The rooms held for it go out.
+func (c *Client) onLoggedIn(ircmsg.Message) {
+	c.mu.Lock()
+	t := c.hold
+	c.hold = nil
+	c.mu.Unlock()
+	if t != nil {
+		t.Stop()
+		c.joinAll()
+	}
+}
+
+// joinAll joins the rooms of the list. The rooms go in as few lines as fit
+// (JOIN #a,#b,…): a line per room in a burst is what an "Excess Flood" kill
+// counts.
+func (c *Client) joinAll() {
+	c.mu.Lock()
+	chans := slices.Clone(c.channels)
+	c.mu.Unlock()
 	var line string
 	for _, ch := range chans {
 		switch {
@@ -502,20 +554,19 @@ func roomName(entry string) string {
 func (c *Client) resetConn() {
 	c.mu.Lock()
 	c.up = false
+	if c.hold != nil { // the rooms held for 900: the next connection holds its own
+		c.hold.Stop()
+		c.hold = nil
+	}
 	c.members, c.names = map[string]map[string]string{}, map[string][]string{}
 	c.motd, c.bans = nil, nil
 	clear(c.asked)
 	clear(c.pings)
-	joining, whois, naming := c.joining, c.whois, c.naming
-	c.joining, c.whois, c.naming = map[string][]model.EvChat{}, map[string]*whoisReq{}, map[string]*model.Chat{}
+	whois, naming := c.whois, c.naming
+	c.whois, c.naming = map[string]*whoisReq{}, map[string]*model.Chat{}
 	c.mu.Unlock()
 	err := i18n.T("irc_not_connected", c.net())
-	for _, q := range joining {
-		for _, ev := range q {
-			ev.Err = err
-			c.Post(ev)
-		}
-	}
+	c.failJoins(err)
 	for _, r := range whois {
 		c.Post(model.EvWhois{ChatID: r.chatID, Err: err})
 	}
@@ -523,6 +574,26 @@ func (c *Client) resetConn() {
 		c.Post(model.EvParticipants{ChatID: chat.ID, Err: err})
 	}
 	c.Post(model.EvDisconnected{})
+}
+
+// failJoins answers every /join that waits with err, its timer stopped. Run
+// calls it when it ends too: a JOIN sent during a handshake that failed has
+// no resetConn, and no timer outlives Run.
+func (c *Client) failJoins(err string) {
+	c.mu.Lock()
+	joining := c.joining
+	c.joining = map[string][]model.EvChat{}
+	for _, t := range c.joinT {
+		t.Stop()
+	}
+	clear(c.joinT)
+	c.mu.Unlock()
+	for _, q := range joining {
+		for _, ev := range q {
+			ev.Err = err
+			c.Post(ev)
+		}
+	}
 }
 
 // msgOf : the message of a PRIVMSG or NOTICE line in chat.
@@ -683,8 +754,7 @@ func (c *Client) onJoin(e ircmsg.Message) {
 	ch, nick := e.Params[0], e.Nick()
 	if c.isMe(nick) {
 		c.mu.Lock()
-		q, waiting := c.joining[c.casefold(ch)]
-		delete(c.joining, c.casefold(ch))
+		q, waiting := c.takeJoining(c.casefold(ch))
 		key := ""
 		for _, ev := range q {
 			if _, k, _ := strings.Cut(ev.Query, " "); strings.TrimSpace(k) != "" {
@@ -887,8 +957,7 @@ func (c *Client) onChannelError(e ircmsg.Message) {
 	ch := e.Params[1]
 	reason := strings.Join(e.Params[2:], " ")
 	c.mu.Lock()
-	q, waiting := c.joining[c.casefold(ch)]
-	delete(c.joining, c.casefold(ch))
+	q, waiting := c.takeJoining(c.casefold(ch))
 	c.mu.Unlock()
 	if waiting {
 		for _, ev := range q {

@@ -11,9 +11,14 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
+
+	"github.com/ergochat/irc-go/ircmsg"
 
 	"github.com/govlog/ttyloom/internal/i18n"
 	"github.com/govlog/ttyloom/internal/model"
+	"github.com/govlog/ttyloom/internal/module"
+	"github.com/govlog/ttyloom/internal/render"
 )
 
 func TestRegressionDCCExtension(t *testing.T) {
@@ -481,4 +486,232 @@ func TestRegressionMembersSorted(t *testing.T) {
 	if got := c.Members(chatOf("#go")); !slices.Equal(got, []string{"alice", "Bob", "zed"}) {
 		t.Fatalf("members: %v", got)
 	}
+}
+
+// --- audit of 2026-11-19, P2 ---
+
+// roomHost : the Host of a window on chat, a chat of the network of the
+// fake server.
+type roomHost struct {
+	fakeHost
+	b    *Client
+	chat *model.Chat
+}
+
+func (h *roomHost) ContextNet(module.Win, string) string { return h.chat.Net }
+func (h *roomHost) Backend(string) model.Backend         { return h.b }
+func (h *roomHost) Context(string) context.Context       { return context.Background() }
+func (h *roomHost) Chats(string) []*model.Chat           { return []*model.Chat{h.chat} }
+
+// IRC-5: the UI shows a bidi or control character of a room name as a space.
+// The room completion and /part typed in the window of the room use the name
+// as the server spells it.
+func TestRegressionRoomCommandsUseWireName(t *testing.T) {
+	c, s, _, _ := start(t, Config{}, false)
+	wire := "#a\u202eb"
+	chat := chatOf(wire)
+	chat.Net, chat.Title = Net("test"), render.CleanLine(chat.Title) // the chat as the UI holds it
+	h := &roomHost{b: c, chat: chat}
+	w := module.Win{Chat: chat}
+	var part module.Command
+	for _, x := range NewModule().Commands() {
+		if x.Name == "part" {
+			part = x
+		}
+	}
+	if got, _ := part.Complete(h, w, ""); !slices.Equal(got, []string{wire}) {
+		t.Fatalf("rooms offered by the completion: %q, want %q", got, wire)
+	}
+	part.Run(h, w, nil, "")
+	if l := s.expect("PART"); l != "PART "+wire {
+		t.Fatalf("/part in the window of the room: %q, want %q", l, "PART "+wire)
+	}
+}
+
+// IRC-3: the server relays ":nick!user@host PRIVMSG target :text\r\n" to the
+// others in 512 bytes and cuts the end in silence. With a long nick, the
+// longest user and host and a long room name, each piece of a message and of
+// an action still fits; no rune is cut in two and no byte is lost.
+func TestRegressionPiecesFitRelayed(t *testing.T) {
+	was := outFill
+	outFill = 5 * time.Millisecond
+	t.Cleanup(func() { outFill = was })
+	c, s, events, _ := start(t, Config{}, false)
+	nick := strings.Repeat("n", 30)
+	s.send(":me!u@h NICK " + nick)
+	waitFor[model.EvSelfName](t, events)
+	room := "#" + strings.Repeat("r", 49)
+	prefix := ":" + nick + "!" + strings.Repeat("u", 10) + "@" + strings.Repeat("h", 63)
+	text := strings.Repeat("aé😀", 150) // runes of 1, 2 and 4 bytes, no blank to cut on
+	for _, tc := range []struct {
+		name      string
+		send      func()
+		open, end string
+	}{
+		{"message", func() { c.Send(context.Background(), chatOf(room), text, 1) }, "", ""},
+		{"action", func() { c.SendAction(context.Background(), chatOf(room), []model.Seg{{Text: text}}, 2) }, "\x01ACTION ", "\x01"},
+	} {
+		tc.send()
+		var got string
+		for len(got) < len(text) {
+			l := s.lineWithin(2*time.Second, "PRIVMSG "+room)
+			if l == "" {
+				t.Fatalf("%s: the pieces end after %d of %d bytes", tc.name, len(got), len(text))
+			}
+			m, err := ircmsg.ParseLine(l)
+			if err != nil || len(m.Params) != 2 {
+				t.Fatalf("%s: line %q: %v", tc.name, l, err)
+			}
+			if n := len(prefix + " PRIVMSG " + room + " :" + m.Params[1] + "\r\n"); n > 512 {
+				t.Fatalf("%s: a piece of %d bytes is relayed in %d bytes, over 512", tc.name, len(m.Params[1]), n)
+			}
+			piece := strings.TrimSuffix(strings.TrimPrefix(m.Params[1], tc.open), tc.end)
+			if !utf8.ValidString(piece) {
+				t.Fatalf("%s: a piece cut inside a rune: %q", tc.name, piece)
+			}
+			got += piece
+		}
+		if got != text {
+			t.Fatalf("%s: the pieces put together differ from the text", tc.name)
+		}
+	}
+}
+
+// IRC-4: the JOIN refusals of Solanum (479 bad name, 480 throttle), InspIRCd
+// (489 TLS only, 520 opers only, 926 forbidden) and UnrealIRCd (448
+// forbidden, 489, 500 join flood) answer the /join that waits for them.
+func TestRegressionJoinRefusalsAnswered(t *testing.T) {
+	c, s, events, _ := start(t, Config{}, false)
+	for i, code := range []string{"448", "479", "480", "489", "500", "520", "926"} {
+		room, req := "#r"+code, uint64(i+1)
+		c.Resolve(context.Background(), room, true, req)
+		s.expect("JOIN " + room)
+		s.send(":srv %s me %s :Cannot join channel (%s)", code, room, code)
+		if e := waitFor[model.EvChat](t, events); e.Request != req || !strings.Contains(e.Err, "("+code+")") {
+			t.Fatalf("%s: %+v, want request %d with the reason of the server", code, e, req)
+		}
+	}
+}
+
+// IRC-4: a JOIN that gets no answer this client knows leaves "resolving…"
+// for ever: after joinWait the /join gets an error. A /join answered in time
+// gets no second answer, and a late JOIN echo does not answer the one given
+// up.
+func TestRegressionJoinTimeout(t *testing.T) {
+	was := joinWait
+	joinWait = 100 * time.Millisecond
+	t.Cleanup(func() { joinWait = was })
+	c, s, events, _ := start(t, Config{}, false)
+	c.Resolve(context.Background(), "#silent", true, 1)
+	s.expect("JOIN #silent")
+	c.Resolve(context.Background(), "#ok", true, 2)
+	s.expect("JOIN #ok")
+	s.send(":me!u@h JOIN #ok")
+	got := map[uint64]model.EvChat{}
+	for len(got) < 2 {
+		e := waitFor[model.EvChat](t, events)
+		if _, twice := got[e.Request]; twice {
+			t.Fatalf("second answer to request %d: %+v", e.Request, e)
+		}
+		got[e.Request] = e
+	}
+	if e := got[1]; e.Err != i18n.T("irc_timeout") {
+		t.Fatalf("/join with no answer: %+v, want the error %q", e, i18n.T("irc_timeout"))
+	}
+	if e := got[2]; e.Err != "" || e.Chat == nil {
+		t.Fatalf("/join answered by the server: %+v, want the chat", e)
+	}
+	s.send(":me!u@h JOIN #silent") // the server answers after all
+	deadline := time.After(3 * joinWait)
+	for {
+		select {
+		case ev := <-events:
+			if e, ok := ev.(model.EvChat); ok {
+				t.Fatalf("answer after the timeout: %+v", e)
+			}
+		case <-deadline:
+			return
+		}
+	}
+}
+
+// IRC-2: with no SASL the rooms of the list wait for services. A room that
+// needs a registered nick (+r) refuses a JOIN that comes before 900. 900
+// sends the rooms at once, and only once.
+func TestRegressionJoinWaitsForLogin(t *testing.T) {
+	was := identifyWait
+	identifyWait = 400 * time.Millisecond
+	t.Cleanup(func() { identifyWait = was })
+	_, s, _, _ := start(t, Config{Password: "secret", PasswordWithoutTLS: true, Channels: []string{"#reg"}}, false)
+	s.expect("PRIVMSG NickServ")
+	s.never("JOIN", 150*time.Millisecond)
+	s.send(":srv 900 me me!u@h me :You are now logged in as me")
+	if l := s.expect("JOIN"); l != "JOIN #reg" {
+		t.Fatalf("join after 900: %q", l)
+	}
+	s.never("JOIN", 2*identifyWait) // the end of the wait sends nothing more
+}
+
+// IRC-2: services that answer IDENTIFY with a NOTICE and no 900: the rooms
+// go out when identifyWait ends.
+func TestRegressionJoinAfterIdentifyWait(t *testing.T) {
+	was := identifyWait
+	identifyWait = 200 * time.Millisecond
+	t.Cleanup(func() { identifyWait = was })
+	_, s, _, _ := start(t, Config{Password: "secret", PasswordWithoutTLS: true, Channels: []string{"#reg"}}, false)
+	s.expect("PRIVMSG NickServ")
+	from := time.Now()
+	s.send(":NickServ!s@services. NOTICE me :You are now identified for me.")
+	if l := s.expect("JOIN"); l != "JOIN #reg" {
+		t.Fatalf("join without 900: %q", l)
+	}
+	if d := time.Since(from); d < identifyWait/2 {
+		t.Fatalf("rooms joined %v after IDENTIFY, want about %v", d, identifyWait)
+	}
+}
+
+// IRC-2: the connection drops while its rooms wait for services. The next
+// connection joins them once, on its own 900: the wait of the first one
+// joins nothing on it.
+func TestRegressionHeldJoinsFollowConnection(t *testing.T) {
+	was := identifyWait
+	identifyWait = 300 * time.Millisecond
+	t.Cleanup(func() { identifyWait = was })
+	c1, s1 := pipeServer(t)
+	c2, s2 := pipeServer(t)
+	dials := make(chan net.Conn, 2)
+	dials <- c1
+	dials <- c2
+	c := New(Config{Name: "test", Host: "irc.example", Port: 6667, Nick: "me", Password: "secret", PasswordWithoutTLS: true,
+		Channels: []string{"#reg"}, Dial: func(ctx context.Context, _, _ string) (net.Conn, error) {
+			select {
+			case conn := <-dials:
+				return conn, nil
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			}
+		}}, make(chan model.Event, 256))
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- c.Run(ctx) }()
+	t.Cleanup(func() {
+		cancel()
+		select {
+		case <-done:
+		case <-time.After(5 * time.Second):
+			t.Error("Run did not end")
+		}
+		c1.Close()
+		c2.Close()
+	})
+	s1.register()
+	s1.expect("PRIVMSG NickServ")
+	s1.conn.Close() // the connection drops before services answer
+	s2.register()
+	s2.expect("PRIVMSG NickServ")
+	s2.send(":srv 900 me me!u@h me :You are now logged in as me")
+	if l := s2.expect("JOIN"); l != "JOIN #reg" {
+		t.Fatalf("join after 900 on the new connection: %q", l)
+	}
+	s2.never("JOIN", 2*identifyWait)
 }

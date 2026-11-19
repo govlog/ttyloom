@@ -36,3 +36,23 @@ func TestJumpLastPill(t *testing.T) {
 		t.Fatalf("click: scroll %d", w.Scroll)
 	}
 }
+
+// A message area narrower than the pill (19 columns in French): no pill, and
+// never a cursor move to a negative column.
+func TestJumpPillTooNarrow(t *testing.T) {
+	u := hoverUI()
+	u.side = sideHidden
+	var out bytes.Buffer
+	u.t = term.NewOffscreen(&out, 12, 10)
+	w := u.view()
+	for range 40 {
+		w.AddSys("line")
+	}
+	w.Scroll = 10
+	u.draw()
+	u.t.Flush()
+	if s := out.String(); strings.Contains(s, ";-") || strings.Contains(s, i18n.T("jump_last")) {
+		t.Fatalf("12 columns, scrolled up: pill drawn %v, negative column %v; want neither",
+			strings.Contains(s, i18n.T("jump_last")), strings.Contains(s, ";-"))
+	}
+}

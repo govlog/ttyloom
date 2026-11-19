@@ -329,7 +329,8 @@ func (c *Client) lines(kind string, text ...string) {
 	c.Post(model.EvLines{ChatID: c.peek(kind), Lines: text})
 }
 
-// reply : a one-line answer of a command (331, 341, 305, 306).
+// reply : a one-line answer of a command (331, 341, 305, 306), or the last
+// line of a list answer (315, 369, 406).
 func (c *Client) reply(kind string) func(ircmsg.Message) {
 	return func(e ircmsg.Message) {
 		if len(e.Params) < 2 {
@@ -398,26 +399,12 @@ func (c *Client) onWho(e ircmsg.Message) {
 	c.lines("who", fmt.Sprintf("%s %s@%s (%s) %s %s %s", e.Params[5], e.Params[2], e.Params[3], real, e.Params[6], e.Params[1], e.Params[4]))
 }
 
-func (c *Client) onWhoEnd(e ircmsg.Message) {
-	if len(e.Params) < 2 {
-		return
-	}
-	c.Post(model.EvLines{ChatID: c.replyTo("who"), Lines: []string{strings.Join(e.Params[1:], " ")}})
-}
-
 // onWhowas : 314 "me nick user host * :realname".
 func (c *Client) onWhowas(e ircmsg.Message) {
 	if len(e.Params) < 6 {
 		return
 	}
 	c.lines("whowas", i18n.T("irc_whowas", e.Params[1], e.Params[2], e.Params[3], e.Params[5]))
-}
-
-func (c *Client) onWhowasEnd(e ircmsg.Message) {
-	if len(e.Params) < 2 {
-		return
-	}
-	c.Post(model.EvLines{ChatID: c.replyTo("whowas"), Lines: []string{strings.Join(e.Params[1:], " ")}})
 }
 
 // MOTD: gathered from 375 to 376 (or 422 alone), posted once — to the

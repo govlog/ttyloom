@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/clipperhouse/uax29/v2/graphemes"
 	"golang.org/x/text/unicode/norm"
@@ -140,12 +141,14 @@ const maxURL = 2048
 
 // SafeURL tells whether a URL can be trusted by the terminal (OSC 8 link) and
 // by the desktop (xdg-open). It comes from the network: no control character
-// (it would go out as it is in the sequence), and only http, https and mailto
-// — never file:, javascript: nor an exotic handler. url.Parse puts the scheme
-// in lower case. A mailto: carries an address only: its header fields
-// (?attach=/home/…) made mail clients attach a local file.
+// (it would go out as it is in the sequence), valid UTF-8 only (a range over
+// the string sees a raw byte as U+FFFD, and a raw 0x9b or 0x9c is a C1
+// control for the terminal), and only http, https and mailto — never file:,
+// javascript: nor an exotic handler. url.Parse puts the scheme in lower case.
+// A mailto: carries an address only: its header fields (?attach=/home/…) made
+// mail clients attach a local file.
 func SafeURL(s string) bool {
-	if s == "" || len(s) > maxURL || hasControl(s) {
+	if s == "" || len(s) > maxURL || !utf8.ValidString(s) || hasControl(s) {
 		return false
 	}
 	v, err := url.Parse(s)
@@ -192,7 +195,7 @@ func Runs(text string, ents []model.Span, base theme.Style, th theme.Theme) []Sp
 	for i := range styles {
 		styles[i] = base
 	}
-	quote := map[int]bool{}
+	quote := map[int]bool{}   // rank of the first rune of each line of a quote: "│ " to put in front
 	preLead := map[int]bool{} // rank of the first rune of each line of a Pre block: "┃ " to put in front
 	// link : rune drawn in the link style, clickable or not.
 	link := make([]bool, len(runes))
@@ -207,13 +210,15 @@ func Runs(text string, ents []model.Span, base theme.Style, th theme.Theme) []Sp
 			if SafeURL(e.URL) { // scheme and control characters: what goes out in OSC 8 and under xdg-open
 				url = e.URL
 			}
-		case model.SpanQuote:
-			quote[ri] = true
-		case model.SpanPre:
-			preLead[ri] = true
+		case model.SpanQuote, model.SpanPre:
+			marks := quote
+			if e.Kind == model.SpanPre {
+				marks = preLead
+			}
+			marks[ri] = true
 			for i := ri; i < rj; i++ {
 				if runes[i] == '\n' && i+1 < rj {
-					preLead[i+1] = true
+					marks[i+1] = true
 				}
 			}
 		}

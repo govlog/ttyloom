@@ -29,7 +29,7 @@ const sampleFrame = "\x1b[1;1H\x1b[0;38;2;205;214;244;48;2;30;30;46mhello 😀 w
 
 func TestCompositeNothingIsIdentity(t *testing.T) {
 	s := Parse(sampleFrame, 20, 4)
-	out := Composite(s, NewLayer(20, 4), 0, rgbKnown)
+	out := Composite(Parse(sampleFrame, 20, 4), NewLayer(20, 4), 0, rgbKnown) // it writes in place: a copy of s
 	if !slices.Equal(out.Cells, s.Cells) {
 		t.Fatalf("no effect, no dark: the chat must be unchanged\n%+v\n%+v", s.Cells, out.Cells)
 	}
@@ -94,17 +94,17 @@ func TestCompositeReverseUsesFG(t *testing.T) {
 // logo show on it. The colour of the text stays the terminal's.
 func TestCompositeUnknownBackgroundTakesBackdrop(t *testing.T) {
 	unknown := func(theme.Color, bool) (theme.RGB, bool) { return theme.RGB{}, false }
-	s := Parse("\x1b[1;1H"+theme.Style{}.SGR()+"xy", 2, 1)
+	frame := "\x1b[1;1H" + theme.Style{}.SGR() + "xy"
 	l := NewLayer(2, 1)
 	l.Cells[0] = FX{Ch: ' ', Tint: theme.RGB{R: 255}, A: 1} // a letter of the logo: a solid fill
-	out := Composite(s, l, 1, unknown)
+	out := Composite(Parse(frame, 2, 1), l, 1, unknown)
 	if bg := out.At(0, 0).Style.BG; bg.Kind != 2 || bg.RGB != (theme.RGB{R: 255}) {
 		t.Fatalf("the fill must show: %+v", bg)
 	}
 	if c := out.At(1, 0); c.Style.BG.Kind != 2 || c.Style.BG.RGB != Backdrop || c.Style.FG.Kind != 0 || c.Text != "y" {
 		t.Fatalf("dark = 1, background unknown: the backdrop at once, the text colour kept: %+v", c)
 	}
-	if out := Composite(s, NewLayer(2, 1), 0, unknown); !slices.Equal(out.Cells, s.Cells) {
+	if out := Composite(Parse(frame, 2, 1), NewLayer(2, 1), 0, unknown); !slices.Equal(out.Cells, Parse(frame, 2, 1).Cells) {
 		t.Fatal("nothing to do: unchanged")
 	}
 }
@@ -123,14 +123,14 @@ func TestCompositeKeepsDarkTextReadable(t *testing.T) {
 
 // The backdrop darkens a known background; the effect then tints it.
 func TestCompositeDarkensThenTints(t *testing.T) {
-	s := Parse("\x1b[1;1H"+theme.Style{BG: theme.Color{Kind: 2, RGB: theme.RGB{R: 200, G: 200, B: 200}}}.SGR()+"x", 1, 1)
-	dark := Composite(s, NewLayer(1, 1), 1, rgbKnown).At(0, 0).Style.BG.RGB
+	frame := "\x1b[1;1H" + theme.Style{BG: theme.Color{Kind: 2, RGB: theme.RGB{R: 200, G: 200, B: 200}}}.SGR() + "x"
+	dark := Composite(Parse(frame, 1, 1), NewLayer(1, 1), 1, rgbKnown).At(0, 0).Style.BG.RGB
 	if dark.R >= 100 {
 		t.Fatalf("dark = 1 must darken toward the backdrop: %+v", dark)
 	}
 	l := NewLayer(1, 1)
 	l.Cells[0] = FX{Tint: theme.RGB{G: 255}, A: 1}
-	if bg := Composite(s, l, 1, rgbKnown).At(0, 0).Style.BG.RGB; bg != (theme.RGB{G: 255}) {
+	if bg := Composite(Parse(frame, 1, 1), l, 1, rgbKnown).At(0, 0).Style.BG.RGB; bg != (theme.RGB{G: 255}) {
 		t.Fatalf("A = 1 gives the tint: %+v", bg)
 	}
 }

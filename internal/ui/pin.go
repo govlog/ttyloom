@@ -71,12 +71,10 @@ func (u *UI) setPin(key model.ChatKey, id int, m *model.Msg) {
 // label reads it), and the cache keeps the change.
 func (u *UI) flagPinned(key model.ChatKey, ids []int, pinned bool) {
 	found := false
-	for _, w := range u.viewsOf(key) {
-		for _, it := range w.Items {
-			if it.Msg != nil && it.Msg.Key() == key && slices.Contains(ids, it.Msg.ID) && it.Msg.Pinned != pinned {
-				it.Msg.Pinned = pinned
-				found = true
-			}
+	for _, it := range u.eachMsg(key) {
+		if slices.Contains(ids, it.Msg.ID) && it.Msg.Pinned != pinned {
+			it.Msg.Pinned = pinned
+			found = true
 		}
 	}
 	if found {
@@ -86,11 +84,9 @@ func (u *UI) flagPinned(key model.ChatKey, ids []int, pinned bool) {
 
 // loadedMsg gives a loaded copy of the message, nil when no view holds it.
 func (u *UI) loadedMsg(key model.ChatKey, id int) *model.Msg {
-	for _, w := range u.viewsOf(key) {
-		for _, it := range w.Items {
-			if it.Msg != nil && it.Msg.ID == id && it.Msg.Key() == key {
-				return it.Msg
-			}
+	for _, it := range u.eachMsg(key) {
+		if it.Msg.ID == id {
+			return it.Msg
 		}
 	}
 	return nil
@@ -100,11 +96,9 @@ func (u *UI) loadedMsg(key model.ChatKey, id int) *model.Msg {
 // with none.
 func (u *UI) newestLoadedPin(key model.ChatKey) *model.Msg {
 	var top *model.Msg
-	for _, w := range u.viewsOf(key) {
-		for _, it := range w.Items {
-			if it.Msg != nil && it.Msg.Pinned && it.Msg.Key() == key && (top == nil || it.Msg.ID > top.ID) {
-				top = it.Msg
-			}
+	for _, it := range u.eachMsg(key) {
+		if it.Msg.Pinned && (top == nil || it.Msg.ID > top.ID) {
+			top = it.Msg
 		}
 	}
 	return top

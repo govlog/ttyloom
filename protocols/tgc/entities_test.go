@@ -3,6 +3,7 @@ package tgc
 import (
 	"reflect"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/gotd/td/telegram/message/entity"
@@ -50,6 +51,16 @@ func TestSpansOfKinds(t *testing.T) {
 	}
 	if !slices.Equal(got, want) {
 		t.Fatalf("kinds:\n got %+v\nwant %+v", got, want)
+	}
+}
+
+// A message with no entity (most of them) costs no allocation in spansOf:
+// the rune and UTF-16 offset tables are built only when an entity needs them.
+// A start-up sync converts thousands of messages.
+func TestSpansOfPlainTextAllocs(t *testing.T) {
+	text := strings.Repeat("une ligne sans style, ", 22) // 484 runes
+	if n := testing.AllocsPerRun(100, func() { spansOf(text, nil) }); n != 0 {
+		t.Fatalf("spansOf with no entity: %v allocations a message, want 0", n)
 	}
 }
 

@@ -10,7 +10,7 @@ import (
 )
 
 // rekeyChats moves the cache keys of a network whose chat ids come from their
-// titles (model.ChatIDer) to the mapping the server negotiated — IRC, whose
+// names (model.ChatIDer) to the mapping the server negotiated — IRC, whose
 // old keys folded ASCII only.
 func (u *UI) rekeyChats(net string, idFor func(string) int64) {
 	u.bgWait.Wait()
@@ -20,7 +20,13 @@ func (u *UI) rekeyChats(net string, idFor func(string) int64) {
 			continue
 		}
 		old := c.Key()
-		key := model.ChatKey{Net: net, ID: idFor(c.Title)}
+		// The title is cleaned for display (a control or a bidi character
+		// becomes a space): the id comes from the name the Peer keeps.
+		name := c.Title
+		if p, ok := c.Peer.(interface{ ServerName() string }); ok {
+			name = p.ServerName()
+		}
+		key := model.ChatKey{Net: net, ID: idFor(name)}
 		if old == key {
 			continue
 		}

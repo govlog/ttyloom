@@ -111,34 +111,30 @@ func (c *Client) LoadStickers(ctx context.Context, chat *model.Chat) {
 
 // fetchStickers asks for the recents, the favorites and the packs.
 func (c *Client) fetchStickers(ctx context.Context, sc *stickerCache) error {
-	if !c.floodOK() {
-		return errFlood()
-	}
-	rec, err := c.api.MessagesGetRecentStickers(ctx, &tg.MessagesGetRecentStickersRequest{})
-	if err != nil {
-		c.floodTrip(err)
-		return err
-	}
-	fav, err := c.api.MessagesGetFavedStickers(ctx, 0)
-	if err != nil {
-		c.floodTrip(err)
-		return err
-	}
-	all, err := c.api.MessagesGetAllStickers(ctx, 0)
-	if err != nil {
-		c.floodTrip(err)
-		return err
-	}
-	if r, ok := rec.(*tg.MessagesRecentStickers); ok {
-		sc.recent = r.Stickers
-	}
-	if f, ok := fav.(*tg.MessagesFavedStickers); ok {
-		sc.faved = f.Stickers
-	}
-	if a, ok := all.(*tg.MessagesAllStickers); ok {
-		sc.sets = a.Sets
-	}
-	return nil
+	return c.rpc(func() error {
+		rec, err := c.api.MessagesGetRecentStickers(ctx, &tg.MessagesGetRecentStickersRequest{})
+		if err != nil {
+			return err
+		}
+		fav, err := c.api.MessagesGetFavedStickers(ctx, 0)
+		if err != nil {
+			return err
+		}
+		all, err := c.api.MessagesGetAllStickers(ctx, 0)
+		if err != nil {
+			return err
+		}
+		if r, ok := rec.(*tg.MessagesRecentStickers); ok {
+			sc.recent = r.Stickers
+		}
+		if f, ok := fav.(*tg.MessagesFavedStickers); ok {
+			sc.faved = f.Stickers
+		}
+		if a, ok := all.(*tg.MessagesAllStickers); ok {
+			sc.sets = a.Sets
+		}
+		return nil
+	})
 }
 
 func (c *Client) LoadStickerPack(ctx context.Context, chat *model.Chat, key string) {
@@ -155,15 +151,12 @@ func (c *Client) LoadStickerPack(ctx context.Context, chat *model.Chat, key stri
 				c.Post(ev)
 				return
 			}
-			if !c.floodOK() {
-				ev.Err = errFlood().Error()
-				c.Post(ev)
-				return
-			}
-			res, err := c.api.MessagesGetStickerSet(ctx, &tg.MessagesGetStickerSetRequest{
-				Stickerset: &tg.InputStickerSetID{ID: id, AccessHash: hash}})
-			if err != nil {
-				c.floodTrip(err)
+			var res tg.MessagesStickerSetClass
+			if err := c.rpc(func() (err error) {
+				res, err = c.api.MessagesGetStickerSet(ctx, &tg.MessagesGetStickerSetRequest{
+					Stickerset: &tg.InputStickerSetID{ID: id, AccessHash: hash}})
+				return err
+			}); err != nil {
 				ev.Err = err.Error()
 				c.Post(ev)
 				return
@@ -187,14 +180,11 @@ func (c *Client) SearchStickers(ctx context.Context, chat *model.Chat, emoji str
 	go func() {
 		ev := model.EvStickerSearch{ChatID: chat.ID, Query: emoji}
 		defer c.Guard("SearchStickers", func(err string) { ev.Err = err; c.Post(ev) })
-		if !c.floodOK() {
-			ev.Err = errFlood().Error()
-			c.Post(ev)
-			return
-		}
-		res, err := c.api.MessagesGetStickers(ctx, &tg.MessagesGetStickersRequest{Emoticon: emoji})
-		if err != nil {
-			c.floodTrip(err)
+		var res tg.MessagesStickersClass
+		if err := c.rpc(func() (err error) {
+			res, err = c.api.MessagesGetStickers(ctx, &tg.MessagesGetStickersRequest{Emoticon: emoji})
+			return err
+		}); err != nil {
 			ev.Err = err.Error()
 		} else if s, ok := res.(*tg.MessagesStickers); ok {
 			ev.Stickers = stickersOf(s.Stickers)

@@ -119,8 +119,10 @@ type Caps struct {
 	NameIsID bool
 }
 
-// ChatIDer : a backend whose chat ids come from their titles (IRC): the UI
-// moves its cache keys when the mapping of the server changes.
+// ChatIDer : a backend whose chat ids come from their names (IRC): the UI
+// moves its cache keys when the mapping of the server changes. The name of a
+// chat is the one its Peer gives through a ServerName() string method, else
+// its Title: the UI cleans the Title for display.
 type ChatIDer interface{ ChatID(title string) int64 }
 
 // MemberLister : a backend that knows who is in a chat, for the Tab

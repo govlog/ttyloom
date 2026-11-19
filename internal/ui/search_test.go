@@ -262,3 +262,16 @@ func TestRegressionPasteIntoNetQuery(t *testing.T) {
 		t.Errorf("global search: query %q after a paste", got)
 	}
 }
+
+// A paste into the Ctrl+F search goes into the query, on one line, as in the
+// other query boxes; the hits follow it.
+func TestRegressionPasteIntoLocalSearch(t *testing.T) {
+	u, _, room, _ := queryUI()
+	u.goTo(u.ws.ForChat(room.Key()))
+	u.view().Upsert(&model.Msg{Net: room.Net, ChatID: room.ID, ID: 5, Text: "hello world", Date: time.Now()})
+	u.key(term.Key{Code: term.Ctrl, Rune: 'f'})
+	u.key(term.Key{Code: term.Paste, Text: "hello\nworld"})
+	if got := string(u.search.q); got != "hello world" || len(u.search.hits) != 1 {
+		t.Fatalf("paste into Ctrl+F: query %q, %d hit(s); want %q and 1 hit", got, len(u.search.hits), "hello world")
+	}
+}

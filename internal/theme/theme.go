@@ -44,38 +44,6 @@ func Mix(a, b Color, f float64) Color {
 	return Color{Kind: 2, RGB: RGB{m(a.RGB.R, b.RGB.R), m(a.RGB.G, b.RGB.G), m(a.RGB.B, b.RGB.B)}}
 }
 
-func (c Color) sgr(fg bool) string {
-	switch c.Kind {
-	case 1:
-		base := 30
-		if !fg {
-			base = 40
-		}
-		if c.Idx >= 8 {
-			return strconv.Itoa(base + 60 + int(c.Idx) - 8)
-		}
-		return strconv.Itoa(base + int(c.Idx))
-	case 2:
-		p := "38"
-		if !fg {
-			p = "48"
-		}
-		return fmt.Sprintf("%s;2;%d;%d;%d", p, c.RGB.R, c.RGB.G, c.RGB.B)
-	}
-	return ""
-}
-
-// underlineSGR : colour of the undercurl (58;2;r;g;b). Nothing for Kind 0
-// (terminal default) and Kind 1 (Ansi): in this package a Color never holds a
-// real 256 index, only the 16-colour ANSI palette of Terminal().
-// ponytail: wire 58;5;n if a 256-indexed Kind ever shows up.
-func (c Color) underlineSGR() string {
-	if c.Kind == 2 {
-		return fmt.Sprintf("58;2;%d;%d;%d", c.RGB.R, c.RGB.G, c.RGB.B)
-	}
-	return ""
-}
-
 type Style struct {
 	FG, BG                                               Color
 	Bold, Italic, Underline, Curly, Strike, Dim, Reverse bool   // Curly : wavy underline, ignored if !Underline
@@ -89,44 +57,78 @@ type Style struct {
 var Curly bool
 
 // SGR gives the full sequence; it always starts with a reset.
-func (s Style) SGR() string {
-	var b strings.Builder
-	b.WriteString("\x1b[0")
+func (s Style) SGR() string { return string(s.AppendSGR(make([]byte, 0, 64))) }
+
+// AppendSGR appends the SGR parameters of c, each after a ';': ";31",
+// ";38;2;r;g;b". fg picks the text code, else the background one. Nothing
+// for the terminal default.
+func (c Color) AppendSGR(b []byte, fg bool) []byte {
+	switch c.Kind {
+	case 1:
+		base := 30
+		if !fg {
+			base = 40
+		}
+		b = append(b, ';')
+		if c.Idx >= 8 {
+			return strconv.AppendInt(b, int64(base+60+int(c.Idx)-8), 10)
+		}
+		return strconv.AppendInt(b, int64(base+int(c.Idx)), 10)
+	case 2:
+		p := ";38;2;"
+		if !fg {
+			p = ";48;2;"
+		}
+		return appendRGB(append(b, p...), c.RGB)
+	}
+	return b
+}
+
+// appendRGB appends r;g;b.
+func appendRGB(b []byte, c RGB) []byte {
+	b = strconv.AppendInt(b, int64(c.R), 10)
+	b = append(b, ';')
+	b = strconv.AppendInt(b, int64(c.G), 10)
+	b = append(b, ';')
+	return strconv.AppendInt(b, int64(c.B), 10)
+}
+
+// AppendSGR appends the sequence of SGR to b, with no allocation of its own:
+// the intro writes one at almost every cell of a frame.
+func (s Style) AppendSGR(b []byte) []byte {
+	b = append(b, "\x1b[0"...)
 	if s.Bold {
-		b.WriteString(";1")
+		b = append(b, ";1"...)
 	}
 	if s.Dim {
-		b.WriteString(";2")
+		b = append(b, ";2"...)
 	}
 	if s.Italic {
-		b.WriteString(";3")
+		b = append(b, ";3"...)
 	}
 	if s.Underline {
 		if s.Curly {
-			b.WriteString(";4:3")
+			b = append(b, ";4:3"...)
 		} else {
-			b.WriteString(";4")
+			b = append(b, ";4"...)
 		}
 	}
 	if s.Reverse {
-		b.WriteString(";7")
+		b = append(b, ";7"...)
 	}
 	if s.Strike {
-		b.WriteString(";9")
+		b = append(b, ";9"...)
 	}
-	if p := s.FG.sgr(true); p != "" {
-		b.WriteString(";" + p)
+	b = s.FG.AppendSGR(b, true)
+	b = s.BG.AppendSGR(b, false)
+	// Colour of the undercurl (58;2;r;g;b). Nothing for Kind 0 (terminal
+	// default) and Kind 1 (Ansi): in this package a Color never holds a real
+	// 256 index, only the 16-colour ANSI palette of Terminal().
+	// ponytail: wire 58;5;n if a 256-indexed Kind ever shows up.
+	if s.Underline && s.Curly && s.FG.Kind == 2 {
+		b = appendRGB(append(b, ";58;2;"...), s.FG.RGB)
 	}
-	if p := s.BG.sgr(false); p != "" {
-		b.WriteString(";" + p)
-	}
-	if s.Underline && s.Curly {
-		if p := s.FG.underlineSGR(); p != "" {
-			b.WriteString(";" + p)
-		}
-	}
-	b.WriteString("m")
-	return b.String()
+	return append(b, 'm')
 }
 
 type Role int
@@ -314,11 +316,14 @@ func ghosttyThemeName(v string) string {
 		return v
 	}
 	parts := strings.Split(v, ",")
+	for i := range parts {
+		parts[i] = strings.TrimSpace(parts[i])
+	}
 	first := strings.TrimPrefix(strings.TrimPrefix(parts[0], "light:"), "dark:")
 	for _, p := range parts {
 		if d, ok := strings.CutPrefix(p, "dark:"); ok {
-			return d
+			return strings.TrimSpace(d)
 		}
 	}
-	return first
+	return strings.TrimSpace(first)
 }

@@ -43,6 +43,22 @@ func TestSGR(t *testing.T) {
 	if got := (Style{}).SGR(); got != "\x1b[0m" {
 		t.Fatalf("default: %q", got)
 	}
+	// Every attribute in its order, and each kind of colour as text and as
+	// background: the intro writes these bytes too.
+	for _, c := range []struct {
+		st   Style
+		want string
+	}{
+		{Style{Bold: true, Dim: true, Italic: true, Reverse: true, Strike: true}, "\x1b[0;1;2;3;7;9m"},
+		{Style{FG: Ansi(3), BG: Ansi(12)}, "\x1b[0;33;104m"},
+		{Style{BG: Color{Kind: 2, RGB: RGB{R: 255, G: 128}}}, "\x1b[0;48;2;255;128;0m"},
+		{Style{FG: Ansi(4), Underline: true, Curly: true}, "\x1b[0;4:3;34m"}, // no 58 for an ANSI colour
+		{Style{Curly: true}, "\x1b[0m"},                                      // Curly alone: no underline
+	} {
+		if got := c.st.SGR(); got != c.want {
+			t.Errorf("%+v: %q, want %q", c.st, got, c.want)
+		}
+	}
 }
 
 func TestSGRCurly(t *testing.T) {
@@ -67,6 +83,9 @@ func TestGhosttyThemeName(t *testing.T) {
 		{"dark:rose-pine,light:rose-pine-dawn", "rose-pine"},
 		{"light:rose-pine-dawn,dark:rose-pine", "rose-pine"},
 		{"light:only", "only"},
+		{"light:rose-pine-dawn, dark:rose-pine", "rose-pine"},
+		{"dark:rose-pine , light:x", "rose-pine"},
+		{"light: rose-pine-dawn", "rose-pine-dawn"},
 	}
 	for _, c := range cases {
 		if got := ghosttyThemeName(c.in); got != c.want {

@@ -16,6 +16,9 @@ import (
 // the kinds the UI styles. The mention family (hashtag, cashtag, bot
 // command, @username) all land on SpanMention.
 func spansOf(text string, ents []tg.MessageEntityClass) []model.Span {
+	if len(ents) == 0 { // most messages: no table to build
+		return nil
+	}
 	runes := []rune(text)
 	off := make([]int, len(runes)+1) // off[i] = UTF-16 length of runes[:i]
 	for i, r := range runes {

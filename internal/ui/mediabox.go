@@ -3,11 +3,9 @@ package ui
 import (
 	"cmp"
 	"fmt"
-	"path/filepath"
 	"slices"
 	"strings"
 
-	"github.com/govlog/ttyloom/internal/config"
 	"github.com/govlog/ttyloom/internal/i18n"
 	"github.com/govlog/ttyloom/internal/media"
 	"github.com/govlog/ttyloom/internal/model"
@@ -160,19 +158,15 @@ func (u *UI) cellPicture(it *model.MediaItem) *model.Media {
 // page when the grid nears the end of the list. Called at each drawing.
 func (u *UI) mboxLoad() {
 	b := u.mbox
-	be := u.net(b.chat)
-	if be == nil {
+	if !u.gridFetch(b, b.chat, "thumbs", func(i int, md *model.Media) bool {
+		if md != b.items[i].Msg.Media {
+			return false
+		}
+		u.download(&b.items[i].Msg) // the file of the message, where the chat would put it
+		return true
+	}) {
 		return
 	}
-	u.gridRelease(b)
-	u.gridLoad(b, func(i int, md *model.Media) {
-		if md == b.items[i].Msg.Media { // the file of the message, where the chat would put it
-			u.download(&b.items[i].Msg)
-			return
-		}
-		md.State = model.MediaLoading
-		be.Download(u.backendContext(be), md, filepath.Join(config.CacheDir(), "thumbs", b.chat.Net, thumbName(md)))
-	})
 	_, hi := b.g.visible()
 	if b.asked < 0 && b.next != 0 && b.err == "" && b.auto < mediaAuto && hi+b.g.perRow*b.g.rows >= len(b.items) {
 		u.mboxAsk(b.next)
@@ -287,12 +281,7 @@ func (u *UI) mboxMouse(e term.MouseEvent) {
 	b, r := u.mbox, u.gridRect(&u.mbox.g)
 	click := e.Press && !e.Motion
 	switch {
-	case u.drag != dragGrid && !r.hits(e.Y, e.X, 1, 1): // a drag of the thumb may leave the box
-		if click {
-			u.mboxClose()
-		} else {
-			b.g.live = -1
-		}
+	case u.gridOutside(&b.g, r, e, u.mboxClose):
 	case u.drag != dragGrid && e.Y == r.row+1:
 		for t, c := range b.tabCols {
 			if x := e.X - r.col - 1; click && e.Button == 0 && x >= c[0] && x < c[1] {

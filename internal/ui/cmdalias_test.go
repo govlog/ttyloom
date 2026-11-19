@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"os"
 	"slices"
 	"strings"
 	"testing"
@@ -53,5 +54,19 @@ func TestCmdAliasSavedAndRemoved(t *testing.T) {
 	input(u, "/ident")
 	if len(b.sends) != 0 {
 		t.Fatalf("a removed alias still sends: %q", b.text)
+	}
+}
+
+// commands.toml stays the user's alone (0600): an alias can hold a password.
+func TestCmdAliasFilePrivate(t *testing.T) {
+	t.Setenv("TTYLOOM_DIR", t.TempDir())
+	u, _, _, _ := queryUI()
+	input(u, "/alias ident /msg nickserv identify pw")
+	st, err := os.Stat(cmdAliasPath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := st.Mode().Perm(); got != 0o600 {
+		t.Fatalf("commands.toml mode %v, want 0600", got)
 	}
 }

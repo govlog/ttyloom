@@ -1,15 +1,10 @@
 package ui
 
 import (
-	"bytes"
-	"errors"
 	"maps"
-	"os"
 	"path/filepath"
 	"slices"
 	"strings"
-
-	"github.com/BurntSushi/toml"
 
 	"github.com/govlog/ttyloom/internal/config"
 	"github.com/govlog/ttyloom/internal/i18n"
@@ -51,10 +46,7 @@ func mutedPath() string { return filepath.Join(config.Dir(), "muted.toml") }
 func loadMuted(path string) (map[model.ChatKey]bool, map[string]bool, error) {
 	chats, secs := map[model.ChatKey]bool{}, map[string]bool{}
 	var f mutedFile
-	if _, err := toml.DecodeFile(path, &f); err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return chats, secs, nil
-		}
+	if err := loadTOML(path, &f); err != nil {
 		return chats, secs, err
 	}
 	for _, s := range f.Chats {
@@ -76,11 +68,7 @@ func saveMuted(path string, muted map[model.ChatKey]bool, secs map[string]bool) 
 		f.Chats = append(f.Chats, aliasKey(k))
 	}
 	slices.Sort(f.Chats) // a stable file: one mute moves one line
-	var buf bytes.Buffer
-	if err := toml.NewEncoder(&buf).Encode(f); err != nil {
-		return err
-	}
-	return config.WriteAtomic(path, buf.Bytes(), 0o600)
+	return saveTOML(path, f)
 }
 
 // muteSections : the section keys /mute and /unmute take — the sections of
@@ -197,6 +185,10 @@ func (u *UI) muteCmd(w *Window, name string, on bool) {
 	}
 	if err := saveMuted(mutedPath(), u.muted, u.mutedSecs); err != nil {
 		w.AddSys(i18n.T("mute_error", err))
+	}
+	if sec := sectionOf(c); !on && u.mutedSecs[sec] { // its own mute is gone, the one of its section stays
+		w.AddSys(i18n.T("unmute_done_section", u.title(c), sec))
+		return
 	}
 	w.AddSys(i18n.T(done, u.title(c)))
 }

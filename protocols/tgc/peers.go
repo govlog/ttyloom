@@ -142,14 +142,21 @@ func (c *Client) floodTrip(err error) {
 	}
 }
 
+// rpc runs f behind the FLOOD_WAIT breaker: refused with errFlood and no
+// request while it is open, and opened by a FLOOD_WAIT that f returns.
+func (c *Client) rpc(f func() error) error {
+	if !c.floodOK() {
+		return errFlood()
+	}
+	err := f()
+	c.floodTrip(err)
+	return err
+}
+
 // resolvePeer : network lookup, refused during a FLOOD_WAIT.
 func (c *Client) resolvePeer(ctx context.Context, p tg.PeerClass) (peers.Peer, error) {
-	if !c.floodOK() {
-		return nil, errFlood()
-	}
-	pr, err := c.peers.ResolvePeer(ctx, p)
-	if err != nil {
-		c.floodTrip(err)
+	var pr peers.Peer
+	if err := c.rpc(func() (err error) { pr, err = c.peers.ResolvePeer(ctx, p); return err }); err != nil {
 		return nil, err
 	}
 	return c.remember(pr), nil

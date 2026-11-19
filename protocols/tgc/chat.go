@@ -110,12 +110,8 @@ func (c *Client) memberPeer(ctx context.Context, token string) (peers.Peer, erro
 			return p, nil
 		}
 	}
-	if !c.floodOK() {
-		return nil, errFlood()
-	}
-	p, err := c.peers.Resolve(ctx, token)
-	if err != nil {
-		c.floodTrip(err)
+	var p peers.Peer
+	if err := c.rpc(func() (err error) { p, err = c.peers.Resolve(ctx, token); return err }); err != nil {
 		return nil, err
 	}
 	return c.remember(p), nil

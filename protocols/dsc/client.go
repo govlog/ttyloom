@@ -48,8 +48,12 @@ type Client struct {
 	// revoked : the gateway closed with 4004, authentication failed.
 	revoked atomic.Bool
 	// emojis : the custom emojis of each guild (customsOf), by guild id —
-	// one read-only copy shared by all its chats, dropped when they change.
+	// one read-only copy shared by all its chats, built again when they change.
 	emojis sync.Map
+	// emojiGen : the handlers add one when the emojis of a guild may have
+	// changed. A value of emojis keeps the generation read before its build,
+	// and customsOf builds an older one again.
+	emojiGen atomic.Uint64
 	// guildStickers : the stickers of each guild asked by the Stickers tab, for
 	// the session (discord.GuildID → []discord.Sticker).
 	guildStickers sync.Map

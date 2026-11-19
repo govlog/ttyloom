@@ -99,8 +99,8 @@ func (m *Module) route(h module.Host, w module.Win, name string, args []string, 
 	}
 	room := ""
 	for _, c := range []*model.Chat{w.Target, w.Chat} {
-		if c != nil && c.Net == net && IsChannel(c.Title) {
-			room = c.Title
+		if c != nil && c.Net == net && IsChannel(nameOf(c)) { // the name the server knows, not the cleaned title
+			room = nameOf(c)
 			break
 		}
 	}
@@ -203,7 +203,7 @@ func (m *Module) chans(h module.Host, w module.Win) []string {
 	var out []string
 	for _, c := range h.Chats(h.ContextNet(w, Prefix)) {
 		if c.Kind != model.ChatUser {
-			out = append(out, c.Title)
+			out = append(out, nameOf(c)) // the title is cleaned for display
 		}
 	}
 	return out

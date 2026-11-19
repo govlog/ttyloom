@@ -13,6 +13,7 @@ import (
 	"github.com/govlog/ttyloom/internal/config"
 	"github.com/govlog/ttyloom/internal/i18n"
 	"github.com/govlog/ttyloom/internal/model"
+	"github.com/govlog/ttyloom/internal/term"
 )
 
 func TestPasteImageName(t *testing.T) {
@@ -230,6 +231,56 @@ func TestSendPathRoutedWindow(t *testing.T) {
 	}
 	if want := i18n.T("sent_to_window", 1, "alice"); u.flashMsg != want {
 		t.Fatalf("status bar: %q, want %q", u.flashMsg, want)
+	}
+}
+
+// A window switch while a caption is typed drops the image: the draft broken
+// off by the "l" stays with its window, and the window reached shows its own
+// draft, never the one of the window left.
+func TestRegressionCaptionSwitchKeepsDrafts(t *testing.T) {
+	u, _, room, peer := queryUI()
+	iRoom, iPeer := u.ws.ForChat(room.Key()), u.ws.ForChat(peer.Key())
+	u.goTo(iPeer)
+	u.ed.Set("draft of peer")
+	u.goTo(iRoom)
+	u.ed.Set("draft of room")
+	p := filepath.Join(t.TempDir(), "x.png")
+	if err := os.WriteFile(p, []byte("\x89PNG\r\n\x1a\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	u.sendAsk = &sendAsk{path: p, size: 8, chat: room, title: room.Title, tmp: true}
+	u.key(term.Key{Rune: 'l'})
+	u.key(term.Key{Rune: 'x'}) // the caption
+	u.key(term.Key{Rune: '0' + rune(iPeer), Alt: true})
+	if got := u.ed.String(); u.sendAsk != nil || got != "draft of peer" {
+		t.Fatalf("after Alt+%d in caption mode: input %q, image prompt %v; want %q and no prompt", iPeer, got, u.sendAsk != nil, "draft of peer")
+	}
+	u.goTo(iRoom)
+	if got := u.ed.String(); got != "draft of room" {
+		t.Fatalf("back in the room: input %q, want %q", got, "draft of room")
+	}
+}
+
+// The image prompt of Ctrl+V opens when the background read ends, between two
+// typed keys. An l or an e within 300 ms is typing, not an answer: it is
+// swallowed and the prompt stays. Later, e sends.
+func TestRegressionImagePromptIgnoresTypedKey(t *testing.T) {
+	u, b, room, _ := queryUI()
+	u.goTo(u.ws.ForChat(room.Key()))
+	p := filepath.Join(t.TempDir(), "x.png")
+	if err := os.WriteFile(p, []byte("\x89PNG\r\n\x1a\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	u.event(evClipImage{Path: p, Size: 8})
+	u.key(term.Key{Rune: 'l'})
+	u.key(term.Key{Rune: 'e'})
+	if b.photo+b.file != 0 || u.sendAsk == nil || u.sendAsk.caption {
+		t.Fatalf("l and e typed right after Ctrl+V: %d send(s), prompt open %v; want nothing sent and the prompt kept", b.photo+b.file, u.sendAsk != nil)
+	}
+	u.sendAsk.at = time.Now().Add(-promptGuard)
+	u.key(term.Key{Rune: 'e'})
+	if b.photo+b.file != 1 || u.sendAsk != nil {
+		t.Fatalf("e 300 ms after the prompt: %d send(s), prompt open %v; want the image sent once", b.photo+b.file, u.sendAsk != nil)
 	}
 }
 

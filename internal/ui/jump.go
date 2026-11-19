@@ -13,13 +13,17 @@ import (
 
 func (u *UI) jumpLabel() string { return " " + i18n.T("jump_last") + " " }
 
-// jumpRect : the box of the pill; ok false when the view sits at the end.
+// jumpRect : the box of the pill; ok false when the view sits at the end, or
+// when the message area is too small for it.
 func (u *UI) jumpRect() (rect, bool) {
 	if u.view().Scroll <= 0 {
 		return rect{}, false
 	}
 	x0, cols := u.layout()
 	w := render.Width(u.jumpLabel())
+	if w > cols || u.viewRows() < 1 {
+		return rect{}, false
+	}
 	return rect{row: u.viewRows() - 1, col: x0 + cols - w, h: 1, w: w}, true
 }
 

@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"image"
+	"iter"
 	"maps"
 	"os"
 	"path/filepath"
@@ -58,6 +59,7 @@ type UI struct {
 	prevRows  map[int]string
 	prevPics  []cellPic
 	prevTrail string
+	prevGfx   string                        // kitty commands of the last frame (paint); sent again with a whole frame only
 	pics      map[picKey]string             // sixel or file of the pictures shown in the cells (picOf)
 	picDir    string                        // private directory of the files of Terminology, made at first use
 	picN      int                           // last file number there
@@ -165,6 +167,7 @@ type UI struct {
 	flashUntil  time.Time               // end of the display of flashMsg
 	pager       *pager                  // page waiting to be shown, only one at a time
 	pasteAsk    string                  // multiline paste waiting for a decision (e/c/a)
+	pasteAt     time.Time               // when pasteAsk opened (typedAhead)
 	pasteIns    bool                    // pasteAsk in the expanded editor: the choice inserts, it never sends
 	multi       bool                    // expanded input zone (/set multiline + Shift+Enter)
 	sendAsk     *sendAsk                // pasted image waiting for a decision (e/l/a)
@@ -1018,6 +1021,20 @@ func (u *UI) viewsOf(k model.ChatKey) []*Window {
 	return out
 }
 
+// eachMsg gives, view by view (viewsOf), each item that holds a message of
+// the chat k: every loaded copy of its messages, with the view that holds it.
+func (u *UI) eachMsg(k model.ChatKey) iter.Seq2[*Window, *Item] {
+	return func(yield func(*Window, *Item) bool) {
+		for _, w := range u.viewsOf(k) {
+			for _, it := range w.Items {
+				if it.Msg != nil && it.Msg.Key() == k && !yield(w, it) {
+					return
+				}
+			}
+		}
+	}
+}
+
 // updateShared replaces m everywhere it shows: a remote edit comes with a new
 // pointer, and each view must take it. false when no view holds it.
 func (u *UI) updateShared(m *model.Msg) bool {
@@ -1373,6 +1390,14 @@ func (u *UI) event(ev model.Event) {
 	case model.EvQuote:
 		u.quoted(e)
 	case model.EvDeleted:
+		// A global delete carries up to 100 ids and sweeps every window: one
+		// set of the ids, and one sweep of the aggregate at the end.
+		del := make(map[int]bool, len(e.IDs))
+		for _, id := range e.IDs {
+			del[id] = true
+		}
+		gone := map[*model.Msg]bool{}
+		now := time.Now()
 		for _, w := range u.ws.List {
 			// Net first: a global delete (ChatID 0) sweeps every window, and the
 			// ids of one network mean nothing in another.
@@ -1385,12 +1410,22 @@ func (u *UI) event(ev model.Event) {
 			if w.Chat.Channel && e.ChatID == 0 {
 				continue // ids of a channel: never in a global UpdateDeleteMessages
 			}
+			found := false
 			for _, it := range w.Items {
-				if it.Msg != nil && slices.Contains(e.IDs, it.Msg.ID) {
+				if it.Msg != nil && del[it.Msg.ID] {
 					it.Msg.Deleted, it.lines = true, nil
-					it.Msg.LiveAt = time.Now()
-					u.agg.Touch(it.Msg)
-					u.markDirty(w.Chat.Key())
+					it.Msg.LiveAt = now
+					gone[it.Msg], found = true, true
+				}
+			}
+			if found {
+				u.markDirty(w.Chat.Key())
+			}
+		}
+		if len(gone) > 0 {
+			for _, it := range u.agg.Items { // the aggregate shares the *model.Msg
+				if gone[it.Msg] {
+					it.lines = nil
 				}
 			}
 		}
@@ -1483,9 +1518,11 @@ func (u *UI) remember(c *model.Chat) *model.Chat {
 		old.Title, old.Username, old.Kind, old.Group = c.Title, c.Username, c.Kind, c.Group
 		old.Pinned, old.Channel, old.Undeletable = c.Pinned, c.Channel, c.Undeletable
 		// max: a read update that came before the dialog list does not get
-		// wiped by an older value (Unread included).
+		// wiped by an older value (Unread included). A chat with no read state
+		// (an IRC list, a /query resolve, a Discord channel never opened) says
+		// 0 and 0 for lack of news: the count kept stays.
 		u.readOutbox(old, c.ReadOutboxMaxID)
-		u.readInbox(old, c.ReadInboxMaxID, c.Unread, true)
+		u.readInbox(old, c.ReadInboxMaxID, c.Unread, c.ReadInboxMaxID != 0 || c.Unread != 0)
 		old.TopMessage = max(old.TopMessage, c.TopMessage)
 		old.UnreadReactions = old.UnreadReactions || c.UnreadReactions // a live reaction before the list is not wiped
 		old.UnreadMentions = old.UnreadMentions || c.UnreadMentions
@@ -1528,13 +1565,8 @@ func (u *UI) newMessage(e model.EvNewMessage) {
 	// (seen in a global search result, or in the contacts).
 	u.listChat(chat)
 	u.noteActivity(chat, &m)
-	i := u.ws.ForChat(chat.Key())
-	if i < 0 {
-		u.bindChat(u.ws.New(true), chat)
-		i = len(u.ws.List) - 1
-	}
 	m.ChatLabel = chat.Title // the aggregate labels each message with its chat
-	w := u.ws.List[i]
+	w := u.winFor(chat)
 	added := w.Upsert(&m)
 	if added {
 		u.logMsg(w, &m)
@@ -1580,12 +1612,10 @@ func (u *UI) newMessage(e model.EvNewMessage) {
 func (u *UI) quoted(e model.EvQuote) {
 	key := u.evKey(e.ChatID)
 	found := false
-	for _, w := range u.viewsOf(key) {
-		for _, it := range w.Items {
-			if it.Msg != nil && it.Msg.ID == e.ID && it.Msg.Key() == key && it.Msg.Reply != nil {
-				q := e.Quote
-				it.Msg.Reply, it.lines, found = &q, nil, true
-			}
+	for _, it := range u.eachMsg(key) {
+		if it.Msg.ID == e.ID && it.Msg.Reply != nil {
+			q := e.Quote
+			it.Msg.Reply, it.lines, found = &q, nil, true
 		}
 	}
 	if found {
@@ -1703,17 +1733,12 @@ func autoOpenChats(chats []*model.Chat, now time.Time, days int) []*model.Chat {
 // chats, at the first chat list of the session.
 func (u *UI) autoOpen(net string) {
 	for _, c := range autoOpenChats(u.netChats(net), time.Now(), u.cfg.AutoOpenDays) {
-		i := u.ws.ForChat(c.Key())
-		if i < 0 {
-			u.bindChat(u.ws.New(true), c)
-			i = len(u.ws.List) - 1
-		}
-		if i == u.ws.Cur {
+		w := u.winFor(c)
+		if w == u.ws.Current() {
 			continue // window already visited: its counters are up to date
 		}
 		// The window may already exist (disk cache): its counters still come
 		// from the network list, the only one up to date.
-		w := u.ws.List[i]
 		w.Act, w.scrolledToMark = c.Unread, false
 		if w.Act == 0 {
 			w.Hot = false // read elsewhere: nothing hot waits any more
@@ -1812,7 +1837,7 @@ func (u *UI) history(e model.EvHistory) {
 		w.scrolledToMark = true
 		lines, _, idx := w.LineItems(u.optsFor(w))
 		if idx >= 0 {
-			w.Scroll = scrollTo(len(lines), idx, u.viewRows())
+			w.Scroll, w.top = scrollTo(len(lines), idx, u.viewRows()), nil // the redline, not the row read before (anchor)
 		}
 	}
 	if recent && u.glowNext == w {
@@ -2062,8 +2087,11 @@ func (u *UI) goTo(n int) {
 	// draft rather than saving it: cancelMode() stays unconditional (Esc,
 	// search, delete confirmation); only the draft swap is gated, and it comes
 	// before cancelMode() so as not to be wiped (cancelMode() empties u.ed
-	// only when edit/reply was on, never in this branch).
-	if u.edit == nil && u.reply == nil && u.prompt == nil && u.pasteAsk == "" && u.sendAsk == nil {
+	// only when edit/reply was on, never in this branch). The image prompt
+	// goes first: a caption gives back the draft of the window left, which
+	// that window keeps.
+	u.cancelSend()
+	if u.edit == nil && u.reply == nil && u.prompt == nil && u.pasteAsk == "" {
 		u.ed.Load(swapDraft(old, w, u.ed.String()))
 	}
 	u.cancelMode()
@@ -2484,7 +2512,7 @@ func (u *UI) key(k term.Key) {
 		case 'd':
 			u.openFiles()
 		case 'k':
-			u.ed.KillToEnd()
+			u.edKill()
 		case 'b', 'i', 'u': // style toggles of the draft (Ctrl+I needs the kitty keyboard protocol: Tab elsewhere)
 			u.ed.Insert(string(map[rune]rune{'b': markBold, 'i': markItalic, 'u': markUnderline}[k.Rune]))
 		case 'w':
@@ -2588,8 +2616,8 @@ func (u *UI) key(k term.Key) {
 // multilineOn : /set multiline, nil-safe (tests build a UI with no config).
 func (u *UI) multilineOn() bool { return u.cfg != nil && u.cfg.Multiline }
 
-// edHome / edEnd : Home/End and Ctrl+A/E stay on the current line in the
-// expanded editor, and keep the whole buffer elsewhere.
+// edHome / edEnd / edKill : Home/End, Ctrl+A/E and Ctrl+K stay on the current
+// line in the expanded editor, and act on the whole buffer elsewhere.
 func (u *UI) edHome() {
 	if u.multi {
 		u.ed.LineHome()
@@ -2604,6 +2632,14 @@ func (u *UI) edEnd() {
 		return
 	}
 	u.ed.End()
+}
+
+func (u *UI) edKill() {
+	if u.multi {
+		u.ed.KillLine()
+		return
+	}
+	u.ed.KillToEnd()
 }
 
 // sendTyping tells "typing" in w, at most once every 5 s per chat

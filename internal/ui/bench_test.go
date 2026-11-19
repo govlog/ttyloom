@@ -132,3 +132,27 @@ func BenchmarkMarqueeTickGuilds(b *testing.B) {
 		u.marqueeTick(time.Now())
 	}
 }
+
+// BenchmarkGlobalDelete : one Telegram global delete of 100 ids with 100
+// windows of 2000 messages open, and the aggregate holding them all.
+func BenchmarkGlobalDelete(b *testing.B) {
+	u := &UI{ws: NewWindows(), agg: &Window{max: 200000}, dirty: map[model.ChatKey]bool{}}
+	for i := 1; i <= 100; i++ {
+		w := u.ws.New(true)
+		w.Chat = &model.Chat{Net: netTelegram, ID: int64(i)}
+		for j := 1; j <= 2000; j++ {
+			m := &model.Msg{Net: netTelegram, ChatID: int64(i), ID: i*10000 + j}
+			w.Items = append(w.Items, &Item{Msg: m})
+			u.agg.Items = append(u.agg.Items, &Item{Msg: m})
+		}
+	}
+	ids := make([]int, 100)
+	for k := range ids {
+		ids[k] = (k+1)*10000 + 1000 // one message in each of the first 100 windows
+	}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for range b.N {
+		u.dispatch(model.Envelope{Net: netTelegram, Ev: model.EvDeleted{IDs: ids}})
+	}
+}

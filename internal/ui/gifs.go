@@ -2,9 +2,7 @@ package ui
 
 import (
 	"fmt"
-	"path/filepath"
 
-	"github.com/govlog/ttyloom/internal/config"
 	"github.com/govlog/ttyloom/internal/i18n"
 	"github.com/govlog/ttyloom/internal/model"
 	"github.com/govlog/ttyloom/internal/render"
@@ -110,16 +108,7 @@ func (u *UI) gifsResult(e model.EvGifs) {
 // yet, a few at a time (gridLoad), and lets the frames of the ones far from
 // the view go. Called at each drawing: a cell that scrolls into view asks then.
 func (u *UI) gifLoad() {
-	g := u.gifs
-	b := u.net(g.chat)
-	if b == nil {
-		return
-	}
-	u.gridRelease(g)
-	u.gridLoad(g, func(_ int, md *model.Media) {
-		md.State = model.MediaLoading
-		b.Download(u.backendContext(b), md, filepath.Join(config.CacheDir(), "gifs", g.chat.Net, thumbName(md)))
-	})
+	u.gridFetch(u.gifs, u.gifs.chat, "gifs", nil)
 }
 
 func (u *UI) gifClose() {
@@ -169,12 +158,7 @@ func (u *UI) gifKey(k term.Key) {
 // scrollbar and the pointer, and a click on a cell sends it.
 func (u *UI) gifMouse(e term.MouseEvent) {
 	r := u.gifRect()
-	if u.drag != dragGrid && !r.hits(e.Y, e.X, 1, 1) { // a drag of the thumb may leave the box
-		if e.Press && !e.Motion {
-			u.gifClose()
-		} else {
-			u.gifs.g.live = -1
-		}
+	if u.gridOutside(&u.gifs.g, r, e, u.gifClose) {
 		return
 	}
 	if e.Press && !e.Motion && e.Button == 0 && e.Y == r.row+1 {

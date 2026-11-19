@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"testing"
 	"time"
 
@@ -254,22 +255,63 @@ func TestLoadHistoryOlderVersion(t *testing.T) {
 }
 
 // A file that does not decode is kept as a .bak copy when a write replaces it.
+// A second one of the same format gets a copy of its own: it used to replace
+// the copy of the first.
 func TestSaveHistoryKeepsUnreadableCopy(t *testing.T) {
 	dir := t.TempDir()
 	c := New(dir, 2000)
 	p := filepath.Join(dir, "history", "42.gob")
-	junk := []byte{0xde, 0xad, 0xbe, 0xef, 0x00, 0x01, 0x02}
-	if err := os.WriteFile(p, junk, 0o600); err != nil {
+	junks := [][]byte{{0xde, 0xad, 0xbe, 0xef, 0x00, 0x01, 0x02}, {0xba, 0xad, 0xf0, 0x0d}}
+	for _, junk := range junks {
+		if err := os.WriteFile(p, junk, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := c.SaveHistory(42, []model.Msg{{ID: 1, ChatID: 42}}); err != nil {
+			t.Fatal(err)
+		}
+		if got, _ := c.LoadHistory(42); len(got) != 1 {
+			t.Fatalf("new file not written: %+v", got)
+		}
+	}
+	baks, _ := filepath.Glob(p + ".bak-0*")
+	if len(baks) != len(junks) {
+		t.Fatalf("copies %v, want one per unreadable file (%d)", baks, len(junks))
+	}
+	for _, junk := range junks {
+		if !slices.ContainsFunc(baks, func(b string) bool { got, _ := os.ReadFile(b); return bytes.Equal(got, junk) }) {
+			t.Errorf("unreadable file % x not kept in %v", junk, baks)
+		}
+	}
+}
+
+// A history file that cannot be opened (no read permission here; EMFILE and
+// EIO are the same) is not corrupt: it is neither set aside nor replaced, and
+// the write gives the error.
+func TestSaveHistoryLeavesUnopenableFile(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root reads a file of mode 000")
+	}
+	dir := t.TempDir()
+	c := New(dir, 2000)
+	if err := c.SaveHistory(42, []model.Msg{{ID: 1, ChatID: 42, Text: "only copy"}}); err != nil {
 		t.Fatal(err)
 	}
-	if err := c.SaveHistory(42, []model.Msg{{ID: 1, ChatID: 42}}); err != nil {
+	p := filepath.Join(dir, "history", "42.gob")
+	if err := os.Chmod(p, 0); err != nil {
 		t.Fatal(err)
 	}
-	if got, err := os.ReadFile(p + ".bak-0"); err != nil || !bytes.Equal(got, junk) {
-		t.Fatalf("unreadable file not kept as .bak-0: %v %v", got, err)
+	err := c.SaveHistory(42, []model.Msg{{ID: 2, ChatID: 42, Text: "new"}})
+	if err := os.Chmod(p, 0o600); err != nil {
+		t.Fatal(err)
 	}
-	if got, _ := c.LoadHistory(42); len(got) != 1 {
-		t.Fatalf("new file not written: %+v", got)
+	if err == nil {
+		t.Error("write over a file that cannot be opened: no error")
+	}
+	if baks, _ := filepath.Glob(p + ".bak-*"); len(baks) != 0 {
+		t.Errorf("readable history set aside: %v", baks)
+	}
+	if got, _ := c.LoadHistory(42); len(got) != 1 || got[0].Text != "only copy" {
+		t.Fatalf("history after the refused write: %+v, want the only copy", got)
 	}
 }
 

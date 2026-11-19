@@ -2,8 +2,10 @@ package ui
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -11,6 +13,7 @@ import (
 
 	"github.com/govlog/ttyloom/internal/cache"
 	"github.com/govlog/ttyloom/internal/config"
+	"github.com/govlog/ttyloom/internal/i18n"
 	"github.com/govlog/ttyloom/internal/media"
 	"github.com/govlog/ttyloom/internal/model"
 	"github.com/govlog/ttyloom/internal/term"
@@ -457,5 +460,104 @@ func TestCacheSnapshotOwnsFull(t *testing.T) {
 	full.Path, full.State = "/x_full.jpg", model.MediaReady // downloadFull lands
 	if got := snap[0].Media.Full; got.Path != "" || got.State != model.MediaNone {
 		t.Fatalf("the snapshot follows the window: %+v", got)
+	}
+}
+
+// An IRC chat list carries no read state: it lists a room at 0 unread, which
+// is not news. The unread count kept in the dialogs file stays, and the
+// window opened at login counts it.
+func TestRegressionDialogsWithoutReadStateKeepUnread(t *testing.T) {
+	const net = "irc:libera"
+	c := cache.New(t.TempDir(), 2000)
+	now := time.Now()
+	if err := c.SaveDialogs([]model.Chat{{ID: 42, Title: "#go", Kind: model.ChatGroup, Unread: 7, LastDate: now}}, 1001); err != nil {
+		t.Fatal(err)
+	}
+	u := ircCacheUI(net, c)
+	u.cfg.AutoOpenDays = 7
+	u.loadCache()
+	u.dispatch(model.Envelope{Net: net, Ev: model.EvDialogs{Chats: []*model.Chat{{ID: 42, Title: "#go", Kind: model.ChatGroup, LastDate: now}}}})
+	u.bgWait.Wait()
+	k := model.ChatKey{Net: net, ID: 42}
+	i := u.ws.ForChat(k)
+	if got := u.chats[k].Unread; got != 7 || i < 0 || u.ws.List[i].Act != 7 {
+		t.Fatalf("after the IRC list: unread %d, window %d; want 7 unread and 7 in the window activity", got, i)
+	}
+}
+
+// Each sync counts its own chats and messages: after a stop in the middle of
+// the first sync, the next login of the session counts from zero and says
+// when it is done.
+func TestRegressionSecondSyncCountsAlone(t *testing.T) {
+	u := newCacheUI(t, cache.New(t.TempDir(), 2000))
+	u.ctx, u.conn, u.events = context.Background(), map[string]bool{}, make(chan model.Event, 8)
+	b := &fakeBackend{caps: model.AllCaps()}
+	u.nets = map[string]model.Backend{netTelegram: b}
+	step := func() { // the answer of the step in flight: one new message
+		c := u.syncCur
+		u.dispatch(model.Envelope{Net: netTelegram, Ev: model.EvHistory{ChatID: c.ID, Since: true,
+			Msgs: []model.Msg{{ChatID: c.ID, ID: 1, Text: "new"}}}})
+		u.syncNext() // the pause of the sync, without the wait
+	}
+	list := func() {
+		var chats []*model.Chat
+		for id := range int64(3) {
+			chats = append(chats, &model.Chat{ID: id + 1, Title: fmt.Sprint(id + 1)})
+		}
+		u.dispatch(model.Envelope{Net: netTelegram, Ev: model.EvDialogs{Chats: chats}})
+	}
+	list()
+	step()
+	u.dispatch(model.Envelope{Net: netTelegram, Ev: model.EvStopped{}}) // two chats left in the queue
+	u.nets[netTelegram] = b                                             // login again
+	list()
+	step()
+	step()
+	step()
+	u.bgWait.Wait()
+	got := shownText(u.ws.List[0])
+	if !strings.HasSuffix(strings.TrimSpace(got), i18n.T("sync_start", 3)+"\n*** "+i18n.T("sync_done", 3)) {
+		t.Fatalf("window 0 after the second sync:\n%s\nwant %q then %q", got, i18n.T("sync_start", 3), i18n.T("sync_done", 3))
+	}
+}
+
+// The window shown is read: the first chat list of its network does not put
+// the unread count of the list into it.
+func TestDialogsLeaveShownWindowCounters(t *testing.T) {
+	c := cache.New(t.TempDir(), 2000)
+	if err := c.SaveDialogs([]model.Chat{{ID: 1, Title: "Alice", Kind: model.ChatUser, LastDate: time.Now()}}, 10); err != nil {
+		t.Fatal(err)
+	}
+	u := newCacheUI(t, c)
+	u.loadCache()
+	u.goTo(u.ws.ForChat(tgk(1)))
+	u.dispatch(model.Envelope{Net: netTelegram, Ev: model.EvDialogs{Chats: []*model.Chat{
+		{ID: 1, Title: "Alice", Kind: model.ChatUser, Unread: 3, ReadInboxMaxID: 4, LastDate: time.Now()}}}})
+	if w := u.view(); w.Chat == nil || w.Chat.ID != 1 || w.Act != 0 {
+		t.Fatalf("shown window %q: activity %d, want the chat shown with 0", w.Name(), w.Act)
+	}
+}
+
+// An account change closes the windows of its network: when the shown one
+// goes, the window before it comes with its draft.
+func TestAccountChangeLandsOnWindowBefore(t *testing.T) {
+	u := listUI()
+	u.ctx = context.Background()
+	b := &fakeBackend{caps: model.AllCaps()}
+	u.nets = map[string]model.Backend{netTelegram: b, netDiscord: b}
+	u.chats, u.dirty, u.self, u.conn = map[model.ChatKey]*model.Chat{}, map[model.ChatKey]bool{}, map[string]selfInfo{}, map[string]bool{}
+	u.cacheSelf = map[string]int64{netTelegram: 111}
+	general := &model.Chat{Net: netDiscord, ID: 9, Title: "#general", Kind: model.ChatGroup}
+	room := &model.Chat{Net: netTelegram, ID: 1, Title: "room", Kind: model.ChatGroup}
+	for _, c := range []*model.Chat{general, room} {
+		u.listChat(u.remember(c))
+		u.winFor(c)
+	}
+	u.goTo(1)
+	u.ed.Set("draft for general")
+	u.goTo(2)
+	u.dispatch(model.Envelope{Net: netTelegram, Ev: model.EvReady{SelfID: 222, SelfName: "another account"}})
+	if v := u.view(); v.Chat != general || u.ed.String() != "draft for general" {
+		t.Fatalf("after the account change: in %q, input %q; want #general with its draft", v.Name(), u.ed.String())
 	}
 }

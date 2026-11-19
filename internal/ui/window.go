@@ -111,6 +111,11 @@ type Window struct {
 	// seps : day separators already drawn — LongDate and its i18n lookups ran
 	// for each separator at each frame. Invalidate drops them (theme change).
 	seps map[sepKey]render.Line
+	// top, topOff : the item on the top row of the view at the last draw, and
+	// that row counted from the first line of the item (below 0: a day
+	// separator above it). topScroll : Scroll then. See anchor.
+	top               *Item
+	topOff, topScroll int
 }
 
 // sepKey : what a day separator depends on, the theme aside.
@@ -725,6 +730,38 @@ func (w *Window) Visible(o render.Opts) ([]render.Line, []*Item) {
 	}
 	w.hidden = nil // the item went away
 	return lines, items
+}
+
+// anchor gives the Scroll that puts the row read at the last draw (keepTop)
+// on top again: Scroll counts from the bottom, so lines added, filled in or
+// drawn again under that row, or a new width, would move the reader. Scroll
+// as it is when something moved it since (wheel, keys, a jump, the redline),
+// at the bottom (0: the new messages show) and when the item went (trim,
+// filter). items: those of Visible, one per line.
+func (w *Window) anchor(items []*Item, view int) int {
+	if w.Scroll <= 0 || w.Scroll != w.topScroll {
+		return w.Scroll
+	}
+	first, last := blockOf(items, w.top)
+	if last < 0 {
+		return w.Scroll
+	}
+	return len(items) - view - min(first+w.topOff, last)
+}
+
+// keepTop notes the row on top of a view that starts at line start, for
+// anchor: the first item drawn from there, under a day separator if need be.
+func (w *Window) keepTop(items []*Item, start int) {
+	w.top, w.topScroll = nil, w.Scroll
+	if w.Scroll <= 0 {
+		return // at the bottom the view follows the new messages
+	}
+	for i := start; i < len(items); i++ {
+		if items[i] != nil {
+			w.top, w.topOff = items[i], start-(i-lineRank(items, i))
+			return
+		}
+	}
 }
 
 // Lines draws the whole window (cache per item and width), with day

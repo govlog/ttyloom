@@ -812,3 +812,42 @@ func TestGIFPartsStepTogether(t *testing.T) {
 		}
 	}
 }
+
+// "Open" on a file of a type off the allow list asks on the input line. The
+// file browser, the media browser and the preview take every key: the one the
+// file comes from closes first, and y then opens the file.
+func TestOpenUnknownTypeClosesBox(t *testing.T) {
+	t.Setenv("PATH", t.TempDir()) // no xdg-open: each open leaves its error line
+	path := filepath.Join(t.TempDir(), "notes.html")
+	if err := os.WriteFile(path, []byte("<p>x</p>"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, box := range []string{"files", "media", "preview"} {
+		u, fb := gifUI()
+		u.nets[netTelegram] = &mediaBackend{fakeBackend: fb}
+		u.ws.Cur = 1
+		m := model.Msg{Net: netTelegram, ChatID: 1, ID: 5, Date: time.Now(),
+			Media: &model.Media{Kind: model.MediaFile, Name: "notes.html", Path: path, Loc: 5}}
+		switch box {
+		case "files":
+			u.files = &filesBox{}
+			u.fileDo(&ctxMenu{file: &Item{Msg: &m}, win: u.view()}, "open")
+		case "media":
+			u.openMediaBox("")
+			u.dispatch(model.Envelope{Net: netTelegram, Ev: model.EvMedia{ChatID: 1, Filter: model.TabMedia, Items: []model.MediaItem{{Msg: m}}}})
+			u.key(term.Key{Rune: 'o'})
+		case "preview":
+			u.viewer = &viewer{src: m.Media, md: m.Media}
+			u.key(term.Key{Rune: 'o'})
+		}
+		if u.ask == nil || u.lead() != nil || u.viewer != nil {
+			t.Fatalf("%s: question %v, box %v, preview %v; want the question and nothing over it",
+				box, u.ask != nil, u.lead() != nil, u.viewer != nil)
+		}
+		u.ask.at = time.Now().Add(-time.Second)
+		u.key(term.Key{Rune: 'y'})
+		if sysLines(u.view(), "xdg-open") != 1 {
+			t.Fatalf("%s: y after the question: %d opens, want 1", box, sysLines(u.view(), "xdg-open"))
+		}
+	}
+}

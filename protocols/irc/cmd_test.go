@@ -225,6 +225,9 @@ func TestWhoWhowasMotd(t *testing.T) {
 	if l := waitLines(t, events, "alice"); l.ChatID != 5 || !strings.Contains(l.Lines[0], "al@host.example") || !strings.Contains(l.Lines[0], "Alice A") {
 		t.Fatalf("who: %+v", l)
 	}
+	if l := waitLines(t, events, "End of WHO"); l.ChatID != 5 {
+		t.Fatalf("end of who: %+v, want the asking window", l)
+	}
 	cmd(c, 5, "", "whowas", "ghost")
 	s.expect("WHOWAS ghost")
 	s.send(":srv 314 me ghost g old.example * :Ghost")
@@ -235,6 +238,9 @@ func TestWhoWhowasMotd(t *testing.T) {
 	}
 	if l := waitLines(t, events, "ghost was on old.example"); l.ChatID != 5 {
 		t.Fatalf("whowas server line: %+v", l)
+	}
+	if l := waitLines(t, events, "End of WHOWAS"); l.ChatID != 5 {
+		t.Fatalf("end of whowas: %+v, want the asking window", l)
 	}
 	cmd(c, 5, "", "motd", "")
 	s.expect("MOTD")

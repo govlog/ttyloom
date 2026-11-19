@@ -103,6 +103,11 @@ func TestClean(t *testing.T) {
 	if got := Clean("a\u202Eb\u2066c"); got != "a b c" {
 		t.Fatalf("bidi: %q", got)
 	}
+	// A raw invalid byte (0x9b is an 8-bit CSI) comes out as U+FFFD, one rune
+	// for one byte: never as itself.
+	if got := Clean("a\x9bb"); got != "a�b" {
+		t.Fatalf("invalid UTF-8: %q", got)
+	}
 	if SafeURL("https://x/\u202Ea") {
 		t.Fatal("bidi override in a URL accepted")
 	}
@@ -297,6 +302,18 @@ func TestRunsPreBlock(t *testing.T) {
 	spans := Runs("a\nb", ents, theme.Style{}, theme.Terminal())
 	if len(spans) != 2 || spans[0].Text != "┃ a\n" || spans[1].Text != "┃ b" {
 		t.Fatalf("pre block: %+v", spans)
+	}
+}
+
+// Blockquote of several lines (Telegram): "│ " in front of each of its
+// lines, and on none of the text around it. The quote ends after its last
+// "\n": the line that follows is not quoted.
+func TestRunsQuoteBlock(t *testing.T) {
+	text := "hi\nfirst\nsecond\nbye"
+	ents := []model.Span{{Start: 3, End: 16, Kind: model.SpanQuote}}
+	got := strings.Join(texts(Wrap(Runs(text, ents, theme.Style{}, theme.Terminal()), 40)), "|")
+	if want := "hi|│ first|│ second|bye"; got != want {
+		t.Fatalf("quote block: got %q, want %q", got, want)
 	}
 }
 
@@ -737,7 +754,8 @@ func TestSafeURL(t *testing.T) {
 	ok := []string{"https://exemple.fr/a?b=1#c", "HTTP://EXEMPLE.FR", "mailto:a@b.fr"}
 	ko := []string{"", "/home/v/Downloads/evil.desktop", "file:///etc/passwd", "javascript:alert(1)",
 		"data:text/html,<script>", "exemple.fr", "https://exemple.fr/\x1b]8;;x\x07",
-		"https://exemple.fr/" + strings.Repeat("a", maxURL)}
+		"https://exemple.fr/" + strings.Repeat("a", maxURL),
+		"https://exemple.fr/\x9c", "https://exemple.fr/\x9b31m"} // raw 8-bit ST and CSI: invalid UTF-8
 	for _, s := range ok {
 		if !SafeURL(s) {
 			t.Errorf("wrongly refused: %q", s)

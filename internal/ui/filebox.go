@@ -3,11 +3,13 @@ package ui
 import (
 	"cmp"
 	"fmt"
+	"maps"
 	"os"
 	"path"
 	"slices"
 	"strings"
 
+	"github.com/govlog/ttyloom/internal/config"
 	"github.com/govlog/ttyloom/internal/i18n"
 	"github.com/govlog/ttyloom/internal/model"
 	"github.com/govlog/ttyloom/internal/render"
@@ -77,31 +79,64 @@ type filesBox struct {
 	leftWidth int // columns of the left column at the last drawing
 }
 
-// evFiles : the histories of the disk cache, read for box.
+// evFiles : the histories of the disk cache, read for box, the messages of
+// the windows at the opening (filesLive), and the file on the disk of each
+// document found there.
 type evFiles struct {
-	box  *filesBox
-	hist map[model.ChatKey][]model.Msg
+	box   *filesBox
+	hist  map[model.ChatKey][]model.Msg
+	live  map[model.ChatKey]map[int]*model.Msg
+	paths map[*model.Media]string
 }
 
-// openFiles : Ctrl+D, /files.
+// openFiles : Ctrl+D, /files. The goroutine that reads the histories also
+// looks for the documents on the disk: one stat or more each, which took the
+// UI loop tens of milliseconds for a few thousand documents, seconds on a
+// network home.
 func (u *UI) openFiles() {
 	b := &filesBox{loading: true}
 	u.files = b
+	titleOf := func(k model.ChatKey) string {
+		if c := u.chats[k]; c != nil {
+			return c.Title
+		}
+		return ""
+	}
 	type job struct {
-		key  model.ChatKey
-		read func(int64) ([]model.Msg, error)
+		key   model.ChatKey
+		title string
+		read  func(int64) ([]model.Msg, error)
 	}
 	var jobs []job
 	for _, c := range u.chatList {
 		if cc := u.cacheFor(c.Net); cc != nil && u.fileScope(c.Net) {
-			jobs = append(jobs, job{c.Key(), cc.LoadHistory})
+			jobs = append(jobs, job{c.Key(), titleOf(c.Key()), cc.LoadHistory})
+		}
+	}
+	// spot notes where each document of m goes: m and what that reads of the
+	// UI (a copy of it) are read at once, the disk later (fileSpot).
+	dir, dls := config.Expand(u.cfg.DownloadDir), maps.Clone(u.dls)
+	spots := map[*model.Media]func() string{}
+	spot := func(k model.ChatKey, title string, m *model.Msg) {
+		for _, md := range fileMedia(m) {
+			if md.Kind == model.MediaFile {
+				p := *m
+				p.Net, p.ChatID, p.Media = k.Net, k.ID, md
+				spots[md] = fileSpot(dir, title, dls, &p, md, "")
+			}
+		}
+	}
+	live := u.filesLive()
+	for k, ms := range live {
+		for _, m := range ms {
+			spot(k, titleOf(k), m) // the UI owns these messages: read here
 		}
 	}
 	prev := u.bgTail
 	u.fileRuns.Add(1)
 	go func() {
 		defer u.fileRuns.Done()
-		ev := evFiles{box: b, hist: map[model.ChatKey][]model.Msg{}}
+		ev := evFiles{box: b, hist: map[model.ChatKey][]model.Msg{}, live: live, paths: map[*model.Media]string{}}
 		defer func() {
 			if r := recover(); r != nil { // a file the decoder chokes on: the windows still show
 				ev.hist = nil
@@ -114,6 +149,18 @@ func (u *UI) openFiles() {
 		for _, j := range jobs {
 			if msgs, _ := j.read(j.key.ID); len(msgs) > 0 {
 				ev.hist[j.key] = msgs
+				for i := range msgs {
+					if live[j.key][msgs[i].ID] == nil { // the window holds it, fresher
+						spot(j.key, j.title, &msgs[i])
+					}
+				}
+			}
+		}
+		// The documents downloaded under the names of before move to the
+		// folder of their conversation, and the ones on the disk are known.
+		for md, where := range spots {
+			if p := where(); fileThere(p) {
+				ev.paths[md] = p
 			}
 		}
 	}()
@@ -122,13 +169,10 @@ func (u *UI) openFiles() {
 // fileScope : the network net shows in the box — every one, or the one of /net.
 func (u *UI) fileScope(net string) bool { return u.netFilter == "" || net == u.netFilter }
 
-// filesLoaded : the disk is read. The box gathers the files by person.
-func (u *UI) filesLoaded(e evFiles) {
-	b := u.files
-	if b == nil || e.box != b {
-		return
-	}
-	b.loading = false
+// filesLive : the messages of the open windows, by conversation and id. They
+// win over the disk: they hold the newest messages, and their media carry
+// the state of their download.
+func (u *UI) filesLive() map[model.ChatKey]map[int]*model.Msg {
 	live := map[model.ChatKey]map[int]*model.Msg{}
 	for _, w := range u.ws.List {
 		if w.Chat == nil || w.Search != "" || !u.fileScope(w.Chat.Net) {
@@ -145,15 +189,35 @@ func (u *UI) filesLoaded(e evFiles) {
 			live[k][it.Msg.ID] = it.Msg
 		}
 	}
+	return live
+}
+
+// fileMedia : the media of m the box lists as files — none for a message
+// deleted, a service line or a message with no id.
+func fileMedia(m *model.Msg) []*model.Media {
+	if m.Deleted || m.ID == 0 || m.Service != "" {
+		return nil
+	}
+	var out []*model.Media
+	for _, md := range append([]*model.Media{m.Media}, m.More...) {
+		if fileKind(md) {
+			out = append(out, md)
+		}
+	}
+	return out
+}
+
+// filesLoaded : the disk is read. The box gathers the files by person.
+func (u *UI) filesLoaded(e evFiles) {
+	b := u.files
+	if b == nil || e.box != b {
+		return
+	}
+	b.loading = false
+	live := e.live
 	people := map[string]*filePerson{}
 	add := func(k model.ChatKey, m *model.Msg) {
-		if m.Deleted || m.ID == 0 || m.Service != "" {
-			return
-		}
-		for _, md := range append([]*model.Media{m.Media}, m.More...) {
-			if !fileKind(md) {
-				continue
-			}
+		for _, md := range fileMedia(m) {
 			p := *m // More stays: the file of an attachment is named by it (fetch)
 			p.Net, p.ChatID, p.Media = k.Net, k.ID, md
 			id := fmt.Sprintf("%s\x00%d\x00%s", k.Net, m.FromID, m.From)
@@ -189,14 +253,11 @@ func (u *UI) filesLoaded(e evFiles) {
 			add(k, m)
 		}
 	}
-	// The documents downloaded under the names of before move to the folder
-	// of their conversation (filePath), and the ones on the disk are known.
+	// The files the disk read found (openFiles).
 	for _, p := range people {
 		for _, it := range p.files {
-			if md := it.Msg.Media; md.Kind == model.MediaFile {
-				if where := u.filePath(it.Msg, md, ""); fileThere(where) {
-					md.Path = where
-				}
+			if where, ok := e.paths[it.Msg.Media]; ok {
+				it.Msg.Media.Path = where
 			}
 		}
 	}

@@ -41,6 +41,43 @@ func TestCleanPartsAllDepths(t *testing.T) {
 	}
 }
 
+// A received file that a version before media.OriginalName renamed them kept
+// as ".part-notes.pdf" has the date of its message: it is not a temporary
+// file of os.CreateTemp (".part-" and digits), it stays.
+func TestCleanFilesKeepsReceivedPartName(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "irc_libera", "alice", ".part-notes.pdf")
+	os.MkdirAll(filepath.Dir(p), 0o700)
+	os.WriteFile(p, []byte("only copy"), 0o600)
+	old := time.Now().Add(-48 * time.Hour)
+	os.Chtimes(p, old, old)
+	cleanFiles(dir, t.TempDir())
+	if _, err := os.Stat(p); err != nil {
+		t.Fatalf("received file removed: %v", err)
+	}
+}
+
+// A download_dir or a cache that is empty or relative makes the patterns
+// start at / or at the working directory: the files of other programs.
+// Nothing is removed there.
+func TestCleanFilesNeedsAbsoluteDirs(t *testing.T) {
+	t.Chdir(t.TempDir())
+	old := time.Now().Add(-8 * 24 * time.Hour)
+	files := []string{filepath.Join("dl", ".part-1"), filepath.Join("dl", "x", "y", ".part-2"),
+		filepath.Join("dl", "paste", "20260901-120000-1.png"), filepath.Join("cache", "gifs", "telegram", "a.mp4")}
+	for _, p := range files {
+		os.MkdirAll(filepath.Dir(p), 0o700)
+		os.WriteFile(p, nil, 0o600)
+		os.Chtimes(p, old, old)
+	}
+	cleanFiles("dl", "cache")
+	for _, p := range files {
+		if _, err := os.Stat(p); err != nil {
+			t.Errorf("relative directory: %s removed", p)
+		}
+	}
+}
+
 // The pictures of the boxes — GIF previews, media thumbnails, custom emojis —
 // leave the cache after a week unused, and pasted images never sent leave
 // download_dir after a day: nothing else ever removed them. The history of a

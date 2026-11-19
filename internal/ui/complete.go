@@ -328,9 +328,12 @@ func (u *UI) completeTab() {
 			u.ed.Replace(cursor-len([]rune(tail)), cursor, `"`+tail)
 		}
 	}
-	if (src == complChats || src == complMute) && tail == "" {
+	switch {
+	case src == complChats && tail == "":
 		list = u.chatCandidates("", "")
-	} else {
+	case src == complMute && tail == "": // the section keys with the chats, as the next Tab
+		list = u.candidates("", false)
+	default:
 		list = u.ed.Complete(u.candidates)
 	}
 	if len(list) > 0 {

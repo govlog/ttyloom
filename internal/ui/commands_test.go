@@ -263,6 +263,40 @@ func TestRegressionMsgTitleOfSeveralWords(t *testing.T) {
 	}
 }
 
+// "/msg Fri" + Tab gives "/msg Friends room ": the whole line names a chat and
+// no text is left. Enter gives the usage and sends nothing, never "room" to
+// "Friends room".
+func TestRegressionMsgWholeTitleSendsNothing(t *testing.T) {
+	u, b, _, _ := queryUI()
+	u.ed.Set("/msg Fri")
+	u.key(term.Key{Code: term.Tab})
+	u.key(term.Key{Code: term.Enter})
+	if got := lastSys(u.view()); len(b.sends) != 0 || got != i18n.T("usage_msg") {
+		t.Fatalf("/msg with a whole title and no text: sent %v %q, last line %q; want nothing sent and %q", b.sends, b.text, got, i18n.T("usage_msg"))
+	}
+}
+
+// /sticker is a command of the client, as /gif is: Tab completes it, a prefix
+// runs it, and an alias cannot take its name.
+func TestRegressionStickerIsACommand(t *testing.T) {
+	u, _, room, _ := queryUI()
+	u.goTo(u.ws.ForChat(room.Key()))
+	u.ed.Set("/stic")
+	u.key(term.Key{Code: term.Tab})
+	if got := u.ed.String(); got != "/sticker " {
+		t.Fatalf("Tab on /stic: %q, want %q", got, "/sticker ")
+	}
+	input(u, "/stick")
+	if u.stickers == nil {
+		t.Fatalf("/stick did not open the sticker box: %q", lastSys(u.view()))
+	}
+	u.stickers = nil
+	input(u, "/alias sticker /quit")
+	if got := lastSys(u.view()); u.cmdAlias["sticker"] != "" || got != i18n.T("alias_reserved", "sticker") {
+		t.Fatalf("/alias sticker: alias %q, line %q; want a refusal", u.cmdAlias["sticker"], got)
+	}
+}
+
 // /whois takes no text after its target: a name of several words is the
 // whole line, not an ambiguous first word.
 func TestRegressionWhoisNameOfSeveralWords(t *testing.T) {

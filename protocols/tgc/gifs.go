@@ -57,22 +57,19 @@ func (c *Client) SearchGifs(ctx context.Context, chat *model.Chat, q string) {
 			ev.Err = err
 			c.Post(ev)
 		})
-		if !c.floodOK() {
-			ev.Err = errFlood().Error()
-			c.Post(ev)
-			return
-		}
-		bot, err := c.gifBotUser(ctx)
-		if err == nil {
-			var res *tg.MessagesBotResults
-			res, err = c.api.MessagesGetInlineBotResults(ctx, &tg.MessagesGetInlineBotResultsRequest{
-				Bot: bot, Peer: c.peer(chat), Query: q})
+		err := c.rpc(func() error {
+			bot, err := c.gifBotUser(ctx)
 			if err == nil {
-				ev.Gifs = gifsOf(res)
+				var res *tg.MessagesBotResults
+				res, err = c.api.MessagesGetInlineBotResults(ctx, &tg.MessagesGetInlineBotResultsRequest{
+					Bot: bot, Peer: c.peer(chat), Query: q})
+				if err == nil {
+					ev.Gifs = gifsOf(res)
+				}
 			}
-		}
+			return err
+		})
 		if err != nil {
-			c.floodTrip(err)
 			ev.Err = err.Error()
 		}
 		c.Post(ev)

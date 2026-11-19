@@ -35,14 +35,8 @@ func (c *Client) Participants(ctx context.Context, chat *model.Chat) {
 			ev.Err = err
 			c.Post(ev)
 		})
-		if !c.floodOK() {
-			ev.Err = errFlood().Error()
-			c.Post(ev)
-			return
-		}
-		lines, err := c.parts(ctx, chat, kind)
-		if err != nil {
-			c.floodTrip(err)
+		var lines []model.Participant
+		if err := c.rpc(func() (err error) { lines, err = c.parts(ctx, chat, kind); return err }); err != nil {
 			ev.Err = err.Error()
 			c.Post(ev)
 			return

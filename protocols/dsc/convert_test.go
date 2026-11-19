@@ -313,6 +313,24 @@ func TestTypist(t *testing.T) {
 	}
 }
 
+// My own typing — the echo of Typing, or another device of the account —
+// shows no "… is typing" line, as on the other networks. The typing of
+// somebody else still does.
+func TestTypingSelfSilent(t *testing.T) {
+	ev := make(chan model.Event, 4)
+	c := testClient(ev)
+	c.wire()
+	c.state().Handler.Call(&gateway.ReadyEvent{User: discord.User{ID: 7, Username: "me"}})
+	c.state().Handler.Call(&gateway.TypingStartEvent{ChannelID: 5, UserID: 7})
+	if len(ev) != 0 {
+		t.Fatalf("my own typing posted %#v", <-ev)
+	}
+	c.state().Handler.Call(&gateway.TypingStartEvent{ChannelID: 5, UserID: 42})
+	if got, ok := next(t, ev).(model.EvTyping); !ok || got.ChatID != 5 {
+		t.Fatalf("typing of somebody else = %#v, want an EvTyping of chat 5", got)
+	}
+}
+
 // reactions: the whole set of a message, read from the state. A message the
 // state does not hold posts nothing — it must never cost a network read.
 func TestReactions(t *testing.T) {
