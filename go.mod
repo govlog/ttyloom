@@ -9,9 +9,9 @@ require (
 	github.com/diamondburned/ningen/v3 v3.0.1-0.20260306213430-5a08d3a709b4
 	github.com/ergochat/irc-go v0.7.0
 	github.com/gorilla/websocket v1.5.3
-	github.com/gotd/contrib v0.25.0
+	github.com/gotd/contrib v0.26.0
 	github.com/gotd/log v0.1.0
-	github.com/gotd/td v0.163.0
+	github.com/gotd/td v0.166.1
 	github.com/mattn/go-runewidth v0.0.31
 	golang.org/x/image v0.48.0
 	golang.org/x/sys v0.50.0
@@ -39,13 +39,13 @@ require (
 	github.com/klauspost/compress v1.20.4 // indirect
 	github.com/mattn/go-colorable v0.1.16 // indirect
 	github.com/mattn/go-isatty v0.0.24 // indirect
-	github.com/ogen-go/ogen v1.24.0 // indirect
+	github.com/ogen-go/ogen v1.25.0 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/refraction-networking/utls v1.8.2 // indirect
 	github.com/segmentio/asm v1.2.1 // indirect
 	github.com/shopspring/decimal v1.6.0 // indirect
 	github.com/twmb/murmur3 v1.2.2 // indirect
-	github.com/yuin/goldmark v1.8.6 // indirect
+	github.com/yuin/goldmark v1.8.7 // indirect
 	go.opentelemetry.io/otel v1.47.0 // indirect
 	go.opentelemetry.io/otel/metric v1.47.0 // indirect
 	go.opentelemetry.io/otel/trace v1.47.0 // indirect
@@ -53,11 +53,11 @@ require (
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.28.0 // indirect
 	golang.org/x/crypto v0.59.0 // indirect
-	golang.org/x/exp v0.0.0-20261014143641-f0251eb4aa3e // indirect
-	golang.org/x/mod v0.42.0 // indirect
-	golang.org/x/net v0.62.0 // indirect
+	golang.org/x/exp v0.0.0-20261118215729-2791e4028fd4 // indirect
+	golang.org/x/mod v0.43.0 // indirect
+	golang.org/x/net v0.63.0 // indirect
 	golang.org/x/sync v0.25.0 // indirect
 	golang.org/x/time v0.16.0 // indirect
-	golang.org/x/tools v0.52.0 // indirect
+	golang.org/x/tools v0.53.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )

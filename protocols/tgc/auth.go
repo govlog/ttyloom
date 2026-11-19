@@ -60,11 +60,12 @@ func (c *Client) Run(ctx context.Context) error {
 
 // --- authentication ---
 
-// Logout ends the account session on the server (auth.logOut): the next Run
-// goes through the QR flow again. The session file stays — its auth key is
-// still good for a new login.
+// Logout ends the account session on the server: auth.logOut on the home DC
+// and on every other DC the authorization went to, then gotd empties the
+// session file — it also holds the authorized keys of those DCs. The next
+// Run makes a new auth key and goes through the QR flow again.
 func (c *Client) Logout(ctx context.Context) error {
-	_, err := c.api.AuthLogOut(ctx)
+	_, err := c.client.LogOut(ctx)
 	return err
 }
 
